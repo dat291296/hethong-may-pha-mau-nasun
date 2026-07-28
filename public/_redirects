@@ -1,1 +1,2 @@
-/* /index.html 200
+# Empty redirects file to prevent Cloudflare Pages loop error.
+# Cloudflare Pages natively supports SPA fallback (index.html) if no 404.html exists.
