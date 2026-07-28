@@ -1,0 +1,27 @@
+{
+  "nppId": "NPP-HN-001",
+  "setCode": "SET-2024-001",
+  "softwareType": "ColorExpert 3",
+  "cloudServerUrl": "http://localhost:5173",
+  "pollIntervalSeconds": 10,
+  "softwareConfig": {
+    "ColorExpert 2": {
+      "installDir": "C:\\Program Files (x86)\\ColorExpert2",
+      "formulaDir": "C:\\Program Files (x86)\\ColorExpert2\\Formula",
+      "historyDbFile": "C:\\Program Files (x86)\\ColorExpert2\\DB\\TintHistory.mdb",
+      "formulaFileFormat": ".mdb"
+    },
+    "ColorExpert 3": {
+      "installDir": "C:\\ColorExpert3",
+      "formulaDir": "C:\\ColorExpert3\\Data\\Formulas",
+      "historyDbFile": "C:\\ColorExpert3\\Data\\History.db",
+      "formulaFileFormat": ".db"
+    },
+    "CorobTINT": {
+      "installDir": "C:\\CorobTINT",
+      "formulaDir": "C:\\CorobTINT\\FormulaDB",
+      "historyDbFile": "C:\\CorobTINT\\Log\\DispenseHistory.xml",
+      "formulaFileFormat": ".xml"
+    }
+  }
+}

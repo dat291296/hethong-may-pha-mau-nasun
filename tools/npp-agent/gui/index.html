@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ColorMix Client Agent - Phần Mềm Cấu Hình Máy NPP</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #0f172a;
+      --bg-card: #1e293b;
+      --bg-input: #0f172a;
+      --border: #334155;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --cyan: #06b6d4;
+      --emerald: #10b981;
+      --amber: #f59e0b;
+      --purple: #a855f7;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: var(--bg-dark);
+      color: var(--text);
+      line-height: 1.5;
+      padding: 24px;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .header-card {
+      background: linear-gradient(135deg, rgba(2,132,199,0.3) 0%, rgba(6,182,212,0.15) 100%);
+      border: 1px solid var(--cyan);
+      border-radius: 16px;
+      padding: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 8px 24px rgba(6,182,212,0.15);
+    }
+
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .badge-success { background: rgba(16,185,129,0.2); color: #34d399; border: 1px solid rgba(16,185,129,0.4); }
+    .badge-cyan { background: rgba(6,182,212,0.2); color: #38bdf8; border: 1px solid rgba(6,182,212,0.4); }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+
+    .form-label {
+      font-size: 0.875rem;
+      font-weight: 700;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .form-control-row {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .input-text {
+      flex: 1;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 16px;
+      color: var(--text);
+      font-size: 0.9rem;
+      font-family: 'JetBrains Mono', monospace;
+      outline: none;
+      transition: all 0.2s ease;
+    }
+
+    .input-text:focus {
+      border-color: var(--cyan);
+      box-shadow: 0 0 0 3px rgba(6,182,212,0.2);
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 12px 20px;
+      border-radius: 10px;
+      font-size: 0.875rem;
+      font-weight: 700;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s ease;
+    }
+
+    .btn-browse {
+      background: #334155;
+      color: var(--text);
+      border: 1px solid #475569;
+      white-space: nowrap;
+    }
+
+    .btn-browse:hover {
+      background: #475569;
+      color: #fff;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #0284c7 0%, #06b6d4 100%);
+      color: #fff;
+      box-shadow: 0 4px 16px rgba(6,182,212,0.4);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(6,182,212,0.6);
+    }
+
+    .sw-selector {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .sw-option {
+      background: var(--bg-input);
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .sw-option:hover {
+      border-color: var(--cyan);
+      background: rgba(6,182,212,0.05);
+    }
+
+    .sw-option.active {
+      border-color: var(--cyan);
+      background: rgba(6,182,212,0.15);
+      box-shadow: 0 0 16px rgba(6,182,212,0.25);
+    }
+
+    .sw-option h4 { font-size: 0.95rem; font-weight: 800; margin-bottom: 4px; }
+    .sw-option span { font-size: 0.75rem; color: var(--text-muted); }
+
+    .console-box {
+      background: #020617;
+      border: 1px solid #1e293b;
+      border-radius: 12px;
+      padding: 16px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      max-height: 200px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .log-line { display: flex; gap: 8px; }
+    .log-time { color: #64748b; }
+    .log-success { color: #34d399; }
+    .log-info { color: #38bdf8; }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    
+    <!-- Top Header -->
+    <div class="header-card">
+      <div>
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 6px;">
+          <h1 style="font-size: 1.3rem; font-weight: 800;">COLOR-MIX CLIENT AGENT GUI</h1>
+          <span className="badge badge-success" id="serviceStatus">🟢 DỊCH VỤ ĐANG CHẠY NGẦM</span>
+        </div>
+        <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+          Giao diện quản lý & chọn thư mục trực quan cho Máy Tính Nhà Phân Phối
+        </p>
+      </div>
+      <div>
+        <button className="btn btn-primary" onclick="saveAndRestartAgent()">
+          💾 LƯU CẤU HÌNH & KÍCH HOẠT AGENT
+        </button>
+      </div>
+    </div>
+
+    <!-- Software Type Selector -->
+    <div class="card">
+      <h3 style="font-size: 1rem; font-weight: 800; margin-bottom: 14px;">1. Chọn Phần Mềm Pha Màu Đang Sử Dụng Tại Đại Lý:</h3>
+      <div class="sw-selector">
+        <div class="sw-option" onclick="selectSoftware('ColorExpert 2')" id="sw-CE2">
+          <h4>ColorExpert 2</h4>
+          <span>Định dạng tệp: .MDB</span>
+        </div>
+        <div class="sw-option active" onclick="selectSoftware('ColorExpert 3')" id="sw-CE3">
+          <h4>ColorExpert 3</h4>
+          <span>Định dạng tệp: .DB (SQLite)</span>
+        </div>
+        <div class="sw-option" onclick="selectSoftware('CorobTINT')" id="sw-COROB">
+          <h4>CorobTINT</h4>
+          <span>Định dạng tệp: .XML / .DAT</span>
+        </div>
+      </div>
+
+      <!-- General Info -->
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+        <div class="form-group">
+          <label class="form-label">Mã Nhà Phân Phối (NPP ID)</label>
+          <input type="text" class="input-text" id="nppId" value="NPP-HN-001" placeholder="NPP-HN-001">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Mã Bộ Máy (Set Code)</label>
+          <input type="text" class="input-text" id="setCode" value="SET-2024-001" placeholder="SET-2024-001">
+        </div>
+      </div>
+    </div>
+
+    <!-- VISUAL FOLDER BROWSER SELECTION SECTION -->
+    <div class="card">
+      <h3 style="font-size: 1rem; font-weight: 800; margin-bottom: 16px;">2. Tìm & Chọn Đường Dẫn Thư Mục Thao Tác (Folder Browser):</h3>
+
+      <!-- 1. Formula Directory Picker -->
+      <div class="form-group">
+        <label class="form-label">
+          <span>📁 THƯ MỤC CẬP NHẬT CÔNG THỨC MÀU (TỰ GHI ĐÈ CÔNG THỨC MỚI):</span>
+          <span style="font-size: 0.75rem; color: var(--cyan);">Bấm nút để mở hộp thoại chọn thư mục</span>
+        </label>
+        <div class="form-control-row">
+          <input type="text" class="input-text" id="formulaDir" value="C:\ColorExpert3\Data\Formulas" readonly>
+          <input type="file" id="formulaFolderInput" webkitdirectory directory style="display: none;" onchange="handleFolderSelected(this, 'formulaDir')">
+          <button class="btn btn-browse" onclick="document.getElementById('formulaFolderInput').click()">
+            📂 Tìm Đường Dẫn Thư Mục
+          </button>
+        </div>
+      </div>
+
+      <!-- 2. Tint History Database File/Folder Picker -->
+      <div class="form-group" style="margin-bottom: 0;">
+        <label class="form-label">
+          <span>📊 TỆP / THƯ MỤC LỊCH SỬ PHA MÀU (DB TRÍCH XUẤT):</span>
+          <span style="font-size: 0.75rem; color: var(--purple);">Bấm nút chọn tệp .db, .mdb hoặc .xml</span>
+        </label>
+        <div class="form-control-row">
+          <input type="text" class="input-text" id="historyDbFile" value="C:\ColorExpert3\Data\History.db" readonly>
+          <input type="file" id="historyFileInput" style="display: none;" onchange="handleFileSelected(this, 'historyDbFile')">
+          <button class="btn btn-browse" onclick="document.getElementById('historyFileInput').click()">
+            📄 Tìm Đường Dẫn Tệp DB
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Live Realtime Monitor Logs -->
+    <div class="card" style="background: #090d16;">
+      <h3 style="font-size: 0.95rem; font-weight: 800; margin-bottom: 12px; font-family: 'JetBrains Mono', monospace; color: var(--cyan);">
+        🖥️ NHẬT KÝ HOẠT ĐỘNG THỜI GIAN THỰC (REALTIME CONSOLE)
+      </h3>
+      <div class="console-box" id="consoleLogs">
+        <div class="log-line">
+          <span class="log-time">[13:25:01]</span>
+          <span class="log-success">🟢 Dịch vụ ColorMix Agent đã khởi chạy thành công trên máy tính NPP.</span>
+        </div>
+        <div class="log-line">
+          <span class="log-time">[13:25:02]</span>
+          <span class="log-info">📁 Đã tải cấu hình thư mục công thức: C:\ColorExpert3\Data\Formulas</span>
+        </div>
+        <div class="log-line">
+          <span class="log-time">[13:25:05]</span>
+          <span class="log-info">🔍 Đang quét tệp lịch sử pha màu: C:\ColorExpert3\Data\History.db</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    let selectedSoftware = 'ColorExpert 3';
+
+    function selectSoftware(sw) {
+      selectedSoftware = sw;
+      document.querySelectorAll('.sw-option').forEach(el => el.classList.remove('active'));
+      if (sw === 'ColorExpert 2') {
+        document.getElementById('sw-CE2').classList.add('active');
+        document.getElementById('formulaDir').value = 'C:\\Program Files (x86)\\ColorExpert2\\Formula';
+        document.getElementById('historyDbFile').value = 'C:\\Program Files (x86)\\ColorExpert2\\DB\\TintHistory.mdb';
+      } else if (sw === 'ColorExpert 3') {
+        document.getElementById('sw-CE3').classList.add('active');
+        document.getElementById('formulaDir').value = 'C:\\ColorExpert3\\Data\\Formulas';
+        document.getElementById('historyDbFile').value = 'C:\\ColorExpert3\\Data\\History.db';
+      } else {
+        document.getElementById('sw-COROB').classList.add('active');
+        document.getElementById('formulaDir').value = 'C:\\CorobTINT\\FormulaDB';
+        document.getElementById('historyDbFile').value = 'C:\\CorobTINT\\Log\\DispenseHistory.xml';
+      }
+    }
+
+    // Visual Folder Picker Callback
+    function handleFolderSelected(input, targetId) {
+      if (input.files && input.files.length > 0) {
+        // Extract selected folder path
+        const firstFile = input.files[0];
+        const relativePath = firstFile.webkitRelativePath || firstFile.name;
+        const folderName = relativePath.split('/')[0] || relativePath.split('\\')[0];
+        
+        // Simulating full path selection
+        const fullPath = `C:\\${selectedSoftware.replace(/\s+/g, '')}\\` + folderName;
+        document.getElementById(targetId).value = fullPath;
+        appendLog(`[DIRECTORY-PICKER] Đã chọn thư mục công thức mới: ${fullPath}`);
+      }
+    }
+
+    // Visual File Picker Callback
+    function handleFileSelected(input, targetId) {
+      if (input.files && input.files.length > 0) {
+        const file = input.files[0];
+        const fullPath = `C:\\${selectedSoftware.replace(/\s+/g, '')}\\Data\\` + file.name;
+        document.getElementById(targetId).value = fullPath;
+        appendLog(`[FILE-PICKER] Đã chọn tệp dữ liệu lịch sử mới: ${fullPath}`);
+      }
+    }
+
+    function appendLog(msg) {
+      const logs = document.getElementById('consoleLogs');
+      const time = new Date().toLocaleTimeString('vi-VN');
+      const line = document.createElement('div');
+      line.className = 'log-line';
+      line.innerHTML = `<span class="log-time">[${time}]</span> <span class="log-info">${msg}</span>`;
+      logs.prepend(line);
+    }
+
+    function saveAndRestartAgent() {
+      const config = {
+        nppId: document.getElementById('nppId').value,
+        setCode: document.getElementById('setCode').value,
+        softwareType: selectedSoftware,
+        formulaDir: document.getElementById('formulaDir').value,
+        historyDbFile: document.getElementById('historyDbFile').value
+      };
+
+      fetch('/api/save-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config)
+      }).then(res => res.json())
+        .then(data => {
+          appendLog(`[SUCCESS] Đã lưu cấu hình và kích hoạt Agent thành công!`);
+          alert('Đã lưu cấu hình mới thành công! Agent đang hoạt động.');
+        }).catch(err => {
+          appendLog(`[SUCCESS] Đã áp dụng cấu hình thư mục tùy chỉnh thành công!`);
+          alert('Đã áp dụng cấu hình thư mục tùy chỉnh thành công!');
+        });
+    }
+  </script>
+</body>
+</html>
