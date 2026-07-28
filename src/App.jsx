@@ -16,33 +16,30 @@ import DeviceRepairProcessing from './components/DeviceRepairProcessing';
 import ExcelImportModal from './components/ExcelImportModal';
 
 import {
-  INITIAL_NPPS,
-  INITIAL_DISPENSERS,
-  INITIAL_MIXERS,
-  INITIAL_COMPUTERS,
-  INITIAL_PRINTERS,
-  INITIAL_SYSTEM_SETS,
   INITIAL_FORMULA_VERSIONS,
-  INITIAL_TINTING_LOGS,
-  INITIAL_AUDIT_LOGS,
-  INITIAL_REPAIR_TICKETS
+  INITIAL_TINTING_LOGS
 } from './data/mockData';
+
+import { useNpps } from './hooks/useNpps.js';
+import { useAssets } from './hooks/useAssets.js';
+import { useRepairs } from './hooks/useRepairs.js';
+import { useAuditLogs } from './hooks/useAuditLogs.js';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [globalSearch, setGlobalSearch] = useState('');
 
-  // Main State
-  const [npps, setNpps] = useState(INITIAL_NPPS);
-  const [dispensers, setDispensers] = useState(INITIAL_DISPENSERS);
-  const [mixers, setMixers] = useState(INITIAL_MIXERS);
-  const [computers, setComputers] = useState(INITIAL_COMPUTERS);
-  const [printers, setPrinters] = useState(INITIAL_PRINTERS);
-  const [systemSets, setSystemSets] = useState(INITIAL_SYSTEM_SETS);
+  // Main State via Supabase hooks
+  const { npps, addNpp, editNpp, deleteNpp } = useNpps();
+  const {
+    dispensers, setDispensers, mixers, setMixers, computers, setComputers, printers, setPrinters, systemSets, setSystemSets,
+    addStockDevice, editDevice, deleteDevice, assembleSet, updateSystemSet
+  } = useAssets();
+  const { repairTickets, addTicket, editTicket, deleteTicket } = useRepairs();
+  const { auditLogs, addAuditLog } = useAuditLogs();
+
   const [formulaVersions, setFormulaVersions] = useState(INITIAL_FORMULA_VERSIONS);
   const [tintingLogs, setTintingLogs] = useState(INITIAL_TINTING_LOGS);
-  const [auditLogs, setAuditLogs] = useState(INITIAL_AUDIT_LOGS);
-  const [repairTickets, setRepairTickets] = useState(INITIAL_REPAIR_TICKETS);
 
   // Excel Import Modal state
   const [showImportModal, setShowImportModal] = useState(false);
@@ -73,81 +70,106 @@ export default function App() {
   const pendingRepairCount = repairTickets.filter(t => t.processingStatus === 'Chưa xử lý').length;
 
   // Repair Tickets Handlers
-  const handleAddTicket = (newTicket) => {
-    setRepairTickets(prev => [newTicket, ...prev]);
-    const newAudit = {
-      id: `AUDIT-00${auditLogs.length + 1}`,
-      type: 'TẠO PHIẾU SỬA CHỮA',
-      timestamp: new Date().toISOString().replace('T', ' ').substring(0, 16),
-      setCode: newTicket.serialNumber,
-      nppId: newTicket.nppId,
-      nppName: newTicket.nppName,
-      serialList: `${newTicket.productCategory}: ${newTicket.machineModel} (${newTicket.serialNumber})`,
-      technician: newTicket.technician,
-      reason: `Tạo phiếu xử lý máy [${newTicket.ticketCode}]`,
-      notes: newTicket.errorDescription
-    };
-    setAuditLogs(prev => [newAudit, ...prev]);
+  const handleAddTicket = async (newTicket) => {
+    try {
+      const added = await addTicket(newTicket);
+      await addAuditLog({
+        type: 'TẠO PHIẾU SỬA CHỮA',
+        setCode: added.serialNumber,
+        nppId: added.nppId,
+        nppName: added.nppName,
+        serialList: `${added.productCategory}: ${added.machineModel} (${added.serialNumber})`,
+        technician: added.technician,
+        reason: `Tạo phiếu xử lý máy [${added.ticketCode}]`,
+        notes: added.errorDescription
+      });
+    } catch (err) {
+      console.error(err);
+      alert('Lỗi tạo phiếu sửa chữa: ' + err.message);
+    }
   };
 
-  const handleEditTicket = (updatedTicket) => {
-    setRepairTickets(prev => prev.map(t => t.id === updatedTicket.id ? updatedTicket : t));
+  const handleEditTicket = async (updatedTicket) => {
+    try {
+      await editTicket(updatedTicket.id, updatedTicket);
+    } catch (err) {
+      console.error(err);
+      alert('Lỗi cập nhật phiếu sửa chữa: ' + err.message);
+    }
   };
 
-  const handleDeleteTicket = (ticketId) => {
-    setRepairTickets(prev => prev.filter(t => t.id !== ticketId));
+  const handleDeleteTicket = async (ticketId) => {
+    try {
+      await deleteTicket(ticketId);
+    } catch (err) {
+      console.error(err);
+      alert('Lỗi xóa phiếu sửa chữa: ' + err.message);
+    }
   };
 
   // NPP CRUD Handlers
-  const handleAddNpp = (newNpp) => {
-    setNpps(prev => [newNpp, ...prev]);
+  const handleAddNpp = async (newNpp) => {
+    try {
+      await addNpp(newNpp);
+    } catch (err) {
+      console.error(err);
+      alert('Lỗi thêm NPP: ' + err.message);
+    }
   };
 
-  const handleEditNpp = (updatedNpp) => {
-    setNpps(prev => prev.map(n => n.id === updatedNpp.id ? updatedNpp : n));
-    setSystemSets(prev => prev.map(s => s.nppId === updatedNpp.id ? { ...s, nppName: updatedNpp.name, region: updatedNpp.region } : s));
+  const handleEditNpp = async (updatedNpp) => {
+    try {
+      await editNpp(updatedNpp.id, updatedNpp);
+      // Let backend real-time updates propagate the changes
+    } catch (err) {
+      console.error(err);
+      alert('Lỗi sửa NPP: ' + err.message);
+    }
   };
 
-  const handleDeleteNpp = (nppId) => {
+  const handleDeleteNpp = async (nppId) => {
     const hasAssignedSets = systemSets.some(s => s.nppId === nppId && s.status === 'DA_LAP_DAT');
     if (hasAssignedSets) {
       alert('Không thể xóa NPP này vì vẫn còn bộ máy đang lắp đặt. Vui lòng thu hồi bộ máy trước!');
       return;
     }
-    setNpps(prev => prev.filter(n => n.id !== nppId));
+    try {
+      await deleteNpp(nppId);
+    } catch (err) {
+      console.error(err);
+      alert('Lỗi xóa NPP: ' + err.message);
+    }
   };
 
   // Device CRUD Handlers
-  const handleEditDevice = (category, updatedData) => {
-    if (category === 'dispenser') setDispensers(prev => prev.map(d => d.id === updatedData.id ? updatedData : d));
-    if (category === 'mixer') setMixers(prev => prev.map(m => m.id === updatedData.id ? updatedData : m));
-    if (category === 'computer') setComputers(prev => prev.map(c => c.id === updatedData.id ? updatedData : c));
-    if (category === 'printer') setPrinters(prev => prev.map(p => p.id === updatedData.id ? updatedData : p));
+  const handleEditDevice = async (category, updatedData) => {
+    try {
+      await editDevice(category === 'computer' ? 'computers' : category === 'dispenser' ? 'dispensers' : category === 'mixer' ? 'mixers' : 'printers', updatedData.id, updatedData);
+    } catch (err) {
+      console.error(err);
+      alert('Lỗi sửa thiết bị: ' + err.message);
+    }
   };
 
-  const handleDeleteDevice = (category, deviceId) => {
-    if (category === 'dispenser') setDispensers(prev => prev.filter(d => d.id !== deviceId));
-    if (category === 'mixer') setMixers(prev => prev.filter(m => m.id !== deviceId));
-    if (category === 'computer') setComputers(prev => prev.filter(c => c.id !== deviceId));
-    if (category === 'printer') setPrinters(prev => prev.filter(p => p.id !== deviceId));
+  const handleDeleteDevice = async (category, deviceId) => {
+    try {
+      await deleteDevice(category === 'computer' ? 'computers' : category === 'dispenser' ? 'dispensers' : category === 'mixer' ? 'mixers' : 'printers', deviceId);
+    } catch (err) {
+      console.error(err);
+      alert('Lỗi xóa thiết bị: ' + err.message);
+    }
   };
 
-  const handleAddStockDevice = (category, newDeviceData) => {
-    const prefix = category === 'dispenser' ? 'DISP' : category === 'mixer' ? 'MIX' : category === 'computer' ? 'PC' : 'PRN';
-    const newObj = {
-      ...newDeviceData,
-      id: `${prefix}-STOCK-00${Date.now().toString().slice(-3)}`,
-      isAssigned: false,
-      setCode: null
-    };
-
-    if (category === 'dispenser') setDispensers(prev => [newObj, ...prev]);
-    if (category === 'mixer') setMixers(prev => [newObj, ...prev]);
-    if (category === 'computer') setComputers(prev => [newObj, ...prev]);
-    if (category === 'printer') setPrinters(prev => [newObj, ...prev]);
+  const handleAddStockDevice = async (category, newDeviceData) => {
+    try {
+      await addStockDevice(category, newDeviceData);
+    } catch (err) {
+      console.error(err);
+      alert('Lỗi thêm thiết bị: ' + err.message);
+    }
   };
 
-  const handleAssembleSet = (newCombo) => {
+  const handleAssembleSet = async (newCombo) => {
     const disp = dispensers.find(d => d.id === newCombo.dispenserId);
     const mix = mixers.find(m => m.id === newCombo.mixerId);
     const pc = computers.find(c => c.id === newCombo.computerId);
@@ -156,171 +178,161 @@ export default function App() {
     const setCode = `SET-2026-00${systemSets.length + 1}`;
 
     const newSetObj = {
-      id: setCode,
-      setCode,
-      nppId: null,
-      nppName: 'Kho Tổng Trung Tâm',
+      set_code: setCode,
+      npp_id: null,
+      npp_name: 'Kho Tổng Trung Tâm',
       region: 'Kho Tổng',
-      dispenserSerial: disp?.serial || 'N/A',
-      dispenserModel: disp?.model || 'N/A',
-      mixerSerial: mix?.serial || 'N/A',
-      mixerModel: mix?.model || 'N/A',
-      pcSerial: pc?.serial || 'N/A',
-      pcType: pc?.type || 'N/A',
-      pcOs: pc?.os || 'N/A',
-      printerSerial: prn?.serial || 'N/A',
-      printerModel: prn?.model || 'QL700',
+      dispenser_id: disp?.id || null,
+      dispenser_serial: disp?.serial || 'N/A',
+      dispenser_model: disp?.model || 'N/A',
+      mixer_id: mix?.id || null,
+      mixer_serial: mix?.serial || 'N/A',
+      mixer_model: mix?.model || 'N/A',
+      computer_id: pc?.id || null,
+      computer_serial: pc?.serial || 'N/A',
+      computer_type: pc?.type || 'N/A',
+      printer_id: prn?.id || null,
+      printer_serial: prn?.serial || 'N/A',
+      printer_model: prn?.model || 'QL700',
       stabilizer: 'NPP tự trang bị khi lắp đặt',
       status: 'TRONG_KHO',
-      installedDate: null,
-      lastMaintenanceDate: null,
-      nextMaintenanceDue: null,
+      install_date: null,
+      last_maintenance_date: null,
+      next_maintenance_due: null,
       technician: 'Quản lý Kho',
-      tintingSoftware: 'ColorExpert 3',
-      softwareVersion: 'Standard Stock',
-      agentStatus: 'Offline',
-      installationPhotos: []
+      tinting_software: 'ColorExpert 3',
+      software_version: 'Standard Stock',
+      agent_status: 'Offline',
+      installation_photos: []
     };
 
-    setSystemSets(prev => [newSetObj, ...prev]);
-
-    if (disp) setDispensers(prev => prev.map(d => d.id === disp.id ? { ...d, isAssigned: true, setCode } : d));
-    if (mix) setMixers(prev => prev.map(m => m.id === mix.id ? { ...m, isAssigned: true, setCode } : m));
-    if (pc) setComputers(prev => prev.map(c => c.id === pc.id ? { ...c, isAssigned: true, setCode } : c));
-    if (prn) setPrinters(prev => prev.map(p => p.id === prn.id ? { ...p, isAssigned: true, setCode } : p));
+    try {
+      await assembleSet(newSetObj);
+      if (disp) await editDevice('dispensers', disp.id, { is_assigned: true, set_code: setCode });
+      if (mix) await editDevice('mixers', mix.id, { is_assigned: true, set_code: setCode });
+      if (pc) await editDevice('computers', pc.id, { is_assigned: true, set_code: setCode });
+      if (prn) await editDevice('printers', prn.id, { is_assigned: true, set_code: setCode });
+    } catch (err) {
+      console.error(err);
+      alert('Lỗi ráp bộ máy: ' + err.message);
+    }
   };
 
-  const handleInstallSubmit = (data) => {
+  const handleInstallSubmit = async (data) => {
     const targetNpp = npps.find(n => n.id === data.nppId);
 
-    setSystemSets(prev => prev.map(s => {
-      if (s.setCode === data.setCode) {
-        return {
-          ...s,
-          nppId: data.nppId,
-          nppName: targetNpp ? targetNpp.name : 'NPP',
-          region: targetNpp ? targetNpp.region : 'Việt Nam',
-          status: 'DA_LAP_DAT',
-          installedDate: data.installedDate,
-          lastMaintenanceDate: data.installedDate,
-          nextMaintenanceDue: data.nextMaintenanceDue,
-          stabilizer: data.stabilizer,
-          technician: data.technician,
-          agentStatus: 'Online',
-          installationPhotos: data.installationPhotos || []
-        };
+    try {
+      await updateSystemSet(data.setCode, {
+        npp_id: data.nppId,
+        npp_name: targetNpp ? targetNpp.name : 'NPP',
+        region: targetNpp ? targetNpp.region : 'Việt Nam',
+        status: 'DA_LAP_DAT',
+        install_date: data.installedDate,
+        last_maintenance_date: data.installedDate,
+        next_maintenance_due: data.nextMaintenanceDue,
+        stabilizer: data.stabilizer,
+        technician: data.technician,
+        agent_status: 'Online',
+        installation_photos: data.installationPhotos || []
+      });
+
+      if (data.installationPhotos && data.installationPhotos.length > 0 && targetNpp) {
+        await editNpp(data.nppId, { photos: [...(targetNpp.photos || []), ...data.installationPhotos] });
       }
-      return s;
-    }));
 
-    if (data.installationPhotos && data.installationPhotos.length > 0 && targetNpp) {
-      setNpps(prev => prev.map(n => n.id === data.nppId ? { ...n, photos: [...(n.photos || []), ...data.installationPhotos] } : n));
+      await addAuditLog({
+        type: 'LẮP ĐẶT MỚI',
+        setCode: data.setCode,
+        nppId: data.nppId,
+        nppName: targetNpp ? targetNpp.name : 'NPP',
+        serialList: `Bộ máy ${data.setCode}`,
+        technician: data.technician,
+        reason: 'Lắp mới bộ máy pha màu cho NPP',
+        notes: data.notes || 'Bàn giao chạy thử tốt.'
+      });
+    } catch (err) {
+      console.error(err);
+      alert('Lỗi lắp đặt máy: ' + err.message);
     }
-
-    const newAudit = {
-      id: `AUDIT-00${auditLogs.length + 1}`,
-      type: 'LẮP ĐẶT MỚI',
-      timestamp: new Date().toISOString().replace('T', ' ').substring(0, 16),
-      setCode: data.setCode,
-      nppId: data.nppId,
-      nppName: targetNpp ? targetNpp.name : 'NPP',
-      serialList: `Bộ máy ${data.setCode}`,
-      technician: data.technician,
-      reason: 'Lắp mới bộ máy pha màu cho NPP',
-      notes: data.notes || 'Bàn giao chạy thử tốt.'
-    };
-    setAuditLogs(prev => [newAudit, ...prev]);
   };
 
-  const handleWithdrawSubmit = (data) => {
+  const handleWithdrawSubmit = async (data) => {
     const targetSet = systemSets.find(s => s.setCode === data.setCode);
 
-    setSystemSets(prev => prev.map(s => {
-      if (s.setCode === data.setCode) {
-        return {
-          ...s,
-          status: 'DA_THU_HOI',
-          nppId: null,
-          nppName: 'Kho Tổng (Đã thu hồi)',
-          agentStatus: 'Offline'
-        };
-      }
-      return s;
-    }));
+    try {
+      await updateSystemSet(data.setCode, {
+        status: 'DA_THU_HOI',
+        npp_id: null,
+        npp_name: 'Kho Tổng (Đã thu hồi)',
+        agent_status: 'Offline'
+      });
 
-    const newAudit = {
-      id: `AUDIT-00${auditLogs.length + 1}`,
-      type: 'THU HỒI',
-      timestamp: new Date().toISOString().replace('T', ' ').substring(0, 16),
-      setCode: data.setCode,
-      nppId: targetSet?.nppId || 'NPP',
-      nppName: targetSet?.nppName || 'NPP',
-      serialList: `Bộ máy ${data.setCode}`,
-      technician: data.technician,
-      reason: data.reason,
-      notes: `${data.deviceCondition} | ${data.notes}`
-    };
-    setAuditLogs(prev => [newAudit, ...prev]);
+      await addAuditLog({
+        type: 'THU HỒI',
+        setCode: data.setCode,
+        nppId: targetSet?.nppId || 'NPP',
+        nppName: targetSet?.nppName || 'NPP',
+        serialList: `Bộ máy ${data.setCode}`,
+        technician: data.technician,
+        reason: data.reason,
+        notes: `${data.deviceCondition} | ${data.notes}`
+      });
+    } catch (err) {
+      console.error(err);
+      alert('Lỗi thu hồi máy: ' + err.message);
+    }
   };
 
-  const handleTransferSubmit = (data) => {
+  const handleTransferSubmit = async (data) => {
     const targetNpp = npps.find(n => n.id === data.newNppId);
     const targetSet = systemSets.find(s => s.setCode === data.setCode);
 
-    setSystemSets(prev => prev.map(s => {
-      if (s.setCode === data.setCode) {
-        return {
-          ...s,
-          nppId: data.newNppId,
-          nppName: targetNpp ? targetNpp.name : 'NPP Mới',
-          region: targetNpp ? targetNpp.region : s.region
-        };
-      }
-      return s;
-    }));
+    try {
+      await updateSystemSet(data.setCode, {
+        npp_id: data.newNppId,
+        npp_name: targetNpp ? targetNpp.name : 'NPP Mới',
+        region: targetNpp ? targetNpp.region : targetSet.region
+      });
 
-    const newAudit = {
-      id: `AUDIT-00${auditLogs.length + 1}`,
-      type: 'ĐIỀU CHUYỂN NPP',
-      timestamp: new Date().toISOString().replace('T', ' ').substring(0, 16),
-      setCode: data.setCode,
-      nppId: data.newNppId,
-      nppName: `Từ ${targetSet?.nppName} sang ${targetNpp?.name}`,
-      serialList: `Bộ máy ${data.setCode}`,
-      technician: data.technician,
-      reason: data.reason || 'Điều chuyển tối ưu',
-      notes: data.notes
-    };
-    setAuditLogs(prev => [newAudit, ...prev]);
+      await addAuditLog({
+        type: 'ĐIỀU CHUYỂN NPP',
+        setCode: data.setCode,
+        nppId: data.newNppId,
+        nppName: `Từ ${targetSet?.nppName} sang ${targetNpp?.name}`,
+        serialList: `Bộ máy ${data.setCode}`,
+        technician: data.technician,
+        reason: data.reason || 'Điều chuyển tối ưu',
+        notes: data.notes
+      });
+    } catch (err) {
+      console.error(err);
+      alert('Lỗi điều chuyển máy: ' + err.message);
+    }
   };
 
-  const handleCompleteMaintenance = (maintData) => {
-    setSystemSets(prev => prev.map(s => {
-      if (s.setCode === maintData.setCode) {
-        return {
-          ...s,
-          lastMaintenanceDate: maintData.lastMaintenanceDate,
-          nextMaintenanceDue: maintData.nextMaintenanceDue,
-          status: 'DA_LAP_DAT'
-        };
-      }
-      return s;
-    }));
-
+  const handleCompleteMaintenance = async (maintData) => {
     const targetSet = systemSets.find(s => s.setCode === maintData.setCode);
-    const newAudit = {
-      id: `AUDIT-00${auditLogs.length + 1}`,
-      type: 'BẢO TRÌ / SỬA CHỮA',
-      timestamp: new Date().toISOString().replace('T', ' ').substring(0, 16),
-      setCode: maintData.setCode,
-      nppId: targetSet?.nppId,
-      nppName: targetSet?.nppName,
-      serialList: `Bảo trì bộ máy ${maintData.setCode}`,
-      technician: 'Kỹ thuật viên bảo trì',
-      reason: 'Bảo trì định kỳ 1 năm / lần',
-      notes: maintData.notes || 'Đã vệ sinh ống chiết và kiểm tra máy lắc.'
-    };
-    setAuditLogs(prev => [newAudit, ...prev]);
+    try {
+      await updateSystemSet(maintData.setCode, {
+        last_maintenance_date: maintData.lastMaintenanceDate,
+        next_maintenance_due: maintData.nextMaintenanceDue,
+        status: 'DA_LAP_DAT'
+      });
+
+      await addAuditLog({
+        type: 'BẢO TRÌ / SỬA CHỮA',
+        setCode: maintData.setCode,
+        nppId: targetSet?.nppId,
+        nppName: targetSet?.nppName,
+        serialList: `Bảo trì bộ máy ${maintData.setCode}`,
+        technician: 'Kỹ thuật viên bảo trì',
+        reason: 'Bảo trì định kỳ 1 năm / lần',
+        notes: maintData.notes || 'Đã vệ sinh ống chiết và kiểm tra máy lắc.'
+      });
+    } catch (err) {
+      console.error(err);
+      alert('Lỗi hoàn tất bảo trì: ' + err.message);
+    }
   };
 
   const handleTriggerRemotePush = (pushInfo) => {
