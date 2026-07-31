@@ -60,20 +60,45 @@ export function AuthProvider({ children }) {
         .eq('id', authUser.id)
         .single();
 
-      if (error) throw error;
+      let finalRole = profile?.role || ROLES.VIEWER;
+      
+      // Auto bootstrap admin role for specific user email
+      if (authUser.email === 'dat291219962.hust@gmail.com') {
+        finalRole = ROLES.ADMIN;
+        // Attempt database updates if role in DB is different
+        if (!profile || profile.role !== ROLES.ADMIN) {
+          try {
+            await supabase.from('profiles').upsert({
+              id: authUser.id,
+              role: ROLES.ADMIN,
+              full_name: profile?.full_name || 'Admin Nasun'
+            });
+          } catch (upsertErr) {
+            console.error('[Auth] Failed to update admin profile row:', upsertErr.message);
+          }
+        }
+      } else if (error) {
+        throw error;
+      }
 
       setUser({
         id: authUser.id,
         email: authUser.email,
         name: profile?.full_name || authUser.email,
-        role: profile?.role || ROLES.VIEWER,
+        role: finalRole,
         avatarUrl: profile?.avatar_url || null,
       });
-      setRole(profile?.role || ROLES.VIEWER);
+      setRole(finalRole);
     } catch (err) {
       console.error('[Auth] Failed to load user profile:', err.message);
-      setUser({ id: authUser.id, email: authUser.email, name: authUser.email, role: ROLES.VIEWER });
-      setRole(ROLES.VIEWER);
+      const isSpecificAdmin = authUser.email === 'dat291219962.hust@gmail.com';
+      setUser({ 
+        id: authUser.id, 
+        email: authUser.email, 
+        name: authUser.email, 
+        role: isSpecificAdmin ? ROLES.ADMIN : ROLES.VIEWER 
+      });
+      setRole(isSpecificAdmin ? ROLES.ADMIN : ROLES.VIEWER);
     } finally {
       setLoading(false);
     }

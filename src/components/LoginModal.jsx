@@ -1,13 +1,16 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { supabase } from '../lib/supabase.js';
-import { Lock, Mail, ShieldAlert, Cpu, User, ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { Lock, Mail, ShieldAlert, Cpu, User, ArrowLeft, CheckCircle2, Eye, EyeOff } from 'lucide-react';
 
 export default function LoginModal() {
   const { user, isDevMode, switchDevRole, loading } = useAuth();
   
   // activeForm: 'login' | 'signup' | 'forgot'
   const [activeForm, setActiveForm] = useState('login');
+  
+  // Password visibility
+  const [showPassword, setShowPassword] = useState(false);
   
   // Input states
   const [email, setEmail] = useState('');
@@ -250,6 +253,23 @@ export default function LoginModal() {
           </div>
         )}
 
+        {/* Info banner for Production mode initial sign up */}
+        {!isDevMode && activeForm === 'login' && (
+          <div style={{
+            background: 'rgba(6, 182, 212, 0.05)',
+            border: '1px solid rgba(6, 182, 212, 0.25)',
+            borderRadius: '8px',
+            padding: '10px 12px',
+            marginBottom: '18px',
+            textAlign: 'left',
+            fontSize: '0.75rem',
+            lineHeight: 1.4,
+            color: 'var(--text-main)'
+          }}>
+            🔑 <strong>Kích hoạt Admin:</strong> Nếu đăng nhập lần đầu tiên với tài khoản <strong style={{ color: 'var(--accent-cyan)' }}>dat291219962.hust@gmail.com</strong>, vui lòng nhấn <strong>Đăng ký ngay</strong> bên dưới trước để khởi tạo tài khoản, hệ thống sẽ tự động cấp quyền Admin Nasun.
+          </div>
+        )}
+
         {/* ── FORM 1: LOGIN ───────────────────────────────────────────────────── */}
         {activeForm === 'login' && (
           <form onSubmit={handleLoginSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -283,14 +303,34 @@ export default function LoginModal() {
               <div style={{ position: 'relative' }}>
                 <Lock size={16} color="var(--text-muted)" style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)' }} />
                 <input 
-                  type="password" 
+                  type={showPassword ? 'text' : 'password'} 
                   required 
                   placeholder="Nhập mật khẩu"
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   className="form-input" 
-                  style={{ paddingLeft: '40px', width: '100%', boxSizing: 'border-box' }}
+                  style={{ paddingLeft: '40px', paddingRight: '40px', width: '100%', boxSizing: 'border-box' }}
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  style={{
+                    position: 'absolute',
+                    right: '12px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: '4px',
+                    color: 'var(--text-muted)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
               </div>
             </div>
 
@@ -356,14 +396,34 @@ export default function LoginModal() {
               <div style={{ position: 'relative' }}>
                 <Lock size={16} color="var(--text-muted)" style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)' }} />
                 <input 
-                  type="password" 
+                  type={showPassword ? 'text' : 'password'} 
                   required 
                   placeholder="Tối thiểu 6 ký tự"
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   className="form-input" 
-                  style={{ paddingLeft: '40px', width: '100%', boxSizing: 'border-box' }}
+                  style={{ paddingLeft: '40px', paddingRight: '40px', width: '100%', boxSizing: 'border-box' }}
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  style={{
+                    position: 'absolute',
+                    right: '12px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: '4px',
+                    color: 'var(--text-muted)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
               </div>
             </div>
 
