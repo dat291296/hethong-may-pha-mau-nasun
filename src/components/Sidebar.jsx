@@ -50,23 +50,44 @@ export default function Sidebar({ activeTab, setActiveTab, maintenanceCount, pen
         alignItems: 'center',
         gap: '12px'
       }}>
-        <div style={{
-          width: '40px',
-          height: '40px',
-          borderRadius: '10px',
-          background: 'linear-gradient(135deg, #0284c7 0%, #06b6d4 100%)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: '#fff',
-          fontWeight: 'bold',
-          boxShadow: '0 4px 12px rgba(6, 182, 212, 0.4)'
-        }}>
-          <ShieldCheck size={24} />
+        {/* Attempt to load public/nasun_logo.png with error handling fallback */}
+        <div style={{ position: 'relative', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <img 
+            src="/nasun_logo.png" 
+            alt="Nasun Logo" 
+            onError={(e) => {
+              e.target.style.display = 'none';
+              const fallback = e.target.nextSibling;
+              if (fallback) fallback.style.display = 'flex';
+            }}
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'contain',
+              borderRadius: '6px'
+            }}
+          />
+          <div 
+            className="logo-fallback"
+            style={{
+              display: 'none', // Shown only if image fails to load
+              width: '40px',
+              height: '40px',
+              borderRadius: '10px',
+              background: 'linear-gradient(135deg, #0284c7 0%, #06b6d4 100%)',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#fff',
+              fontWeight: 'bold',
+              boxShadow: '0 4px 12px rgba(6, 182, 212, 0.4)'
+            }}
+          >
+            <ShieldCheck size={24} />
+          </div>
         </div>
         <div>
           <h2 style={{ fontSize: '1.05rem', fontWeight: '800', color: 'var(--text-main)', letterSpacing: '-0.02em', lineHeight: 1.2 }}>
-            COLOR-MIX
+            NASUN COLOR
           </h2>
           <span style={{ fontSize: '0.725rem', color: 'var(--accent-cyan)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
             Hệ Thống Pha Màu
