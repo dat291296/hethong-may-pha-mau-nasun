@@ -31,11 +31,11 @@ export function useAssets() {
       safeQuery(sb => sb.from('printers').select('*').order('created_at', { ascending: false }), 'fetchPrinters'),
       safeQuery(sb => sb.from('system_sets').select('*').order('created_at', { ascending: false }), 'fetchSystemSets'),
     ]);
-    if (dRes.data) setDispensers(dRes.data.map(mapDbToDispenser));
-    if (mRes.data) setMixers(mRes.data.map(mapDbToMixer));
-    if (cRes.data) setComputers(cRes.data.map(mapDbToComputer));
-    if (pRes.data) setPrinters(pRes.data.map(mapDbToPrinter));
-    if (sRes.data) setSystemSets(sRes.data.map(mapDbToSystemSet));
+    if (dRes.data && dRes.data.length > 0) setDispensers(dRes.data.map(mapDbToDispenser));
+    if (mRes.data && mRes.data.length > 0) setMixers(mRes.data.map(mapDbToMixer));
+    if (cRes.data && cRes.data.length > 0) setComputers(cRes.data.map(mapDbToComputer));
+    if (pRes.data && pRes.data.length > 0) setPrinters(pRes.data.map(mapDbToPrinter));
+    if (sRes.data && sRes.data.length > 0) setSystemSets(sRes.data.map(mapDbToSystemSet));
     setLoading(false);
   }, []);
 

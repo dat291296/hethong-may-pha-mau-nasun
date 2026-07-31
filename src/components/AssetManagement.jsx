@@ -14,6 +14,12 @@ import {
   X,
   FileSpreadsheet
 } from 'lucide-react';
+import {
+  INITIAL_DISPENSERS,
+  INITIAL_MIXERS,
+  INITIAL_COMPUTERS,
+  INITIAL_PRINTERS
+} from '../data/mockData';
 
 export default function AssetManagement({
   systemSets,
@@ -69,6 +75,23 @@ export default function AssetManagement({
     onAssembleSet(newSetData);
     setShowAssembleModal(false);
     setNewSetData({ dispenserId: '', mixerId: '', computerId: '', printerId: '' });
+  };
+
+  const handleOpenAddDevice = (category) => {
+    setAddDeviceCategory(category);
+    setAddFormData({
+      model: '',
+      serial: '',
+      status: 'Mới 100%',
+      type: 'Lắc xoay khép kín',
+      os: 'Windows 11 Pro',
+      specs: 'Core i5 / 16GB RAM / 512GB SSD',
+      network: 'Có mạng LAN',
+      connection: 'USB',
+      hasStabilizer: false,
+      stabilizerBrand: ''
+    });
+    setShowAddDeviceModal(true);
   };
 
   const handleOpenEditDevice = (category, data) => {
@@ -549,19 +572,19 @@ export default function AssetManagement({
                     return true;
                   };
 
-                  const allDisp = (dispensers && dispensers.length > 0) ? dispensers : [];
+                  const allDisp = (dispensers && dispensers.length > 0) ? dispensers : INITIAL_DISPENSERS;
                   const freeDisp = allDisp.filter(isDeviceFree);
                   const availDisp = freeDisp.length > 0 ? freeDisp : allDisp;
 
-                  const allMix = (mixers && mixers.length > 0) ? mixers : [];
+                  const allMix = (mixers && mixers.length > 0) ? mixers : INITIAL_MIXERS;
                   const freeMix = allMix.filter(isDeviceFree);
                   const availMix = freeMix.length > 0 ? freeMix : allMix;
 
-                  const allPc = (computers && computers.length > 0) ? computers : [];
+                  const allPc = (computers && computers.length > 0) ? computers : INITIAL_COMPUTERS;
                   const freePc = allPc.filter(isDeviceFree);
                   const availPc = freePc.length > 0 ? freePc : allPc;
 
-                  const allPrn = (printers && printers.length > 0) ? printers : [];
+                  const allPrn = (printers && printers.length > 0) ? printers : INITIAL_PRINTERS;
                   const freePrn = allPrn.filter(isDeviceFree);
                   const availPrn = freePrn.length > 0 ? freePrn : allPrn;
 
@@ -573,7 +596,7 @@ export default function AssetManagement({
                           <button 
                             type="button" 
                             style={{ background: 'none', border: 'none', color: 'var(--accent-cyan)', fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline' }}
-                            onClick={() => { setShowAssembleModal(false); openAddDeviceModal('dispenser'); }}
+                            onClick={() => { setShowAssembleModal(false); handleOpenAddDevice('dispenser'); }}
                           >
                             + Thêm máy chiết mới vào kho
                           </button>
@@ -594,7 +617,7 @@ export default function AssetManagement({
                           <button 
                             type="button" 
                             style={{ background: 'none', border: 'none', color: 'var(--accent-cyan)', fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline' }}
-                            onClick={() => { setShowAssembleModal(false); openAddDeviceModal('mixer'); }}
+                            onClick={() => { setShowAssembleModal(false); handleOpenAddDevice('mixer'); }}
                           >
                             + Thêm máy lắc mới vào kho
                           </button>
@@ -615,7 +638,7 @@ export default function AssetManagement({
                           <button 
                             type="button" 
                             style={{ background: 'none', border: 'none', color: 'var(--accent-cyan)', fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline' }}
-                            onClick={() => { setShowAssembleModal(false); openAddDeviceModal('computer'); }}
+                            onClick={() => { setShowAssembleModal(false); handleOpenAddDevice('computer'); }}
                           >
                             + Thêm máy tính mới vào kho
                           </button>
@@ -636,7 +659,7 @@ export default function AssetManagement({
                           <button 
                             type="button" 
                             style={{ background: 'none', border: 'none', color: 'var(--accent-cyan)', fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline' }}
-                            onClick={() => { setShowAssembleModal(false); openAddDeviceModal('printer'); }}
+                            onClick={() => { setShowAssembleModal(false); handleOpenAddDevice('printer'); }}
                           >
                             + Thêm máy in mới vào kho
                           </button>

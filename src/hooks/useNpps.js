@@ -20,7 +20,7 @@ export function useNpps() {
       'fetchNpps'
     );
     if (err) { setError(err.message); }
-    else if (data) { setNpps(data.map(mapDbToNpp)); }
+    else if (data && data.length > 0) { setNpps(data.map(mapDbToNpp)); }
     setLoading(false);
   }, []);
 
