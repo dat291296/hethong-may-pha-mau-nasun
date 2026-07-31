@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase, isSupabaseConfigured, safeQuery } from '../lib/supabase.js';
 import { INITIAL_AUDIT_LOGS } from '../data/mockData.js';
+import { cacheOfflineData, getCachedOfflineData, enqueueOfflineAction } from '../lib/offlineSync.js';
 
 export function useAuditLogs() {
-  const [auditLogs, setAuditLogs] = useState(INITIAL_AUDIT_LOGS);
+  const [auditLogs, setAuditLogs] = useState(() => getCachedOfflineData('audit_logs', INITIAL_AUDIT_LOGS));
   const [loading, setLoading] = useState(false);
 
   const fetchAuditLogs = useCallback(async () => {
@@ -13,8 +14,13 @@ export function useAuditLogs() {
       sb => sb.from('audit_logs').select('*').order('timestamp', { ascending: false }),
       'fetchAuditLogs'
     );
-    if (data) {
-      setAuditLogs(data.map(mapDbToAudit));
+    if (error) {
+      const cached = getCachedOfflineData('audit_logs', null);
+      if (cached) setAuditLogs(cached);
+    } else if (data && data.length > 0) {
+      const mapped = data.map(mapDbToAudit);
+      setAuditLogs(mapped);
+      cacheOfflineData('audit_logs', mapped);
     }
     setLoading(false);
   }, []);
@@ -34,24 +40,46 @@ export function useAuditLogs() {
   }, [fetchAuditLogs]);
 
   const addAuditLog = useCallback(async (logData) => {
-    if (isSupabaseConfigured) {
-      const { data, error } = await safeQuery(
-        sb => sb.from('audit_logs').insert(mapAuditToDb(logData)).select().single(),
-        'addAuditLog'
-      );
-      if (error) throw new Error(error.message);
-      setAuditLogs(prev => [mapDbToAudit(data), ...prev]);
-      return mapDbToAudit(data);
-    } else {
-      const newLog = {
-        ...logData,
-        id: logData.id || `AUDIT-00${auditLogs.length + 1}`,
-        timestamp: logData.timestamp || new Date().toISOString().replace('T', ' ').substring(0, 16)
-      };
-      setAuditLogs(prev => [newLog, ...prev]);
-      return newLog;
+    const tempId = logData.id || `AUDIT-TEMP-${Date.now()}`;
+    const localLog = {
+      ...logData,
+      id: tempId,
+      timestamp: logData.timestamp || new Date().toISOString().replace('T', ' ').substring(0, 16)
+    };
+    const dbPayload = mapAuditToDb(localLog);
+
+    // Update local state immediately
+    setAuditLogs(prev => {
+      const updated = [localLog, ...prev];
+      cacheOfflineData('audit_logs', updated);
+      return updated;
+    });
+
+    if (isSupabaseConfigured && navigator.onLine) {
+      try {
+        const { data, error } = await safeQuery(
+          sb => sb.from('audit_logs').insert(dbPayload).select().single(),
+          'addAuditLog'
+        );
+        if (error) throw error;
+        if (data) {
+          setAuditLogs(prev => {
+            const updated = prev.map(item => item.id === tempId ? mapDbToAudit(data) : item);
+            cacheOfflineData('audit_logs', updated);
+            return updated;
+          });
+        }
+      } catch (err) {
+        console.warn('[Offline] Failed online addAuditLog. Queueing.', err);
+        enqueueOfflineAction('ADD_AUDIT_LOG', dbPayload);
+      }
+    } else if (isSupabaseConfigured && !navigator.onLine) {
+      console.log('[Offline] Network down. Enqueueing addAuditLog.');
+      enqueueOfflineAction('ADD_AUDIT_LOG', dbPayload);
     }
-  }, [auditLogs.length]);
+
+    return localLog;
+  }, []);
 
   return {
     auditLogs,

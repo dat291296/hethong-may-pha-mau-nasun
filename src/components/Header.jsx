@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
-import { Bell, Search, PlusCircle, AlertTriangle, ShieldAlert, CheckCircle2, UserCheck } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Bell, Search, PlusCircle, AlertTriangle, ShieldAlert, CheckCircle2, UserCheck, Wifi, WifiOff, RefreshCw } from 'lucide-react';
 import RoleSelector from './RoleSelector.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { ROLE_LABELS, ROLE_COLORS } from '../security/rbac.js';
+import { getOfflineQueue, syncOfflineQueue } from '../lib/offlineSync.js';
 
 export default function Header({ 
   activeTab, 
@@ -14,6 +15,64 @@ export default function Header({
 }) {
   const [showNotifications, setShowNotifications] = useState(false);
   const { role, user, isDevMode } = useAuth();
+  
+  // Connection and sync states
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [queueCount, setQueueCount] = useState(0);
+  const [syncState, setSyncState] = useState('idle'); // idle | syncing | error
+  const [syncErrorMessage, setSyncErrorMessage] = useState('');
+
+  // Update states on mount and set listeners
+  useEffect(() => {
+    const updateStatus = () => {
+      setIsOnline(navigator.onLine);
+      if (navigator.onLine) {
+        // Auto trigger sync when back online
+        handleSync();
+      }
+    };
+
+    const updateQueueCount = () => {
+      setQueueCount(getOfflineQueue().length);
+    };
+
+    window.addEventListener('online', updateStatus);
+    window.addEventListener('offline', updateStatus);
+    window.addEventListener('offline-queue-updated', updateQueueCount);
+    
+    // Initial fetch
+    updateQueueCount();
+
+    // Try auto-sync on mount if online
+    if (navigator.onLine) {
+      handleSync();
+    }
+
+    return () => {
+      window.removeEventListener('online', updateStatus);
+      window.removeEventListener('offline', updateStatus);
+      window.removeEventListener('offline-queue-updated', updateQueueCount);
+    };
+  }, []);
+
+  const handleSync = async () => {
+    if (syncState === 'syncing' || !navigator.onLine) return;
+    
+    setSyncState('syncing');
+    setSyncErrorMessage('');
+    
+    const success = await syncOfflineQueue((status, remaining, err) => {
+      if (status === 'error') {
+        setSyncState('error');
+        setSyncErrorMessage(err || 'Đồng bộ thất bại');
+      }
+    });
+
+    if (success) {
+      setSyncState('idle');
+      setQueueCount(0);
+    }
+  };
 
   const getTitle = () => {
     switch (activeTab) {
@@ -47,9 +106,68 @@ export default function Header({
     }} className="no-print">
       {/* Title */}
       <div>
-        <h1 style={{ fontSize: '1.2rem', fontWeight: '800', color: 'var(--text-main)', letterSpacing: '-0.01em' }}>
-          {getTitle()}
-        </h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <h1 style={{ fontSize: '1.2rem', fontWeight: '800', color: 'var(--text-main)', letterSpacing: '-0.01em', margin: 0 }}>
+            {getTitle()}
+          </h1>
+          
+          {/* Connection Status & Offline Sync UI */}
+          {!isOnline ? (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '2px 8px',
+              borderRadius: '12px',
+              background: 'rgba(239, 68, 68, 0.1)',
+              border: '1px solid rgba(239, 68, 68, 0.3)',
+              color: '#ef4444',
+              fontSize: '0.7rem',
+              fontWeight: 'bold'
+            }}>
+              <WifiOff size={12} />
+              <span>Ngoại Tuyến (Offline)</span>
+            </div>
+          ) : queueCount > 0 ? (
+            <button 
+              onClick={handleSync}
+              title={syncErrorMessage ? `Lỗi: ${syncErrorMessage}. Click để thử lại.` : 'Click để đồng bộ ngay'}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '2px 8px',
+                borderRadius: '12px',
+                background: syncState === 'error' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(245, 158, 11, 0.1)',
+                border: syncState === 'error' ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid rgba(245, 158, 11, 0.3)',
+                color: syncState === 'error' ? '#ef4444' : '#f59e0b',
+                fontSize: '0.7rem',
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                animation: syncState === 'syncing' ? 'pulse 1.5s infinite' : 'none'
+              }}
+            >
+              <RefreshCw size={12} className={syncState === 'syncing' ? 'spin' : ''} />
+              <span>Đang có {queueCount} dữ liệu cần đồng bộ</span>
+            </button>
+          ) : (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '2px 8px',
+              borderRadius: '12px',
+              background: 'rgba(16, 185, 129, 0.1)',
+              border: '1px solid rgba(16, 185, 129, 0.3)',
+              color: '#10b981',
+              fontSize: '0.7rem',
+              fontWeight: 'bold'
+            }}>
+              <Wifi size={12} />
+              <span>Đã Đồng Bộ (Online)</span>
+            </div>
+          )}
+        </div>
         <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
           Cập nhật thời gian thực: {new Date().toLocaleDateString('vi-VN')} • Trạng thái hoạt động bình thường
         </div>

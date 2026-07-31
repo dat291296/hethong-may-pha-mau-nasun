@@ -7,17 +7,19 @@ import {
   INITIAL_PRINTERS,
   INITIAL_SYSTEM_SETS,
 } from '../data/mockData.js';
+import { cacheOfflineData, getCachedOfflineData, enqueueOfflineAction } from '../lib/offlineSync.js';
 
 /**
  * useAssets – unified hook for all physical equipment:
  * Dispensers, Mixers, Computers, Printers, System Sets.
+ * Integrated with offline support, local persistence & action queuing.
  */
 export function useAssets() {
-  const [dispensers,  setDispensers]  = useState(INITIAL_DISPENSERS);
-  const [mixers,      setMixers]      = useState(INITIAL_MIXERS);
-  const [computers,   setComputers]   = useState(INITIAL_COMPUTERS);
-  const [printers,    setPrinters]    = useState(INITIAL_PRINTERS);
-  const [systemSets,  setSystemSets]  = useState(INITIAL_SYSTEM_SETS);
+  const [dispensers,  setDispensers]  = useState(() => getCachedOfflineData('dispensers', INITIAL_DISPENSERS));
+  const [mixers,      setMixers]      = useState(() => getCachedOfflineData('mixers', INITIAL_MIXERS));
+  const [computers,   setComputers]   = useState(() => getCachedOfflineData('computers', INITIAL_COMPUTERS));
+  const [printers,    setPrinters]    = useState(() => getCachedOfflineData('printers', INITIAL_PRINTERS));
+  const [systemSets,  setSystemSets]  = useState(() => getCachedOfflineData('system_sets', INITIAL_SYSTEM_SETS));
   const [loading, setLoading] = useState(false);
 
   // ── Fetch all asset tables ────────────────────────────────────────────────
@@ -31,11 +33,31 @@ export function useAssets() {
       safeQuery(sb => sb.from('printers').select('*').order('created_at', { ascending: false }), 'fetchPrinters'),
       safeQuery(sb => sb.from('system_sets').select('*').order('created_at', { ascending: false }), 'fetchSystemSets'),
     ]);
-    if (dRes.data && dRes.data.length > 0) setDispensers(dRes.data.map(mapDbToDispenser));
-    if (mRes.data && mRes.data.length > 0) setMixers(mRes.data.map(mapDbToMixer));
-    if (cRes.data && cRes.data.length > 0) setComputers(cRes.data.map(mapDbToComputer));
-    if (pRes.data && pRes.data.length > 0) setPrinters(pRes.data.map(mapDbToPrinter));
-    if (sRes.data && sRes.data.length > 0) setSystemSets(sRes.data.map(mapDbToSystemSet));
+    if (dRes.data && dRes.data.length > 0) {
+      const mapped = dRes.data.map(mapDbToDispenser);
+      setDispensers(mapped);
+      cacheOfflineData('dispensers', mapped);
+    }
+    if (mRes.data && mRes.data.length > 0) {
+      const mapped = mRes.data.map(mapDbToMixer);
+      setMixers(mapped);
+      cacheOfflineData('mixers', mapped);
+    }
+    if (cRes.data && cRes.data.length > 0) {
+      const mapped = cRes.data.map(mapDbToComputer);
+      setComputers(mapped);
+      cacheOfflineData('computers', mapped);
+    }
+    if (pRes.data && pRes.data.length > 0) {
+      const mapped = pRes.data.map(mapDbToPrinter);
+      setPrinters(mapped);
+      cacheOfflineData('printers', mapped);
+    }
+    if (sRes.data && sRes.data.length > 0) {
+      const mapped = sRes.data.map(mapDbToSystemSet);
+      setSystemSets(mapped);
+      cacheOfflineData('system_sets', mapped);
+    }
     setLoading(false);
   }, []);
 
@@ -56,38 +78,59 @@ export function useAssets() {
   // ── Generic add stock device ────────────────────────────────────────────────
   const addStockDevice = useCallback(async (category, deviceData) => {
     const tableMap = {
-      dispenser: { table: 'dispensers', setter: setDispensers, mapper: mapDbToDispenser },
-      mixer:     { table: 'mixers',     setter: setMixers,     mapper: mapDbToMixer     },
-      computer:  { table: 'computers',  setter: setComputers,  mapper: mapDbToComputer  },
-      printer:   { table: 'printers',   setter: setPrinters,   mapper: mapDbToPrinter   },
+      dispenser: { table: 'dispensers', setter: setDispensers, mapper: mapDbToDispenser, cacheKey: 'dispensers' },
+      mixer:     { table: 'mixers',     setter: setMixers,     mapper: mapDbToMixer,     cacheKey: 'mixers' },
+      computer:  { table: 'computers',  setter: setComputers,  mapper: mapDbToComputer,  cacheKey: 'computers' },
+      printer:   { table: 'printers',   setter: setPrinters,   mapper: mapDbToPrinter,   cacheKey: 'printers' },
     };
     const cfg = tableMap[category];
     if (!cfg) throw new Error(`Unknown category: ${category}`);
 
-    if (isSupabaseConfigured) {
-      const { data, error } = await safeQuery(
-        sb => sb.from(cfg.table).insert(deviceData).select().single(),
-        `addStockDevice:${category}`
-      );
-      if (error) throw new Error(error.message);
-      cfg.setter(prev => [cfg.mapper(data), ...prev]);
-    } else {
-      const newDevice = { ...deviceData, id: `${category.toUpperCase()}-${Date.now()}`, isAssigned: false, setCode: null };
-      cfg.setter(prev => [newDevice, ...prev]);
+    const tempId = deviceData.id || `${category.toUpperCase()}-${Date.now()}`;
+    const localDevice = { ...deviceData, id: tempId, isAssigned: false, setCode: null };
+
+    // Update local state immediately for instant feedback
+    cfg.setter(prev => {
+      const updated = [localDevice, ...prev];
+      cacheOfflineData(cfg.cacheKey, updated);
+      return updated;
+    });
+
+    if (isSupabaseConfigured && navigator.onLine) {
+      try {
+        const { data, error } = await safeQuery(
+          sb => sb.from(cfg.table).insert(deviceData).select().single(),
+          `addStockDevice:${category}`
+        );
+        if (error) throw error;
+        if (data) {
+          cfg.setter(prev => {
+            const updated = prev.map(item => item.id === tempId ? cfg.mapper(data) : item);
+            cacheOfflineData(cfg.cacheKey, updated);
+            return updated;
+          });
+        }
+      } catch (err) {
+        console.warn(`[Offline] Failed online addStockDevice for ${category}. Queueing action.`, err);
+        enqueueOfflineAction('ADD_DEVICE', deviceData, cfg.table);
+      }
+    } else if (isSupabaseConfigured && !navigator.onLine) {
+      console.log(`[Offline] Network down. Enqueueing addStockDevice for ${category}.`);
+      enqueueOfflineAction('ADD_DEVICE', deviceData, cfg.table);
     }
   }, []);
 
   // ── Generic edit device ────────────────────────────────────────────────────
   const editDevice = useCallback(async (category, id, updates) => {
     const tableMap = {
-      dispensers: setDispensers,
-      mixers:     setMixers,
-      computers:  setComputers,
-      printers:   setPrinters,
+      dispensers: { setter: setDispensers, cacheKey: 'dispensers' },
+      mixers:     { setter: setMixers,     cacheKey: 'mixers' },
+      computers:  { setter: setComputers,  cacheKey: 'computers' },
+      printers:   { setter: setPrinters,   cacheKey: 'printers' },
     };
 
     // Normalize property names for DB (snake_case) vs App (camelCase)
-    const dbUpdates = { ...updates };
+    const dbUpdates = { ...updates, id };
     const appUpdates = { ...updates };
 
     if ('isAssigned' in updates) dbUpdates.is_assigned = updates.isAssigned;
@@ -95,83 +138,154 @@ export function useAssets() {
     if ('is_assigned' in updates) appUpdates.isAssigned = updates.is_assigned;
     if ('set_code' in updates) appUpdates.setCode = updates.set_code;
 
-    if (isSupabaseConfigured) {
-      const { error } = await safeQuery(
-        sb => sb.from(category).update(dbUpdates).eq('id', id),
-        `editDevice:${category}`
-      );
-      if (error) throw new Error(error.message);
+    // Update local state immediately
+    const cfg = tableMap[category];
+    if (cfg) {
+      cfg.setter(prev => {
+        const updated = prev.map(d => d.id === id ? { ...d, ...appUpdates } : d);
+        cacheOfflineData(cfg.cacheKey, updated);
+        return updated;
+      });
     }
-    const setter = tableMap[category];
-    if (setter) setter(prev => prev.map(d => d.id === id ? { ...d, ...appUpdates } : d));
+
+    if (isSupabaseConfigured && navigator.onLine) {
+      try {
+        const { error } = await safeQuery(
+          sb => sb.from(category).update(dbUpdates).eq('id', id),
+          `editDevice:${category}`
+        );
+        if (error) throw error;
+      } catch (err) {
+        console.warn(`[Offline] Failed online editDevice for ${category}. Queueing action.`, err);
+        enqueueOfflineAction('EDIT_DEVICE', dbUpdates, category);
+      }
+    } else if (isSupabaseConfigured && !navigator.onLine) {
+      console.log(`[Offline] Network down. Enqueueing editDevice for ${category}.`);
+      enqueueOfflineAction('EDIT_DEVICE', dbUpdates, category);
+    }
   }, []);
 
   // ── Generic delete device ──────────────────────────────────────────────────
   const deleteDevice = useCallback(async (category, id) => {
     const tableMap = {
-      dispensers: setDispensers,
-      mixers:     setMixers,
-      computers:  setComputers,
-      printers:   setPrinters,
+      dispensers: { setter: setDispensers, cacheKey: 'dispensers' },
+      mixers:     { setter: setMixers,     cacheKey: 'mixers' },
+      computers:  { setter: setComputers,  cacheKey: 'computers' },
+      printers:   { setter: setPrinters,   cacheKey: 'printers' },
     };
-    if (isSupabaseConfigured) {
-      const { error } = await safeQuery(
-        sb => sb.from(category).delete().eq('id', id),
-        `deleteDevice:${category}`
-      );
-      if (error) throw new Error(error.message);
+
+    const cfg = tableMap[category];
+    if (cfg) {
+      cfg.setter(prev => {
+        const updated = prev.filter(d => d.id !== id);
+        cacheOfflineData(cfg.cacheKey, updated);
+        return updated;
+      });
     }
-    const setter = tableMap[category];
-    if (setter) setter(prev => prev.filter(d => d.id !== id));
+
+    if (isSupabaseConfigured && navigator.onLine) {
+      try {
+        const { error } = await safeQuery(
+          sb => sb.from(category).delete().eq('id', id),
+          `deleteDevice:${category}`
+        );
+        if (error) throw error;
+      } catch (err) {
+        console.warn(`[Offline] Failed online deleteDevice for ${category}. Queueing.`, err);
+        enqueueOfflineAction('DELETE_DEVICE', { id }, category);
+      }
+    } else if (isSupabaseConfigured && !navigator.onLine) {
+      console.log(`[Offline] Network down. Enqueueing deleteDevice for ${category}.`);
+      enqueueOfflineAction('DELETE_DEVICE', { id }, category);
+    }
   }, []);
 
   // ── Import bulk devices ─────────────────────────────────────────────────────
   const importDevices = useCallback(async (type, items) => {
     const tableMap = {
-      dispenser: { table: 'dispensers', setter: setDispensers, mapper: mapDbToDispenser },
-      mixer:     { table: 'mixers',     setter: setMixers,     mapper: mapDbToMixer     },
-      computer:  { table: 'computers',  setter: setComputers,  mapper: mapDbToComputer  },
-      printer:   { table: 'printers',   setter: setPrinters,   mapper: mapDbToPrinter   },
+      dispenser: { table: 'dispensers', setter: setDispensers, mapper: mapDbToDispenser, cacheKey: 'dispensers' },
+      mixer:     { table: 'mixers',     setter: setMixers,     mapper: mapDbToMixer,     cacheKey: 'mixers' },
+      computer:  { table: 'computers',  setter: setComputers,  mapper: mapDbToComputer,  cacheKey: 'computers' },
+      printer:   { table: 'printers',   setter: setPrinters,   mapper: mapDbToPrinter,   cacheKey: 'printers' },
     };
     const cfg = tableMap[type];
     if (!cfg) throw new Error(`Unknown import type: ${type}`);
 
+    cfg.setter(prev => {
+      const updated = [...items, ...prev];
+      cacheOfflineData(cfg.cacheKey, updated);
+      return updated;
+    });
+
     if (isSupabaseConfigured) {
-      const { error } = await safeQuery(
-        sb => sb.from(cfg.table).insert(items),
-        `importDevices:${type}`
-      );
-      if (error) throw new Error(error.message);
-      await fetchAssets();
-    } else {
-      cfg.setter(prev => [...items, ...prev]);
+      if (navigator.onLine) {
+        try {
+          const { error } = await safeQuery(
+            sb => sb.from(cfg.table).insert(items),
+            `importDevices:${type}`
+          );
+          if (error) throw error;
+          await fetchAssets();
+        } catch (err) {
+          items.forEach(item => enqueueOfflineAction('ADD_DEVICE', item, cfg.table));
+        }
+      } else {
+        items.forEach(item => enqueueOfflineAction('ADD_DEVICE', item, cfg.table));
+      }
     }
   }, [fetchAssets]);
 
   // ── Assemble set (Lắp đặt bộ máy) ─────────────────────────────────────────
   const assembleSet = useCallback(async (setData) => {
-    if (isSupabaseConfigured) {
-      const { error } = await safeQuery(
-        sb => sb.from('system_sets').insert(setData),
-        'assembleSet'
-      );
-      if (error) throw new Error(error.message);
-      await fetchAssets();
-    } else {
-      setSystemSets(prev => [setData, ...prev]);
+    setSystemSets(prev => {
+      const updated = [setData, ...prev];
+      cacheOfflineData('system_sets', updated);
+      return updated;
+    });
+
+    if (isSupabaseConfigured && navigator.onLine) {
+      try {
+        const { error } = await safeQuery(
+          sb => sb.from('system_sets').insert(setData),
+          'assembleSet'
+        );
+        if (error) throw error;
+        await fetchAssets();
+      } catch (err) {
+        console.warn('[Offline] Failed online assembleSet. Queueing action.', err);
+        enqueueOfflineAction('ASSEMBLE_SET', setData);
+      }
+    } else if (isSupabaseConfigured && !navigator.onLine) {
+      console.log('[Offline] Network down. Enqueueing assembleSet.');
+      enqueueOfflineAction('ASSEMBLE_SET', setData);
     }
   }, [fetchAssets]);
 
   // ── Update system set ──────────────────────────────────────────────────────
   const updateSystemSet = useCallback(async (setCode, updates) => {
-    if (isSupabaseConfigured) {
-      const { error } = await safeQuery(
-        sb => sb.from('system_sets').update(updates).eq('set_code', setCode),
-        'updateSystemSet'
-      );
-      if (error) throw new Error(error.message);
+    setSystemSets(prev => {
+      const updated = prev.map(s => s.setCode === setCode ? { ...s, ...updates } : s);
+      cacheOfflineData('system_sets', updated);
+      return updated;
+    });
+
+    const dbUpdates = { ...updates, set_code: setCode };
+
+    if (isSupabaseConfigured && navigator.onLine) {
+      try {
+        const { error } = await safeQuery(
+          sb => sb.from('system_sets').update(updates).eq('set_code', setCode),
+          'updateSystemSet'
+        );
+        if (error) throw error;
+      } catch (err) {
+        console.warn('[Offline] Failed online updateSystemSet. Queueing action.', err);
+        enqueueOfflineAction('UPDATE_SYSTEM_SET', dbUpdates);
+      }
+    } else if (isSupabaseConfigured && !navigator.onLine) {
+      console.log('[Offline] Network down. Enqueueing updateSystemSet.');
+      enqueueOfflineAction('UPDATE_SYSTEM_SET', dbUpdates);
     }
-    setSystemSets(prev => prev.map(s => s.setCode === setCode ? { ...s, ...updates } : s));
   }, []);
 
   return {
