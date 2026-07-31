@@ -482,6 +482,135 @@ export default function AssetManagement({
         </div>
       )}
 
+      {/* ADD STOCK DEVICE MODAL */}
+      {showAddDeviceModal && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '560px' }}>
+            <div className="modal-header">
+              <h3 style={{ fontWeight: '800' }}>
+                Thêm Thiết Bị Lẻ Vào Kho —&nbsp;
+                {addDeviceCategory === 'dispenser' && '🖱️ Máy Chiết'}
+                {addDeviceCategory === 'mixer' && '🔄 Máy Lắc'}
+                {addDeviceCategory === 'computer' && '💻 Máy Tính'}
+                {addDeviceCategory === 'printer' && '🖨️ Máy In QL700'}
+              </h3>
+              <button className="btn btn-secondary btn-sm" onClick={() => setShowAddDeviceModal(false)}>✕</button>
+            </div>
+            <form onSubmit={handleAddDeviceSubmit}>
+              <div className="modal-body">
+
+                {/* Model */}
+                <div className="form-group">
+                  <label className="form-label">
+                    {addDeviceCategory === 'dispenser' && 'Model Máy Chiết (Satint / Hero / Corob)'}
+                    {addDeviceCategory === 'mixer' && 'Model Máy Lắc'}
+                    {addDeviceCategory === 'computer' && 'Model / Hệ Máy Tính'}
+                    {addDeviceCategory === 'printer' && 'Model Máy In (thường là QL700)'}
+                  </label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    required
+                    placeholder={
+                      addDeviceCategory === 'dispenser' ? 'VD: Satint AM16, Hero 6-L, Corob D7...' :
+                      addDeviceCategory === 'mixer' ? 'VD: Satint ST-50, Evoshake-200, YSA-2A...' :
+                      addDeviceCategory === 'computer' ? 'VD: Dell OptiPlex 3080, Asus AIO P1600...' :
+                      'VD: Brother QL-700'
+                    }
+                    value={addFormData.model}
+                    onChange={e => setAddFormData({ ...addFormData, model: e.target.value })}
+                  />
+                </div>
+
+                {/* Serial */}
+                <div className="form-group">
+                  <label className="form-label">Số Seri (Serial Number - Duy nhất) *</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    required
+                    placeholder="VD: ST-A1-00123, HERO-EU-5541..."
+                    value={addFormData.serial}
+                    onChange={e => setAddFormData({ ...addFormData, serial: e.target.value })}
+                  />
+                </div>
+
+                {/* Status */}
+                <div className="form-group">
+                  <label className="form-label">Tình Trạng Kỹ Thuật</label>
+                  <select className="form-select" value={addFormData.status} onChange={e => setAddFormData({ ...addFormData, status: e.target.value })}>
+                    <option value="Mới 100%">Mới 100%</option>
+                    <option value="Đang chạy tốt">Đang chạy tốt</option>
+                    <option value="Cần bảo trì">Cần bảo trì</option>
+                    <option value="Hỏng đầu phun">Hỏng đầu phun / Hư hỏng</option>
+                  </select>
+                </div>
+
+                {/* Mixer-specific: type */}
+                {addDeviceCategory === 'mixer' && (
+                  <div className="form-group">
+                    <label className="form-label">Loại Máy Lắc</label>
+                    <select className="form-select" value={addFormData.type} onChange={e => setAddFormData({ ...addFormData, type: e.target.value })}>
+                      <option value="Lắc xoay khép kín">Lắc xoay khép kín</option>
+                      <option value="Lắc rung đứng">Lắc rung đứng</option>
+                      <option value="Lắc rung ngang">Lắc rung ngang</option>
+                    </select>
+                  </div>
+                )}
+
+                {/* Computer-specific */}
+                {addDeviceCategory === 'computer' && (
+                  <>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                      <div className="form-group">
+                        <label className="form-label">Loại Máy Tính</label>
+                        <select className="form-select" value={addFormData.type} onChange={e => setAddFormData({ ...addFormData, type: e.target.value })}>
+                          <option value="AIO">AIO (All in One)</option>
+                          <option value="Case">Case Để Bàn</option>
+                        </select>
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">Hệ Điều Hành</label>
+                        <input type="text" className="form-input" placeholder="Windows 11 Pro" value={addFormData.os} onChange={e => setAddFormData({ ...addFormData, os: e.target.value })} />
+                      </div>
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Cấu Hình (Specs)</label>
+                      <input type="text" className="form-input" placeholder="Core i5 / 16GB RAM / 512GB SSD" value={addFormData.specs} onChange={e => setAddFormData({ ...addFormData, specs: e.target.value })} />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Kết Nối Mạng</label>
+                      <select className="form-select" value={addFormData.network} onChange={e => setAddFormData({ ...addFormData, network: e.target.value })}>
+                        <option value="Có mạng LAN">Có mạng LAN</option>
+                        <option value="Có mạng Wifi">Có mạng Wifi</option>
+                        <option value="Không có mạng">Không có mạng</option>
+                      </select>
+                    </div>
+                  </>
+                )}
+
+                {/* Printer-specific */}
+                {addDeviceCategory === 'printer' && (
+                  <div className="form-group">
+                    <label className="form-label">Cổng Kết Nối</label>
+                    <select className="form-select" value={addFormData.connection} onChange={e => setAddFormData({ ...addFormData, connection: e.target.value })}>
+                      <option value="USB">USB</option>
+                      <option value="LAN">LAN</option>
+                      <option value="Wifi">Wifi</option>
+                    </select>
+                  </div>
+                )}
+
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={() => setShowAddDeviceModal(false)}>Hủy Bỏ</button>
+                <button type="submit" className="btn btn-primary">✅ Thêm Vào Kho</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* EDIT DEVICE MODAL */}
       {editingDevice && (
         <div className="modal-overlay">
