@@ -7,7 +7,7 @@ const AuthContext = createContext(null);
 
 // Default dev user (used when Supabase not configured)
 const DEV_USERS = {
-  [ROLES.ADMIN]:  { id: 'dev-admin',  email: 'admin@dev.local',  name: 'Admin Dev',  role: ROLES.ADMIN  },
+  [ROLES.ADMIN]:  { id: 'dev-admin',  email: 'dat291219962.hust@gmail.com',  name: 'Admin Nasun',  role: ROLES.ADMIN  },
   [ROLES.QC]:     { id: 'dev-qc',     email: 'qc@dev.local',     name: 'QC Dev',     role: ROLES.QC     },
   [ROLES.VIEWER]: { id: 'dev-viewer', email: 'viewer@dev.local',  name: 'Viewer Dev', role: ROLES.VIEWER },
 };
