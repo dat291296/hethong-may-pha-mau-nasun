@@ -549,17 +549,21 @@ export default function AssetManagement({
                     return true;
                   };
 
-                  const freeDisp = dispensers.filter(isDeviceFree);
-                  const availDisp = freeDisp.length > 0 ? freeDisp : dispensers;
+                  const allDisp = (dispensers && dispensers.length > 0) ? dispensers : [];
+                  const freeDisp = allDisp.filter(isDeviceFree);
+                  const availDisp = freeDisp.length > 0 ? freeDisp : allDisp;
 
-                  const freeMix = mixers.filter(isDeviceFree);
-                  const availMix = freeMix.length > 0 ? freeMix : mixers;
+                  const allMix = (mixers && mixers.length > 0) ? mixers : [];
+                  const freeMix = allMix.filter(isDeviceFree);
+                  const availMix = freeMix.length > 0 ? freeMix : allMix;
 
-                  const freePc = computers.filter(isDeviceFree);
-                  const availPc = freePc.length > 0 ? freePc : computers;
+                  const allPc = (computers && computers.length > 0) ? computers : [];
+                  const freePc = allPc.filter(isDeviceFree);
+                  const availPc = freePc.length > 0 ? freePc : allPc;
 
-                  const freePrn = printers.filter(isDeviceFree);
-                  const availPrn = freePrn.length > 0 ? freePrn : printers;
+                  const allPrn = (printers && printers.length > 0) ? printers : [];
+                  const freePrn = allPrn.filter(isDeviceFree);
+                  const availPrn = freePrn.length > 0 ? freePrn : allPrn;
 
                   return (
                     <>
