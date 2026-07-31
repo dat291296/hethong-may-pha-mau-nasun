@@ -14,11 +14,13 @@ import {
 } from 'lucide-react';
 
 export default function Sidebar({ activeTab, setActiveTab, maintenanceCount, pendingRepairCount }) {
-  const [logoSrc, setLogoSrc] = useState('/nasun_logo.png.webp');
+  const [logoSrc, setLogoSrc] = useState('/nasun_logo.png.png');
   const [showFallback, setShowFallback] = useState(false);
 
   const handleLogoError = () => {
-    if (logoSrc === '/nasun_logo.png.webp') {
+    if (logoSrc === '/nasun_logo.png.png') {
+      setLogoSrc('/nasun_logo.png.webp');
+    } else if (logoSrc === '/nasun_logo.png.webp') {
       setLogoSrc('/nasun_logo.png');
     } else if (logoSrc === '/nasun_logo.png') {
       setLogoSrc('/nasun_logo.jpg');
@@ -56,24 +58,39 @@ export default function Sidebar({ activeTab, setActiveTab, maintenanceCount, pen
     >
       {/* Brand Logo */}
       <div style={{
-        padding: '20px 24px',
+        padding: '24px 24px',
         borderBottom: '1px solid var(--border-color)',
         display: 'flex',
         alignItems: 'center',
-        gap: '12px'
+        gap: '14px',
+        background: 'rgba(30, 41, 59, 0.15)'
       }}>
         {/* Attempt to load public/nasun_logo with error handling fallback */}
-        <div style={{ position: 'relative', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ 
+          position: 'relative', 
+          width: '44px', 
+          height: '44px', 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'center',
+          background: 'rgba(255, 255, 255, 0.03)',
+          borderRadius: '12px',
+          border: '1px solid rgba(255, 255, 255, 0.08)',
+          padding: '4px',
+          boxSizing: 'border-box',
+          overflow: 'hidden'
+        }}>
           {!showFallback ? (
             <img 
               src={logoSrc} 
               alt="Nasun Logo" 
               onError={handleLogoError}
               style={{
-                width: '100%',
-                height: '100%',
+                maxWidth: '100%',
+                maxHeight: '100%',
                 objectFit: 'contain',
-                borderRadius: '6px'
+                borderRadius: '8px',
+                transition: 'transform 0.2s ease'
               }}
             />
           ) : (
@@ -81,9 +98,9 @@ export default function Sidebar({ activeTab, setActiveTab, maintenanceCount, pen
               className="logo-fallback"
               style={{
                 display: 'flex',
-                width: '40px',
-                height: '40px',
-                borderRadius: '10px',
+                width: '100%',
+                height: '100%',
+                borderRadius: '8px',
                 background: 'linear-gradient(135deg, #0284c7 0%, #06b6d4 100%)',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -92,15 +109,31 @@ export default function Sidebar({ activeTab, setActiveTab, maintenanceCount, pen
                 boxShadow: '0 4px 12px rgba(6, 182, 212, 0.4)'
               }}
             >
-              <ShieldCheck size={24} />
+              <ShieldCheck size={22} />
             </div>
           )}
         </div>
-        <div>
-          <h2 style={{ fontSize: '1.05rem', fontWeight: '800', color: 'var(--text-main)', letterSpacing: '-0.02em', lineHeight: 1.2 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+          <h2 style={{ 
+            fontSize: '1.1rem', 
+            fontWeight: '900', 
+            color: 'var(--text-main)', 
+            letterSpacing: '-0.02em', 
+            lineHeight: 1.1,
+            background: 'linear-gradient(90deg, #fff 0%, #cbd5e1 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent'
+          }}>
             NASUN COLOR
           </h2>
-          <span style={{ fontSize: '0.725rem', color: 'var(--accent-cyan)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          <span style={{ 
+            fontSize: '0.7rem', 
+            color: 'var(--accent-cyan)', 
+            fontWeight: '700', 
+            textTransform: 'uppercase', 
+            letterSpacing: '0.08em',
+            opacity: 0.9 
+          }}>
             Hệ Thống Pha Màu
           </span>
         </div>
