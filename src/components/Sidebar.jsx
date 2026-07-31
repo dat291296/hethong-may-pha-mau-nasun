@@ -56,15 +56,15 @@ export default function Sidebar({ activeTab, setActiveTab, maintenanceCount, pen
     <aside 
       className={`desktop-sidebar no-print ${isOpen ? 'mobile-open' : ''}`}
       style={{
-        width: '260px',
+        width: isOpen ? '285px' : '260px',
         background: 'var(--bg-card)',
         borderRight: '1px solid var(--border-color)',
         display: 'flex',
         flexDirection: 'column',
         height: '100vh',
-        position: 'sticky',
+        position: isOpen ? 'fixed' : 'sticky',
         top: 0,
-        zIndex: 100
+        zIndex: isOpen ? 1000 : 100
       }} 
     >
       {/* Brand Logo */}
