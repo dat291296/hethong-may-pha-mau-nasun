@@ -102,6 +102,42 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
     }));
   };
 
+  const handleGetLocation = (e) => {
+    e.preventDefault();
+    if (!navigator.geolocation) {
+      alert("Trình duyệt không hỗ trợ lấy vị trí định vị.");
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const lat = position.coords.latitude.toFixed(6);
+        const lng = position.coords.longitude.toFixed(6);
+        setFormData(prev => ({
+          ...prev,
+          locationCoordinates: `${lat}, ${lng}`
+        }));
+      },
+      (error) => {
+        let msg = "Lỗi lấy GPS: ";
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            msg += "Quyền định vị bị từ chối.";
+            break;
+          case error.POSITION_UNAVAILABLE:
+            msg += "Tín hiệu định vị không có sẵn.";
+            break;
+          case error.TIMEOUT:
+            msg += "Hết thời gian chờ phản hồi GPS.";
+            break;
+          default:
+            msg += error.message;
+        }
+        alert(msg);
+      },
+      { enableHighAccuracy: true, timeout: 8000 }
+    );
+  };
+
   const handleAddSubmit = (e) => {
     e.preventDefault();
     if (!formData.name || !formData.phone) {
@@ -337,10 +373,33 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
 
                 {/* GPS Location & Maps Coordinates */}
                 <div className="form-group">
-                  <label className="form-label">
-                    <span>📍 Vị Trí / Tọa Độ GPS / Google Maps Link (Cho Kỹ Thuật Viên Lắp Máy)</span>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--accent-cyan)' }}>Vấn đề tìm đường khi đi thị trường</span>
-                  </label>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                    <label className="form-label" style={{ marginBottom: 0 }}>
+                      <span>📍 Vị Trí / Tọa Độ GPS (Cho Kỹ Thuật Viên)</span>
+                    </label>
+                    <button 
+                      type="button" 
+                      onClick={handleGetLocation} 
+                      style={{
+                        padding: '4px 10px',
+                        fontSize: '0.725rem',
+                        fontWeight: '700',
+                        color: 'var(--accent-cyan)',
+                        border: '1px solid rgba(6, 182, 212, 0.3)',
+                        background: 'rgba(6, 182, 212, 0.08)',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        transition: 'all 0.15s ease'
+                      }}
+                      onMouseOver={e => e.currentTarget.style.background = 'rgba(6, 182, 212, 0.15)'}
+                      onMouseOut={e => e.currentTarget.style.background = 'rgba(6, 182, 212, 0.08)'}
+                    >
+                      <span>📍 Lấy GPS Tự Động</span>
+                    </button>
+                  </div>
                   <input 
                     type="text" 
                     className="form-input" 
