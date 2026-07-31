@@ -23,11 +23,13 @@ import {
 export default function RemoteFormulaUpdates({ 
   formulaVersions, 
   systemSets, 
-  onTriggerRemotePush
+  onTriggerRemotePush,
+  onSyncLogs
 }) {
   const [activeSoftwareTab, setActiveSoftwareTab] = useState('ALL'); // ALL | ColorExpert 2 | ColorExpert 3 | CorobTINT
   const [showAgentDownloadModal, setShowAgentDownloadModal] = useState(false);
   const [selectedVersion, setSelectedVersion] = useState(formulaVersions[0] || null);
+  const [extractingSetCodes, setExtractingSetCodes] = useState({});
 
   // Software Paths Customization State
   const [softwarePaths, setSoftwarePaths] = useState({
@@ -110,6 +112,73 @@ export default function RemoteFormulaUpdates({
       setConsoleLogs(prev => [rollbackLog, ...prev]);
       alert(`Đã gửi lệnh Rollback thành công tới máy tính NPP ${set.nppName}!`);
     }
+  };
+
+  const handleExtractLogs = (set) => {
+    if (set.agentStatus !== 'Online') {
+      alert(`Thiết bị của NPP ${set.nppName} đang Offline. Không thể kết nối với Agent để trích xuất dữ liệu!`);
+      return;
+    }
+
+    const setCode = set.setCode;
+    setExtractingSetCodes(prev => ({ ...prev, [setCode]: true }));
+
+    const startLog = {
+      id: Date.now(),
+      time: new Date().toLocaleTimeString('vi-VN'),
+      type: 'INFO',
+      text: `[AGENT-EXTRACT] Bắt đầu kết nối với Agent tại NPP ${set.nppName} (${setCode})...`
+    };
+    setConsoleLogs(prev => [startLog, ...prev]);
+
+    setTimeout(() => {
+      const pathInfo = softwarePaths[set.tintingSoftware] || {};
+      const readLog = {
+        id: Date.now() + 1,
+        time: new Date().toLocaleTimeString('vi-VN'),
+        type: 'INFO',
+        text: `[AGENT-EXTRACT] Đang đọc tệp nhật ký: ${pathInfo.historyDbFile}...`
+      };
+      setConsoleLogs(prev => [readLog, ...prev]);
+
+      setTimeout(() => {
+        const randomVol = [5, 18][Math.floor(Math.random() * 2)];
+        const randomQty = Math.floor(Math.random() * 3) + 1;
+        const colorName = ['RED', 'BLUE', 'GREEN', 'YELLOW', 'ORANGE'][Math.floor(Math.random() * 5)];
+        const randomCode = Math.floor(Math.random() * 800) + 100;
+        
+        const newRecord = {
+          id: `L-EXT-${Date.now()}-${Math.floor(Math.random() * 100)}`,
+          timestamp: new Date().toISOString().replace('T', ' ').substr(0, 19),
+          nppId: set.nppId || 'NPP-001',
+          nppName: set.nppName,
+          dispenserSerial: set.dispenserSerial || 'DISP-88291',
+          colorCode: `NASUN-${colorName}-${randomCode}`,
+          productLine: 'Sơn nội thất cao cấp Nasun Lux',
+          base: ['Base A', 'Base B', 'Base C'][Math.floor(Math.random() * 3)],
+          containerSize: `${randomVol}L`,
+          quantity: randomQty,
+          totalVolumeLiters: randomVol * randomQty,
+          pigmentUsedMl: parseFloat((randomVol * randomQty * 12.8).toFixed(1)),
+          status: 'HOÀN THÀNH'
+        };
+
+        if (onSyncLogs) {
+          onSyncLogs(prev => [newRecord, ...prev]);
+        }
+
+        const successLog = {
+          id: Date.now() + 2,
+          time: new Date().toLocaleTimeString('vi-VN'),
+          type: 'SUCCESS',
+          text: `[AGENT-SUCCESS] Trích xuất thành công ${randomQty} lượt pha (${randomVol * randomQty}L) từ máy chiết ${set.dispenserSerial || 'DISP-88291'}!`
+        };
+        setConsoleLogs(prev => [successLog, ...prev]);
+        setExtractingSetCodes(prev => ({ ...prev, [setCode]: false }));
+        
+        alert(`Trích xuất & Đồng bộ thành công ${randomQty} lượt pha màu mới từ NPP ${set.nppName}!`);
+      }, 1000);
+    }, 800);
   };
 
   const filteredSets = systemSets.filter(s => {
@@ -302,7 +371,28 @@ export default function RemoteFormulaUpdates({
                       )}
                     </td>
                     <td>
-                      <span className="badge badge-purple">🟢 Tự động trích xuất</span>
+                      {set.agentStatus === 'Online' ? (
+                        <button
+                          disabled={extractingSetCodes[set.setCode]}
+                          onClick={() => handleExtractLogs(set)}
+                          className="btn btn-secondary btn-xs"
+                          style={{
+                            borderColor: 'var(--accent-purple)',
+                            color: 'var(--accent-purple)',
+                            fontSize: '0.7rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            padding: '3px 8px',
+                            background: extractingSetCodes[set.setCode] ? 'rgba(147,51,234,0.1)' : 'transparent'
+                          }}
+                        >
+                          <RefreshCw size={10} className={extractingSetCodes[set.setCode] ? 'spin' : ''} style={{ flexShrink: 0 }} />
+                          {extractingSetCodes[set.setCode] ? 'Đang trích xuất...' : '⚡ Trích Xuất Ngay'}
+                        </button>
+                      ) : (
+                        <span className="badge badge-neutral" style={{ fontSize: '0.65rem' }}>✕ Offline</span>
+                      )}
                     </td>
                     <td>
                       <div style={{ display: 'flex', gap: '6px' }}>

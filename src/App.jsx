@@ -493,6 +493,7 @@ export default function App() {
               formulaVersions={formulaVersions}
               systemSets={systemSets}
               onTriggerRemotePush={handleTriggerRemotePush}
+              onSyncLogs={setTintingLogs}
             />
           )}
 
