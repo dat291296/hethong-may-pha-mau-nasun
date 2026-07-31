@@ -92,58 +92,26 @@ export default function Header({
   const totalAlertsCount = maintenanceAlerts.length + unstabilizedAlerts.length;
 
   return (
-    <header style={{
-      height: '70px',
-      background: 'var(--bg-card)',
-      borderBottom: '1px solid var(--border-color)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      padding: '0 28px',
-      position: 'sticky',
-      top: 0,
-      zIndex: 90
-    }} className="no-print">
+    <header className="no-print main-header">
       {/* Title */}
-      <div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <h1 style={{ fontSize: '1.2rem', fontWeight: '800', color: 'var(--text-main)', letterSpacing: '-0.01em', margin: 0 }}>
+      <div className="header-title-wrapper">
+        <div className="header-title-inner">
+          <h1 className="header-title-text">
             {getTitle()}
           </h1>
           
           {/* Connection Status & Offline Sync UI */}
           {!isOnline ? (
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '2px 8px',
-              borderRadius: '12px',
-              background: 'rgba(239, 68, 68, 0.1)',
-              border: '1px solid rgba(239, 68, 68, 0.3)',
-              color: '#ef4444',
-              fontSize: '0.7rem',
-              fontWeight: 'bold'
-            }}>
+            <div className="connection-status-badge offline">
               <WifiOff size={12} />
               <span>Ngoại Tuyến (Offline)</span>
             </div>
           ) : queueCount > 0 ? (
             <button 
               onClick={handleSync}
+              className="connection-status-badge sync-pending"
               title={syncErrorMessage ? `Lỗi: ${syncErrorMessage}. Click để thử lại.` : 'Click để đồng bộ ngay'}
               style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '2px 8px',
-                borderRadius: '12px',
-                background: syncState === 'error' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(245, 158, 11, 0.1)',
-                border: syncState === 'error' ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid rgba(245, 158, 11, 0.3)',
-                color: syncState === 'error' ? '#ef4444' : '#f59e0b',
-                fontSize: '0.7rem',
-                fontWeight: 'bold',
-                cursor: 'pointer',
                 animation: syncState === 'syncing' ? 'pulse 1.5s infinite' : 'none'
               }}
             >
@@ -151,45 +119,33 @@ export default function Header({
               <span>Đang có {queueCount} dữ liệu cần đồng bộ</span>
             </button>
           ) : (
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '2px 8px',
-              borderRadius: '12px',
-              background: 'rgba(16, 185, 129, 0.1)',
-              border: '1px solid rgba(16, 185, 129, 0.3)',
-              color: '#10b981',
-              fontSize: '0.7rem',
-              fontWeight: 'bold'
-            }}>
+            <div className="connection-status-badge online">
               <Wifi size={12} />
               <span>Đã Đồng Bộ (Online)</span>
             </div>
           )}
         </div>
-        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+        <div className="header-subtitle-text">
           Cập nhật thời gian thực: {new Date().toLocaleDateString('vi-VN')} • Trạng thái hoạt động bình thường
         </div>
       </div>
 
       {/* Header Actions */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+      <div className="header-actions-wrapper">
         {/* Global Search Bar */}
-        <div style={{ position: 'relative', width: '280px' }}>
+        <div className="header-search-container">
           <Search size={16} color="var(--text-muted)" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
           <input
             type="text"
             placeholder="Tìm Seri máy, NPP, Mã bộ máy..."
             value={globalSearch}
             onChange={(e) => setGlobalSearch(e.target.value)}
-            className="form-input"
-            style={{ paddingLeft: '36px', height: '38px', fontSize: '0.825rem', width: '100%' }}
+            className="form-input header-search-input"
           />
         </div>
 
         {/* Quick New Installation Button */}
-        <button className="btn btn-primary btn-sm" onClick={onOpenNewInstallation} style={{ height: '38px', padding: '0 16px' }}>
+        <button className="btn btn-primary btn-sm header-action-btn" onClick={onOpenNewInstallation}>
           <PlusCircle size={16} />
           <span>Lắp Đặt Cho NPP</span>
         </button>
@@ -199,12 +155,7 @@ export default function Header({
 
         {/* Current User Role Badge (production) */}
         {!isDevMode && role && (
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            padding: '4px 10px',
-            borderRadius: '20px',
+          <div className="header-role-badge" style={{
             border: `1px solid ${ROLE_COLORS[role]}44`,
             background: `${ROLE_COLORS[role]}11`,
           }}>
@@ -223,19 +174,7 @@ export default function Header({
         <div style={{ position: 'relative' }}>
           <button
             onClick={() => setShowNotifications(!showNotifications)}
-            style={{
-              width: '38px',
-              height: '38px',
-              borderRadius: '8px',
-              border: '1px solid var(--border-color)',
-              background: 'var(--bg-main)',
-              color: 'var(--text-main)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              position: 'relative'
-            }}
+            className="header-notify-btn"
           >
             <Bell size={18} />
             {totalAlertsCount > 0 && (
@@ -313,20 +252,11 @@ export default function Header({
         </div>
 
         {/* User Profile */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', borderLeft: '1px solid var(--border-color)', paddingLeft: '16px' }}>
-          <div style={{
-            width: '36px',
-            height: '36px',
-            borderRadius: '50%',
-            background: 'var(--bg-card-hover)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'var(--accent-cyan)'
-          }}>
+        <div className="header-profile-container">
+          <div className="header-profile-avatar">
             <UserCheck size={20} />
           </div>
-          <div>
+          <div className="header-profile-info">
             <div style={{ fontSize: '0.825rem', fontWeight: '700', lineHeight: 1.2 }}>Quản Lý Kỹ Thuật</div>
             <div style={{ fontSize: '0.7rem', color: 'var(--accent-emerald)' }}>● Admin System</div>
           </div>
