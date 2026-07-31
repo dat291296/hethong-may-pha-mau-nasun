@@ -85,15 +85,25 @@ export function useAssets() {
       computers:  setComputers,
       printers:   setPrinters,
     };
+
+    // Normalize property names for DB (snake_case) vs App (camelCase)
+    const dbUpdates = { ...updates };
+    const appUpdates = { ...updates };
+
+    if ('isAssigned' in updates) dbUpdates.is_assigned = updates.isAssigned;
+    if ('setCode' in updates) dbUpdates.set_code = updates.setCode;
+    if ('is_assigned' in updates) appUpdates.isAssigned = updates.is_assigned;
+    if ('set_code' in updates) appUpdates.setCode = updates.set_code;
+
     if (isSupabaseConfigured) {
       const { error } = await safeQuery(
-        sb => sb.from(category).update(updates).eq('id', id),
+        sb => sb.from(category).update(dbUpdates).eq('id', id),
         `editDevice:${category}`
       );
       if (error) throw new Error(error.message);
     }
     const setter = tableMap[category];
-    if (setter) setter(prev => prev.map(d => d.id === id ? { ...d, ...updates } : d));
+    if (setter) setter(prev => prev.map(d => d.id === id ? { ...d, ...appUpdates } : d));
   }, []);
 
   // ── Generic delete device ──────────────────────────────────────────────────

@@ -539,45 +539,116 @@ export default function AssetManagement({
                   💡 Quy chuẩn 1 Bộ Máy Pha Màu bao gồm: 1 Máy Chiết + 1 Máy Lắc + 1 Máy Tính + 1 Máy In QL700. (Ổn áp sẽ ghi nhận thêm khi lắp đặt tại NPP).
                 </div>
 
-                <div className="form-group">
-                  <label className="form-label">1. Chọn Máy Chiết Trong Kho *</label>
-                  <select className="form-select" required value={newSetData.dispenserId} onChange={e => setNewSetData({ ...newSetData, dispenserId: e.target.value })}>
-                    <option value="">-- Chọn máy chiết từ kho --</option>
-                    {dispensers.filter(d => !d.isAssigned).map(d => (
-                      <option key={d.id} value={d.id}>{d.model} - Seri: {d.serial} ({d.status})</option>
-                    ))}
-                  </select>
-                </div>
+                {/* Helper logic for filtering available devices */}
+                {(() => {
+                  const isDeviceFree = (dev) => {
+                    if (!dev) return false;
+                    if (dev.isAssigned === true || dev.isAssigned === 'true' || dev.is_assigned === true || dev.is_assigned === 'true') return false;
+                    if (dev.setCode && dev.setCode !== '' && dev.setCode !== 'null' && dev.setCode !== '—') return false;
+                    if (dev.set_code && dev.set_code !== '' && dev.set_code !== 'null' && dev.set_code !== '—') return false;
+                    return true;
+                  };
 
-                <div className="form-group">
-                  <label className="form-label">2. Chọn Máy Lắc Trong Kho *</label>
-                  <select className="form-select" required value={newSetData.mixerId} onChange={e => setNewSetData({ ...newSetData, mixerId: e.target.value })}>
-                    <option value="">-- Chọn máy lắc từ kho --</option>
-                    {mixers.filter(m => !m.isAssigned).map(m => (
-                      <option key={m.id} value={m.id}>{m.model} ({m.type}) - Seri: {m.serial}</option>
-                    ))}
-                  </select>
-                </div>
+                  const freeDisp = dispensers.filter(isDeviceFree);
+                  const availDisp = freeDisp.length > 0 ? freeDisp : dispensers;
 
-                <div className="form-group">
-                  <label className="form-label">3. Chọn Máy Tính Trong Kho *</label>
-                  <select className="form-select" required value={newSetData.computerId} onChange={e => setNewSetData({ ...newSetData, computerId: e.target.value })}>
-                    <option value="">-- Chọn máy tính từ kho --</option>
-                    {computers.filter(c => !c.isAssigned).map(c => (
-                      <option key={c.id} value={c.id}>{c.type} ({c.os}) - Seri: {c.serial}</option>
-                    ))}
-                  </select>
-                </div>
+                  const freeMix = mixers.filter(isDeviceFree);
+                  const availMix = freeMix.length > 0 ? freeMix : mixers;
 
-                <div className="form-group">
-                  <label className="form-label">4. Chọn Máy In QL700 *</label>
-                  <select className="form-select" required value={newSetData.printerId} onChange={e => setNewSetData({ ...newSetData, printerId: e.target.value })}>
-                    <option value="">-- Chọn máy in QL700 --</option>
-                    {printers.filter(p => !p.isAssigned).map(p => (
-                      <option key={p.id} value={p.id}>{p.model} - Cổng {p.connection} - Seri: {p.serial}</option>
-                    ))}
-                  </select>
-                </div>
+                  const freePc = computers.filter(isDeviceFree);
+                  const availPc = freePc.length > 0 ? freePc : computers;
+
+                  const freePrn = printers.filter(isDeviceFree);
+                  const availPrn = freePrn.length > 0 ? freePrn : printers;
+
+                  return (
+                    <>
+                      <div className="form-group">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                          <label className="form-label" style={{ marginBottom: 0 }}>1. Chọn Máy Chiết Trong Kho *</label>
+                          <button 
+                            type="button" 
+                            style={{ background: 'none', border: 'none', color: 'var(--accent-cyan)', fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline' }}
+                            onClick={() => { setShowAssembleModal(false); openAddDeviceModal('dispenser'); }}
+                          >
+                            + Thêm máy chiết mới vào kho
+                          </button>
+                        </div>
+                        <select className="form-select" required value={newSetData.dispenserId} onChange={e => setNewSetData({ ...newSetData, dispenserId: e.target.value })}>
+                          <option value="">-- Chọn máy chiết từ kho ({availDisp.length} máy) --</option>
+                          {availDisp.map(d => (
+                            <option key={d.id} value={d.id}>
+                              {d.model} - Seri: {d.serial} {isDeviceFree(d) ? '🟢 (Tự do trong kho)' : `🟡 (Đang gán bộ ${d.setCode || d.set_code || ''})`}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="form-group">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                          <label className="form-label" style={{ marginBottom: 0 }}>2. Chọn Máy Lắc Trong Kho *</label>
+                          <button 
+                            type="button" 
+                            style={{ background: 'none', border: 'none', color: 'var(--accent-cyan)', fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline' }}
+                            onClick={() => { setShowAssembleModal(false); openAddDeviceModal('mixer'); }}
+                          >
+                            + Thêm máy lắc mới vào kho
+                          </button>
+                        </div>
+                        <select className="form-select" required value={newSetData.mixerId} onChange={e => setNewSetData({ ...newSetData, mixerId: e.target.value })}>
+                          <option value="">-- Chọn máy lắc từ kho ({availMix.length} máy) --</option>
+                          {availMix.map(m => (
+                            <option key={m.id} value={m.id}>
+                              {m.model} ({m.type}) - Seri: {m.serial} {isDeviceFree(m) ? '🟢 (Tự do trong kho)' : `🟡 (Đang gán bộ ${m.setCode || m.set_code || ''})`}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="form-group">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                          <label className="form-label" style={{ marginBottom: 0 }}>3. Chọn Máy Tính Trong Kho *</label>
+                          <button 
+                            type="button" 
+                            style={{ background: 'none', border: 'none', color: 'var(--accent-cyan)', fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline' }}
+                            onClick={() => { setShowAssembleModal(false); openAddDeviceModal('computer'); }}
+                          >
+                            + Thêm máy tính mới vào kho
+                          </button>
+                        </div>
+                        <select className="form-select" required value={newSetData.computerId} onChange={e => setNewSetData({ ...newSetData, computerId: e.target.value })}>
+                          <option value="">-- Chọn máy tính từ kho ({availPc.length} máy) --</option>
+                          {availPc.map(c => (
+                            <option key={c.id} value={c.id}>
+                              {c.type} ({c.os}) - Seri: {c.serial} {isDeviceFree(c) ? '🟢 (Tự do trong kho)' : `🟡 (Đang gán bộ ${c.setCode || c.set_code || ''})`}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="form-group">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                          <label className="form-label" style={{ marginBottom: 0 }}>4. Chọn Máy In QL700 *</label>
+                          <button 
+                            type="button" 
+                            style={{ background: 'none', border: 'none', color: 'var(--accent-cyan)', fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline' }}
+                            onClick={() => { setShowAssembleModal(false); openAddDeviceModal('printer'); }}
+                          >
+                            + Thêm máy in mới vào kho
+                          </button>
+                        </div>
+                        <select className="form-select" required value={newSetData.printerId} onChange={e => setNewSetData({ ...newSetData, printerId: e.target.value })}>
+                          <option value="">-- Chọn máy in QL700 ({availPrn.length} máy) --</option>
+                          {availPrn.map(p => (
+                            <option key={p.id} value={p.id}>
+                              {p.model} - Seri: {p.serial} {isDeviceFree(p) ? '🟢 (Tự do trong kho)' : `🟡 (Đang gán bộ ${p.setCode || p.set_code || ''})`}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
               <div className="modal-footer">
                 <button type="button" className="btn btn-secondary" onClick={() => setShowAssembleModal(false)}>Hủy Bỏ</button>
