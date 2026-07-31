@@ -1,15 +1,15 @@
 import React, { useState } from 'react';
-import { Search, ShieldCheck, History, ArrowRight, CheckCircle2, Cpu, Building2 } from 'lucide-react';
+import { Search, ShieldCheck, History, ArrowRight, CheckCircle2, Cpu, Building2, QrCode } from 'lucide-react';
+import QrScannerModal from './QrScannerModal.jsx';
 
 export default function SerialLookup({ dispensers, mixers, computers, printers, systemSets, auditLogs }) {
   const [searchSerial, setSearchSerial] = useState('ST-A2-99801');
   const [searchedResult, setSearchedResult] = useState(null);
+  const [showScanner, setShowScanner] = useState(false);
 
-  const handleSearch = (e) => {
-    e.preventDefault();
-    if (!searchSerial.trim()) return;
-
-    const query = searchSerial.trim().toUpperCase();
+  const executeLookup = (queryStr) => {
+    if (!queryStr.trim()) return;
+    const query = queryStr.trim().toUpperCase();
 
     // Check dispensers
     let dev = dispensers.find(d => d.serial.toUpperCase().includes(query));
@@ -42,8 +42,24 @@ export default function SerialLookup({ dispensers, mixers, computers, printers, 
     }
   };
 
+  const handleSearch = (e) => {
+    e.preventDefault();
+    executeLookup(searchSerial);
+  };
+
+  const handleScanSuccess = (scannedCode) => {
+    setSearchSerial(scannedCode);
+    executeLookup(scannedCode);
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      {showScanner && (
+        <QrScannerModal
+          onScanSuccess={handleScanSuccess}
+          onClose={() => setShowScanner(false)}
+        />
+      )}
       
       {/* Search Input Box */}
       <div className="glass-panel" style={{ padding: '24px', textAlign: 'center', background: 'linear-gradient(135deg, rgba(30,41,59,1) 0%, rgba(15,23,42,1) 100%)' }}>
@@ -51,23 +67,34 @@ export default function SerialLookup({ dispensers, mixers, computers, printers, 
           Tra Cứu Lịch Sử & Vòng Đời Thiết Bị Theo Số Seri
         </h2>
         <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '20px' }}>
-          Nhập số Seri của Máy Chiết (Satint/Hero/Corob), Máy Lắc, Máy Tính hoặc Máy In QL700 để xem toàn bộ hành trình tác nghiệp.
+          Nhập số Seri hoặc quét mã QR/mã vạch tem máy (Chiết/Lắc/Máy Tính/Máy In) để xem hành trình tác nghiệp.
         </p>
 
-        <form onSubmit={handleSearch} style={{ display: 'flex', justifyContent: 'center', gap: '12px', maxWidth: '560px', margin: '0 auto' }}>
-          <div style={{ position: 'relative', flex: 1 }}>
+        <form onSubmit={handleSearch} style={{ display: 'flex', justifyContent: 'center', gap: '10px', maxWidth: '620px', margin: '0 auto', flexWrap: 'wrap' }}>
+          <div style={{ position: 'relative', flex: 1, minWidth: '240px' }}>
             <Search size={18} color="var(--text-muted)" style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)' }} />
             <input
               type="text"
               className="form-input"
-              placeholder="Nhập số Seri (Ví dụ: ST-A2-99801, HERO-EU-5541...)"
+              placeholder="Nhập Seri (VD: ST-A2-99801)..."
               value={searchSerial}
               onChange={e => setSearchSerial(e.target.value)}
-              style={{ paddingLeft: '40px', height: '44px', fontSize: '0.95rem' }}
+              style={{ paddingLeft: '40px', height: '42px', fontSize: '0.9rem', width: '100%' }}
             />
           </div>
-          <button type="submit" className="btn btn-primary" style={{ height: '44px', padding: '0 24px' }}>
-            Tra Cứu Seri
+
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => setShowScanner(true)}
+            style={{ height: '42px', padding: '0 16px', display: 'flex', alignItems: 'center', gap: '6px', border: '1px solid rgba(6, 182, 212, 0.4)', color: 'var(--accent-cyan)' }}
+          >
+            <QrCode size={18} />
+            <span>Quét Mã QR/Vạch</span>
+          </button>
+
+          <button type="submit" className="btn btn-primary" style={{ height: '42px', padding: '0 24px' }}>
+            Tra Cứu
           </button>
         </form>
       </div>
