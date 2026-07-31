@@ -14,6 +14,8 @@ import HandoverPrintModal from './components/HandoverPrintModal';
 import MobileBottomNav from './components/MobileBottomNav';
 import DeviceRepairProcessing from './components/DeviceRepairProcessing';
 import ExcelImportModal from './components/ExcelImportModal';
+import LoginModal from './components/LoginModal';
+import { useAuth } from './context/AuthContext';
 
 import {
   INITIAL_FORMULA_VERSIONS,
@@ -26,6 +28,7 @@ import { useRepairs } from './hooks/useRepairs.js';
 import { useAuditLogs } from './hooks/useAuditLogs.js';
 
 export default function App() {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [globalSearch, setGlobalSearch] = useState('');
 
@@ -341,6 +344,10 @@ export default function App() {
 
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
+  if (!user) {
+    return <LoginModal />;
+  }
+
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg-main)' }}>
       
@@ -492,6 +499,7 @@ export default function App() {
             <TintingAnalytics
               tintingLogs={tintingLogs}
               npps={npps}
+              onSyncLogs={setTintingLogs}
             />
           )}
 

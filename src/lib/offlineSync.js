@@ -1,12 +1,10 @@
 import { supabase, isSupabaseConfigured } from './supabase';
-
-const QUEUE_KEY = 'nasun_offline_queue';
+import { addToQueue, getQueue, removeFromQueue, clearQueue, setCache, getCache } from './offlineDb';
 
 /**
  * Push an action to the offline queue
  */
-export function enqueueOfflineAction(action, payload, category = null) {
-  const queue = getOfflineQueue();
+export async function enqueueOfflineAction(action, payload, category = null) {
   const newItem = {
     id: `action-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
     action,
@@ -14,8 +12,8 @@ export function enqueueOfflineAction(action, payload, category = null) {
     category,
     timestamp: Date.now()
   };
-  queue.push(newItem);
-  localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
+  
+  await addToQueue(newItem);
   
   // Dispatch custom event to trigger sync warning badge or sync attempt
   window.dispatchEvent(new Event('offline-queue-updated'));
@@ -26,30 +24,23 @@ export function enqueueOfflineAction(action, payload, category = null) {
 /**
  * Get all enqueued offline actions
  */
-export function getOfflineQueue() {
-  try {
-    const queueJson = localStorage.getItem(QUEUE_KEY);
-    return queueJson ? JSON.parse(queueJson) : [];
-  } catch (e) {
-    return [];
-  }
+export async function getOfflineQueue() {
+  return await getQueue();
 }
 
 /**
  * Remove an action from the queue by ID
  */
-export function dequeueOfflineAction(id) {
-  const queue = getOfflineQueue();
-  const filtered = queue.filter(item => item.id !== id);
-  localStorage.setItem(QUEUE_KEY, JSON.stringify(filtered));
+export async function dequeueOfflineAction(id) {
+  await removeFromQueue(id);
   window.dispatchEvent(new Event('offline-queue-updated'));
 }
 
 /**
  * Clear the entire offline queue
  */
-export function clearOfflineQueue() {
-  localStorage.removeItem(QUEUE_KEY);
+export async function clearOfflineQueue() {
+  await clearQueue();
   window.dispatchEvent(new Event('offline-queue-updated'));
 }
 
@@ -62,7 +53,7 @@ export async function syncOfflineQueue(onStatusChange) {
     return false;
   }
 
-  const queue = getOfflineQueue();
+  const queue = await getOfflineQueue();
   if (queue.length === 0) {
     return true;
   }
@@ -135,7 +126,7 @@ export async function syncOfflineQueue(onStatusChange) {
       }
 
       // Success, remove from queue
-      dequeueOfflineAction(item.id);
+      await dequeueOfflineAction(item.id);
       successCount++;
       
     } catch (err) {
@@ -154,21 +145,12 @@ export async function syncOfflineQueue(onStatusChange) {
  * Cache list data for offline reading
  */
 export function cacheOfflineData(key, data) {
-  try {
-    localStorage.setItem(`cached_${key}`, JSON.stringify(data));
-  } catch (e) {
-    console.error('Error caching data for offline', e);
-  }
+  setCache(key, data);
 }
 
 /**
  * Retrieve cached list data for offline reading
  */
-export function getCachedOfflineData(key, fallback = []) {
-  try {
-    const cached = localStorage.getItem(`cached_${key}`);
-    return cached ? JSON.parse(cached) : fallback;
-  } catch (e) {
-    return fallback;
-  }
+export async function getCachedOfflineData(key, fallback = []) {
+  return await getCache(key, fallback);
 }

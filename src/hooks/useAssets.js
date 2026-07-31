@@ -15,12 +15,31 @@ import { cacheOfflineData, getCachedOfflineData, enqueueOfflineAction } from '..
  * Integrated with offline support, local persistence & action queuing.
  */
 export function useAssets() {
-  const [dispensers,  setDispensers]  = useState(() => getCachedOfflineData('dispensers', INITIAL_DISPENSERS));
-  const [mixers,      setMixers]      = useState(() => getCachedOfflineData('mixers', INITIAL_MIXERS));
-  const [computers,   setComputers]   = useState(() => getCachedOfflineData('computers', INITIAL_COMPUTERS));
-  const [printers,    setPrinters]    = useState(() => getCachedOfflineData('printers', INITIAL_PRINTERS));
-  const [systemSets,  setSystemSets]  = useState(() => getCachedOfflineData('system_sets', INITIAL_SYSTEM_SETS));
+  const [dispensers,  setDispensers]  = useState(INITIAL_DISPENSERS);
+  const [mixers,      setMixers]      = useState(INITIAL_MIXERS);
+  const [computers,   setComputers]   = useState(INITIAL_COMPUTERS);
+  const [printers,    setPrinters]    = useState(INITIAL_PRINTERS);
+  const [systemSets,  setSystemSets]  = useState(INITIAL_SYSTEM_SETS);
   const [loading, setLoading] = useState(false);
+
+  // Hydrate from IndexedDB cache on mount
+  useEffect(() => {
+    async function loadCached() {
+      const [d, m, c, p, s] = await Promise.all([
+        getCachedOfflineData('dispensers', null),
+        getCachedOfflineData('mixers', null),
+        getCachedOfflineData('computers', null),
+        getCachedOfflineData('printers', null),
+        getCachedOfflineData('system_sets', null),
+      ]);
+      if (d && d.length > 0) setDispensers(d);
+      if (m && m.length > 0) setMixers(m);
+      if (c && c.length > 0) setComputers(c);
+      if (p && p.length > 0) setPrinters(p);
+      if (s && s.length > 0) setSystemSets(s);
+    }
+    loadCached();
+  }, []);
 
   // ── Fetch all asset tables ────────────────────────────────────────────────
   const fetchAssets = useCallback(async () => {

@@ -8,9 +8,20 @@ import { cacheOfflineData, getCachedOfflineData, enqueueOfflineAction } from '..
  * Uses Supabase when configured, falls back to mock data locally, with offline caching & queuing.
  */
 export function useNpps() {
-  const [npps, setNpps] = useState(() => getCachedOfflineData('npps', INITIAL_NPPS));
+  const [npps, setNpps] = useState(INITIAL_NPPS);
   const [loading, setLoading] = useState(false);
   const [error, setError]   = useState(null);
+
+  // Hydrate cache from IndexedDB on mount
+  useEffect(() => {
+    async function loadCached() {
+      const cached = await getCachedOfflineData('npps', null);
+      if (cached && cached.length > 0) {
+        setNpps(cached);
+      }
+    }
+    loadCached();
+  }, []);
 
   // ── Fetch all NPPs ─────────────────────────────────────────────────────────
   const fetchNpps = useCallback(async () => {
@@ -23,7 +34,7 @@ export function useNpps() {
     if (err) { 
       setError(err.message); 
       // Loading cached data on network error
-      const cached = getCachedOfflineData('npps', null);
+      const cached = await getCachedOfflineData('npps', null);
       if (cached) setNpps(cached);
     }
     else if (data && data.length > 0) { 

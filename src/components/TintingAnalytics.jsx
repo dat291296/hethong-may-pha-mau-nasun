@@ -1,9 +1,28 @@
 import React, { useState } from 'react';
-import { BarChart3, Flame, AlertTriangle, CheckCircle2, Search, TrendingUp, Award, Droplet } from 'lucide-react';
+import { 
+  BarChart3, 
+  Flame, 
+  AlertTriangle, 
+  CheckCircle2, 
+  Search, 
+  TrendingUp, 
+  Award, 
+  Droplet,
+  Upload,
+  FileText,
+  RefreshCw,
+  Play
+} from 'lucide-react';
 
-export default function TintingAnalytics({ tintingLogs, npps }) {
+export default function TintingAnalytics({ tintingLogs, npps, onSyncLogs }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [nppFilter, setNppFilter] = useState('ALL');
+  
+  // IoT Simulation States
+  const [syncStatus, setSyncStatus] = useState('idle'); // idle | syncing | success | error
+  const [syncProgress, setSyncProgress] = useState(0);
+  const [syncedCount, setSyncedCount] = useState(0);
+  const [logDetails, setLogDetails] = useState('');
 
   const filteredLogs = tintingLogs.filter(log => {
     const matchesSearch = log.colorCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -27,6 +46,109 @@ export default function TintingAnalytics({ tintingLogs, npps }) {
     nppName,
     volume: nppVolumeMap[nppName]
   })).sort((a, b) => b.volume - a.volume);
+
+  // ── IoT Simulated CSV File Generator & Parser ──────────────────────────────
+  const generateAndDownloadSampleCSV = () => {
+    const csvContent = 
+`Timestamp,NppId,NppName,DispenserSerial,ColorCode,ProductLine,Base,ContainerSize,Quantity,TotalVolumeLiters,PigmentUsedMl
+${new Date().toISOString().replace('T', ' ').substr(0, 19)},NPP-001,Công Ty TNHH Vật Liệu Hải Phòng,DISP-88291,NASUN-GOLD-99,Sơn phủ bóng cao cấp Gold,Base A,5L,2,10,150.2
+${new Date().toISOString().replace('T', ' ').substr(0, 19)},NPP-002,Đại Lý Sơn Nasun Hà Nội,DISP-99212,NASUN-EASY-02,Sơn nội thất mịn màng Easy,Base B,18L,1,18,340.5
+${new Date().toISOString().replace('T', ' ').substr(0, 19)},NPP-003,Nhà Phân Phối Nasun Miền Trung,DISP-66291,NASUN-SHIELD-04,Sơn ngoại thất chống thấm Shield,Base C,5L,3,15,220.0
+`;
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", "nasun_tinting_machine_iot_log.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      processLogsText(event.target.result);
+    };
+    reader.readAsText(file);
+  };
+
+  const processLogsText = (text) => {
+    setSyncStatus('syncing');
+    setSyncProgress(0);
+    setErrorMessage('');
+
+    // Parse lines
+    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+    if (lines.length <= 1) {
+      setSyncStatus('error');
+      setLogDetails('Tệp CSV trống hoặc không đúng cấu trúc dòng.');
+      return;
+    }
+
+    const headers = lines[0].split(',');
+    const parsedLogs = [];
+
+    for (let i = 1; i < lines.length; i++) {
+      const cols = lines[i].split(',');
+      if (cols.length < headers.length) continue;
+      
+      parsedLogs.push({
+        id: `L-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        timestamp: cols[0],
+        nppId: cols[1],
+        nppName: cols[2],
+        dispenserSerial: cols[3],
+        colorCode: cols[4],
+        productLine: cols[5],
+        base: cols[6],
+        containerSize: cols[7],
+        quantity: parseInt(cols[8]) || 1,
+        totalVolumeLiters: parseFloat(cols[9]) || 0,
+        pigmentUsedMl: parseFloat(cols[10]) || 0,
+        status: 'HOÀN THÀNH'
+      });
+    }
+
+    if (parsedLogs.length === 0) {
+      setSyncStatus('error');
+      setLogDetails('Không tìm thấy dòng nhật ký hợp lệ nào trong tệp.');
+      return;
+    }
+
+    // Simulate progress animation
+    let currentProgress = 0;
+    const interval = setInterval(() => {
+      currentProgress += 10;
+      setSyncProgress(currentProgress);
+      if (currentProgress >= 100) {
+        clearInterval(interval);
+        setSyncStatus('success');
+        setSyncedCount(parsedLogs.length);
+        setLogDetails(`Đã đồng bộ thành công ${parsedLogs.length} dòng nhật ký pha màu từ tệp tin.`);
+        
+        // Callback to App.jsx to append the logs
+        if (onSyncLogs) {
+          onSyncLogs(prev => [...parsedLogs, ...prev]);
+        }
+      }
+    }, 150);
+  };
+
+  const handleSimulateFastSync = () => {
+    // Generate quick mock logs text and process immediately
+    const mockCsv = 
+`Timestamp,NppId,NppName,DispenserSerial,ColorCode,ProductLine,Base,ContainerSize,Quantity,TotalVolumeLiters,PigmentUsedMl
+${new Date().toISOString().replace('T', ' ').substr(0, 19)},NPP-001,Công Ty TNHH Vật Liệu Hải Phòng,DISP-88291,NASUN-EXPERT-${Math.floor(Math.random() * 100)},Sơn bóng Expert,Base A,5L,1,5,98.5
+${new Date().toISOString().replace('T', ' ').substr(0, 19)},NPP-002,Đại Lý Sơn Nasun Hà Nội,DISP-99212,NASUN-PRO-${Math.floor(Math.random() * 100)},Sơn mịn Pro,Base B,18L,2,36,650.0
+`;
+    processLogsText(mockCsv);
+  };
+
+  const [errorMessage, setErrorMessage] = useState('');
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -58,6 +180,107 @@ export default function TintingAnalytics({ tintingLogs, npps }) {
           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>Sản lượng: {leaderboard[0]?.volume || 0} Lít sơn</div>
         </div>
 
+      </div>
+
+      {/* IoT Synchronizer Section */}
+      <div className="glass-panel" style={{ padding: '24px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
+          <RefreshCw size={20} color="var(--accent-cyan)" />
+          <h3 style={{ fontSize: '1.1rem', fontWeight: '800', margin: 0 }}>Đồng Bộ Nhật Ký Pha Màu Từ Thiết Bị (Giám Sát IoT Từ Xa)</h3>
+        </div>
+        
+        <p style={{ fontSize: '0.825rem', color: 'var(--text-muted)', marginBottom: '20px', lineHeight: 1.5 }}>
+          Để hỗ trợ theo dõi 200+ Nhà phân phối, KTV hoặc Đại lý có thể kết nối cổng USB máy chiết hoặc tải tệp tin log nhật ký (.csv) được kết xuất hàng ngày từ máy tính quản lý máy pha màu (ColorExpert/CorobTINT). Hệ thống sẽ tự động đồng bộ khối lượng pha lên cơ sở dữ liệu Nasun.
+        </p>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', flexWrap: 'wrap' }}>
+          
+          {/* Uploader Box */}
+          <div style={{
+            border: '2px dashed rgba(6, 182, 212, 0.2)',
+            borderRadius: '12px',
+            padding: '24px 20px',
+            background: 'rgba(6, 182, 212, 0.02)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            textAlign: 'center',
+            gap: '12px'
+          }}>
+            <Upload size={32} color="var(--accent-cyan)" />
+            <div style={{ fontSize: '0.85rem', fontWeight: '700' }}>Tải tệp tin nhật ký máy pha màu</div>
+            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Chấp nhận định dạng .csv hoặc .txt</div>
+            
+            <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <FileText size={14} />
+              Chọn Tệp
+              <input type="file" accept=".csv,.txt" style={{ display: 'none' }} onChange={handleFileUpload} />
+            </label>
+
+            <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
+              <button 
+                onClick={generateAndDownloadSampleCSV} 
+                className="btn btn-link btn-xs"
+                style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textDecoration: 'underline' }}
+              >
+                Tải tệp mẫu (.csv)
+              </button>
+            </div>
+          </div>
+
+          {/* Sync Status / Simulator Action */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', justifyContent: 'center' }}>
+            
+            {/* Quick Simulate Trigger */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600' }}>Kiểm thử nhanh đồng bộ IoT:</div>
+              <button 
+                onClick={handleSimulateFastSync}
+                disabled={syncStatus === 'syncing'}
+                className="btn btn-secondary"
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', width: 'fit-content' }}
+              >
+                <Play size={14} fill="currentColor" />
+                Giả Lập Đồng Bộ Tự Động Từ Xa
+              </button>
+            </div>
+
+            {/* Sync Progress Indicator */}
+            {syncStatus !== 'idle' && (
+              <div style={{
+                padding: '12px 16px',
+                background: 'rgba(30, 41, 59, 0.4)',
+                border: '1px solid var(--border-color)',
+                borderRadius: '8px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.8rem' }}>
+                  <span style={{ fontWeight: '700', color: syncStatus === 'success' ? 'var(--accent-emerald)' : 'var(--text-main)' }}>
+                    {syncStatus === 'syncing' && '⏳ Đang truyền dữ liệu...'}
+                    {syncStatus === 'success' && '✓ Đồng bộ thành công'}
+                    {syncStatus === 'error' && '✕ Đồng bộ thất bại'}
+                  </span>
+                  {syncStatus === 'syncing' && <span>{syncProgress}%</span>}
+                </div>
+
+                {syncStatus === 'syncing' && (
+                  <div style={{ width: '100%', height: '6px', background: 'rgba(255,255,255,0.05)', borderRadius: '3px', overflow: 'hidden' }}>
+                    <div style={{ width: `${syncProgress}%`, height: '100%', background: 'var(--accent-cyan)', transition: 'width 0.15s ease' }}></div>
+                  </div>
+                )}
+
+                {logDetails && (
+                  <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+                    {logDetails}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Inactivity Clogging Warning Banner */}

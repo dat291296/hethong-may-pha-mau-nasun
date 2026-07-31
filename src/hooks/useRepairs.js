@@ -4,8 +4,19 @@ import { INITIAL_REPAIR_TICKETS } from '../data/mockData.js';
 import { cacheOfflineData, getCachedOfflineData, enqueueOfflineAction } from '../lib/offlineSync.js';
 
 export function useRepairs() {
-  const [repairTickets, setRepairTickets] = useState(() => getCachedOfflineData('repair_tickets', INITIAL_REPAIR_TICKETS));
+  const [repairTickets, setRepairTickets] = useState(INITIAL_REPAIR_TICKETS);
   const [loading, setLoading] = useState(false);
+
+  // Hydrate cache from IndexedDB on mount
+  useEffect(() => {
+    async function loadCached() {
+      const cached = await getCachedOfflineData('repair_tickets', null);
+      if (cached && cached.length > 0) {
+        setRepairTickets(cached);
+      }
+    }
+    loadCached();
+  }, []);
 
   const fetchRepairs = useCallback(async () => {
     if (!isSupabaseConfigured) return;
@@ -15,7 +26,7 @@ export function useRepairs() {
       'fetchRepairs'
     );
     if (error) {
-      const cached = getCachedOfflineData('repair_tickets', null);
+      const cached = await getCachedOfflineData('repair_tickets', null);
       if (cached) setRepairTickets(cached);
     } else if (data && data.length > 0) {
       const mapped = data.map(mapDbToRepair);

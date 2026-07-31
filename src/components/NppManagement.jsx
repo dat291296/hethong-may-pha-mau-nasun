@@ -18,6 +18,8 @@ import {
   FileSpreadsheet
 } from 'lucide-react';
 
+import { compressImage } from '../utils/imageCompressor.js';
+
 export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, onDeleteNpp, onOpenImportModal }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [regionFilter, setRegionFilter] = useState('ALL');
@@ -81,18 +83,28 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
     });
   };
 
-  const handlePhotoUpload = (e) => {
+  const handlePhotoUpload = async (e) => {
     const files = Array.from(e.target.files);
-    files.forEach(file => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
+    for (const file of files) {
+      try {
+        const compressedBase64 = await compressImage(file);
         setFormData(prev => ({
           ...prev,
-          photos: [...prev.photos, reader.result]
+          photos: [...(prev.photos || []), compressedBase64]
         }));
-      };
-      reader.readAsDataURL(file);
-    });
+      } catch (err) {
+        console.error('Error compressing image:', err);
+        // Fallback to reading file directly on error
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setFormData(prev => ({
+            ...prev,
+            photos: [...(prev.photos || []), reader.result]
+          }));
+        };
+        reader.readAsDataURL(file);
+      }
+    }
   };
 
   const handleRemovePhoto = (index) => {

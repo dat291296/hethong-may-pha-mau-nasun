@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ArrowLeftRight, CheckCircle2, AlertTriangle, ShieldCheck, Printer, Calendar, Camera, X } from 'lucide-react';
+import { compressImage } from '../utils/imageCompressor.js';
 
 export default function WorkflowModal({
   mode, // 'INSTALL' | 'WITHDRAW' | 'TRANSFER'
@@ -28,15 +29,21 @@ export default function WorkflowModal({
   const [deviceCondition, setDeviceCondition] = useState('Bình thường - Đang chạy tốt');
   const [returnToStock, setReturnToStock] = useState(true);
 
-  const handlePhotoUpload = (e) => {
+  const handlePhotoUpload = async (e) => {
     const files = Array.from(e.target.files);
-    files.forEach(file => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setPhotos(prev => [...prev, reader.result]);
-      };
-      reader.readAsDataURL(file);
-    });
+    for (const file of files) {
+      try {
+        const compressedBase64 = await compressImage(file);
+        setPhotos(prev => [...prev, compressedBase64]);
+      } catch (err) {
+        console.error('Error compressing image:', err);
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setPhotos(prev => [...prev, reader.result]);
+        };
+        reader.readAsDataURL(file);
+      }
+    }
   };
 
   const handleRemovePhoto = (index) => {

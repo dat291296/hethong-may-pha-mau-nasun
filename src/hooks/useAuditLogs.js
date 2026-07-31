@@ -4,8 +4,19 @@ import { INITIAL_AUDIT_LOGS } from '../data/mockData.js';
 import { cacheOfflineData, getCachedOfflineData, enqueueOfflineAction } from '../lib/offlineSync.js';
 
 export function useAuditLogs() {
-  const [auditLogs, setAuditLogs] = useState(() => getCachedOfflineData('audit_logs', INITIAL_AUDIT_LOGS));
+  const [auditLogs, setAuditLogs] = useState(INITIAL_AUDIT_LOGS);
   const [loading, setLoading] = useState(false);
+
+  // Hydrate cache from IndexedDB on mount
+  useEffect(() => {
+    async function loadCached() {
+      const cached = await getCachedOfflineData('audit_logs', null);
+      if (cached && cached.length > 0) {
+        setAuditLogs(cached);
+      }
+    }
+    loadCached();
+  }, []);
 
   const fetchAuditLogs = useCallback(async () => {
     if (!isSupabaseConfigured) return;
@@ -15,7 +26,7 @@ export function useAuditLogs() {
       'fetchAuditLogs'
     );
     if (error) {
-      const cached = getCachedOfflineData('audit_logs', null);
+      const cached = await getCachedOfflineData('audit_logs', null);
       if (cached) setAuditLogs(cached);
     } else if (data && data.length > 0) {
       const mapped = data.map(mapDbToAudit);
