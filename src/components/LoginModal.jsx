@@ -326,7 +326,8 @@ export default function LoginModal() {
                     color: 'var(--text-muted)',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'center'
+                    justifyContent: 'center',
+                    zIndex: 10
                   }}
                 >
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -419,7 +420,8 @@ export default function LoginModal() {
                     color: 'var(--text-muted)',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'center'
+                    justifyContent: 'center',
+                    zIndex: 10
                   }}
                 >
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}

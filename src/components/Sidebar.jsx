@@ -10,10 +10,13 @@ import {
   Search, 
   FileText,
   ShieldCheck,
-  Wrench
+  Wrench,
+  X,
+  UserCheck,
+  LogOut
 } from 'lucide-react';
 
-import { X } from 'lucide-react';
+import { useAuth } from '../context/AuthContext.jsx';
 
 export default function Sidebar({ activeTab, setActiveTab, maintenanceCount, pendingRepairCount, isOpen, onClose }) {
   const [logoSrc, setLogoSrc] = useState('/nasun_logo.png.png');
@@ -30,6 +33,8 @@ export default function Sidebar({ activeTab, setActiveTab, maintenanceCount, pen
       setShowFallback(true);
     }
   };
+  const { role, signOut } = useAuth();
+
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard Tổng Quan', icon: LayoutDashboard },
     { id: 'npp', label: 'Nhà Phân Phối (NPP)', icon: Building2 },
@@ -42,6 +47,10 @@ export default function Sidebar({ activeTab, setActiveTab, maintenanceCount, pen
     { id: 'serialLookup', label: 'Tra Cứu Seri Thiết Bị', icon: Search },
     { id: 'auditLogs', label: 'Nhật Ký Tác Nghiệp', icon: FileText },
   ];
+
+  if (role === 'admin') {
+    menuItems.push({ id: 'users', label: 'Quản Lý Tài Khoản', icon: UserCheck });
+  }
 
   return (
     <aside 
@@ -216,6 +225,37 @@ export default function Sidebar({ activeTab, setActiveTab, maintenanceCount, pen
           );
         })}
       </nav>
+
+      {/* Logout button */}
+      <div style={{ padding: '0 12px 12px 12px' }}>
+        <button
+          onClick={() => {
+            if (window.confirm('Bạn có chắc chắn muốn đăng xuất khỏi hệ thống?')) {
+              signOut();
+              if (onClose) onClose();
+            }
+          }}
+          style={{
+            width: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            padding: '10px 14px',
+            borderRadius: '8px',
+            border: 'none',
+            background: 'rgba(239, 68, 68, 0.08)',
+            color: '#ef4444',
+            fontWeight: '600',
+            fontSize: '0.875rem',
+            cursor: 'pointer',
+            transition: 'all 0.15s ease'
+          }}
+          className="sidebar-logout-btn"
+        >
+          <LogOut size={16} color="#ef4444" />
+          <span>Đăng Xuất</span>
+        </button>
+      </div>
 
       {/* Footer Info */}
       <div style={{

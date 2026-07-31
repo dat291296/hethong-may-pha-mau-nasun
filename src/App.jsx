@@ -15,6 +15,7 @@ import MobileBottomNav from './components/MobileBottomNav';
 import DeviceRepairProcessing from './components/DeviceRepairProcessing';
 import ExcelImportModal from './components/ExcelImportModal';
 import LoginModal from './components/LoginModal';
+import UserManagement from './components/UserManagement';
 import { useAuth } from './context/AuthContext';
 
 import {
@@ -516,6 +517,10 @@ export default function App() {
 
           {activeTab === 'auditLogs' && (
             <AuditLogs auditLogs={auditLogs} />
+          )}
+
+          {activeTab === 'users' && (
+            <UserManagement />
           )}
 
         </main>
