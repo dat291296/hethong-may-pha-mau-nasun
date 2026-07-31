@@ -13,7 +13,9 @@ import {
   Wrench
 } from 'lucide-react';
 
-export default function Sidebar({ activeTab, setActiveTab, maintenanceCount, pendingRepairCount }) {
+import { X } from 'lucide-react';
+
+export default function Sidebar({ activeTab, setActiveTab, maintenanceCount, pendingRepairCount, isOpen, onClose }) {
   const [logoSrc, setLogoSrc] = useState('/nasun_logo.png.png');
   const [showFallback, setShowFallback] = useState(false);
 
@@ -43,7 +45,7 @@ export default function Sidebar({ activeTab, setActiveTab, maintenanceCount, pen
 
   return (
     <aside 
-      className="desktop-sidebar no-print"
+      className={`desktop-sidebar no-print ${isOpen ? 'mobile-open' : ''}`}
       style={{
         width: '260px',
         background: 'var(--bg-card)',
@@ -58,85 +60,109 @@ export default function Sidebar({ activeTab, setActiveTab, maintenanceCount, pen
     >
       {/* Brand Logo */}
       <div style={{
-        padding: '24px 24px',
+        padding: '16px',
         borderBottom: '1px solid var(--border-color)',
         display: 'flex',
         alignItems: 'center',
-        gap: '14px',
+        justifyContent: 'space-between',
         background: 'rgba(30, 41, 59, 0.15)'
       }}>
-        {/* Attempt to load public/nasun_logo with error handling fallback */}
-        <div style={{ 
-          position: 'relative', 
-          width: '44px', 
-          height: '44px', 
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: 'center',
-          background: 'rgba(255, 255, 255, 0.03)',
-          borderRadius: '12px',
-          border: '1px solid rgba(255, 255, 255, 0.08)',
-          padding: '4px',
-          boxSizing: 'border-box',
-          overflow: 'hidden'
-        }}>
-          {!showFallback ? (
-            <img 
-              src={logoSrc} 
-              alt="Nasun Logo" 
-              onError={handleLogoError}
-              style={{
-                maxWidth: '100%',
-                maxHeight: '100%',
-                objectFit: 'contain',
-                borderRadius: '8px',
-                transition: 'transform 0.2s ease'
-              }}
-            />
-          ) : (
-            <div 
-              className="logo-fallback"
-              style={{
-                display: 'flex',
-                width: '100%',
-                height: '100%',
-                borderRadius: '8px',
-                background: 'linear-gradient(135deg, #0284c7 0%, #06b6d4 100%)',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#fff',
-                fontWeight: 'bold',
-                boxShadow: '0 4px 12px rgba(6, 182, 212, 0.4)'
-              }}
-            >
-              <ShieldCheck size={22} />
-            </div>
-          )}
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-          <h2 style={{ 
-            fontSize: '1.1rem', 
-            fontWeight: '900', 
-            color: 'var(--text-main)', 
-            letterSpacing: '-0.02em', 
-            lineHeight: 1.1,
-            background: 'linear-gradient(90deg, #fff 0%, #cbd5e1 100%)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent'
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          {/* Attempt to load public/nasun_logo with error handling fallback */}
+          <div style={{ 
+            position: 'relative', 
+            width: '40px', 
+            height: '40px', 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center',
+            background: 'rgba(255, 255, 255, 0.03)',
+            borderRadius: '10px',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
+            padding: '3px',
+            boxSizing: 'border-box',
+            overflow: 'hidden'
           }}>
-            NASUN COLOR
-          </h2>
-          <span style={{ 
-            fontSize: '0.7rem', 
-            color: 'var(--accent-cyan)', 
-            fontWeight: '700', 
-            textTransform: 'uppercase', 
-            letterSpacing: '0.08em',
-            opacity: 0.9 
-          }}>
-            Hệ Thống Pha Màu
-          </span>
+            {!showFallback ? (
+              <img 
+                src={logoSrc} 
+                alt="Nasun Logo" 
+                onError={handleLogoError}
+                style={{
+                  maxWidth: '100%',
+                  maxHeight: '100%',
+                  objectFit: 'contain',
+                  borderRadius: '6px',
+                  transition: 'transform 0.2s ease'
+                }}
+              />
+            ) : (
+              <div 
+                className="logo-fallback"
+                style={{
+                  display: 'flex',
+                  width: '100%',
+                  height: '100%',
+                  borderRadius: '6px',
+                  background: 'linear-gradient(135deg, #0284c7 0%, #06b6d4 100%)',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#fff',
+                  fontWeight: 'bold',
+                  boxShadow: '0 4px 12px rgba(6, 182, 212, 0.4)'
+                }}
+              >
+                <ShieldCheck size={20} />
+              </div>
+            )}
+          </div>
+          
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+            <h2 style={{ 
+              fontSize: '1rem', 
+              fontWeight: '900', 
+              color: 'var(--text-main)', 
+              letterSpacing: '-0.02em', 
+              lineHeight: 1.1,
+              background: 'linear-gradient(90deg, #fff 0%, #cbd5e1 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent'
+            }}>
+              NASUN COLOR
+            </h2>
+            <span style={{ 
+              fontSize: '0.65rem', 
+              color: 'var(--accent-cyan)', 
+              fontWeight: '700', 
+              textTransform: 'uppercase', 
+              letterSpacing: '0.08em',
+              opacity: 0.9 
+            }}>
+              Hệ Thống Pha Màu
+            </span>
+          </div>
         </div>
+
+        {isOpen && (
+          <button 
+            onClick={onClose}
+            className="sidebar-close-btn"
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'var(--text-muted)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '6px',
+              borderRadius: '50%',
+              background: 'rgba(255,255,255,0.05)'
+            }}
+          >
+            <X size={18} color="#fff" />
+          </button>
+        )}
       </div>
 
       {/* Navigation Links */}
@@ -150,7 +176,10 @@ export default function Sidebar({ activeTab, setActiveTab, maintenanceCount, pen
           return (
             <button
               key={item.id}
-              onClick={() => setActiveTab(item.id)}
+              onClick={() => {
+                setActiveTab(item.id);
+                if (onClose) onClose();
+              }}
               style={{
                 width: '100%',
                 display: 'flex',

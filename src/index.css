@@ -647,7 +647,50 @@ body {
   .header-profile-container {
     display: none !important; /* Hide profile avatar on small mobile headers */
   }
+
+  .header-menu-toggle-btn {
+    display: flex !important; /* Show hamburger icon on mobile */
+  }
+
+  .desktop-sidebar.mobile-open {
+    display: flex !important;
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 285px;
+    z-index: 1000;
+    box-shadow: 10px 0 40px rgba(0,0,0,0.65);
+    animation: slideRight 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+  }
 }
+
+.header-menu-toggle-btn {
+  display: none; /* Hidden by default on desktop */
+  background: none;
+  border: none;
+  color: var(--text-main);
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  border-radius: 6px;
+  transition: background-color 0.15s ease;
+}
+
+.header-menu-toggle-btn:hover {
+  background-color: var(--bg-card-hover);
+}
+
+@keyframes slideRight {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
 
 
 

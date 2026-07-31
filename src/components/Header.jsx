@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Bell, Search, PlusCircle, AlertTriangle, ShieldAlert, CheckCircle2, UserCheck, Wifi, WifiOff, RefreshCw } from 'lucide-react';
+import { Bell, Search, PlusCircle, AlertTriangle, ShieldAlert, CheckCircle2, UserCheck, Wifi, WifiOff, RefreshCw, Menu } from 'lucide-react';
 import RoleSelector from './RoleSelector.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { ROLE_LABELS, ROLE_COLORS } from '../security/rbac.js';
@@ -11,7 +11,8 @@ export default function Header({
   setGlobalSearch, 
   onOpenNewInstallation,
   maintenanceAlerts,
-  unstabilizedAlerts
+  unstabilizedAlerts,
+  onOpenMobileSidebar
 }) {
   const [showNotifications, setShowNotifications] = useState(false);
   const { role, user, isDevMode } = useAuth();
@@ -96,6 +97,13 @@ export default function Header({
       {/* Title */}
       <div className="header-title-wrapper">
         <div className="header-title-inner">
+          <button 
+            onClick={onOpenMobileSidebar}
+            className="header-menu-toggle-btn"
+            title="Mở menu quản lý"
+          >
+            <Menu size={20} />
+          </button>
           <h1 className="header-title-text">
             {getTitle()}
           </h1>

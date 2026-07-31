@@ -339,16 +339,38 @@ export default function App() {
     console.log('Remote push triggered:', pushInfo);
   };
 
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg-main)' }}>
       
-      {/* Sidebar Navigation for Desktop */}
+      {/* Sidebar Navigation for Desktop & Mobile sliding drawer */}
       <Sidebar 
         activeTab={activeTab} 
         setActiveTab={setActiveTab} 
         maintenanceCount={maintenanceAlerts.length}
         pendingRepairCount={pendingRepairCount}
+        isOpen={isMobileSidebarOpen}
+        onClose={() => setIsMobileSidebarOpen(false)}
       />
+
+      {/* Sidebar Backdrop Overlay on Mobile */}
+      {isMobileSidebarOpen && (
+        <div 
+          className="sidebar-backdrop"
+          onClick={() => setIsMobileSidebarOpen(false)}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.65)',
+            backdropFilter: 'blur(8px)',
+            zIndex: 999
+          }}
+        />
+      )}
 
       {/* Main Container */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
@@ -361,6 +383,7 @@ export default function App() {
           onOpenNewInstallation={() => setWorkflowMode('INSTALL')}
           maintenanceAlerts={maintenanceAlerts}
           unstabilizedAlerts={unstabilizedAlerts}
+          onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
         />
 
         {/* Dynamic View Content */}
@@ -496,6 +519,7 @@ export default function App() {
         setActiveTab={setActiveTab}
         maintenanceCount={maintenanceAlerts.length}
         pendingRepairCount={pendingRepairCount}
+        onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
       />
 
       {/* Workflow Execution Modal */}
