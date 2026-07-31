@@ -313,7 +313,7 @@ body {
 }
 
 @media (max-width: 768px) {
-  .desktop-sidebar {
+  .desktop-sidebar:not(.mobile-open) {
     display: none !important;
   }
 
@@ -654,14 +654,15 @@ body {
 
   .desktop-sidebar.mobile-open {
     display: flex !important;
-    position: fixed;
-    top: 0;
-    left: 0;
-    bottom: 0;
-    width: 285px;
-    z-index: 1000;
-    box-shadow: 10px 0 40px rgba(0,0,0,0.65);
-    animation: slideRight 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    bottom: 0 !important;
+    width: 285px !important;
+    z-index: 1000 !important;
+    background: var(--bg-card) !important;
+    box-shadow: 10px 0 40px rgba(0,0,0,0.65) !important;
+    animation: slideRight 0.24s cubic-bezier(0.16, 1, 0.3, 1) !important;
   }
 }
 
