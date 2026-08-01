@@ -1,0 +1,11 @@
+{
+  "api_url": "https://hethong-may-pha-mau-nasun.dat291219962-hust.workers.dev/api",
+  "api_key": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.example-supabase-anon-key",
+  "set_code": "SET-001",
+  "sync_interval_minutes": 15,
+  "software_type": "ColorExpert 3",
+  "paths": {
+    "formula_override_dir": "C:\\ColorExpert3\\Data\\Formulas",
+    "history_log_file": "C:\\ColorExpert3\\Data\\History.db"
+  }
+}

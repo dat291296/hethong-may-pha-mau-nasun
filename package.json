@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "electron:start": "electron electron/main.cjs",
+    "electron:build": "vite build && electron-builder"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.9",
@@ -23,6 +25,8 @@
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.3",
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3",
     "oxlint": "^1.71.0",
     "vite": "^8.1.1"
   }
