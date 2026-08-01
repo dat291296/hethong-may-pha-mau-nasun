@@ -51,7 +51,9 @@ export default function DeviceRepairProcessing({
   onAddTicket,
   onEditTicket,
   onDeleteTicket,
-  onPrintTicket
+  onPrintTicket,
+  prefilledTicket,
+  onClearPrefill
 }) {
   const [activeTab, setActiveTab] = useState('ALL'); // ALL | PENDING | NOT_RETURNED | REPLACED
   const [searchTerm, setSearchTerm] = useState('');
@@ -62,6 +64,32 @@ export default function DeviceRepairProcessing({
   const [showModal, setShowModal] = useState(false);
   const [editingTicket, setEditingTicket] = useState(null);
   const [selectedTicket, setSelectedTicket] = useState(null);
+
+  // Auto-fill from Handbook if prefilledTicket is provided
+  React.useEffect(() => {
+    if (prefilledTicket) {
+      setEditingTicket(null);
+      setFormData({
+        date: new Date().toISOString().split('T')[0],
+        technician: 'Nguyễn Văn Hùng',
+        nppId: npps.length > 0 ? npps[0].id : '',
+        nppName: npps.length > 0 ? npps[0].name : '',
+        productCategory: prefilledTicket.productCategory || 'Máy chiết',
+        machineModel: prefilledTicket.machineModel || 'Satint A2',
+        serialNumber: prefilledTicket.serialNumber || '',
+        errorCategory: prefilledTicket.errorCategory || 'Lỗi phần cứng',
+        errorDescription: prefilledTicket.errorDescription || '',
+        photos: [],
+        actionDirection: 'Sửa chữa',
+        replacementCondition: 'Mới',
+        processingStatus: 'Chưa xử lý',
+        customerReturnStatus: 'Chưa gửi trả',
+        notes: ''
+      });
+      setShowModal(true);
+      if (onClearPrefill) onClearPrefill();
+    }
+  }, [prefilledTicket]);
 
   // Form State
   const [formData, setFormData] = useState({

@@ -16,6 +16,8 @@ import DeviceRepairProcessing from './components/DeviceRepairProcessing';
 import ExcelImportModal from './components/ExcelImportModal';
 import LoginModal from './components/LoginModal';
 import UserManagement from './components/UserManagement';
+import TechHandbook from './components/TechHandbook';
+import FieldRouteMap from './components/FieldRouteMap';
 import { useAuth } from './context/AuthContext';
 
 import {
@@ -57,6 +59,19 @@ export default function App() {
   // Workflow Modal state
   const [workflowMode, setWorkflowMode] = useState(null); // 'INSTALL' | 'WITHDRAW' | 'TRANSFER' | null
   const [printProtocolData, setPrintProtocolData] = useState(null);
+
+  // Tech Handbook -> Repair Ticket Prefill State
+  const [prefilledRepairData, setPrefilledRepairData] = useState(null);
+
+  const handleSelectErrorForRepair = (errorObj) => {
+    setPrefilledRepairData({
+      productCategory: errorObj.category === 'Phần mềm' ? 'Máy tính' : errorObj.category,
+      machineModel: errorObj.machineModel,
+      errorCategory: errorObj.category === 'Phần mềm' ? 'Lỗi phần mềm' : 'Lỗi phần cứng',
+      errorDescription: `[${errorObj.code}] ${errorObj.title}\n- Dấu hiệu: ${errorObj.symptoms.join('; ')}\n- Nguyên nhân: ${errorObj.rootCause}`
+    });
+    setActiveTab('repairs');
+  };
 
   // Calculate alerts
   const today = new Date('2026-07-26');
@@ -445,6 +460,24 @@ export default function App() {
               onAddTicket={handleAddTicket}
               onEditTicket={handleEditTicket}
               onDeleteTicket={handleDeleteTicket}
+              prefilledTicket={prefilledRepairData}
+              onClearPrefill={() => setPrefilledRepairData(null)}
+            />
+          )}
+
+          {activeTab === 'techHandbook' && (
+            <TechHandbook
+              onSelectErrorForRepair={handleSelectErrorForRepair}
+            />
+          )}
+
+          {activeTab === 'routeMap' && (
+            <FieldRouteMap
+              npps={npps}
+              systemSets={systemSets}
+              repairTickets={repairTickets}
+              onAddAuditLog={addAuditLog}
+              onNavigateTab={(tab) => setActiveTab(tab)}
             />
           )}
 

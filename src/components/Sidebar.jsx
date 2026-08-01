@@ -12,7 +12,9 @@ import {
   Wrench,
   X,
   UserCheck,
-  LogOut
+  LogOut,
+  BookOpen,
+  MapPin
 } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext.jsx';
@@ -25,6 +27,8 @@ export default function Sidebar({ activeTab, setActiveTab, maintenanceCount, pen
     { id: 'npp', label: 'Nhà Phân Phối (NPP)', icon: Building2 },
     { id: 'assets', label: 'Bộ Máy & Kho Thiết Bị', icon: Cpu },
     { id: 'repairs', label: 'Xử Lý & Sửa Chữa Máy', icon: Wrench, badge: pendingRepairCount },
+    { id: 'techHandbook', label: 'Sổ Tay Kỹ Thuật & Tra Cứu Lỗi', icon: BookOpen, badgeText: 'SOPs' },
+    { id: 'routeMap', label: 'Bản Đồ Công Tác & Tuyến Đường', icon: MapPin, badgeText: 'GPS' },
     { id: 'workflows', label: 'Cấp Phát / Thu Hồi', icon: ArrowLeftRight },
     { id: 'maintenance', label: 'Lịch Bảo Trì 1 Năm', icon: CalendarClock, badge: maintenanceCount },
     { id: 'remoteFormula', label: 'Cập Nhật Công Thức Màu', icon: RefreshCw, badgeText: '3 SW' },
