@@ -63,14 +63,12 @@ export default function Sidebar({ activeTab, setActiveTab, maintenanceCount, pen
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <img 
-            src="/nasun_logo.png" 
+            src="/nasun_logo.png?v=3" 
             alt="Nasun Paint Logo" 
             style={{
               width: '40px',
               height: '40px',
-              borderRadius: '8px',
-              objectFit: 'contain',
-              boxShadow: '0 4px 12px rgba(218, 26, 34, 0.2)'
+              objectFit: 'contain'
             }}
           />
           

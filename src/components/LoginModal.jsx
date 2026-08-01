@@ -191,14 +191,12 @@ export default function LoginModal() {
         {/* Brand Logo */}
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '20px' }}>
           <img 
-            src="/nasun_logo.png" 
+            src="/nasun_logo.png?v=3" 
             alt="Nasun Paint Logo" 
             style={{
-              width: '64px',
-              height: '64px',
-              borderRadius: '12px',
-              objectFit: 'contain',
-              boxShadow: '0 8px 24px rgba(218, 26, 34, 0.3)'
+              width: '80px',
+              height: '80px',
+              objectFit: 'contain'
             }}
           />
         </div>
