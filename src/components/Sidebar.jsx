@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { 
   LayoutDashboard, 
   Building2, 
@@ -9,7 +9,6 @@ import {
   BarChart3, 
   Search, 
   FileText,
-  ShieldCheck,
   Wrench,
   X,
   UserCheck,
@@ -19,20 +18,6 @@ import {
 import { useAuth } from '../context/AuthContext.jsx';
 
 export default function Sidebar({ activeTab, setActiveTab, maintenanceCount, pendingRepairCount, isOpen, onClose }) {
-  const [logoSrc, setLogoSrc] = useState('/nasun_logo.png.png');
-  const [showFallback, setShowFallback] = useState(false);
-
-  const handleLogoError = () => {
-    if (logoSrc === '/nasun_logo.png.png') {
-      setLogoSrc('/nasun_logo.png.webp');
-    } else if (logoSrc === '/nasun_logo.png.webp') {
-      setLogoSrc('/nasun_logo.png');
-    } else if (logoSrc === '/nasun_logo.png') {
-      setLogoSrc('/nasun_logo.jpg');
-    } else {
-      setShowFallback(true);
-    }
-  };
   const { role, signOut } = useAuth();
 
   const menuItems = [
@@ -77,7 +62,6 @@ export default function Sidebar({ activeTab, setActiveTab, maintenanceCount, pen
         background: 'rgba(30, 41, 59, 0.15)'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          {/* Attempt to load public/nasun_logo with error handling fallback */}
           <div style={{ 
             position: 'relative', 
             width: '40px', 
@@ -85,45 +69,19 @@ export default function Sidebar({ activeTab, setActiveTab, maintenanceCount, pen
             display: 'flex', 
             alignItems: 'center', 
             justifyContent: 'center',
-            background: 'rgba(255, 255, 255, 0.03)',
+            background: '#da1a22',
             borderRadius: '10px',
-            border: '1px solid rgba(255, 255, 255, 0.08)',
-            padding: '3px',
+            boxShadow: '0 4px 12px rgba(218, 26, 34, 0.2)',
+            padding: '4px',
             boxSizing: 'border-box',
             overflow: 'hidden'
           }}>
-            {!showFallback ? (
-              <img 
-                src={logoSrc} 
-                alt="Nasun Logo" 
-                onError={handleLogoError}
-                style={{
-                  maxWidth: '100%',
-                  maxHeight: '100%',
-                  objectFit: 'contain',
-                  borderRadius: '6px',
-                  transition: 'transform 0.2s ease'
-                }}
+            <svg width="100%" height="100%" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <polygon
+                points="50,8 58.7,29 79.7,20.3 71,41.3 92,50 71,58.7 79.7,79.7 58.7,71 50,92 41.3,71 20.3,79.7 29,58.7 8,50 29,41.3 20.3,20.3 41.3,29"
+                fill="#ffffff"
               />
-            ) : (
-              <div 
-                className="logo-fallback"
-                style={{
-                  display: 'flex',
-                  width: '100%',
-                  height: '100%',
-                  borderRadius: '6px',
-                  background: 'linear-gradient(135deg, #0284c7 0%, #06b6d4 100%)',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#fff',
-                  fontWeight: 'bold',
-                  boxShadow: '0 4px 12px rgba(6, 182, 212, 0.4)'
-                }}
-              >
-                <ShieldCheck size={20} />
-              </div>
-            )}
+            </svg>
           </div>
           
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
@@ -137,7 +95,7 @@ export default function Sidebar({ activeTab, setActiveTab, maintenanceCount, pen
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent'
             }}>
-              NASUN COLOR
+              NASUN PAINT
             </h2>
             <span style={{ 
               fontSize: '0.65rem', 

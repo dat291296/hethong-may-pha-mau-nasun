@@ -194,18 +194,23 @@ export default function LoginModal() {
             width: '60px',
             height: '60px',
             borderRadius: '16px',
-            background: 'linear-gradient(135deg, #06b6d4 0%, #0284c7 100%)',
+            background: '#da1a22',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            boxShadow: '0 8px 24px rgba(6, 182, 212, 0.3)'
+            boxShadow: '0 8px 24px rgba(218, 26, 34, 0.3)'
           }}>
-            <Cpu size={30} color="#fff" />
+            <svg width="34" height="34" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <polygon
+                points="50,8 58.7,29 79.7,20.3 71,41.3 92,50 71,58.7 79.7,79.7 58.7,71 50,92 41.3,71 20.3,79.7 29,58.7 8,50 29,41.3 20.3,20.3 41.3,29"
+                fill="#ffffff"
+              />
+            </svg>
           </div>
         </div>
 
         <h2 style={{ fontSize: '1.4rem', fontWeight: '900', color: '#fff', marginBottom: '4px', letterSpacing: '-0.02em' }}>
-          NASUN COLOR
+          NASUN PAINT
         </h2>
         <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '24px' }}>
           {activeForm === 'login' && 'Hệ Thống Quản Lý & Giám Sát Máy Pha Màu Tự Động'}
@@ -253,7 +258,8 @@ export default function LoginModal() {
           </div>
         )}
 
-        {/* Info banner for Production mode initial sign up */}
+        {/* Info banner for Production mode initial sign up - Hidden as requested */}
+        {/*
         {!isDevMode && activeForm === 'login' && (
           <div style={{
             background: 'rgba(6, 182, 212, 0.05)',
@@ -269,6 +275,7 @@ export default function LoginModal() {
             🔑 <strong>Kích hoạt Admin:</strong> Nếu đăng nhập lần đầu tiên với tài khoản <strong style={{ color: 'var(--accent-cyan)' }}>dat291219962.hust@gmail.com</strong>, vui lòng nhấn <strong>Đăng ký ngay</strong> bên dưới trước để khởi tạo tài khoản, hệ thống sẽ tự động cấp quyền Admin Nasun.
           </div>
         )}
+        */}
 
         {/* ── FORM 1: LOGIN ───────────────────────────────────────────────────── */}
         {activeForm === 'login' && (
