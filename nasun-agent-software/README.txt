@@ -1,53 +1,51 @@
 ========================================================================
-             NASUN PAINT TINTING MACHINE SYNC AGENT (WINDOWS)
+             NASUN PAINT TINTING MACHINE SYNC AGENT (WINDOWS GUI)
 ========================================================================
 
-Thu mục này chứa toàn bộ mã nguồn và công cụ đóng gói phần mềm chạy ngầm
-cho máy tính Windows tại Nhà Phân Phối (NPP) để tự động cập nhật công thức
-màu và trích xuất lịch sử pha máy chiết lên hệ thống Cloud NASUN PAINT.
+Phần mềm này giúp máy tính Windows tại Nhà Phân Phối (NPP) tự động đồng bộ
+lịch sử pha màu từ máy chiết lên Cloud và nhận cập nhật công thức màu mới.
+
+Điểm cải tiến: Phiên bản này cung cấp Giao Diện Đồ Họa (GUI) trực quan giúp
+Kỹ thuật viên (KTV) dễ dàng nhập các thông số cấu hình và cài đặt chạy ngầm
+không cần biên dịch code phức tạp.
 
 ------------------------------------------------------------------------
-I. THÀNH PHẦN MÃ NGUỒN TRONG THƯ MỤC:
+I. CÁC THÀNH PHẦN CHÍNH:
 ------------------------------------------------------------------------
-1. agent.py:
-   Mã nguồn Python chính của phần mềm. Thực hiện:
-   - Đọc config.json khi khởi động.
-   - Nhận diện loại phần mềm máy pha (ColorExpert 3 sử dụng cơ sở dữ liệu
-     SQLite, hoặc CorobTINT sử dụng XML log).
-   - Tự động quét và chỉ trích xuất các lượt pha mới phát sinh (sử dụng
-     tệp lưu vết trạng thái last_sync.json để không bị trùng lặp).
-   - Gửi yêu cầu HTTPS POST tới Cloud API để đồng bộ sản lượng sơn.
-   - Định kỳ gọi Cloud để xem có phiên bản công thức màu mới nào không.
-     Nếu có, tự động tải xuống, sao lưu tệp cũ (.bak) và ghi đè tệp mới
-     vào đúng thư mục phần mềm máy chiết.
+1. agent_gui.py:
+   Mã nguồn chính tích hợp giao diện GUI và luồng chạy ẩn nền.
+   - Khi chạy bình thường: Mở cửa sổ đồ họa nhập thông số.
+   - Khi chạy với tham số --silent: Chạy ẩn hoàn toàn dưới nền Windows.
 
 2. config.json:
-   Tệp cấu hình của Agent. Cần điều chỉnh set_code (Mã bộ máy), loại phần
-   mềm pha màu, và đường dẫn thư mục database tương ứng trên máy tính đó.
+   Tệp lưu trữ thông số cấu hình dạng JSON.
 
 3. setup_service.bat:
-   Tập lệnh cài đặt tự động bằng quyền Admin (Windows Batch Script):
-   - Tự động nâng cấp pip, cài đặt thư viện biên dịch.
-   - Biên dịch tệp agent.py thành tệp thực thi duy nhất NasunAgentService.exe.
-   - Tạo thư mục C:\NasunAgent và copy file cấu hình cùng file chạy vào ổ đĩa.
-   - Đăng ký chương trình chạy ngầm với Windows Task Scheduler (Chạy cùng hệ
-     thống dưới quyền SYSTEM không cần người dùng đăng nhập).
+   Tập lệnh tự động copy phần mềm vào thư mục làm việc hệ thống C:\NasunAgent
+   và khởi chạy giao diện GUI cấu hình lần đầu.
 
 ------------------------------------------------------------------------
-II. HƯỚNG DẪN BIÊN DỊCH VÀ CÀI ĐẶT:
+II. HƯỚNG DẪN CÀI ĐẶT 3 BƯỚC (CHO KTV):
 ------------------------------------------------------------------------
-Bước 1: Chỉnh sửa tệp config.json
-- Mở tệp config.json bằng Notepad.
-- Cập nhật đúng các thông số:
-  + "set_code": Mã bộ máy tương ứng của NPP.
-  + "paths" -> "history_log_file": Đường dẫn tới file History.db hoặc
-    DispenseHistory.xml trên máy tính NPP.
 
-Bước 2: Chạy file cài đặt setup_service.bat
-- Nhấp chuột phải vào tệp setup_service.bat chọn "Run as Administrator".
-- Chương trình sẽ tự động thực hiện từ đầu đến cuối và tạo ra dịch vụ chạy ẩn.
+BƯỚC 1: Khởi chạy Trình cấu hình GUI
+- Nhấp đúp chuột vào file "setup_service.bat".
+- Chương trình sẽ tự động tạo thư mục C:\NasunAgent, copy mã nguồn vào
+  đó và mở ra một cửa sổ giao diện đồ họa cấu hình tuyệt đẹp.
 
-Bước 3: Kiểm tra log vận hành
-- Mở thư mục C:\NasunAgent
-- Xem tệp agent.log để theo dõi quá trình đồng bộ và tải công thức màu.
+BƯỚC 2: Nhập thông số cấu hình trực tiếp trên giao diện
+- Điền các thông số: API URL, Supabase Token, Mã bộ máy (Set Code).
+- Chọn loại phần mềm pha màu NPP đang dùng (ColorExpert 3, 2, hay CorobTINT).
+- Bấm nút "Browse..." ở góc phải các ô thư mục để chọn trực tiếp file
+  database hoặc file log trên máy tính (Không cần gõ tay đường dẫn).
+- Bấm nút "LƯU CẤU HÌNH".
+
+BƯỚC 3: Đồng bộ thử nghiệm & Cài đặt chạy ngầm cùng Windows
+- Bấm nút "ĐỒNG BỘ THỬ NGHIỆM" để kiểm tra kết nối. Log hoạt động sẽ hiển
+  thị trực tiếp trong khung console màu xanh bên dưới cửa sổ ứng dụng.
+- Bấm nút "CÀI ĐẶT CHẠY CÙNG WINDOWS" để phần mềm tự động đăng ký với
+  Windows Task Scheduler. Từ lúc này phần mềm sẽ tự chạy ẩn hoàn toàn mỗi
+  khi máy tính NPP khởi động (Sử dụng pythonw.exe chạy ngầm).
+
+* Xem file log chi tiết lưu tại: C:\NasunAgent\agent.log
 ========================================================================

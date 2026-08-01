@@ -1,18 +1,9 @@
 @echo off
-title NASUN AGENT SERVICE INSTALLER
+title NASUN AGENT SERVICE INSTALLER & RUNNER
 echo ========================================================
-echo   BO CAI DAT VA DANG KY CONG CU NASUN AGENT CHO MAY NPP
+echo   KHOI DONG TRINH CAU HINH GUI NASUN AGENT CHO NPP
 echo ========================================================
 echo.
-
-:: Check Admin privileges
-openfiles >nul 2>&1
-if %errorlevel% neq 0 (
-    echo [ERROR] Vui long chay file BAT nay bang quyen Admin (Run as Administrator)!
-    echo.
-    pause
-    exit /b
-)
 
 :: Ensure Python is installed
 python --version >nul 2>&1
@@ -24,37 +15,21 @@ if %errorlevel% neq 0 (
     exit /b
 )
 
-echo [1/4] Dang cai dat cac thu vien can thiet...
-python -m pip install --upgrade pip
-python -m pip install pyinstaller requests
-
-echo.
-echo [2/4] Dang bien dich agent.py thanh file exe doc lap (NasunAgentService.exe)...
-pyinstaller --onefile --name=NasunAgentService agent.py
-
-if not exist "dist\NasunAgentService.exe" (
-    echo.
-    echo [ERROR] Bien dich file EXE that bai! Vui long kiem tra log loi phia tren.
-    pause
-    exit /b
-)
-
-echo.
-echo [3/4] Dang copy cac file can thiet vao thu muc lam viec C:\NasunAgent...
+echo [+] Dang chuan bi thu muc lam viec C:\NasunAgent...
 if not exist "C:\NasunAgent" mkdir "C:\NasunAgent"
-copy /y "dist\NasunAgentService.exe" "C:\NasunAgent\NasunAgentService.exe"
+copy /y "agent_gui.py" "C:\NasunAgent\agent_gui.py"
 if not exist "C:\NasunAgent\config.json" copy /y "config.json" "C:\NasunAgent\config.json"
 
-echo.
-echo [4/4] Dang dang ky chuong trinh chay ngam cung Windows (Task Scheduler)...
-schtasks /create /tn "NasunAgentService" /tr "C:\NasunAgent\NasunAgentService.exe" /sc onstart /ru "SYSTEM" /f
+echo [+] Dang mo giao dien cau hinh GUI...
+cd /d "C:\NasunAgent"
+start "" pythonw.exe agent_gui.py
 
 echo.
 echo ========================================================
-echo   CAI DAT HOAN TAT!
-echo   - Chuong trinh da duoc copy vao: C:\NasunAgent
-echo   - Da thiet lap chay an cung he thong (Windows Startup)
-echo   - Log hoat dong ghi tai file: C:\NasunAgent\agent.log
+echo   Cua so cau hinh giao dien da duoc mo!
+echo   Vui long nhap cac thong so ket noi, file database log
+echo   va nhan nut 'CAI DAT CHAY CUNG WINDOWS' de hoan tat.
 echo ========================================================
 echo.
-pause
+timeout /t 5
+exit /b
