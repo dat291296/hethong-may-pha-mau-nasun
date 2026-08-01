@@ -190,23 +190,17 @@ export default function LoginModal() {
       >
         {/* Brand Logo */}
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '20px' }}>
-          <div style={{
-            width: '60px',
-            height: '60px',
-            borderRadius: '16px',
-            background: '#da1a22',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 8px 24px rgba(218, 26, 34, 0.3)'
-          }}>
-            <svg width="34" height="34" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <polygon
-                points="50,8 58.7,29 79.7,20.3 71,41.3 92,50 71,58.7 79.7,79.7 58.7,71 50,92 41.3,71 20.3,79.7 29,58.7 8,50 29,41.3 20.3,20.3 41.3,29"
-                fill="#ffffff"
-              />
-            </svg>
-          </div>
+          <img 
+            src="/nasun_logo.png" 
+            alt="Nasun Paint Logo" 
+            style={{
+              width: '64px',
+              height: '64px',
+              borderRadius: '12px',
+              objectFit: 'contain',
+              boxShadow: '0 8px 24px rgba(218, 26, 34, 0.3)'
+            }}
+          />
         </div>
 
         <h2 style={{ fontSize: '1.4rem', fontWeight: '900', color: '#fff', marginBottom: '4px', letterSpacing: '-0.02em' }}>

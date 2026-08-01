@@ -62,27 +62,17 @@ export default function Sidebar({ activeTab, setActiveTab, maintenanceCount, pen
         background: 'rgba(30, 41, 59, 0.15)'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ 
-            position: 'relative', 
-            width: '40px', 
-            height: '40px', 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'center',
-            background: '#da1a22',
-            borderRadius: '10px',
-            boxShadow: '0 4px 12px rgba(218, 26, 34, 0.2)',
-            padding: '4px',
-            boxSizing: 'border-box',
-            overflow: 'hidden'
-          }}>
-            <svg width="100%" height="100%" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <polygon
-                points="50,8 58.7,29 79.7,20.3 71,41.3 92,50 71,58.7 79.7,79.7 58.7,71 50,92 41.3,71 20.3,79.7 29,58.7 8,50 29,41.3 20.3,20.3 41.3,29"
-                fill="#ffffff"
-              />
-            </svg>
-          </div>
+          <img 
+            src="/nasun_logo.png" 
+            alt="Nasun Paint Logo" 
+            style={{
+              width: '40px',
+              height: '40px',
+              borderRadius: '8px',
+              objectFit: 'contain',
+              boxShadow: '0 4px 12px rgba(218, 26, 34, 0.2)'
+            }}
+          />
           
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
             <h2 style={{ 
