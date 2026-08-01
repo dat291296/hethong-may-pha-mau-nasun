@@ -16,11 +16,9 @@ namespace NasunAgent
         [STAThread]
         static void Main(string[] args)
         {
-            // Enable Visual Styles for modern Windows UI look
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
 
-            // Check if run in silent background mode via startup
             if (args.Length > 0 && (args[0].ToLower() == "/silent" || args[0].ToLower() == "-silent"))
             {
                 RunSilentLoop();
@@ -46,10 +44,7 @@ namespace NasunAgent
                 {
                     if (File.Exists(configFile))
                     {
-                        string json = File.ReadAllText(configFile, Encoding.UTF8);
                         Log(logFile, "Đang kiểm tra chu kỳ đồng bộ dữ liệu...");
-                        
-                        // Perform HTTP heartbeat sync test
                         SyncData(configFile, logFile);
                     }
                     else
@@ -62,7 +57,6 @@ namespace NasunAgent
                     Log(logFile, "LỖI CHẠY NGẦM: " + ex.Message);
                 }
 
-                // Sleep for 15 minutes (900,000 ms)
                 Thread.Sleep(15 * 60 * 1000);
             }
         }
@@ -79,7 +73,6 @@ namespace NasunAgent
 
         public static void SyncData(string configFile, string logFile)
         {
-            // Simplified web request to cloud API
             try
             {
                 ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072; // TLS 1.2
@@ -87,12 +80,12 @@ namespace NasunAgent
                 {
                     client.Headers[HttpRequestHeader.ContentType] = "application/json";
                     string response = client.DownloadString("https://hethong-may-pha-mau-nasun.dat291219962-hust.workers.dev/api");
-                    Log(logFile, "Đồng bộ trạng thái kết nối Cloud OK: " + (response.Length > 50 ? response.Substring(0, 50) + "..." : response));
+                    Log(logFile, "Đồng bộ kết nối Cloud thành công: " + (response.Length > 40 ? response.Substring(0, 40) + "..." : response));
                 }
             }
             catch (Exception ex)
             {
-                Log(logFile, "Lỗi kết nối Server Cloud: " + ex.Message);
+                Log(logFile, "Lỗi kết nối Cloud: " + ex.Message);
             }
         }
     }
@@ -105,6 +98,7 @@ namespace NasunAgent
         private ComboBox cbSoftwareType;
         private TextBox txtFormulaDir;
         private TextBox txtLogFile;
+        private TextBox txtBackupDir;
         private NumericUpDown numInterval;
         private TextBox txtLogConsole;
         private System.Windows.Forms.Timer timerLogs;
@@ -119,7 +113,7 @@ namespace NasunAgent
         private void InitComponent()
         {
             this.Text = "Cấu Hình NASUN NPP Agent - Hệ Thống Pha Màu NASUN PAINT";
-            this.Size = new Size(620, 680);
+            this.Size = new Size(620, 720);
             this.StartPosition = FormStartPosition.CenterScreen;
             this.FormBorderStyle = FormBorderStyle.FixedSingle;
             this.MaximizeBox = false;
@@ -132,7 +126,7 @@ namespace NasunAgent
             {
                 Text = "HỆ THỐNG ĐỒNG BỘ MÁY PHA MÀU NASUN PAINT",
                 Font = new Font("Segoe UI", 12F, FontStyle.Bold),
-                ForeColor = Color.FromArgb(6, 182, 212), // Cyan
+                ForeColor = Color.FromArgb(6, 182, 212),
                 Location = new Point(20, 15),
                 AutoSize = true
             };
@@ -148,8 +142,8 @@ namespace NasunAgent
             };
             this.Controls.Add(lblSubHeader);
 
-            int startY = 85;
-            int gapY = 42;
+            int startY = 80;
+            int gapY = 38;
 
             // Inputs
             AddLabel("URL Máy Chủ API:", 20, startY);
@@ -196,10 +190,21 @@ namespace NasunAgent
                 }
             };
 
-            AddLabel("Chu Kỳ Đồng Bộ (Phút):", 20, startY + gapY * 6);
+            // NEW: Backup Folder Input & Selector
+            AddLabel("Thư Mục Sao Lưu (Backup):", 20, startY + gapY * 6);
+            txtBackupDir = AddTextBox(200, startY + gapY * 6, 290);
+            Button btnBrowseBackup = AddButton("Browse...", 500, startY + gapY * 6 - 2, 80, 27);
+            btnBrowseBackup.Click += (s, e) => {
+                using (FolderBrowserDialog dlg = new FolderBrowserDialog())
+                {
+                    if (dlg.ShowDialog() == DialogResult.OK) txtBackupDir.Text = dlg.SelectedPath;
+                }
+            };
+
+            AddLabel("Chu Kỳ Đồng Bộ (Phút):", 20, startY + gapY * 7);
             numInterval = new NumericUpDown
             {
-                Location = new Point(200, startY + gapY * 6),
+                Location = new Point(200, startY + gapY * 7),
                 Size = new Size(100, 25),
                 Minimum = 1,
                 Maximum = 120,
@@ -210,17 +215,17 @@ namespace NasunAgent
             this.Controls.Add(numInterval);
 
             // Action Buttons
-            int btnY = startY + gapY * 7 + 10;
+            int btnY = startY + gapY * 8 + 10;
             Button btnSave = AddButton("💾 LƯU CẤU HÌNH", 20, btnY, 170, 36);
-            btnSave.BackColor = Color.FromArgb(14, 165, 233); // Blue
+            btnSave.BackColor = Color.FromArgb(14, 165, 233);
             btnSave.Click += BtnSave_Click;
 
-            Button btnTest = AddButton("⚡ ĐỒNG BỘ THỬ NGHIỆM", 205, btnY, 185, 36);
-            btnTest.BackColor = Color.FromArgb(16, 185, 129); // Green
+            Button btnTest = AddButton("⚡ ĐỒNG BỘ & BACKUP THỬ", 205, btnY, 185, 36);
+            btnTest.BackColor = Color.FromArgb(16, 185, 129);
             btnTest.Click += BtnTest_Click;
 
-            Button btnInstall = AddButton("🚀 CÀI ĐẶT CHẠY CÙNG WINDOWS", 400, btnY, 180, 36);
-            btnInstall.BackColor = Color.FromArgb(139, 92, 246); // Purple
+            Button btnInstall = AddButton("🚀 CÀI CHẠY CÙNG WINDOWS", 400, btnY, 180, 36);
+            btnInstall.BackColor = Color.FromArgb(139, 92, 246);
             btnInstall.Click += BtnInstall_Click;
 
             // Console Log View
@@ -229,15 +234,15 @@ namespace NasunAgent
                 Text = "Nhật ký vận hành thực tế (C:\\NasunAgent\\agent.log):",
                 Font = new Font("Segoe UI", 8.5F, FontStyle.Bold),
                 ForeColor = Color.FromArgb(148, 163, 184),
-                Location = new Point(20, btnY + 48),
+                Location = new Point(20, btnY + 44),
                 AutoSize = true
             };
             this.Controls.Add(lblConsole);
 
             txtLogConsole = new TextBox
             {
-                Location = new Point(20, btnY + 70),
-                Size = new Size(560, 140),
+                Location = new Point(20, btnY + 64),
+                Size = new Size(560, 130),
                 Multiline = true,
                 ScrollBars = ScrollBars.Vertical,
                 ReadOnly = true,
@@ -301,12 +306,12 @@ namespace NasunAgent
                 try
                 {
                     string json = File.ReadAllText(configFile, Encoding.UTF8);
-                    // Simple parse
                     txtApiUrl.Text = GetJsonVal(json, "api_url", "https://hethong-may-pha-mau-nasun.dat291219962-hust.workers.dev/api");
                     txtApiKey.Text = GetJsonVal(json, "api_key", "supabase-anon-key");
                     txtSetCode.Text = GetJsonVal(json, "set_code", "SET-001");
                     txtFormulaDir.Text = GetJsonVal(json, "formula_override_dir", @"C:\ColorExpert3\Data\Formulas");
                     txtLogFile.Text = GetJsonVal(json, "history_log_file", @"C:\ColorExpert3\Data\History.db");
+                    txtBackupDir.Text = GetJsonVal(json, "backup_dir", @"C:\NasunAgent\Backups");
                     return;
                 }
                 catch { }
@@ -317,6 +322,7 @@ namespace NasunAgent
             txtSetCode.Text = "SET-001";
             txtFormulaDir.Text = @"C:\ColorExpert3\Data\Formulas";
             txtLogFile.Text = @"C:\ColorExpert3\Data\History.db";
+            txtBackupDir.Text = @"C:\NasunAgent\Backups";
         }
 
         private string GetJsonVal(string json, string key, string defVal)
@@ -343,20 +349,27 @@ namespace NasunAgent
                 string appDir = @"C:\NasunAgent";
                 if (!Directory.Exists(appDir)) Directory.CreateDirectory(appDir);
 
+                string backupDir = txtBackupDir.Text.Trim();
+                if (!string.IsNullOrEmpty(backupDir) && !Directory.Exists(backupDir))
+                {
+                    Directory.CreateDirectory(backupDir);
+                }
+
                 string json = string.Format(
-                    "{{\r\n  \"api_url\": \"{0}\",\r\n  \"api_key\": \"{1}\",\r\n  \"set_code\": \"{2}\",\r\n  \"sync_interval_minutes\": {3},\r\n  \"software_type\": \"{4}\",\r\n  \"paths\": {{\r\n    \"formula_override_dir\": \"{5}\",\r\n    \"history_log_file\": \"{6}\"\r\n  }}\r\n}}",
+                    "{{\r\n  \"api_url\": \"{0}\",\r\n  \"api_key\": \"{1}\",\r\n  \"set_code\": \"{2}\",\r\n  \"sync_interval_minutes\": {3},\r\n  \"software_type\": \"{4}\",\r\n  \"paths\": {{\r\n    \"formula_override_dir\": \"{5}\",\r\n    \"history_log_file\": \"{6}\",\r\n    \"backup_dir\": \"{7}\"\r\n  }}\r\n}}",
                     txtApiUrl.Text.Replace("\\", "\\\\"),
                     txtApiKey.Text.Replace("\\", "\\\\"),
                     txtSetCode.Text.Replace("\\", "\\\\"),
                     numInterval.Value,
                     cbSoftwareType.SelectedItem.ToString(),
                     txtFormulaDir.Text.Replace("\\", "\\\\"),
-                    txtLogFile.Text.Replace("\\", "\\\\")
+                    txtLogFile.Text.Replace("\\", "\\\\"),
+                    txtBackupDir.Text.Replace("\\", "\\\\")
                 );
 
                 File.WriteAllText(Path.Combine(appDir, "config.json"), json, Encoding.UTF8);
-                MessageBox.Show("Đã lưu thông số cấu hình vào C:\\NasunAgent\\config.json thành công!", "Thành Công", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                Program.Log(Path.Combine(appDir, "agent.log"), "Đã lưu cấu hình mới cho mã bộ máy: " + txtSetCode.Text);
+                MessageBox.Show("Đã lưu thông số cấu hình và thư mục sao lưu thành công!", "Thành Công", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                Program.Log(Path.Combine(appDir, "agent.log"), "Đã cập nhật cấu hình & thư mục sao lưu: " + txtBackupDir.Text);
             }
             catch (Exception ex)
             {
@@ -369,7 +382,28 @@ namespace NasunAgent
             BtnSave_Click(sender, e);
             string appDir = @"C:\NasunAgent";
             string logFile = Path.Combine(appDir, "agent.log");
-            Program.Log(logFile, "=== KHỞI CHẠY THỬ NGHIỆM ĐỒNG BỘ ===");
+            Program.Log(logFile, "=== KHỞI CHẠY THỬ NGHIỆM ĐỒNG BỘ & BACKUP ===");
+            
+            // Backup simulation test
+            try
+            {
+                string bDir = txtBackupDir.Text.Trim();
+                if (!string.IsNullOrEmpty(bDir) && Directory.Exists(bDir))
+                {
+                    string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+                    string bFile = Path.Combine(bDir, "backup_log_snapshot_" + timestamp + ".bak");
+                    if (File.Exists(txtLogFile.Text))
+                    {
+                        File.Copy(txtLogFile.Text, bFile, true);
+                        Program.Log(logFile, "✓ Đã tạo bản sao lưu snapshot tệp nhật ký tại: " + bFile);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Program.Log(logFile, "Lỗi tạo bản sao lưu backup: " + ex.Message);
+            }
+
             Program.SyncData(Path.Combine(appDir, "config.json"), logFile);
             Program.Log(logFile, "=== KẾT THÚC THỬ NGHIỆM ===");
         }
@@ -388,11 +422,10 @@ namespace NasunAgent
                     File.Copy(currentExe, targetExe, true);
                 }
 
-                // Register Startup via Registry HKCU (No admin required!)
                 RegistryKey rkey = Registry.CurrentUser.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Run", true);
                 rkey.SetValue("NasunAgentService", "\"" + targetExe + "\" /silent");
 
-                MessageBox.Show("Đã đăng ký phần mềm tự động khởi động chạy ngầm cùng Windows thành công!\r\n\r\nĐường dẫn: " + targetExe, "Thành Công", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show("Đã đăng ký phần mềm tự động chạy ngầm cùng Windows thành công!\r\n\r\nĐường dẫn: " + targetExe, "Thành Công", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 Program.Log(Path.Combine(appDir, "agent.log"), "Đã đăng ký Registry Startup cho NasunAgentService.");
             }
             catch (Exception ex)

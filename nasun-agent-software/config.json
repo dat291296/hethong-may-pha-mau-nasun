@@ -6,6 +6,7 @@
   "software_type": "ColorExpert 3",
   "paths": {
     "formula_override_dir": "C:\\ColorExpert3\\Data\\Formulas",
-    "history_log_file": "C:\\ColorExpert3\\Data\\History.db"
+    "history_log_file": "C:\\ColorExpert3\\Data\\History.db",
+    "backup_dir": "C:\\NasunAgent\\Backups"
   }
 }
