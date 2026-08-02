@@ -1,13 +1,47 @@
 import React, { useState } from 'react';
-import { FileText, Filter, Search, Calendar, UserCheck, Download, ShieldAlert } from 'lucide-react';
+import { FileText, Filter, Search, Calendar, UserCheck, Download, ShieldAlert, Edit3, Trash2 } from 'lucide-react';
 import { useDebounce } from '../security/useDebounce.js';
 import { sanitizeForSheet } from '../security/sanitize.js';
 import * as XLSX from 'xlsx';
 
-export default function AuditLogs({ auditLogs }) {
+export default function AuditLogs({ auditLogs, onEditLog, onDeleteLog }) {
   const [filterType, setFilterType]     = useState('ALL');
   const [rawSearch, setRawSearch]       = useState('');
   const [severityFilter, setSeverityFilter] = useState('ALL');
+
+  // Edit states
+  const [editingLog, setEditingLog] = useState(null);
+  const [editLogFormData, setEditLogFormData] = useState({});
+
+  const handleOpenEditLog = (log) => {
+    setEditingLog(log);
+    setEditLogFormData({
+      type: log.type || '',
+      nppName: log.nppName || '',
+      setCode: log.setCode || '',
+      reason: log.reason || '',
+      technician: log.technician || '',
+      notes: log.notes || '',
+      severity: log.severity || 'INFO'
+    });
+  };
+
+  const handleEditLogSubmit = (e) => {
+    e.preventDefault();
+    if (!editingLog) return;
+    if (onEditLog) {
+      onEditLog(editingLog.id, editLogFormData);
+    }
+    setEditingLog(null);
+  };
+
+  const handleDeleteLog = (id) => {
+    if (window.confirm(`Bạn có chắc chắn muốn xóa bản ghi nhật ký tác nghiệp [${id}] không?`)) {
+      if (onDeleteLog) {
+        onDeleteLog(id);
+      }
+    }
+  };
 
   // ── Debounce search input 180ms (DoS protection) ────────────────────────────
   const searchTerm = useDebounce(rawSearch, 180);
@@ -137,12 +171,13 @@ export default function AuditLogs({ auditLogs }) {
                 <th>Lý Do Tác Nghiệp</th>
                 <th>Kỹ Thuật Viên</th>
                 <th>Ghi Chú</th>
+                <th>Thao Tác</th>
               </tr>
             </thead>
             <tbody>
               {filteredLogs.length === 0 ? (
                 <tr>
-                  <td colSpan={9} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '32px' }}>
+                  <td colSpan={10} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '32px' }}>
                     Không tìm thấy bản ghi nào phù hợp.
                   </td>
                 </tr>
@@ -163,13 +198,23 @@ export default function AuditLogs({ auditLogs }) {
                       {!['LẮP ĐẶT MỚI','THU HỒI','ĐIỀU CHUYỂN NPP','BẢO TRÌ / SỬA CHỮA'].includes(log.type) &&
                        !log.type?.startsWith('IMPORT EXCEL') && !log.type?.startsWith('SECURITY') && (
                         <span className="badge">{log.type}</span>
-                      )}
+                       )}
                     </td>
                     <td style={{ fontWeight: '600' }}>{log.nppName}</td>
                     <td style={{ fontWeight: '700', color: 'var(--accent-cyan)', fontFamily: 'var(--font-mono)' }}>{log.setCode}</td>
                     <td style={{ maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{log.reason}</td>
                     <td style={{ fontWeight: '600' }}>{log.technician}</td>
                     <td style={{ fontSize: '0.8rem', color: 'var(--text-muted)', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{log.notes}</td>
+                    <td>
+                      <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
+                        <button className="btn btn-secondary btn-sm" style={{ padding: '4px 8px' }} onClick={() => handleOpenEditLog(log)}>
+                          <Edit3 size={14} color="var(--accent-cyan)" />
+                        </button>
+                        <button className="btn btn-danger btn-sm" style={{ padding: '4px 8px' }} onClick={() => handleDeleteLog(log.id)}>
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 );
               })}
@@ -178,6 +223,110 @@ export default function AuditLogs({ auditLogs }) {
         </div>
 
       </div>
+
+      {/* EDIT LOG MODAL */}
+      {editingLog && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '560px' }}>
+            <div className="modal-header">
+              <h3 style={{ fontWeight: '800' }}>Chỉnh Sửa Nhật Ký Tác Nghiệp [{editingLog.id}]</h3>
+              <button className="btn btn-secondary btn-sm" onClick={() => setEditingLog(null)}>✕</button>
+            </div>
+            <form onSubmit={handleEditLogSubmit}>
+              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                
+                <div className="form-group">
+                  <label className="form-label">Loại Tác Nghiệp</label>
+                  <select 
+                    className="form-select" 
+                    value={editLogFormData.type} 
+                    onChange={e => setEditLogFormData({ ...editLogFormData, type: e.target.value })}
+                  >
+                    <option value="LẮP ĐẶT MỚI">Lắp Đặt Mới</option>
+                    <option value="THU HỒI">Thu Hồi</option>
+                    <option value="ĐIỀU CHUYỂN NPP">Điều Chuyển NPP</option>
+                    <option value="BẢO TRÌ / SỬA CHỮA">Bảo Trì / Sửa Chữa</option>
+                    <option value="IMPORT EXCEL – NPP">Import Excel – NPP</option>
+                    <option value="IMPORT EXCEL – MÁY CHIẾT">Import Excel – Máy Chiết</option>
+                    <option value="IMPORT EXCEL – MÁY LẮC">Import Excel – Máy Lắc</option>
+                    <option value="IMPORT EXCEL – MÁY TÍNH">Import Excel – Máy Tính</option>
+                    <option value="IMPORT EXCEL – MÁY IN">Import Excel – Máy In</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Nhà Phân Phối</label>
+                  <input 
+                    type="text" 
+                    className="form-input" 
+                    value={editLogFormData.nppName} 
+                    onChange={e => setEditLogFormData({ ...editLogFormData, nppName: e.target.value })} 
+                  />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div className="form-group">
+                    <label className="form-label">Mã Bộ Máy</label>
+                    <input 
+                      type="text" 
+                      className="form-input" 
+                      value={editLogFormData.setCode} 
+                      onChange={e => setEditLogFormData({ ...editLogFormData, setCode: e.target.value })} 
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Mức Độ (Severity)</label>
+                    <select 
+                      className="form-select" 
+                      value={editLogFormData.severity} 
+                      onChange={e => setEditLogFormData({ ...editLogFormData, severity: e.target.value })}
+                    >
+                      <option value="INFO">✓ INFO</option>
+                      <option value="WARNING">⚠️ WARNING</option>
+                      <option value="CRITICAL">🚨 CRITICAL</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Lý Do Tác Nghiệp</label>
+                  <input 
+                    type="text" 
+                    className="form-input" 
+                    value={editLogFormData.reason} 
+                    onChange={e => setEditLogFormData({ ...editLogFormData, reason: e.target.value })} 
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Kỹ Thuật Viên</label>
+                  <input 
+                    type="text" 
+                    className="form-input" 
+                    value={editLogFormData.technician} 
+                    onChange={e => setEditLogFormData({ ...editLogFormData, technician: e.target.value })} 
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Ghi Chú</label>
+                  <textarea 
+                    className="form-textarea" 
+                    rows={2} 
+                    value={editLogFormData.notes} 
+                    onChange={e => setEditLogFormData({ ...editLogFormData, notes: e.target.value })} 
+                  />
+                </div>
+
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={() => setEditingLog(null)}>Hủy Bỏ</button>
+                <button type="submit" className="btn btn-primary">Lưu Thay Đổi</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
     </div>
   );

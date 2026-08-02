@@ -31,12 +31,18 @@ export default function AssetManagement({
   onAddStockDevice,
   onEditDevice,
   onDeleteDevice,
-  onOpenImportModal
+  onOpenImportModal,
+  onEditSet,
+  onDeleteSet
 }) {
   const [activeSubTab, setActiveSubTab] = useState('comboSets'); // comboSets | dispensers | mixers | computers | printers
   const [modelFilter, setModelFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [showAssembleModal, setShowAssembleModal] = useState(false);
+
+  // Set Edit state
+  const [editingSet, setEditingSet] = useState(null);
+  const [editSetFormData, setEditSetFormData] = useState({});
 
   // Device Edit Modal state
   const [editingDevice, setEditingDevice] = useState(null); // { category: 'dispenser'|'mixer'|'computer'|'printer', data }
@@ -124,6 +130,34 @@ export default function AssetManagement({
     }
     onAddStockDevice(addDeviceCategory, addFormData);
     setShowAddDeviceModal(false);
+  };
+
+  const handleOpenEditSet = (set) => {
+    setEditingSet(set);
+    setEditSetFormData({
+      nppName: set.nppName || '',
+      region: set.region || '',
+      province: set.province || '',
+      status: set.status || 'TRONG_KHO',
+      stabilizer: set.stabilizer || 'Không dùng ổn áp',
+      technician: set.technician || '',
+      notes: set.notes || '',
+      lastMaintenanceDate: set.lastMaintenanceDate || '',
+      nextMaintenanceDue: set.nextMaintenanceDue || ''
+    });
+  };
+
+  const handleEditSetSubmit = (e) => {
+    e.preventDefault();
+    if (!editingSet) return;
+    onEditSet(editingSet.setCode, editSetFormData);
+    setEditingSet(null);
+  };
+
+  const handleDeleteSet = (setCode) => {
+    if (window.confirm(`Bạn có chắc chắn muốn xóa bộ máy [${setCode}] không? Các thiết bị liên kết sẽ tự động được giải phóng và đưa lại về kho lẻ.`)) {
+      onDeleteSet(setCode);
+    }
   };
 
   const filteredSets = systemSets.filter(s => {
@@ -246,6 +280,7 @@ export default function AssetManagement({
                   <th>Máy In (Model/Seri)</th>
                   <th>Ổn Áp (Ghi Nhận)</th>
                   <th>Trạng Thái</th>
+                  <th>Thao Tác</th>
                 </tr>
               </thead>
               <tbody>
@@ -281,6 +316,16 @@ export default function AssetManagement({
                       {set.status === 'TRONG_KHO' && <span className="badge badge-info">● Trong Kho</span>}
                       {set.status === 'DA_THU_HOI' && <span className="badge badge-danger">● Đã Thu Hồi</span>}
                       {set.status === 'BAO_THUONG_BAO_TRI' && <span className="badge badge-warning">● Bảo Trì</span>}
+                    </td>
+                    <td>
+                      <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
+                        <button className="btn btn-secondary btn-sm" style={{ padding: '4px 8px' }} onClick={() => handleOpenEditSet(set)}>
+                          <Edit3 size={14} color="var(--accent-cyan)" />
+                        </button>
+                        <button className="btn btn-danger btn-sm" style={{ padding: '4px 8px' }} onClick={() => handleDeleteSet(set.setCode)}>
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -809,6 +854,124 @@ export default function AssetManagement({
               <div className="modal-footer">
                 <button type="button" className="btn btn-secondary" onClick={() => setShowAssembleModal(false)}>Hủy Bỏ</button>
                 <button type="submit" className="btn btn-primary">Xác Nhận Tạo Bộ Combo</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT SYSTEM SET MODAL */}
+      {editingSet && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '600px' }}>
+            <div className="modal-header">
+              <h3 style={{ fontWeight: '800' }}>Chỉnh Sửa Thông Tin Bộ Máy [{editingSet.setCode}]</h3>
+              <button className="btn btn-secondary btn-sm" onClick={() => setEditingSet(null)}>✕</button>
+            </div>
+            <form onSubmit={handleEditSetSubmit}>
+              <div className="modal-body" style={{ maxHeight: '60vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                
+                <div className="form-group">
+                  <label className="form-label">Tên Nhà Phân Phối</label>
+                  <input 
+                    type="text" 
+                    className="form-input" 
+                    value={editSetFormData.nppName} 
+                    onChange={e => setEditSetFormData({ ...editSetFormData, nppName: e.target.value })} 
+                  />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div className="form-group">
+                    <label className="form-label">Khu Vực (Vùng)</label>
+                    <input 
+                      type="text" 
+                      className="form-input" 
+                      value={editSetFormData.region} 
+                      onChange={e => setEditSetFormData({ ...editSetFormData, region: e.target.value })} 
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Tỉnh / Thành Phố</label>
+                    <input 
+                      type="text" 
+                      className="form-input" 
+                      value={editSetFormData.province} 
+                      onChange={e => setEditSetFormData({ ...editSetFormData, province: e.target.value })} 
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div className="form-group">
+                    <label className="form-label">Trạng Thái Bộ Máy</label>
+                    <select 
+                      className="form-select" 
+                      value={editSetFormData.status} 
+                      onChange={e => setEditSetFormData({ ...editSetFormData, status: e.target.value })}
+                    >
+                      <option value="DA_LAP_DAT">Đã Lắp Đặt</option>
+                      <option value="TRONG_KHO">Trong Kho</option>
+                      <option value="DA_THU_HOI">Đã Thu Hồi</option>
+                      <option value="BAO_THUONG_BAO_TRI">Đang Bảo Trì</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Ghi Nhận Ổn Áp</label>
+                    <input 
+                      type="text" 
+                      className="form-input" 
+                      value={editSetFormData.stabilizer} 
+                      onChange={e => setEditSetFormData({ ...editSetFormData, stabilizer: e.target.value })} 
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div className="form-group">
+                    <label className="form-label">Ngày Bảo Trì Gần Nhất</label>
+                    <input 
+                      type="date" 
+                      className="form-input" 
+                      value={editSetFormData.lastMaintenanceDate || ''} 
+                      onChange={e => setEditSetFormData({ ...editSetFormData, lastMaintenanceDate: e.target.value })} 
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Hạn Bảo Trì Tiếp Theo</label>
+                    <input 
+                      type="date" 
+                      className="form-input" 
+                      value={editSetFormData.nextMaintenanceDue || ''} 
+                      onChange={e => setEditSetFormData({ ...editSetFormData, nextMaintenanceDue: e.target.value })} 
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Kỹ Thuật Viên Phụ Trách</label>
+                  <input 
+                    type="text" 
+                    className="form-input" 
+                    value={editSetFormData.technician} 
+                    onChange={e => setEditSetFormData({ ...editSetFormData, technician: e.target.value })} 
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Ghi Chú Chi Tiết</label>
+                  <textarea 
+                    className="form-textarea" 
+                    rows={2} 
+                    value={editSetFormData.notes} 
+                    onChange={e => setEditSetFormData({ ...editSetFormData, notes: e.target.value })} 
+                  />
+                </div>
+
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={() => setEditingSet(null)}>Hủy Bỏ</button>
+                <button type="submit" className="btn btn-primary">Lưu Thay Đổi</button>
               </div>
             </form>
           </div>

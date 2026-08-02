@@ -92,11 +92,61 @@ export function useAuditLogs() {
     return localLog;
   }, []);
 
+  const editAuditLog = useCallback(async (id, updates) => {
+    setAuditLogs(prev => {
+      const updated = prev.map(item => item.id === id ? { ...item, ...updates } : item);
+      cacheOfflineData('audit_logs', updated);
+      return updated;
+    });
+
+    const dbPayload = mapAuditToDb({ id, ...updates });
+
+    if (isSupabaseConfigured && navigator.onLine) {
+      try {
+        const { error } = await safeQuery(
+          sb => sb.from('audit_logs').update(dbPayload).eq('id', id),
+          'editAuditLog'
+        );
+        if (error) throw error;
+      } catch (err) {
+        console.warn('[Offline] Failed online editAuditLog. Queueing.', err);
+        enqueueOfflineAction('UPDATE_AUDIT_LOG', { id, ...dbPayload });
+      }
+    } else if (isSupabaseConfigured && !navigator.onLine) {
+      enqueueOfflineAction('UPDATE_AUDIT_LOG', { id, ...dbPayload });
+    }
+  }, []);
+
+  const deleteAuditLog = useCallback(async (id) => {
+    setAuditLogs(prev => {
+      const updated = prev.filter(item => item.id !== id);
+      cacheOfflineData('audit_logs', updated);
+      return updated;
+    });
+
+    if (isSupabaseConfigured && navigator.onLine) {
+      try {
+        const { error } = await safeQuery(
+          sb => sb.from('audit_logs').delete().eq('id', id),
+          'deleteAuditLog'
+        );
+        if (error) throw error;
+      } catch (err) {
+        console.warn('[Offline] Failed online deleteAuditLog. Queueing.', err);
+        enqueueOfflineAction('DELETE_AUDIT_LOG', { id });
+      }
+    } else if (isSupabaseConfigured && !navigator.onLine) {
+      enqueueOfflineAction('DELETE_AUDIT_LOG', { id });
+    }
+  }, []);
+
   return {
     auditLogs,
     setAuditLogs,
     loading,
     addAuditLog,
+    editAuditLog,
+    deleteAuditLog,
     refetch: fetchAuditLogs
   };
 }

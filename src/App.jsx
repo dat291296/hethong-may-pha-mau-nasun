@@ -39,10 +39,10 @@ export default function App() {
   const { npps, addNpp, editNpp, deleteNpp } = useNpps();
   const {
     dispensers, setDispensers, mixers, setMixers, computers, setComputers, printers, setPrinters, systemSets, setSystemSets,
-    addStockDevice, editDevice, deleteDevice, assembleSet, updateSystemSet
+    addStockDevice, editDevice, deleteDevice, deleteSystemSet, assembleSet, updateSystemSet
   } = useAssets();
   const { repairTickets, addTicket, editTicket, deleteTicket } = useRepairs();
-  const { auditLogs, addAuditLog } = useAuditLogs();
+  const { auditLogs, addAuditLog, editAuditLog, deleteAuditLog } = useAuditLogs();
 
   const [formulaVersions, setFormulaVersions] = useState(INITIAL_FORMULA_VERSIONS);
   const [tintingLogs, setTintingLogs] = useState(INITIAL_TINTING_LOGS);
@@ -450,6 +450,8 @@ export default function App() {
               onEditDevice={handleEditDevice}
               onDeleteDevice={handleDeleteDevice}
               onOpenImportModal={openImportModal}
+              onEditSet={updateSystemSet}
+              onDeleteSet={deleteSystemSet}
             />
           )}
 
@@ -510,7 +512,11 @@ export default function App() {
               </div>
 
               {/* Show Audit Trail Log */}
-              <AuditLogs auditLogs={auditLogs} />
+              <AuditLogs 
+                auditLogs={auditLogs} 
+                onEditLog={editAuditLog} 
+                onDeleteLog={deleteAuditLog} 
+              />
             </div>
           )}
 
@@ -518,6 +524,8 @@ export default function App() {
             <MaintenanceSchedule
               systemSets={systemSets}
               onCompleteMaintenance={handleCompleteMaintenance}
+              onUpdateSystemSet={updateSystemSet}
+              onDeleteSystemSet={deleteSystemSet}
             />
           )}
 
@@ -550,7 +558,11 @@ export default function App() {
           )}
 
           {activeTab === 'auditLogs' && (
-            <AuditLogs auditLogs={auditLogs} />
+            <AuditLogs 
+              auditLogs={auditLogs} 
+              onEditLog={editAuditLog} 
+              onDeleteLog={deleteAuditLog} 
+            />
           )}
 
           {activeTab === 'users' && (

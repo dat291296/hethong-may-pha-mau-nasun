@@ -307,6 +307,47 @@ export function useAssets() {
     }
   }, []);
 
+  // ── Delete system set ──────────────────────────────────────────────────────
+  const deleteSystemSet = useCallback(async (setCode) => {
+    let setObj = null;
+    setSystemSets(prev => {
+      setObj = prev.find(s => s.setCode === setCode);
+      const filtered = prev.filter(s => s.setCode !== setCode);
+      cacheOfflineData('system_sets', filtered);
+      return filtered;
+    });
+
+    if (setObj) {
+      if (setObj.dispenserId) {
+        editDevice('dispensers', setObj.dispenserId, { is_assigned: false, set_code: null });
+      }
+      if (setObj.mixerId) {
+        editDevice('mixers', setObj.mixerId, { is_assigned: false, set_code: null });
+      }
+      if (setObj.computerId) {
+        editDevice('computers', setObj.computerId, { is_assigned: false, set_code: null });
+      }
+      if (setObj.printerId) {
+        editDevice('printers', setObj.printerId, { is_assigned: false, set_code: null });
+      }
+    }
+
+    if (isSupabaseConfigured && navigator.onLine) {
+      try {
+        const { error } = await safeQuery(
+          sb => sb.from('system_sets').delete().eq('set_code', setCode),
+          'deleteSystemSet'
+        );
+        if (error) throw error;
+      } catch (err) {
+        console.warn('[Offline] Failed online deleteSystemSet. Queueing action.', err);
+        enqueueOfflineAction('DELETE_SYSTEM_SET', { set_code: setCode });
+      }
+    } else if (isSupabaseConfigured && !navigator.onLine) {
+      enqueueOfflineAction('DELETE_SYSTEM_SET', { set_code: setCode });
+    }
+  }, [editDevice]);
+
   return {
     dispensers, setDispensers,
     mixers,     setMixers,
@@ -317,6 +358,7 @@ export function useAssets() {
     addStockDevice,
     editDevice,
     deleteDevice,
+    deleteSystemSet,
     importDevices,
     assembleSet,
     updateSystemSet,

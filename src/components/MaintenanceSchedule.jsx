@@ -1,11 +1,39 @@
 import React, { useState } from 'react';
-import { CalendarClock, CheckCircle2, AlertTriangle, ShieldAlert, Wrench, Search } from 'lucide-react';
+import { CalendarClock, CheckCircle2, AlertTriangle, ShieldAlert, Wrench, Search, Edit3, Trash2 } from 'lucide-react';
 
-export default function MaintenanceSchedule({ systemSets, onCompleteMaintenance }) {
+export default function MaintenanceSchedule({ systemSets, onCompleteMaintenance, onUpdateSystemSet, onDeleteSystemSet }) {
   const [filter, setFilter] = useState('ALL'); // ALL | DUE_SOON | OVERDUE | OK
   const [selectedSet, setSelectedSet] = useState(null);
   const [techNotes, setTechNotes] = useState('');
   const [maintDate, setMaintDate] = useState(new Date().toISOString().split('T')[0]);
+
+  // Edit maintenance states
+  const [editingMaint, setEditingMaint] = useState(null);
+  const [editMaintFormData, setEditMaintFormData] = useState({});
+
+  const handleOpenEditMaint = (set) => {
+    setEditingMaint(set);
+    setEditMaintFormData({
+      lastMaintenanceDate: set.lastMaintenanceDate || '',
+      nextMaintenanceDue: set.nextMaintenanceDue || ''
+    });
+  };
+
+  const handleEditMaintSubmit = (e) => {
+    e.preventDefault();
+    if (!editingMaint) return;
+    onUpdateSystemSet(editingMaint.setCode, editMaintFormData);
+    setEditingMaint(null);
+  };
+
+  const handleDeleteMaint = (setCode) => {
+    if (window.confirm(`Bạn có chắc chắn muốn xóa lịch bảo trì của bộ máy [${setCode}] không? Ngày bảo trì gần nhất và hạn tiếp theo sẽ được đặt về trống.`)) {
+      onUpdateSystemSet(setCode, {
+        lastMaintenanceDate: null,
+        nextMaintenanceDue: null
+      });
+    }
+  };
 
   const today = new Date('2026-07-26');
 
@@ -146,10 +174,18 @@ export default function MaintenanceSchedule({ systemSets, onCompleteMaintenance 
                     )}
                   </td>
                   <td>
-                    <button className="btn btn-secondary btn-sm" onClick={() => setSelectedSet(set)}>
-                      <Wrench size={14} />
-                      <span>Xác Nhận Bảo Trì</span>
-                    </button>
+                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                      <button className="btn btn-secondary btn-sm" style={{ display: 'flex', alignItems: 'center', gap: '4px' }} onClick={() => setSelectedSet(set)}>
+                        <Wrench size={14} />
+                        <span>Xác Nhận Bảo Trì</span>
+                      </button>
+                      <button className="btn btn-secondary btn-sm" style={{ padding: '4px 8px' }} onClick={() => handleOpenEditMaint(set)}>
+                        <Edit3 size={14} color="var(--accent-cyan)" />
+                      </button>
+                      <button className="btn btn-danger btn-sm" style={{ padding: '4px 8px' }} onClick={() => handleDeleteMaint(set.setCode)}>
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -189,6 +225,44 @@ export default function MaintenanceSchedule({ systemSets, onCompleteMaintenance 
               </div>
               <div className="modal-footer">
                 <button type="button" className="btn btn-secondary" onClick={() => setSelectedSet(null)}>Hủy Bỏ</button>
+                <button type="submit" className="btn btn-primary">Lưu Lịch Bảo Trì</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT MAINTENANCE MODAL */}
+      {editingMaint && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '440px' }}>
+            <div className="modal-header">
+              <h3 style={{ fontWeight: '800' }}>Sửa Lịch Bảo Trì Bộ Máy [{editingMaint.setCode}]</h3>
+              <button className="btn btn-secondary btn-sm" onClick={() => setEditingMaint(null)}>✕</button>
+            </div>
+            <form onSubmit={handleEditMaintSubmit}>
+              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div className="form-group">
+                  <label className="form-label">Ngày Bảo Trì Gần Nhất</label>
+                  <input 
+                    type="date" 
+                    className="form-input" 
+                    value={editMaintFormData.lastMaintenanceDate || ''} 
+                    onChange={e => setEditMaintFormData({ ...editMaintFormData, lastMaintenanceDate: e.target.value })} 
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Hạn Bảo Trì Tiếp Theo</label>
+                  <input 
+                    type="date" 
+                    className="form-input" 
+                    value={editMaintFormData.nextMaintenanceDue || ''} 
+                    onChange={e => setEditMaintFormData({ ...editMaintFormData, nextMaintenanceDue: e.target.value })} 
+                  />
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={() => setEditingMaint(null)}>Hủy Bỏ</button>
                 <button type="submit" className="btn btn-primary">Lưu Lịch Bảo Trì</button>
               </div>
             </form>
