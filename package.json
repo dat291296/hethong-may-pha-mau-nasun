@@ -8,7 +8,7 @@
     "build": "vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "electron:start": "electron electron/main.cjs",
+    "electron:start": "node node_modules/electron/install.js && electron electron/main.cjs",
     "electron:build": "vite build && electron-builder"
   },
   "dependencies": {
