@@ -1,5 +1,5 @@
 {
-  "api_url": "https://hethong-may-pha-mau-nasun.dat291219962-hust.workers.dev/api",
+  "api_url": "https://kythuat.nasun.workers.dev/api",
   "api_key": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.example-supabase-anon-key",
   "set_code": "SET-001",
   "sync_interval_minutes": 15,

@@ -79,7 +79,7 @@ namespace NasunAgent
                 using (WebClient client = new WebClient())
                 {
                     client.Headers[HttpRequestHeader.ContentType] = "application/json";
-                    string response = client.DownloadString("https://hethong-may-pha-mau-nasun.dat291219962-hust.workers.dev/api");
+                    string response = client.DownloadString("https://kythuat.nasun.workers.dev/api");
                     Log(logFile, "Đồng bộ kết nối Cloud thành công: " + (response.Length > 40 ? response.Substring(0, 40) + "..." : response));
                 }
             }
@@ -306,7 +306,7 @@ namespace NasunAgent
                 try
                 {
                     string json = File.ReadAllText(configFile, Encoding.UTF8);
-                    txtApiUrl.Text = GetJsonVal(json, "api_url", "https://hethong-may-pha-mau-nasun.dat291219962-hust.workers.dev/api");
+                    txtApiUrl.Text = GetJsonVal(json, "api_url", "https://kythuat.nasun.workers.dev/api");
                     txtApiKey.Text = GetJsonVal(json, "api_key", "supabase-anon-key");
                     txtSetCode.Text = GetJsonVal(json, "set_code", "SET-001");
                     txtFormulaDir.Text = GetJsonVal(json, "formula_override_dir", @"C:\ColorExpert3\Data\Formulas");
@@ -317,7 +317,7 @@ namespace NasunAgent
                 catch { }
             }
 
-            txtApiUrl.Text = "https://hethong-may-pha-mau-nasun.dat291219962-hust.workers.dev/api";
+            txtApiUrl.Text = "https://kythuat.nasun.workers.dev/api";
             txtApiKey.Text = "supabase-anon-key-chuyen-biet-cua-he-thong";
             txtSetCode.Text = "SET-001";
             txtFormulaDir.Text = @"C:\ColorExpert3\Data\Formulas";

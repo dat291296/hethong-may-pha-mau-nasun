@@ -29,7 +29,7 @@ CONFIG_FILE = "config.json"
 STATE_FILE = "last_sync.json"
 
 DEFAULT_CONFIG = {
-    "api_url": "https://hethong-may-pha-mau-nasun.dat291219962-hust.workers.dev/api",
+    "api_url": "https://kythuat.nasun.workers.dev/api",
     "api_key": "supabase-anon-key-chuyen-biet-cua-he-thong",
     "set_code": "SET-001",
     "sync_interval_minutes": 15,
