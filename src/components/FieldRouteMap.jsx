@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Navigation,
   MapPin,
@@ -39,6 +39,64 @@ export default function FieldRouteMap({
   // Selected Trip Route List (Array of NPP IDs)
   const [selectedTripNpps, setSelectedTripNpps] = useState([]);
   const [checkInLogs, setCheckInLogs] = useState({});
+
+  // Leaflet & GPS states
+  const [showMap, setShowMap] = useState(true);
+  const [isLScriptLoaded, setIsLScriptLoaded] = useState(false);
+  const [userLocation, setUserLocation] = useState(null);
+  const mapInstanceRef = useRef(null);
+
+  // Load Leaflet JS & CSS dynamically from CDN
+  useEffect(() => {
+    // 1. CSS
+    if (!document.getElementById('leaflet-css')) {
+      const link = document.createElement('link');
+      link.id = 'leaflet-css';
+      link.rel = 'stylesheet';
+      link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+      document.head.appendChild(link);
+    }
+
+    // 2. JS
+    if (!window.L) {
+      const script = document.createElement('script');
+      script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+      script.async = true;
+      script.onload = () => {
+        setIsLScriptLoaded(true);
+      };
+      document.head.appendChild(script);
+    } else {
+      setIsLScriptLoaded(true);
+    }
+
+    // 3. User Geolocation on mount
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setUserLocation([position.coords.latitude, position.coords.longitude]);
+        },
+        (err) => {
+          console.warn('GPS location request denied or unavailable:', err.message);
+        }
+      );
+    }
+  }, []);
+
+  // Distance helper (Haversine formula in km)
+  const getDistanceKm = (lat1, lon1, lat2, lon2) => {
+    const R = 6371; // Radius of the Earth in km
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLon = ((lon2 - lon1) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((lat1 * Math.PI) / 180) *
+        Math.cos((lat2 * Math.PI) / 180) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  };
 
   // Reference date for maintenance calculations
   const today = new Date('2026-07-26');
@@ -150,9 +208,35 @@ export default function FieldRouteMap({
     return `https://www.google.com/maps/dir/${coordsList.join('/')}`;
   }, [tripNppObjects]);
 
-  // Check-in Handler
+  // Check-in Handler with GPS Geofencing
   const handleCheckIn = async (npp) => {
     const timestamp = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) + ' ' + new Date().toLocaleDateString('vi-VN');
+    const nppCoords = npp.locationCoordinates?.split(',').map(Number);
+
+    let distanceMsg = '';
+    let requiresConfirmation = false;
+
+    if (userLocation && nppCoords && nppCoords.length === 2 && !isNaN(nppCoords[0]) && !isNaN(nppCoords[1])) {
+      const dist = getDistanceKm(userLocation[0], userLocation[1], nppCoords[0], nppCoords[1]);
+      
+      if (dist > 0.1) { // 100 meters
+        requiresConfirmation = true;
+        distanceMsg = `Khoảng cách thực tế của bạn đến đại lý là ${dist.toFixed(2)} km (vượt quá bán kính 100m yêu cầu).`;
+      }
+    } else {
+      requiresConfirmation = true;
+      distanceMsg = `Không thể định vị GPS của bạn hoặc đại lý thiếu tọa độ.`;
+    }
+
+    if (requiresConfirmation) {
+      const proceed = confirm(
+        `⚠️ CẢNH BÁO GPS GEOFENCING\n\n` +
+        `${distanceMsg}\n\n` +
+        `Bạn có muốn ghi nhận check-in thực tế ở chế độ DEV (Bỏ qua định vị)?`
+      );
+      if (!proceed) return;
+    }
+
     setCheckInLogs((prev) => ({
       ...prev,
       [npp.id]: timestamp
@@ -160,19 +244,242 @@ export default function FieldRouteMap({
 
     if (onAddAuditLog) {
       await onAddAuditLog({
-        type: 'CHECK-IN THỰC ĐỊA',
+        type: 'CHECK-IN THỰC ĐỊA (GPS)',
         setCode: '—',
         nppId: npp.id,
         nppName: npp.name,
         serialList: `Tọa độ GPS: ${npp.locationCoordinates || '—'}`,
         technician: 'KTV. Nguyễn Văn Hùng',
-        reason: `Check-in thực địa tại ${npp.name} (${npp.province})`,
-        notes: `Đã xác nhận có mặt lúc ${timestamp}`
+        reason: `Check-in thực địa có xác thực tọa độ tại ${npp.name} (${npp.province})`,
+        notes: `Đã xác nhận có mặt lúc ${timestamp}. Cách vị trí GPS đại lý: ${userLocation ? `${getDistanceKm(userLocation[0], userLocation[1], nppCoords[0] || 0, nppCoords[1] || 0).toFixed(3)} km` : 'Không xác định'}`
       });
     }
 
     alert(`📍 Đã Check-in thành công tại: ${npp.name}\nThời gian: ${timestamp}`);
   };
+
+  // Traveling Salesperson Problem (TSP) Nearest-Neighbor Optimizer
+  const optimizeTripRoute = () => {
+    if (selectedTripNpps.length <= 2) {
+      alert('Cần chọn ít nhất 3 nhà phân phối để thực hiện tối ưu hóa lộ trình!');
+      return;
+    }
+
+    const unvisited = [...tripNppObjects];
+    const optimized = [];
+
+    // Start with the first selected distributor
+    let current = unvisited.shift();
+    optimized.push(current);
+
+    while (unvisited.length > 0) {
+      let nearestIdx = 0;
+      let minDistance = Infinity;
+
+      const currCoords = current.locationCoordinates?.split(',').map(Number);
+      if (!currCoords || currCoords.length !== 2) {
+        current = unvisited.shift();
+        optimized.push(current);
+        continue;
+      }
+
+      for (let i = 0; i < unvisited.length; i++) {
+        const targetCoords = unvisited[i].locationCoordinates?.split(',').map(Number);
+        if (!targetCoords || targetCoords.length !== 2) continue;
+
+        const dist = getDistanceKm(currCoords[0], currCoords[1], targetCoords[0], targetCoords[1]);
+        if (dist < minDistance) {
+          minDistance = dist;
+          nearestIdx = i;
+        }
+      }
+
+      current = unvisited.splice(nearestIdx, 1)[0];
+      optimized.push(current);
+    }
+
+    setSelectedTripNpps(optimized.map(n => n.id));
+    
+    if (onAddAuditLog) {
+      onAddAuditLog({
+        type: 'TỐI ƯU HÓA LỘ TRÌNH',
+        setCode: '—',
+        nppId: '—',
+        nppName: 'Lộ trình công tác',
+        serialList: `${optimized.length} điểm dừng`,
+        technician: 'KTV. Nguyễn Văn Hùng',
+        reason: 'Sắp xếp tuyến đường bảo trì tối ưu (Nearest Neighbor TSP)',
+        notes: `Thứ tự tối ưu: ${optimized.map((n, idx) => `${idx + 1}. ${n.name}`).join(' -> ')}`
+      });
+    }
+
+    alert(`⚡ Đã tối ưu hóa đường đi thành công!\nSắp xếp lại ${optimized.length} chặng di chuyển theo khoảng cách ngắn nhất.`);
+  };
+
+  // Leaflet Map Rendering and Markers synchronization
+  useEffect(() => {
+    if (!window.L || !showMap || !isLScriptLoaded) return;
+    
+    const container = document.getElementById('leaflet-map-container');
+    if (!container) return;
+
+    if (mapInstanceRef.current) {
+      mapInstanceRef.current.remove();
+      mapInstanceRef.current = null;
+    }
+
+    let center = [21.0285, 105.8542]; // Default center (Hanoi)
+    if (filteredNpps.length > 0) {
+      const firstCoord = filteredNpps[0].locationCoordinates?.split(',').map(Number);
+      if (firstCoord && firstCoord.length === 2 && !isNaN(firstCoord[0]) && !isNaN(firstCoord[1])) {
+        center = firstCoord;
+      }
+    }
+
+    const map = window.L.map('leaflet-map-container', { zoomControl: true }).setView(center, 6);
+    mapInstanceRef.current = map;
+
+    // Dark Matter tile layer for premium styling
+    window.L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+      subdomains: 'abcd',
+      maxZoom: 20
+    }).addTo(map);
+
+    // Pulse dot for User GPS Location
+    if (userLocation) {
+      const userIcon = window.L.divIcon({
+        html: `
+          <div style="position: relative; width: 20px; height: 20px;">
+            <span style="display: block; width: 14px; height: 14px; background-color: #3b82f6; border: 2px solid white; border-radius: 50%; box-shadow: 0 0 10px #3b82f6; position: absolute; top: 3px; left: 3px; z-index: 10;"></span>
+            <span style="display: block; width: 20px; height: 20px; border: 2px solid #3b82f6; border-radius: 50%; animation: ping 2s cubic-bezier(0, 0, 0.2, 1) infinite; opacity: 0.75; position: absolute; top: 0; left: 0;"></span>
+          </div>
+          <style>
+            @keyframes ping {
+              75%, 100% { transform: scale(2); opacity: 0; }
+            }
+          </style>
+        `,
+        className: 'user-location-marker',
+        iconSize: [20, 20],
+        iconAnchor: [10, 10]
+      });
+      window.L.marker(userLocation, { icon: userIcon }).addTo(map).bindPopup('<div style="color:#0f172a;font-weight:700;">Vị trí hiện tại của bạn</div>');
+    }
+
+    // Add NPP Markers
+    filteredNpps.forEach(npp => {
+      const coords = npp.locationCoordinates?.split(',').map(Number);
+      if (!coords || coords.length !== 2 || isNaN(coords[0]) || isNaN(coords[1])) return;
+
+      let color = '#06b6d4'; // Cyan - OK
+      if (npp.priority === 'REPAIR') color = '#ef4444'; // Red - urgent
+      else if (npp.priority === 'DUE' || npp.priority === 'OVERDUE') color = '#f59e0b'; // Amber - warning
+
+      const isSelected = selectedTripNpps.includes(npp.id);
+      
+      const customIcon = window.L.divIcon({
+        html: `
+          <div style="
+            width: 26px;
+            height: 26px;
+            background-color: ${color};
+            border: 2px solid ${isSelected ? '#fff' : 'rgba(255,255,255,0.6)'};
+            border-radius: 50%;
+            box-shadow: 0 3px 8px rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 11px;
+            font-weight: 800;
+            transform: ${isSelected ? 'scale(1.2)' : 'scale(1)'};
+            transition: transform 0.2s;
+          ">
+            ${isSelected ? '✓' : ''}
+          </div>
+        `,
+        className: 'npp-map-marker',
+        iconSize: [26, 26],
+        iconAnchor: [13, 13]
+      });
+
+      const popupDiv = document.createElement('div');
+      popupDiv.style.color = '#1e293b';
+      popupDiv.style.fontSize = '12px';
+      popupDiv.style.width = '200px';
+      popupDiv.innerHTML = `
+        <div style="font-weight: 800; font-size: 13px; color:#0f172a; margin-bottom: 3px;">${npp.name}</div>
+        <div style="color:#64748b; margin-bottom: 6px; font-size:11px;">📍 ${npp.address}</div>
+        <div style="margin-bottom: 8px;">
+          <strong>Liên hệ:</strong> ${npp.contactPerson} (${npp.phone})
+        </div>
+        <div style="display:flex; gap:6px;">
+          <button id="pop-select-${npp.id}" style="
+            background: #0284c7; color:#fff; border:none; padding:4px 8px; border-radius:4px; font-size:11px; font-weight:700; cursor:pointer; flex: 1;
+          ">${isSelected ? 'Bỏ Chọn' : 'Chọn Đi'}</button>
+          <button id="pop-checkin-${npp.id}" style="
+            background: #10b981; color:#fff; border:none; padding:4px 8px; border-radius:4px; font-size:11px; font-weight:700; cursor:pointer; flex: 1;
+          ">Check-in</button>
+        </div>
+      `;
+
+      const marker = window.L.marker(coords, { icon: customIcon }).addTo(map);
+      marker.bindPopup(popupDiv);
+
+      marker.on('popupopen', () => {
+        const selBtn = document.getElementById(`pop-select-${npp.id}`);
+        if (selBtn) {
+          selBtn.onclick = () => {
+            toggleTripSelection(npp.id);
+            marker.closePopup();
+          };
+        }
+        const chkBtn = document.getElementById(`pop-checkin-${npp.id}`);
+        if (chkBtn) {
+          chkBtn.onclick = () => {
+            handleCheckIn(npp);
+            marker.closePopup();
+          };
+        }
+      });
+    });
+
+    // Draw route polyline for the selected trip sequence
+    if (tripNppObjects.length > 1) {
+      const lineCoords = tripNppObjects
+        .map(n => n.locationCoordinates?.split(',').map(Number))
+        .filter(c => c && c.length === 2 && !isNaN(c[0]) && !isNaN(c[1]));
+
+      if (lineCoords.length > 1) {
+        window.L.polyline(lineCoords, {
+          color: '#06b6d4',
+          weight: 4,
+          opacity: 0.9,
+          dashArray: '8, 8',
+          lineJoin: 'round'
+        }).addTo(map);
+      }
+    }
+
+    // Zoom map to fit all markers if we have multiple
+    if (filteredNpps.length > 1) {
+      const validCoords = filteredNpps
+        .map(n => n.locationCoordinates?.split(',').map(Number))
+        .filter(c => c && c.length === 2 && !isNaN(c[0]) && !isNaN(c[1]));
+      
+      if (validCoords.length > 1) {
+        map.fitBounds(validCoords, { padding: [50, 50] });
+      }
+    }
+
+    return () => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+    };
+  }, [filteredNpps, selectedTripNpps, showMap, userLocation, isLScriptLoaded]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -407,6 +714,23 @@ export default function FieldRouteMap({
             </h3>
 
             <div style={{ display: 'flex', gap: '8px' }}>
+              {selectedTripNpps.length >= 3 && (
+                <button
+                  className="btn btn-primary btn-sm"
+                  onClick={optimizeTripRoute}
+                  style={{
+                    fontSize: '0.75rem',
+                    background: 'linear-gradient(135deg, var(--accent-purple) 0%, #7c3aed 100%)',
+                    borderColor: 'rgba(147, 51, 234, 0.4)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                >
+                  <span>⚡ Tối Ưu Lộ Trình (TSP)</span>
+                </button>
+              )}
+
               <button
                 className="btn btn-secondary btn-sm"
                 onClick={() => setSelectedTripNpps([])}
@@ -505,6 +829,53 @@ export default function FieldRouteMap({
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* 📍 LEAFLET INTERACTIVE MAP PANEL */}
+      {showMap && (
+        <div className="glass-panel" style={{ padding: '16px', position: 'relative' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            <span style={{ fontSize: '0.875rem', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--accent-cyan)' }}>
+              🗺️ Bản Đồ Số Thực Địa & Tuyến Đường Trực Quan
+            </span>
+            <button 
+              className="btn btn-secondary btn-xs"
+              onClick={() => setShowMap(false)}
+              style={{ fontSize: '0.7rem' }}
+            >
+              Ẩn Bản Đồ
+            </button>
+          </div>
+          <div 
+            id="leaflet-map-container" 
+            style={{ 
+              height: '420px', 
+              width: '100%', 
+              borderRadius: '8px', 
+              border: '1px solid var(--border-color)',
+              position: 'relative',
+              zIndex: 10
+            }}
+          >
+            {!isLScriptLoaded && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)' }}>
+                Đang tải dữ liệu bản đồ Leaflet...
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      
+      {!showMap && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '-10px', marginBottom: '10px' }}>
+          <button 
+            className="btn btn-secondary btn-sm"
+            onClick={() => setShowMap(true)}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+          >
+            🗺️ Hiện Bản Đồ
+          </button>
         </div>
       )}
 

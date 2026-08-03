@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ArrowLeftRight, CheckCircle2, AlertTriangle, ShieldCheck, Printer, Calendar, Camera, X } from 'lucide-react';
 import { compressImage } from '../utils/imageCompressor.js';
+import { useLockedMonths } from '../hooks/useLockedMonths.js';
 
 export default function WorkflowModal({
   mode, // 'INSTALL' | 'WITHDRAW' | 'TRANSFER'
@@ -12,6 +13,7 @@ export default function WorkflowModal({
   onSubmitTransfer,
   onPrintProtocol
 }) {
+  const { isDateLocked } = useLockedMonths();
   // Common states
   const [selectedSetCode, setSelectedSetCode] = useState('');
   const [targetNppId, setTargetNppId] = useState('');
@@ -52,6 +54,12 @@ export default function WorkflowModal({
 
   const handleSubmit = (e) => {
     e.preventDefault();
+
+    if (isDateLocked(handoverDate)) {
+      alert(`Thao tác bị khóa: Tháng ${handoverDate.substring(0, 7)} đã chốt sổ kế toán!`);
+      return;
+    }
+
     if (mode === 'INSTALL') {
       if (!selectedSetCode || !targetNppId) {
         alert('Vui lòng chọn đầy đủ Bộ máy và Nhà Phân Phối!');

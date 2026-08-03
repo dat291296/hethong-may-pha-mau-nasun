@@ -18,13 +18,51 @@ export function AuthProvider({ children }) {
   const [role, setRole] = useState(ROLES.ADMIN); // Default to Admin in dev
   const [loading, setLoading] = useState(true);
   const [securityEvents, setSecurityEvents] = useState([]);
+  const [emailVerifiedSuccess, setEmailVerifiedSuccess] = useState(false);
+  const [authRedirectError, setAuthRedirectError] = useState('');
 
   // ── Initialize auth ────────────────────────────────────────────────────────
   useEffect(() => {
     if (isSupabaseConfigured && supabase) {
+      const urlParams = new URLSearchParams(window.location.search);
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      
+      const isVerified = urlParams.get('verified') === 'true';
+      const hasErrorSearch = urlParams.has('error') || urlParams.has('error_description');
+      const hasErrorHash = hashParams.has('error') || hashParams.has('error_description');
+
+      let errorMsg = '';
+      if (hasErrorSearch) {
+        errorMsg = urlParams.get('error_description') || urlParams.get('error') || 'Xác thực email thất bại.';
+      } else if (hasErrorHash) {
+        errorMsg = hashParams.get('error_description') || hashParams.get('error') || 'Xác thực email thất bại.';
+      }
+
+      if (isVerified) {
+        setEmailVerifiedSuccess(true);
+        // Force logout to let user log in manually
+        supabase.auth.signOut().then(() => {
+          // Clear query params so refreshing does not trigger this again
+          const newUrl = window.location.origin + window.location.pathname;
+          window.history.replaceState({}, document.title, newUrl);
+        });
+      } else if (errorMsg) {
+        const cleanMsg = decodeURIComponent(errorMsg.replace(/\+/g, ' '));
+        setAuthRedirectError(cleanMsg);
+        
+        // Force logout and clear parameters
+        supabase.auth.signOut().then(() => {
+          const newUrl = window.location.origin + window.location.pathname;
+          window.history.replaceState({}, document.title, newUrl);
+        });
+      }
+
       // Production: Use Supabase Auth
       supabase.auth.getSession().then(({ data: { session } }) => {
-        if (session) {
+        const currentUrlParams = new URLSearchParams(window.location.search);
+        const currentIsVerified = currentUrlParams.get('verified') === 'true';
+
+        if (session && !currentIsVerified) {
           loadUserProfile(session.user);
         } else {
           setLoading(false);
@@ -33,7 +71,10 @@ export function AuthProvider({ children }) {
 
       const { data: { subscription } } = supabase.auth.onAuthStateChange(
         async (event, session) => {
-          if (session) {
+          const currentUrlParams = new URLSearchParams(window.location.search);
+          const currentIsVerified = currentUrlParams.get('verified') === 'true';
+
+          if (session && !currentIsVerified) {
             await loadUserProfile(session.user);
           } else {
             setUser(null);
@@ -166,6 +207,10 @@ export function AuthProvider({ children }) {
     isDevMode: !isSupabaseConfigured,
     ROLES,
     ROLE_LABELS,
+    emailVerifiedSuccess,
+    setEmailVerifiedSuccess,
+    authRedirectError,
+    setAuthRedirectError,
   };
 
   return (

@@ -29,20 +29,24 @@ import { useNpps } from './hooks/useNpps.js';
 import { useAssets } from './hooks/useAssets.js';
 import { useRepairs } from './hooks/useRepairs.js';
 import { useAuditLogs } from './hooks/useAuditLogs.js';
+import { useLockedMonths } from './hooks/useLockedMonths.js';
+
 
 export default function App() {
-  const { user } = useAuth();
+  const { user, isDevMode } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [globalSearch, setGlobalSearch] = useState('');
 
   // Main State via Supabase hooks
-  const { npps, addNpp, editNpp, deleteNpp } = useNpps();
+  const { npps, addNpp, editNpp, deleteNpp, importNpps } = useNpps();
   const {
     dispensers, setDispensers, mixers, setMixers, computers, setComputers, printers, setPrinters, systemSets, setSystemSets,
-    addStockDevice, editDevice, deleteDevice, deleteSystemSet, assembleSet, updateSystemSet
+    addStockDevice, editDevice, deleteDevice, deleteSystemSet, assembleSet, updateSystemSet, importDevices
   } = useAssets();
   const { repairTickets, addTicket, editTicket, deleteTicket } = useRepairs();
   const { auditLogs, addAuditLog, editAuditLog, deleteAuditLog } = useAuditLogs();
+  const { lockedMonths, lockMonth, unlockMonth, isDateLocked } = useLockedMonths();
+
 
   const [formulaVersions, setFormulaVersions] = useState(INITIAL_FORMULA_VERSIONS);
   const [tintingLogs, setTintingLogs] = useState(INITIAL_TINTING_LOGS);
@@ -88,10 +92,28 @@ export default function App() {
 
   const pendingRepairCount = repairTickets.filter(t => t.processingStatus === 'Chưa xử lý').length;
 
+  // Helper for Dev/Mock mode local sync of device status
+  const updateLocalDeviceStatus = (cat, serial, newStatus) => {
+    if (cat === 'Máy chiết') {
+      setDispensers(prev => prev.map(d => d.serial === serial ? { ...d, status: newStatus } : d));
+    } else if (cat === 'Máy lắc') {
+      setMixers(prev => prev.map(m => m.serial === serial ? { ...m, status: newStatus } : m));
+    } else if (cat === 'Máy in') {
+      setPrinters(prev => prev.map(p => p.serial === serial ? { ...p, status: newStatus } : p));
+    }
+  };
+
   // Repair Tickets Handlers
   const handleAddTicket = async (newTicket) => {
     try {
       const added = await addTicket(newTicket);
+
+      // Local status sync for offline mock dev mode
+      if (isDevMode) {
+        const newStatus = added.processingStatus === 'Đã xử lý' ? 'Đang chạy tốt' : 'Cần bảo trì';
+        updateLocalDeviceStatus(added.productCategory, added.serialNumber, newStatus);
+      }
+
       await addAuditLog({
         type: 'TẠO PHIẾU SỬA CHỮA',
         setCode: added.serialNumber,
@@ -111,6 +133,12 @@ export default function App() {
   const handleEditTicket = async (updatedTicket) => {
     try {
       await editTicket(updatedTicket.id, updatedTicket);
+
+      // Local status sync for offline mock dev mode
+      if (isDevMode) {
+        const newStatus = updatedTicket.processingStatus === 'Đã xử lý' ? 'Đang chạy tốt' : 'Cần bảo trì';
+        updateLocalDeviceStatus(updatedTicket.productCategory, updatedTicket.serialNumber, newStatus);
+      }
     } catch (err) {
       console.error(err);
       alert('Lỗi cập nhật phiếu sửa chữa: ' + err.message);
@@ -612,12 +640,10 @@ export default function App() {
           existingMixers={mixers}
           existingComputers={computers}
           existingPrinters={printers}
-          onImportNpps={(newItems) => {
-            setNpps(prev => [...prev, ...newItems]);
-            setAuditLogs(prev => [{
-              id: `AUDIT-IMP-${Date.now()}`,
+          onImportNpps={async (newItems) => {
+            await importNpps(newItems);
+            await addAuditLog({
               type: 'IMPORT EXCEL – NPP',
-              timestamp: new Date().toISOString().replace('T', ' ').substring(0, 16),
               setCode: '—',
               nppId: '—',
               nppName: `Đã import ${newItems.length} NPP từ Excel`,
@@ -625,63 +651,55 @@ export default function App() {
               technician: 'Hệ thống – Import Excel',
               reason: 'Nhập hàng loạt từ file Excel',
               notes: `Tổng ${newItems.length} NPP mới được thêm vào danh sách`
-            }, ...prev]);
+            });
           }}
-          onImportDispensers={(newItems) => {
-            setDispensers(prev => [...prev, ...newItems]);
-            setAuditLogs(prev => [{
-              id: `AUDIT-IMP-${Date.now()}`,
+          onImportDispensers={async (newItems) => {
+            await importDevices('dispenser', newItems);
+            await addAuditLog({
               type: 'IMPORT EXCEL – MÁY CHIẾT',
-              timestamp: new Date().toISOString().replace('T', ' ').substring(0, 16),
               setCode: '—', nppId: '—',
               nppName: `Đã import ${newItems.length} Máy Chiết từ Excel`,
               serialList: newItems.map(d => d.serial).join(', '),
               technician: 'Hệ thống – Import Excel',
               reason: 'Nhập hàng loạt từ file Excel',
               notes: `Tổng ${newItems.length} Máy Chiết mới vào kho`
-            }, ...prev]);
+            });
           }}
-          onImportMixers={(newItems) => {
-            setMixers(prev => [...prev, ...newItems]);
-            setAuditLogs(prev => [{
-              id: `AUDIT-IMP-${Date.now()}`,
+          onImportMixers={async (newItems) => {
+            await importDevices('mixer', newItems);
+            await addAuditLog({
               type: 'IMPORT EXCEL – MÁY LẮC',
-              timestamp: new Date().toISOString().replace('T', ' ').substring(0, 16),
               setCode: '—', nppId: '—',
               nppName: `Đã import ${newItems.length} Máy Lắc từ Excel`,
               serialList: newItems.map(m => m.serial).join(', '),
               technician: 'Hệ thống – Import Excel',
               reason: 'Nhập hàng loạt từ file Excel',
               notes: `Tổng ${newItems.length} Máy Lắc mới vào kho`
-            }, ...prev]);
+            });
           }}
-          onImportComputers={(newItems) => {
-            setComputers(prev => [...prev, ...newItems]);
-            setAuditLogs(prev => [{
-              id: `AUDIT-IMP-${Date.now()}`,
+          onImportComputers={async (newItems) => {
+            await importDevices('computer', newItems);
+            await addAuditLog({
               type: 'IMPORT EXCEL – MÁY TÍNH',
-              timestamp: new Date().toISOString().replace('T', ' ').substring(0, 16),
               setCode: '—', nppId: '—',
               nppName: `Đã import ${newItems.length} Máy Tính từ Excel`,
               serialList: newItems.map(c => c.serial).join(', '),
               technician: 'Hệ thống – Import Excel',
               reason: 'Nhập hàng loạt từ file Excel',
               notes: `Tổng ${newItems.length} Máy Tính mới vào kho`
-            }, ...prev]);
+            });
           }}
-          onImportPrinters={(newItems) => {
-            setPrinters(prev => [...prev, ...newItems]);
-            setAuditLogs(prev => [{
-              id: `AUDIT-IMP-${Date.now()}`,
+          onImportPrinters={async (newItems) => {
+            await importDevices('printer', newItems);
+            await addAuditLog({
               type: 'IMPORT EXCEL – MÁY IN',
-              timestamp: new Date().toISOString().replace('T', ' ').substring(0, 16),
               setCode: '—', nppId: '—',
               nppName: `Đã import ${newItems.length} Máy In từ Excel`,
               serialList: newItems.map(p => p.serial).join(', '),
               technician: 'Hệ thống – Import Excel',
               reason: 'Nhập hàng loạt từ file Excel',
               notes: `Tổng ${newItems.length} Máy In QL700 mới vào kho`
-            }, ...prev]);
+            });
           }}
           onClose={() => setShowImportModal(false)}
         />

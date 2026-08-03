@@ -11,6 +11,8 @@ import {
   ChevronDown,
   Loader2
 } from 'lucide-react';
+import { sanitizeForSheet, sanitizeText, validatePhone, validateSerial, validateGps } from '../security/sanitize.js';
+
 
 // ─────────────────────────────────────────────
 // Column definitions for each import type
@@ -191,7 +193,9 @@ export default function ExcelImportModal({
         dataRows.forEach((row, idx) => {
           const obj = {};
           keys.forEach((key, i) => {
-            obj[key] = String(row[i] || '').trim();
+            const rawVal = String(row[i] || '').trim();
+            // Sanitize against CSV Injection and limit character length to 250
+            obj[key] = sanitizeText(sanitizeForSheet(rawVal), 250);
           });
 
           const issues = [];
@@ -202,6 +206,26 @@ export default function ExcelImportModal({
               issues.push(`Thiếu "${col.label}"`);
             }
           });
+
+          // Specific format validation checks for imported rows
+          if (obj.phone) {
+            const phoneCheck = validatePhone(obj.phone);
+            if (!phoneCheck.valid) {
+              issues.push(phoneCheck.error);
+            }
+          }
+          if (importType !== 'npp' && obj.serial) {
+            const serialCheck = validateSerial(obj.serial);
+            if (!serialCheck.valid) {
+              issues.push(serialCheck.error);
+            }
+          }
+          if (obj.locationCoordinates) {
+            const gpsCheck = validateGps(obj.locationCoordinates);
+            if (!gpsCheck.valid) {
+              issues.push(gpsCheck.error);
+            }
+          }
 
           // Duplicate check
           if (importType !== 'npp' && obj.serial) {

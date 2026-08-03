@@ -1,25 +1,26 @@
 import React, { useState } from 'react';
-import { 
-  Wrench, 
-  PlusCircle, 
-  Search, 
-  Filter, 
-  CheckCircle2, 
-  AlertTriangle, 
+import {
+
+  PlusCircle,
+  Wrench,
+  Eye,
+  Edit3,
+  Trash2,
+  Search,
   Clock, 
-  PackageCheck, 
   Camera, 
-  Edit3, 
-  Trash2, 
-  Eye, 
-  Printer, 
-  X,
-  ExternalLink,
-  ChevronRight,
+  X, 
+  MapPin, 
+  Check,
+  AlertTriangle,
   RefreshCw,
   Building2,
-  Calendar
+  BookOpen,
+  ClipboardCheck,
+  ShieldAlert
 } from 'lucide-react';
+import { useLockedMonths } from '../hooks/useLockedMonths.js';
+import { sanitizeFormData, validatePhone, validateSerial } from '../security/sanitize.js';
 
 export const MACHINE_MODELS = [
   'AI88',
@@ -46,8 +47,8 @@ export const PRODUCT_CATEGORIES = [
 import { compressImage } from '../utils/imageCompressor.js';
 
 export default function DeviceRepairProcessing({
-  repairTickets,
-  npps,
+  repairTickets = [],
+  npps = [],
   onAddTicket,
   onEditTicket,
   onDeleteTicket,
@@ -55,6 +56,7 @@ export default function DeviceRepairProcessing({
   prefilledTicket,
   onClearPrefill
 }) {
+  const { isDateLocked } = useLockedMonths();
   const [activeTab, setActiveTab] = useState('ALL'); // ALL | PENDING | NOT_RETURNED | REPLACED
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('ALL');
@@ -133,6 +135,10 @@ export default function DeviceRepairProcessing({
   };
 
   const handleOpenEdit = (ticket) => {
+    if (isDateLocked(ticket.date)) {
+      alert(`Thao tác bị khóa: Phiếu thuộc tháng ${ticket.date.substring(0, 7)} đã chốt sổ kế toán!`);
+      return;
+    }
     setEditingTicket(ticket);
     setFormData({ ...ticket });
     setShowModal(true);
@@ -171,23 +177,44 @@ export default function DeviceRepairProcessing({
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!formData.errorDescription || !formData.serialNumber) {
+    
+    // Sanitize input form data
+    const sanitized = sanitizeFormData(formData);
+
+    if (!sanitized.errorDescription || !sanitized.serialNumber) {
       alert('Vui lòng nhập Số Seri thiết bị và Diễn giải lỗi!');
       return;
     }
 
-    const selectedNppObj = npps.find(n => n.id === formData.nppId);
-    const finalNppName = selectedNppObj ? selectedNppObj.name : formData.nppName || 'NPP Khác';
+    // Format validation
+    const serialCheck = validateSerial(sanitized.serialNumber);
+    if (!serialCheck.valid) {
+      alert(serialCheck.error);
+      return;
+    }
+
+    // Check monthly closing locks
+    if (isDateLocked(sanitized.date)) {
+      alert(`Thao tác bị khóa: Tháng ${sanitized.date.substring(0, 7)} đã chốt sổ kế toán!`);
+      return;
+    }
+    if (editingTicket && isDateLocked(editingTicket.date)) {
+      alert(`Thao tác bị khóa: Phiếu cũ thuộc tháng ${editingTicket.date.substring(0, 7)} đã chốt sổ kế toán!`);
+      return;
+    }
+
+    const selectedNppObj = npps.find(n => n.id === sanitized.nppId);
+    const finalNppName = selectedNppObj ? selectedNppObj.name : sanitized.nppName || 'NPP Khác';
 
     if (editingTicket) {
       onEditTicket({
-        ...formData,
+        ...sanitized,
         nppName: finalNppName
       });
     } else {
       const newTicketCode = `TICK-202607-00${repairTickets.length + 1}`;
       onAddTicket({
-        ...formData,
+        ...sanitized,
         id: newTicketCode,
         ticketCode: newTicketCode,
         nppName: finalNppName
@@ -198,6 +225,10 @@ export default function DeviceRepairProcessing({
   };
 
   const handleDelete = (ticket) => {
+    if (isDateLocked(ticket.date)) {
+      alert(`Thao tác bị khóa: Phiếu thuộc tháng ${ticket.date.substring(0, 7)} đã chốt sổ kế toán!`);
+      return;
+    }
     if (confirm(`Bạn có chắc chắn muốn xóa Phiếu xử lý máy [${ticket.ticketCode}]?`)) {
       onDeleteTicket(ticket.id);
     }
@@ -310,6 +341,12 @@ export default function DeviceRepairProcessing({
           </button>
         </div>
 
+        {/* Warning Banner for Locked Month */}
+        <div style={{ padding: '10px 14px', background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: '8px', color: '#ef4444', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px' }}>
+          <ShieldAlert size={16} />
+          <span>Lưu ý: Hệ thống tự động khóa các thao tác Thêm/Sửa/Xóa đối với các phiếu phát sinh trong các tháng đã chốt sổ kế toán.</span>
+        </div>
+
         {/* Search & Select Filters */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
           
@@ -418,11 +455,21 @@ export default function DeviceRepairProcessing({
                         <button className="btn btn-secondary btn-sm" style={{ padding: '4px 8px' }} title="Xem chi tiết" onClick={() => setSelectedTicket(ticket)}>
                           <Eye size={14} color="var(--accent-cyan)" />
                         </button>
-                        <button className="btn btn-secondary btn-sm" style={{ padding: '4px 8px' }} title="Chỉnh sửa phiếu" onClick={() => handleOpenEdit(ticket)}>
-                          <Edit3 size={14} color="var(--accent-amber)" />
+                        <button 
+                          className="btn btn-secondary btn-sm" 
+                          style={{ padding: '4px 8px', opacity: isDateLocked(ticket.date) ? 0.4 : 1, cursor: isDateLocked(ticket.date) ? 'not-allowed' : 'pointer' }} 
+                          title={isDateLocked(ticket.date) ? "Tháng đã chốt sổ" : "Chỉnh sửa phiếu"} 
+                          onClick={() => handleOpenEdit(ticket)}
+                        >
+                          <Edit3 size={14} color={isDateLocked(ticket.date) ? "var(--text-muted)" : "var(--accent-amber)"} />
                         </button>
-                        <button className="btn btn-danger btn-sm" style={{ padding: '4px 8px' }} title="Xóa phiếu" onClick={() => handleDelete(ticket)}>
-                          <Trash2 size={14} />
+                        <button 
+                          className="btn btn-secondary btn-sm" 
+                          style={{ padding: '4px 8px', opacity: isDateLocked(ticket.date) ? 0.4 : 1, cursor: isDateLocked(ticket.date) ? 'not-allowed' : 'pointer' }} 
+                          title={isDateLocked(ticket.date) ? "Tháng đã chốt sổ" : "Xóa phiếu"} 
+                          onClick={() => handleDelete(ticket)}
+                        >
+                          <Trash2 size={14} color={isDateLocked(ticket.date) ? "var(--text-muted)" : "#ef4444"} />
                         </button>
                       </div>
                     </td>

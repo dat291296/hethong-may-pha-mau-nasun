@@ -17,9 +17,25 @@ ALTER TABLE audit_logs     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE locked_months  ENABLE ROW LEVEL SECURITY;
 
 -- ── Helper: get current user's role ──────────────────────────────────────────
-CREATE OR REPLACE FUNCTION get_my_role()
-RETURNS TEXT LANGUAGE sql STABLE SECURITY DEFINER AS $$
-  SELECT role FROM profiles WHERE id = auth.uid();
+CREATE OR REPLACE FUNCTION public.get_my_role()
+RETURNS TEXT LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  RETURN (SELECT role FROM public.profiles WHERE id = auth.uid());
+END;
+$$;
+
+-- ── Helper: check if a target date belongs to a locked month ────────────────
+CREATE OR REPLACE FUNCTION public.is_month_locked(target_date DATE)
+RETURNS BOOLEAN LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  m_key TEXT;
+BEGIN
+  IF target_date IS NULL THEN
+    RETURN FALSE;
+  END IF;
+  m_key := to_char(target_date, 'YYYY-MM');
+  RETURN EXISTS (SELECT 1 FROM public.locked_months WHERE month_key = m_key);
+END;
 $$;
 
 -- ══════════════════════════════════════════════════════════════
@@ -60,17 +76,17 @@ END $$;
 -- SYSTEM SETS (Bộ Máy Lắp Đặt)
 -- ══════════════════════════════════════════════════════════════
 CREATE POLICY "sets_select_auth"  ON system_sets FOR SELECT USING (auth.role() = 'authenticated');
-CREATE POLICY "sets_insert_staff" ON system_sets FOR INSERT WITH CHECK (get_my_role() IN ('admin', 'qc'));
-CREATE POLICY "sets_update_staff" ON system_sets FOR UPDATE USING (get_my_role() IN ('admin', 'qc'));
-CREATE POLICY "sets_delete_admin" ON system_sets FOR DELETE USING (get_my_role() = 'admin');
+CREATE POLICY "sets_insert_staff" ON system_sets FOR INSERT WITH CHECK (get_my_role() IN ('admin', 'qc') AND NOT is_month_locked(install_date));
+CREATE POLICY "sets_update_staff" ON system_sets FOR UPDATE USING (get_my_role() IN ('admin', 'qc') AND NOT is_month_locked(install_date)) WITH CHECK (NOT is_month_locked(install_date));
+CREATE POLICY "sets_delete_admin" ON system_sets FOR DELETE USING (get_my_role() = 'admin' AND NOT is_month_locked(install_date));
 
 -- ══════════════════════════════════════════════════════════════
 -- REPAIR TICKETS (Phiếu Xử Lý Máy)
 -- ══════════════════════════════════════════════════════════════
 CREATE POLICY "repair_select_auth"   ON repair_tickets FOR SELECT USING (auth.role() = 'authenticated');
-CREATE POLICY "repair_insert_staff"  ON repair_tickets FOR INSERT WITH CHECK (get_my_role() IN ('admin', 'qc'));
-CREATE POLICY "repair_update_staff"  ON repair_tickets FOR UPDATE USING (get_my_role() IN ('admin', 'qc'));
-CREATE POLICY "repair_delete_admin"  ON repair_tickets FOR DELETE USING (get_my_role() = 'admin');
+CREATE POLICY "repair_insert_staff"  ON repair_tickets FOR INSERT WITH CHECK (get_my_role() IN ('admin', 'qc') AND NOT is_month_locked(date));
+CREATE POLICY "repair_update_staff"  ON repair_tickets FOR UPDATE USING (get_my_role() IN ('admin', 'qc') AND NOT is_month_locked(date)) WITH CHECK (NOT is_month_locked(date));
+CREATE POLICY "repair_delete_admin"  ON repair_tickets FOR DELETE USING (get_my_role() = 'admin' AND NOT is_month_locked(date));
 
 -- ══════════════════════════════════════════════════════════════
 -- AUDIT LOGS (Nhật Ký – APPEND ONLY!)

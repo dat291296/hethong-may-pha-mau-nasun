@@ -42,6 +42,31 @@ CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
+-- Trigger to prevent self-privilege escalation (modifying profiles.role)
+CREATE OR REPLACE FUNCTION public.check_role_update()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF OLD.role IS DISTINCT FROM NEW.role THEN
+    -- Bootstrap admin: always allow dat291219962.hust@gmail.com to get/keep admin role
+    IF (SELECT email FROM auth.users WHERE id = auth.uid()) = 'dat291219962.hust@gmail.com' THEN
+      RETURN NEW;
+    END IF;
+
+    -- Only allow existing admins to modify user roles
+    IF (SELECT role FROM public.profiles WHERE id = auth.uid()) IS DISTINCT FROM 'admin' THEN
+      RAISE EXCEPTION 'SECURITY VIOLATION: Chỉ Admin mới có quyền thay đổi vai trò tài khoản!';
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+DROP TRIGGER IF EXISTS trg_check_role_update ON public.profiles;
+CREATE TRIGGER trg_check_role_update
+  BEFORE UPDATE ON public.profiles
+  FOR EACH ROW
+  EXECUTE FUNCTION public.check_role_update();
+
 -- ── 2. Distributors (NPP) ────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS distributors (
   id                   TEXT PRIMARY KEY,
@@ -235,4 +260,39 @@ BEGIN
   END LOOP;
 END $$;
 
+-- ── sync_device_status_on_repair trigger ──────────────────────────────────────
+CREATE OR REPLACE FUNCTION public.sync_device_status_on_repair()
+RETURNS TRIGGER AS $$
+DECLARE
+  target_table TEXT;
+  new_status TEXT;
+BEGIN
+  IF NEW.product_category = 'Máy chiết' THEN
+    target_table := 'dispensers';
+  ELSIF NEW.product_category = 'Máy lắc' THEN
+    target_table := 'mixers';
+  ELSIF NEW.product_category = 'Máy in' THEN
+    target_table := 'printers';
+  ELSE
+    RETURN NEW;
+  END IF;
+
+  IF NEW.processing_status = 'Đã xử lý' THEN
+    new_status := 'Đang chạy tốt';
+  ELSE
+    new_status := 'Cần bảo trì';
+  END IF;
+
+  EXECUTE format('UPDATE public.%I SET status = %L WHERE serial = %L', target_table, new_status, NEW.serial_number);
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+DROP TRIGGER IF EXISTS trg_sync_device_status_on_repair ON public.repair_tickets;
+CREATE TRIGGER trg_sync_device_status_on_repair
+  AFTER INSERT OR UPDATE ON public.repair_tickets
+  FOR EACH ROW
+  EXECUTE FUNCTION public.sync_device_status_on_repair();
+
 -- Done! Run rls_policies.sql next.
+

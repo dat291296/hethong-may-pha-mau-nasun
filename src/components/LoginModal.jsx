@@ -4,7 +4,16 @@ import { supabase } from '../lib/supabase.js';
 import { Lock, Mail, ShieldAlert, Cpu, User, ArrowLeft, CheckCircle2, Eye, EyeOff } from 'lucide-react';
 
 export default function LoginModal() {
-  const { user, isDevMode, switchDevRole, loading } = useAuth();
+  const { 
+    user, 
+    isDevMode, 
+    switchDevRole, 
+    loading,
+    emailVerifiedSuccess,
+    setEmailVerifiedSuccess,
+    authRedirectError,
+    setAuthRedirectError
+  } = useAuth();
   
   // activeForm: 'login' | 'signup' | 'forgot'
   const [activeForm, setActiveForm] = useState('login');
@@ -21,6 +30,27 @@ export default function LoginModal() {
   const [authLoading, setAuthLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const [isVerificationPending, setIsVerificationPending] = useState(false);
+  const [registeredEmail, setRegisteredEmail] = useState('');
+
+  // Catch redirect messages on mount/update
+  React.useEffect(() => {
+    if (emailVerifiedSuccess) {
+      setSuccessMessage('Xác thực email thành công! Tài khoản của bạn đã được kích hoạt. Hãy đăng nhập để tiếp tục.');
+      setActiveForm('login');
+      setIsVerificationPending(false);
+      setEmailVerifiedSuccess(false);
+    }
+  }, [emailVerifiedSuccess, setEmailVerifiedSuccess]);
+
+  React.useEffect(() => {
+    if (authRedirectError) {
+      setErrorMessage(`Xác thực email thất bại: ${authRedirectError}`);
+      setActiveForm('login');
+      setIsVerificationPending(false);
+      setAuthRedirectError('');
+    }
+  }, [authRedirectError, setAuthRedirectError]);
 
   // If already authenticated or app is initializing, don't show the login screen
   if (user || loading) return null;
@@ -28,6 +58,7 @@ export default function LoginModal() {
   // Reset messages when switching forms
   const handleFormSwitch = (formType) => {
     setActiveForm(formType);
+    setIsVerificationPending(false);
     setErrorMessage('');
     setSuccessMessage('');
     setEmail('');
@@ -86,9 +117,10 @@ export default function LoginModal() {
     if (isDevMode) {
       // Dev mode mock signup
       setTimeout(() => {
-        setSuccessMessage('Đăng ký tài khoản thử nghiệm thành công! Bạn có thể sử dụng email này để đăng nhập.');
+        setRegisteredEmail(email.trim());
+        setIsVerificationPending(true);
         setAuthLoading(false);
-      }, 1000);
+      }, 800);
       return;
     }
 
@@ -97,6 +129,7 @@ export default function LoginModal() {
         email: email.trim(),
         password: password,
         options: {
+          emailRedirectTo: `${window.location.origin}?verified=true`,
           data: {
             full_name: fullName.trim()
           }
@@ -104,7 +137,8 @@ export default function LoginModal() {
       });
       if (error) throw error;
       
-      setSuccessMessage('Đăng ký thành công! Hãy kiểm tra hộp thư email để xác minh tài khoản trước khi đăng nhập.');
+      setRegisteredEmail(email.trim());
+      setIsVerificationPending(true);
     } catch (err) {
       console.error('[Signup] Registration error:', err.message);
       setErrorMessage(err.message || 'Đăng ký thất bại. Email có thể đã tồn tại.');
@@ -205,9 +239,10 @@ export default function LoginModal() {
           NASUN PAINT
         </h2>
         <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '24px' }}>
-          {activeForm === 'login' && 'Hệ Thống Quản Lý & Giám Sát Máy Pha Màu Tự Động'}
-          {activeForm === 'signup' && 'Đăng Ký Tài Khoản Kỹ Thuật Viên Mới'}
-          {activeForm === 'forgot' && 'Khôi Phục Mật Khẩu Truy Cập Hệ Thống'}
+          {isVerificationPending && 'Xác Thực Tài Khoản Đăng Ký'}
+          {!isVerificationPending && activeForm === 'login' && 'Hệ Thống Quản Lý & Giám Sát Máy Pha Màu Tự Động'}
+          {!isVerificationPending && activeForm === 'signup' && 'Đăng Ký Tài Khoản Kỹ Thuật Viên Mới'}
+          {!isVerificationPending && activeForm === 'forgot' && 'Khôi Phục Mật Khẩu Truy Cập Hệ Thống'}
         </p>
 
         {/* Success message banner */}
@@ -269,9 +304,131 @@ export default function LoginModal() {
         )}
         */}
 
-        {/* ── FORM 1: LOGIN ───────────────────────────────────────────────────── */}
-        {activeForm === 'login' && (
-          <form onSubmit={handleLoginSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        {isVerificationPending ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', textAlign: 'left' }}>
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '24px',
+              background: 'rgba(56, 189, 248, 0.03)',
+              border: '1px dashed rgba(56, 189, 248, 0.2)',
+              borderRadius: '12px',
+              textAlign: 'center',
+              gap: '12px'
+            }}>
+              <div className="pulse-animation" style={{
+                width: '56px',
+                height: '56px',
+                borderRadius: '50%',
+                background: 'rgba(56, 189, 248, 0.1)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'var(--accent-blue)',
+                boxShadow: '0 0 15px rgba(56, 189, 248, 0.2)',
+                animation: 'pulse 2s infinite'
+              }}>
+                <Mail size={28} />
+              </div>
+              <div>
+                <h3 style={{ fontSize: '1.05rem', fontWeight: '800', color: '#fff', marginBottom: '6px' }}>
+                  Kiểm tra hộp thư Gmail
+                </h3>
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+                  Hệ thống đã gửi liên kết xác thực tài khoản kỹ thuật viên đến địa chỉ email:
+                </p>
+                <div style={{
+                  margin: '8px 0',
+                  padding: '6px 12px',
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  borderRadius: '6px',
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '0.8rem',
+                  color: 'var(--accent-blue)',
+                  wordBreak: 'break-all'
+                }}>
+                  {registeredEmail}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ fontSize: '0.775rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+              <strong style={{ color: '#fff' }}>Hướng dẫn kích hoạt:</strong>
+              <ol style={{ paddingLeft: '16px', marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <li>Mở Gmail của bạn và tìm email từ <strong>Nasun Paint / Supabase</strong>.</li>
+                <li>Nhấn vào nút hoặc liên kết <strong>Confirm your mail</strong> trong thư.</li>
+                <li>Sau khi xác nhận thành công, bạn sẽ được tự động chuyển hướng quay lại màn hình đăng nhập này để tiếp tục truy cập hệ thống.</li>
+              </ol>
+              <div style={{ marginTop: '8px', fontStyle: 'italic', fontSize: '0.725rem' }}>
+                * Lưu ý: Hãy kiểm tra hòm thư Rác (Spam) hoặc Quảng cáo nếu không tìm thấy trong Hộp thư đến chính.
+              </div>
+            </div>
+
+            {/* Dev Mode Simulation Panel */}
+            {isDevMode && (
+              <div style={{
+                marginTop: '10px',
+                padding: '14px',
+                background: 'rgba(245, 158, 11, 0.05)',
+                border: '1px solid rgba(245, 158, 11, 0.15)',
+                borderRadius: '8px',
+                fontSize: '0.725rem',
+                textAlign: 'center'
+              }}>
+                <div style={{ color: 'var(--accent-amber)', fontWeight: '700', marginBottom: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                  <span>🛠️ MÔ PHỎNG (DEV MODE)</span>
+                </div>
+                <p style={{ color: 'var(--text-muted)', marginBottom: '10px', lineHeight: 1.3 }}>
+                  Trong môi trường local, bạn có thể click nút dưới để giả lập việc người dùng mở Gmail và nhấn link xác thực.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsVerificationPending(false);
+                    setSuccessMessage('Xác thực email thành công! Tài khoản thử nghiệm đã hoạt động. Vui lòng đăng nhập.');
+                    handleFormSwitch('login');
+                  }}
+                  className="btn btn-secondary btn-sm"
+                  style={{
+                    borderColor: 'rgba(245, 158, 11, 0.4)',
+                    color: 'var(--accent-amber)',
+                    width: '100%',
+                    fontSize: '0.75rem',
+                    fontWeight: '700'
+                  }}
+                >
+                  ⚡ Giả lập click Xác nhận Gmail
+                </button>
+              </div>
+            )}
+
+            <button 
+              type="button"
+              onClick={() => handleFormSwitch('login')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+                background: 'none',
+                border: 'none',
+                color: 'var(--text-muted)',
+                fontSize: '0.8rem',
+                cursor: 'pointer',
+                margin: '10px auto 0 auto'
+              }}
+            >
+              <ArrowLeft size={14} />
+              Quay lại Đăng nhập
+            </button>
+          </div>
+        ) : (
+          <>
+            {/* ── FORM 1: LOGIN ───────────────────────────────────────────────────── */}
+            {activeForm === 'login' && (
+              <form onSubmit={handleLoginSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div className="form-group" style={{ textAlign: 'left', marginBottom: 0 }}>
               <label className="form-label">Tài Khoản Email</label>
               <div style={{ position: 'relative' }}>
@@ -511,6 +668,8 @@ export default function LoginModal() {
               Quay lại Đăng nhập
             </button>
           </form>
+        )}
+          </>
         )}
 
         {/* Development Helper Quick Login buttons */}
