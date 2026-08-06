@@ -243,7 +243,7 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
       </div>
 
       {/* NPP Cards Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '20px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}>
         {filteredNpps.map((npp) => {
           const assignedSets = systemSets.filter(s => s.nppId === npp.id);
           return (
@@ -529,32 +529,63 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
               {systemSets.filter(s => s.nppId === selectedNpp.id).length === 0 ? (
                 <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)' }}>Chưa có bộ máy pha màu nào được cấp phát cho NPP này.</div>
               ) : (
-                <div className="data-table-container">
-                  <table className="data-table">
-                    <thead>
-                      <tr>
-                        <th>Mã Bộ Máy</th>
-                        <th>Máy Chiết</th>
-                        <th>Máy Lắc</th>
-                        <th>Máy Tính</th>
-                        <th>Ổn Áp</th>
-                        <th>Trạng Thái</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {systemSets.filter(s => s.nppId === selectedNpp.id).map(set => (
-                        <tr key={set.id}>
-                          <td style={{ fontWeight: '700', color: 'var(--accent-cyan)' }}>{set.setCode}</td>
-                          <td>{set.dispenserModel} ({set.dispenserSerial})</td>
-                          <td>{set.mixerModel} ({set.mixerSerial})</td>
-                          <td>{set.pcType} ({set.pcOs})</td>
-                          <td>{set.stabilizer}</td>
-                          <td><span className="badge badge-success">● {set.status}</span></td>
+                <>
+                  <div className="desktop-only data-table-container">
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>Mã Bộ Máy</th>
+                          <th>Máy Chiết</th>
+                          <th>Máy Lắc</th>
+                          <th>Máy Tính</th>
+                          <th>Ổn Áp</th>
+                          <th>Trạng Thái</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody>
+                        {systemSets.filter(s => s.nppId === selectedNpp.id).map(set => (
+                          <tr key={set.id}>
+                            <td style={{ fontWeight: '700', color: 'var(--accent-cyan)' }}>{set.setCode}</td>
+                            <td>{set.dispenserModel} ({set.dispenserSerial})</td>
+                            <td>{set.mixerModel} ({set.mixerSerial})</td>
+                            <td>{set.pcType} ({set.pcOs})</td>
+                            <td>{set.stabilizer}</td>
+                            <td><span className="badge badge-success">● {set.status}</span></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="mobile-only mobile-card-list">
+                    {systemSets.filter(s => s.nppId === selectedNpp.id).map(set => (
+                      <div className="mobile-card" key={set.id} style={{ padding: '12px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)' }}>
+                        <div className="mobile-card-header" style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '6px', marginBottom: '6px' }}>
+                          <span className="mobile-card-title" style={{ color: 'var(--accent-cyan)', fontSize: '0.85rem' }}>{set.setCode}</span>
+                          <span className="badge badge-success" style={{ fontSize: '0.65rem' }}>{set.status}</span>
+                        </div>
+                        <div className="mobile-card-body" style={{ gap: '4px' }}>
+                          <div className="mobile-card-row" style={{ fontSize: '0.8rem' }}>
+                            <span className="mobile-card-label">Máy Chiết:</span>
+                            <span className="mobile-card-value">{set.dispenserModel} ({set.dispenserSerial})</span>
+                          </div>
+                          <div className="mobile-card-row" style={{ fontSize: '0.8rem' }}>
+                            <span className="mobile-card-label">Máy Lắc:</span>
+                            <span className="mobile-card-value">{set.mixerModel} ({set.mixerSerial})</span>
+                          </div>
+                          <div className="mobile-card-row" style={{ fontSize: '0.8rem' }}>
+                            <span className="mobile-card-label">Máy Tính:</span>
+                            <span className="mobile-card-value">{set.pcType} ({set.pcOs})</span>
+                          </div>
+                          <div className="mobile-card-row" style={{ fontSize: '0.8rem' }}>
+                            <span className="mobile-card-label">Ổn Áp:</span>
+                            <span className="mobile-card-value">{set.stabilizer}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
               )}
             </div>
             <div className="modal-footer">

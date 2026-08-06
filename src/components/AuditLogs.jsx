@@ -157,8 +157,8 @@ export default function AuditLogs({ auditLogs, onEditLog, onDeleteLog }) {
           </div>
         </div>
 
-        {/* Table */}
-        <div className="data-table-container">
+        {/* Desktop View Table */}
+        <div className="desktop-only data-table-container">
           <table className="data-table">
             <thead>
               <tr>
@@ -220,6 +220,79 @@ export default function AuditLogs({ auditLogs, onEditLog, onDeleteLog }) {
               })}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile View Cards */}
+        <div className="mobile-only mobile-card-list">
+          {filteredLogs.length === 0 ? (
+            <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)' }}>
+              Không tìm thấy bản ghi nào phù hợp.
+            </div>
+          ) : (
+            filteredLogs.map(log => {
+              const isCritical = (log.severity || 'INFO') === 'CRITICAL';
+              return (
+                <div className="mobile-card" key={log.id} style={{ borderLeft: isCritical ? '4px solid var(--accent-rose)' : '4px solid var(--border-color)' }}>
+                  <div className="mobile-card-header">
+                    <div>
+                      <span className="mobile-card-title" style={{ color: 'var(--accent-cyan)' }}>{log.id}</span>
+                      <div className="mobile-card-subtitle">{log.timestamp}</div>
+                    </div>
+                    <div>
+                      {getSeverityBadge(log)}
+                    </div>
+                  </div>
+                  <div className="mobile-card-body">
+                    <div className="mobile-card-row">
+                      <span className="mobile-card-label">Loại:</span>
+                      <span className="mobile-card-value">
+                        {log.type === 'LẮP ĐẶT MỚI'        && <span className="badge badge-success" style={{ fontSize: '0.65rem' }}>Lắp Đặt Mới</span>}
+                        {log.type === 'THU HỒI'             && <span className="badge badge-danger" style={{ fontSize: '0.65rem' }}>Thu Hồi</span>}
+                        {log.type === 'ĐIỀU CHUYỂN NPP'     && <span className="badge badge-info" style={{ fontSize: '0.65rem' }}>Điều Chuyển</span>}
+                        {log.type === 'BẢO TRÌ / SỬA CHỮA' && <span className="badge badge-warning" style={{ fontSize: '0.65rem' }}>Bảo Trì</span>}
+                        {log.type?.startsWith('IMPORT EXCEL') && <span className="badge" style={{ fontSize: '0.65rem', background: 'rgba(16,185,129,0.1)', color: '#34d399', border: '1px solid rgba(16,185,129,0.3)' }}>📥 Excel</span>}
+                        {log.type?.startsWith('SECURITY')    && <span className="badge badge-danger" style={{ fontSize: '0.65rem' }}>🚨 Security</span>}
+                        {!['LẮP ĐẶT MỚI','THU HỒI','ĐIỀU CHUYỂN NPP','BẢO TRÌ / SỬA CHỮA'].includes(log.type) &&
+                         !log.type?.startsWith('IMPORT EXCEL') && !log.type?.startsWith('SECURITY') && (
+                          <span className="badge" style={{ fontSize: '0.65rem' }}>{log.type}</span>
+                         )}
+                      </span>
+                    </div>
+                    <div className="mobile-card-row">
+                      <span className="mobile-card-label">NPP:</span>
+                      <span className="mobile-card-value">{log.nppName}</span>
+                    </div>
+                    <div className="mobile-card-row">
+                      <span className="mobile-card-label">Bộ Máy:</span>
+                      <span className="mobile-card-value" style={{ fontWeight: '700', color: 'var(--accent-cyan)' }}>{log.setCode}</span>
+                    </div>
+                    <div className="mobile-card-row">
+                      <span className="mobile-card-label">Lý do:</span>
+                      <span className="mobile-card-value">{log.reason}</span>
+                    </div>
+                    <div className="mobile-card-row">
+                      <span className="mobile-card-label">Kỹ thuật viên:</span>
+                      <span className="mobile-card-value">{log.technician}</span>
+                    </div>
+                    <div className="mobile-card-row" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '2px' }}>
+                      <span className="mobile-card-label">Ghi chú:</span>
+                      <span className="mobile-card-value" style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'left' }}>{log.notes}</span>
+                    </div>
+                  </div>
+                  <div className="mobile-card-actions">
+                    <button className="btn btn-secondary btn-sm" onClick={() => handleOpenEditLog(log)}>
+                      <Edit3 size={14} color="var(--accent-cyan)" />
+                      <span>Sửa</span>
+                    </button>
+                    <button className="btn btn-danger btn-sm" onClick={() => handleDeleteLog(log.id)}>
+                      <Trash2 size={14} />
+                      <span>Xóa</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          )}
         </div>
 
       </div>

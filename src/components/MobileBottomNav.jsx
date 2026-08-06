@@ -25,9 +25,23 @@ export default function MobileBottomNav({ activeTab, setActiveTab, maintenanceCo
             key={item.id}
             className={`mobile-nav-item ${isActive ? 'active' : ''}`}
             onClick={() => setActiveTab(item.id)}
+            style={{
+              padding: '6px 0',
+              position: 'relative'
+            }}
           >
-            <div style={{ position: 'relative' }}>
-              <Icon size={20} color={isActive ? 'var(--accent-cyan)' : 'var(--text-muted)'} />
+            <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+              <Icon size={20} color={isActive ? 'var(--accent-cyan)' : 'var(--text-muted)'} style={{ transition: 'color 0.2s ease' }} />
+              {isActive && (
+                <span style={{
+                  width: '4px',
+                  height: '4px',
+                  borderRadius: '50%',
+                  background: 'var(--accent-cyan)',
+                  boxShadow: '0 0 6px var(--accent-cyan)',
+                  marginTop: '1px'
+                }} />
+              )}
               {item.badge > 0 && (
                 <span style={{
                   position: 'absolute',
@@ -48,7 +62,7 @@ export default function MobileBottomNav({ activeTab, setActiveTab, maintenanceCo
                 </span>
               )}
             </div>
-            <span>{item.label}</span>
+            <span style={{ fontSize: '0.625rem', marginTop: isActive ? '1px' : '5px', transition: 'all 0.2s ease' }}>{item.label}</span>
           </button>
         );
       })}
@@ -58,8 +72,10 @@ export default function MobileBottomNav({ activeTab, setActiveTab, maintenanceCo
         className="mobile-nav-item"
         onClick={onOpenMobileSidebar}
       >
-        <Menu size={20} color="var(--text-muted)" />
-        <span>Danh Mục</span>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
+          <Menu size={20} color="var(--text-muted)" />
+        </div>
+        <span style={{ fontSize: '0.625rem', marginTop: '1px' }}>Danh Mục</span>
       </button>
     </nav>
   );

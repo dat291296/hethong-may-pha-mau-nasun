@@ -319,7 +319,8 @@ ${new Date().toISOString().replace('T', ' ').substr(0, 19)},NPP-002,Đại Lý S
           </div>
         </div>
 
-        <div className="data-table-container">
+        {/* Desktop View Table */}
+        <div className="desktop-only data-table-container">
           <table className="data-table">
             <thead>
               <tr>
@@ -352,7 +353,7 @@ ${new Date().toISOString().replace('T', ' ').substr(0, 19)},NPP-002,Đại Lý S
                   <td style={{ fontFamily: 'var(--font-mono)' }}>{log.pigmentUsedMl} ml</td>
                   <td>
                     {log.status === 'HOÀN THÀNH' ? (
-                      <span className="badge badge-success">✓ Thành Công</span>
+                      <span className="badge badge-success">✓ Hoàn Thành</span>
                     ) : (
                       <span className="badge badge-danger">✕ Hủy Bỏ</span>
                     )}
@@ -361,6 +362,57 @@ ${new Date().toISOString().replace('T', ' ').substr(0, 19)},NPP-002,Đại Lý S
               ))}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile View Cards */}
+        <div className="mobile-only mobile-card-list">
+          {filteredLogs.map(log => (
+            <div className="mobile-card" key={log.id}>
+              <div className="mobile-card-header">
+                <div>
+                  <span className="mobile-card-title" style={{ color: 'var(--accent-cyan)' }}>{log.id}</span>
+                  <div className="mobile-card-subtitle">{log.timestamp}</div>
+                </div>
+                <div>
+                  {log.status === 'HOÀN THÀNH' ? (
+                    <span className="badge badge-success">✓ Thành Công</span>
+                  ) : (
+                    <span className="badge badge-danger">✕ Hủy</span>
+                  )}
+                </div>
+              </div>
+              <div className="mobile-card-body">
+                <div className="mobile-card-row">
+                  <span className="mobile-card-label">NPP:</span>
+                  <span className="mobile-card-value">{log.nppName}</span>
+                </div>
+                <div className="mobile-card-row">
+                  <span className="mobile-card-label">Seri Máy Chiết:</span>
+                  <span className="mobile-card-value" style={{ fontFamily: 'var(--font-mono)' }}>{log.dispenserSerial}</span>
+                </div>
+                <div className="mobile-card-row">
+                  <span className="mobile-card-label">Mã Màu:</span>
+                  <span className="mobile-card-value" style={{ fontWeight: '700', color: '#fbbf24' }}>{log.colorCode}</span>
+                </div>
+                <div className="mobile-card-row">
+                  <span className="mobile-card-label">Dòng Sơn:</span>
+                  <span className="mobile-card-value">{log.productLine} ({log.base})</span>
+                </div>
+                <div className="mobile-card-row">
+                  <span className="mobile-card-label">Quy cách:</span>
+                  <span className="mobile-card-value">{log.containerSize} x {log.quantity}</span>
+                </div>
+                <div className="mobile-card-row">
+                  <span className="mobile-card-label">Tổng Lít:</span>
+                  <span className="mobile-card-value" style={{ fontWeight: '700', color: 'var(--accent-cyan)' }}>{log.totalVolumeLiters} L</span>
+                </div>
+                <div className="mobile-card-row">
+                  <span className="mobile-card-label">Tinh Màu:</span>
+                  <span className="mobile-card-value">{log.pigmentUsedMl} ml</span>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 

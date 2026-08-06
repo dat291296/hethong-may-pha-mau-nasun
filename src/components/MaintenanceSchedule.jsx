@@ -136,7 +136,8 @@ export default function MaintenanceSchedule({ systemSets, onCompleteMaintenance,
 
       {/* Table of Maintenance Items */}
       <div className="glass-panel" style={{ padding: '20px' }}>
-        <div className="data-table-container">
+        {/* Desktop View Table */}
+        <div className="desktop-only data-table-container">
           <table className="data-table">
             <thead>
               <tr>
@@ -191,6 +192,59 @@ export default function MaintenanceSchedule({ systemSets, onCompleteMaintenance,
               ))}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile View Cards */}
+        <div className="mobile-only mobile-card-list">
+          {filteredSets.map(set => (
+            <div className="mobile-card" key={set.id}>
+              <div className="mobile-card-header">
+                <div>
+                  <span className="mobile-card-title" style={{ color: 'var(--accent-cyan)' }}>{set.setCode}</span>
+                  <div className="mobile-card-subtitle">{set.nppName} ({set.region})</div>
+                </div>
+                <div>
+                  {set.statusType === 'OVERDUE' && (
+                    <span className="badge badge-danger">🚨 Quá Hạn ({Math.abs(set.dueDays)}N)</span>
+                  )}
+                  {set.statusType === 'DUE_SOON' && (
+                    <span className="badge badge-warning">⚠️ Còn {set.dueDays}N</span>
+                  )}
+                  {set.statusType === 'OK' && (
+                    <span className="badge badge-success">✓ Còn {set.dueDays}N</span>
+                  )}
+                </div>
+              </div>
+              <div className="mobile-card-body">
+                <div className="mobile-card-row">
+                  <span className="mobile-card-label">Máy Chiết:</span>
+                  <span className="mobile-card-value">{set.dispenserModel} ({set.dispenserSerial})</span>
+                </div>
+                <div className="mobile-card-row">
+                  <span className="mobile-card-label">Bảo Trì Gần Nhất:</span>
+                  <span className="mobile-card-value">{set.lastMaintenanceDate || 'Chưa thực hiện'}</span>
+                </div>
+                <div className="mobile-card-row">
+                  <span className="mobile-card-label">Hạn Tiếp Theo:</span>
+                  <span className="mobile-card-value" style={{ fontWeight: '700' }}>{set.nextMaintenanceDue || 'N/A'}</span>
+                </div>
+              </div>
+              <div className="mobile-card-actions">
+                <button className="btn btn-secondary btn-sm" style={{ display: 'flex', alignItems: 'center', gap: '4px' }} onClick={() => setSelectedSet(set)}>
+                  <Wrench size={14} />
+                  <span>Xác Nhận Bảo Trì</span>
+                </button>
+                <button className="btn btn-secondary btn-sm" onClick={() => handleOpenEditMaint(set)}>
+                  <Edit3 size={14} color="var(--accent-cyan)" />
+                  <span>Sửa</span>
+                </button>
+                <button className="btn btn-danger btn-sm" onClick={() => handleDeleteMaint(set.setCode)}>
+                  <Trash2 size={14} />
+                  <span>Xóa</span>
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 

@@ -324,13 +324,15 @@ body {
     left: 0;
     right: 0;
     height: 64px;
-    background: #0f172a;
-    border-top: 1px solid #334155;
+    background: rgba(15, 23, 42, 0.85) !important;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-top: 1px solid rgba(51, 65, 85, 0.5) !important;
     z-index: 900;
     align-items: center;
     justify-content: space-around;
     padding: 0 4px;
-    box-shadow: 0 -4px 20px rgba(0,0,0,0.4);
+    box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.4) !important;
   }
 
   .mobile-nav-item {
@@ -689,6 +691,151 @@ body {
   }
   to {
     transform: translateX(0);
+  }
+}
+
+/* --- High-end Responsive Card & Bottom Sheet Utilities (Added for Responsive UI/UX) --- */
+
+/* Active tap feedback */
+.btn:active, 
+.mobile-nav-item:active, 
+.sidebar-menu-btn:active, 
+.sidebar-sub-item:active, 
+.sidebar-group-header:active,
+.glass-panel-hover:active,
+.mobile-card:active {
+  transform: scale(0.97) !important;
+}
+
+/* Visibility classes */
+.desktop-only {
+  display: block;
+}
+.mobile-only {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .desktop-only {
+    display: none !important;
+  }
+  .mobile-only {
+    display: block !important;
+  }
+  
+  /* Mobile Bottom Sheet Modal Styling */
+  .modal-overlay {
+    align-items: flex-end; /* Align to bottom for sheet effect */
+    padding: 0;
+  }
+  
+  .modal-content {
+    max-height: 85vh !important;
+    border-radius: 20px 20px 0 0 !important; /* Rounded top corners only */
+    border-bottom: none !important;
+    border-left: none !important;
+    border-right: none !important;
+    animation: slideUpSheet 0.3s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+    position: relative;
+  }
+  
+  /* Bottom sheet pull handle indicator */
+  .modal-content::before {
+    content: '';
+    display: block;
+    width: 36px;
+    height: 4px;
+    background: var(--border-color);
+    border-radius: 2px;
+    margin: 10px auto 4px auto;
+    flex-shrink: 0;
+  }
+
+  .modal-header {
+    padding: 10px 20px 16px 20px !important;
+  }
+  
+  /* Mobile Card Layout System */
+  .mobile-card-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 10px;
+  }
+  
+  .mobile-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 16px;
+    box-shadow: var(--shadow-glow);
+    transition: transform 0.15s ease-in-out;
+  }
+  
+  .mobile-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 10px;
+    margin-bottom: 10px;
+    gap: 10px;
+  }
+  
+  .mobile-card-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text-main);
+  }
+  
+  .mobile-card-subtitle {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+  
+  .mobile-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .mobile-card-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.85rem;
+    gap: 10px;
+  }
+  
+  .mobile-card-label {
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+  
+  .mobile-card-value {
+    color: var(--text-main);
+    font-weight: 600;
+    text-align: right;
+  }
+  
+  .mobile-card-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    border-top: 1px solid var(--border-color);
+    padding-top: 12px;
+    margin-top: 12px;
+    flex-wrap: wrap;
+  }
+}
+
+@keyframes slideUpSheet {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
   }
 }
 

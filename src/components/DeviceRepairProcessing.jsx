@@ -382,7 +382,8 @@ export default function DeviceRepairProcessing({
 
       {/* Tickets Data Table */}
       <div className="glass-panel" style={{ padding: '20px' }}>
-        <div className="data-table-container">
+        {/* Desktop View Table */}
+        <div className="desktop-only data-table-container">
           <table className="data-table">
             <thead>
               <tr>
@@ -478,6 +479,94 @@ export default function DeviceRepairProcessing({
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile View Cards */}
+        <div className="mobile-only mobile-card-list">
+          {filteredTickets.length === 0 ? (
+            <div style={{ padding: '30px', textAlign: 'center', color: 'var(--text-muted)' }}>
+              Không tìm thấy phiếu xử lý máy nào phù hợp với bộ lọc.
+            </div>
+          ) : (
+            filteredTickets.map(ticket => (
+              <div className="mobile-card" key={ticket.id}>
+                <div className="mobile-card-header">
+                  <div>
+                    <span className="mobile-card-title" style={{ color: 'var(--accent-cyan)' }}>{ticket.ticketCode}</span>
+                    <div className="mobile-card-subtitle">{ticket.nppName}</div>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-end' }}>
+                    {ticket.processingStatus === 'Đã xử lý' ? (
+                      <span className="badge badge-success" style={{ fontSize: '0.65rem' }}>✓ Đã xử lý</span>
+                    ) : (
+                      <span className="badge badge-warning" style={{ fontSize: '0.65rem' }}>⏳ Chưa xử lý</span>
+                    )}
+                    {ticket.customerReturnStatus === 'Đã gửi trả' ? (
+                      <span className="badge badge-success" style={{ fontSize: '0.65rem' }}>✓ Đã trả</span>
+                    ) : (
+                      <span className="badge badge-danger" style={{ fontSize: '0.65rem' }}>📦 Chưa trả</span>
+                    )}
+                  </div>
+                </div>
+                <div className="mobile-card-body">
+                  <div className="mobile-card-row">
+                    <span className="mobile-card-label">Sản phẩm:</span>
+                    <span className="mobile-card-value">{ticket.machineModel} ({ticket.productCategory})</span>
+                  </div>
+                  <div className="mobile-card-row">
+                    <span className="mobile-card-label">Số Seri:</span>
+                    <span className="mobile-card-value" style={{ fontFamily: 'var(--font-mono)' }}>{ticket.serialNumber}</span>
+                  </div>
+                  <div className="mobile-card-row">
+                    <span className="mobile-card-label">Lỗi:</span>
+                    <span className="mobile-card-value">{ticket.errorDescription}</span>
+                  </div>
+                  <div className="mobile-card-row">
+                    <span className="mobile-card-label">Kỹ thuật viên:</span>
+                    <span className="mobile-card-value">{ticket.technician}</span>
+                  </div>
+                  <div className="mobile-card-row">
+                    <span className="mobile-card-label">Ngày xử lý:</span>
+                    <span className="mobile-card-value">{ticket.date}</span>
+                  </div>
+                  <div className="mobile-card-row">
+                    <span className="mobile-card-label">Hướng xử lý:</span>
+                    <span className="mobile-card-value">
+                      {ticket.actionDirection === 'Xuất đổi' ? (
+                        <span className="badge badge-purple" style={{ fontSize: '0.7rem' }}>🔄 Xuất đổi ({ticket.replacementCondition})</span>
+                      ) : (
+                        <span className="badge badge-info" style={{ fontSize: '0.7rem' }}>🛠️ Sửa chữa</span>
+                      )}
+                    </span>
+                  </div>
+                </div>
+                <div className="mobile-card-actions">
+                  <button className="btn btn-secondary btn-sm" onClick={() => setSelectedTicket(ticket)}>
+                    <Eye size={14} color="var(--accent-cyan)" />
+                    <span>Xem</span>
+                  </button>
+                  <button 
+                    className="btn btn-secondary btn-sm" 
+                    disabled={isDateLocked(ticket.date)}
+                    style={{ opacity: isDateLocked(ticket.date) ? 0.4 : 1 }}
+                    onClick={() => handleOpenEdit(ticket)}
+                  >
+                    <Edit3 size={14} color={isDateLocked(ticket.date) ? "var(--text-muted)" : "var(--accent-amber)"} />
+                    <span>Sửa</span>
+                  </button>
+                  <button 
+                    className="btn btn-danger btn-sm" 
+                    disabled={isDateLocked(ticket.date)}
+                    style={{ opacity: isDateLocked(ticket.date) ? 0.4 : 1 }}
+                    onClick={() => handleDelete(ticket)}
+                  >
+                    <Trash2 size={14} />
+                    <span>Xóa</span>
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
 

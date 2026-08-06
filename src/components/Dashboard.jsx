@@ -174,7 +174,7 @@ export default function Dashboard({
       </div>
 
       {/* Charts Section */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '20px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px' }}>
         
         {/* Region Distribution Chart */}
         <div className="glass-panel" style={{ padding: '20px' }}>
@@ -247,7 +247,8 @@ export default function Dashboard({
           </button>
         </div>
 
-        <div className="data-table-container">
+        {/* Desktop View Table */}
+        <div className="desktop-only data-table-container">
           <table className="data-table">
             <thead>
               <tr>
@@ -309,6 +310,58 @@ export default function Dashboard({
               ))}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile View Cards */}
+        <div className="mobile-only mobile-card-list">
+          {systemSets.map((set) => (
+            <div className="mobile-card" key={set.id}>
+              <div className="mobile-card-header">
+                <div>
+                  <span className="mobile-card-title" style={{ color: 'var(--accent-cyan)' }}>{set.setCode}</span>
+                  <div className="mobile-card-subtitle">{set.nppName || 'Kho Tổng'} ({set.region})</div>
+                </div>
+                <div>
+                  {set.status === 'DA_LAP_DAT' && <span className="badge badge-success">🟢 Đã Lắp</span>}
+                  {set.status === 'TRONG_KHO' && <span className="badge badge-info">🔵 Kho</span>}
+                  {set.status === 'DA_THU_HOI' && <span className="badge badge-danger">🔴 Thu Hồi</span>}
+                  {set.status === 'BAO_THUONG_BAO_TRI' && <span className="badge badge-warning">🟡 Bảo Trì</span>}
+                </div>
+              </div>
+              <div className="mobile-card-body">
+                <div className="mobile-card-row">
+                  <span className="mobile-card-label">Máy Chiết:</span>
+                  <span className="mobile-card-value">{set.dispenserModel} ({set.dispenserSerial})</span>
+                </div>
+                <div className="mobile-card-row">
+                  <span className="mobile-card-label">Máy Lắc:</span>
+                  <span className="mobile-card-value">{set.mixerModel} ({set.mixerSerial})</span>
+                </div>
+                <div className="mobile-card-row">
+                  <span className="mobile-card-label">Máy Tính (OS):</span>
+                  <span className="mobile-card-value">{set.pcType} ({set.pcOs})</span>
+                </div>
+                <div className="mobile-card-row">
+                  <span className="mobile-card-label">Máy In:</span>
+                  <span className="mobile-card-value">{set.printerModel} ({set.printerSerial})</span>
+                </div>
+                <div className="mobile-card-row">
+                  <span className="mobile-card-label">Ổn Áp:</span>
+                  <span className="mobile-card-value">
+                    {set.stabilizer?.includes('Chưa') || set.stabilizer?.includes('Không') ? (
+                      <span className="badge badge-danger" style={{ fontSize: '0.7rem', padding: '2px 6px' }}>⚠️ {set.stabilizer}</span>
+                    ) : (
+                      <span className="badge badge-success" style={{ fontSize: '0.7rem', padding: '2px 6px' }}>✓ {set.stabilizer}</span>
+                    )}
+                  </span>
+                </div>
+                <div className="mobile-card-row">
+                  <span className="mobile-card-label">Hạn Bảo Trì:</span>
+                  <span className="mobile-card-value" style={{ fontWeight: '700' }}>{set.nextMaintenanceDue || 'Chưa có'}</span>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 

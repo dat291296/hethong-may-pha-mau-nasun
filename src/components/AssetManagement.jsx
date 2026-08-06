@@ -267,8 +267,8 @@ export default function AssetManagement({
             </select>
           </div>
 
-          {/* Combo Table */}
-          <div className="data-table-container">
+          {/* Desktop View Table */}
+          <div className="desktop-only data-table-container">
             <table className="data-table">
               <thead>
                 <tr>
@@ -332,6 +332,58 @@ export default function AssetManagement({
               </tbody>
             </table>
           </div>
+
+          {/* Mobile View Cards */}
+          <div className="mobile-only mobile-card-list">
+            {filteredSets.map(set => (
+              <div className="mobile-card" key={set.id}>
+                <div className="mobile-card-header">
+                  <div>
+                    <span className="mobile-card-title" style={{ color: 'var(--accent-cyan)' }}>{set.setCode}</span>
+                    <div className="mobile-card-subtitle">{set.nppName || 'Kho Tổng Trung Tâm'}</div>
+                  </div>
+                  <div>
+                    {set.status === 'DA_LAP_DAT' && <span className="badge badge-success">🟢 Đã Lắp</span>}
+                    {set.status === 'TRONG_KHO' && <span className="badge badge-info">🔵 Kho</span>}
+                    {set.status === 'DA_THU_HOI' && <span className="badge badge-danger">🔴 Thu Hồi</span>}
+                    {set.status === 'BAO_THUONG_BAO_TRI' && <span className="badge badge-warning">🟡 Bảo Trì</span>}
+                  </div>
+                </div>
+                <div className="mobile-card-body">
+                  <div className="mobile-card-row">
+                    <span className="mobile-card-label">Máy Chiết:</span>
+                    <span className="mobile-card-value">{set.dispenserModel} ({set.dispenserSerial})</span>
+                  </div>
+                  <div className="mobile-card-row">
+                    <span className="mobile-card-label">Máy Lắc:</span>
+                    <span className="mobile-card-value">{set.mixerModel} ({set.mixerSerial})</span>
+                  </div>
+                  <div className="mobile-card-row">
+                    <span className="mobile-card-label">Máy Tính:</span>
+                    <span className="mobile-card-value">{set.pcType} ({set.pcOs})</span>
+                  </div>
+                  <div className="mobile-card-row">
+                    <span className="mobile-card-label">Máy In:</span>
+                    <span className="mobile-card-value">{set.printerModel} ({set.printerSerial})</span>
+                  </div>
+                  <div className="mobile-card-row">
+                    <span className="mobile-card-label">Ổn Áp:</span>
+                    <span className="mobile-card-value">{set.stabilizer}</span>
+                  </div>
+                </div>
+                <div className="mobile-card-actions">
+                  <button className="btn btn-secondary btn-sm" onClick={() => handleOpenEditSet(set)}>
+                    <Edit3 size={14} color="var(--accent-cyan)" />
+                    <span>Sửa</span>
+                  </button>
+                  <button className="btn btn-danger btn-sm" onClick={() => handleDeleteSet(set.setCode)}>
+                    <Trash2 size={14} />
+                    <span>Xóa</span>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -339,7 +391,8 @@ export default function AssetManagement({
       {activeSubTab === 'dispensers' && (
         <div className="glass-panel" style={{ padding: '20px' }}>
           <h3 style={{ fontSize: '1rem', fontWeight: '800', marginBottom: '14px' }}>Danh Mục Máy Chiết (Kho & Đã Cấp Phát)</h3>
-          <div className="data-table-container">
+          {/* Desktop View Table */}
+          <div className="desktop-only data-table-container">
             <table className="data-table">
               <thead>
                 <tr>
@@ -381,6 +434,50 @@ export default function AssetManagement({
               </tbody>
             </table>
           </div>
+
+          {/* Mobile View Cards */}
+          <div className="mobile-only mobile-card-list">
+            {dispensers.map(item => (
+              <div className="mobile-card" key={item.id}>
+                <div className="mobile-card-header">
+                  <div>
+                    <span className="mobile-card-title">{item.model}</span>
+                    <div className="mobile-card-subtitle">Seri: {item.serial}</div>
+                  </div>
+                  <div>
+                    {item.status === 'Mới 100%' && <span className="badge badge-success">{item.status}</span>}
+                    {item.status === 'Đang chạy tốt' && <span className="badge badge-info">{item.status}</span>}
+                    {item.status === 'Cần bảo trì' && <span className="badge badge-warning">{item.status}</span>}
+                    {item.status === 'Hỏng đầu phun' && <span className="badge badge-danger">⚠️ {item.status}</span>}
+                  </div>
+                </div>
+                <div className="mobile-card-body">
+                  <div className="mobile-card-row">
+                    <span className="mobile-card-label">Mã Quản Lý:</span>
+                    <span className="mobile-card-value">{item.id}</span>
+                  </div>
+                  <div className="mobile-card-row">
+                    <span className="mobile-card-label">Trạng thái:</span>
+                    <span className="mobile-card-value">{item.isAssigned ? 'Đã gán bộ' : 'Tự do trong kho'}</span>
+                  </div>
+                  <div className="mobile-card-row">
+                    <span className="mobile-card-label">Mã bộ máy:</span>
+                    <span className="mobile-card-value" style={{ fontWeight: '700', color: 'var(--accent-cyan)' }}>{item.setCode || 'Chưa gán'}</span>
+                  </div>
+                </div>
+                <div className="mobile-card-actions">
+                  <button className="btn btn-secondary btn-sm" onClick={() => handleOpenEditDevice('dispenser', item)}>
+                    <Edit3 size={14} color="var(--accent-cyan)" />
+                    <span>Sửa</span>
+                  </button>
+                  <button className="btn btn-danger btn-sm" onClick={() => handleDeleteDevice('dispenser', item)}>
+                    <Trash2 size={14} />
+                    <span>Xóa</span>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -388,7 +485,8 @@ export default function AssetManagement({
       {activeSubTab === 'mixers' && (
         <div className="glass-panel" style={{ padding: '20px' }}>
           <h3 style={{ fontSize: '1rem', fontWeight: '800', marginBottom: '14px' }}>Danh Mục Máy Lắc (Kho & Đã Cấp Phát)</h3>
-          <div className="data-table-container">
+          {/* Desktop View Table */}
+          <div className="desktop-only data-table-container">
             <table className="data-table">
               <thead>
                 <tr>
@@ -425,6 +523,47 @@ export default function AssetManagement({
               </tbody>
             </table>
           </div>
+
+          {/* Mobile View Cards */}
+          <div className="mobile-only mobile-card-list">
+            {mixers.map(item => (
+              <div className="mobile-card" key={item.id}>
+                <div className="mobile-card-header">
+                  <div>
+                    <span className="mobile-card-title">{item.model}</span>
+                    <div className="mobile-card-subtitle">Seri: {item.serial}</div>
+                  </div>
+                  <div>
+                    <span className="badge badge-info">{item.status}</span>
+                  </div>
+                </div>
+                <div className="mobile-card-body">
+                  <div className="mobile-card-row">
+                    <span className="mobile-card-label">Mã Quản Lý:</span>
+                    <span className="mobile-card-value">{item.id}</span>
+                  </div>
+                  <div className="mobile-card-row">
+                    <span className="mobile-card-label">Loại máy:</span>
+                    <span className="mobile-card-value">{item.type}</span>
+                  </div>
+                  <div className="mobile-card-row">
+                    <span className="mobile-card-label">Cấp phát:</span>
+                    <span className="mobile-card-value">{item.isAssigned ? 'Đã gán bộ' : 'Tự do trong kho'}</span>
+                  </div>
+                </div>
+                <div className="mobile-card-actions">
+                  <button className="btn btn-secondary btn-sm" onClick={() => handleOpenEditDevice('mixer', item)}>
+                    <Edit3 size={14} color="var(--accent-cyan)" />
+                    <span>Sửa</span>
+                  </button>
+                  <button className="btn btn-danger btn-sm" onClick={() => handleDeleteDevice('mixer', item)}>
+                    <Trash2 size={14} />
+                    <span>Xóa</span>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -435,7 +574,8 @@ export default function AssetManagement({
             <h3 style={{ fontSize: '1rem', fontWeight: '800' }}>Danh Mục Máy Tính (Case & AIO)</h3>
             <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>*Lưu ý: Ổn áp do NPP tự mua nên trong kho máy tính không có ổn áp sẵn.</span>
           </div>
-          <div className="data-table-container">
+          {/* Desktop View Table */}
+          <div className="desktop-only data-table-container">
             <table className="data-table">
               <thead>
                 <tr>
@@ -480,6 +620,53 @@ export default function AssetManagement({
               </tbody>
             </table>
           </div>
+
+          {/* Mobile View Cards */}
+          <div className="mobile-only mobile-card-list">
+            {computers.map(item => (
+              <div className="mobile-card" key={item.id}>
+                <div className="mobile-card-header">
+                  <div>
+                    <span className="mobile-card-title">{item.type}</span>
+                    <div className="mobile-card-subtitle">Seri: {item.serial}</div>
+                  </div>
+                  <div>
+                    <span className="badge badge-purple">{item.os}</span>
+                  </div>
+                </div>
+                <div className="mobile-card-body">
+                  <div className="mobile-card-row">
+                    <span className="mobile-card-label">Mã Quản Lý:</span>
+                    <span className="mobile-card-value">{item.id}</span>
+                  </div>
+                  <div className="mobile-card-row">
+                    <span className="mobile-card-label">Cấu hình:</span>
+                    <span className="mobile-card-value" style={{ fontSize: '0.8rem' }}>{item.specs}</span>
+                  </div>
+                  <div className="mobile-card-row">
+                    <span className="mobile-card-label">Mạng:</span>
+                    <span className="mobile-card-value">{item.network}</span>
+                  </div>
+                  <div className="mobile-card-row">
+                    <span className="mobile-card-label">Ổn áp (NPP):</span>
+                    <span className="mobile-card-value">
+                      {item.stabilizer?.hasStabilizer ? `✓ ${item.stabilizer.brand}` : 'Chưa có'}
+                    </span>
+                  </div>
+                </div>
+                <div className="mobile-card-actions">
+                  <button className="btn btn-secondary btn-sm" onClick={() => handleOpenEditDevice('computer', item)}>
+                    <Edit3 size={14} color="var(--accent-cyan)" />
+                    <span>Sửa</span>
+                  </button>
+                  <button className="btn btn-danger btn-sm" onClick={() => handleDeleteDevice('computer', item)}>
+                    <Trash2 size={14} />
+                    <span>Xóa</span>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -487,7 +674,8 @@ export default function AssetManagement({
       {activeSubTab === 'printers' && (
         <div className="glass-panel" style={{ padding: '20px' }}>
           <h3 style={{ fontSize: '1rem', fontWeight: '800', marginBottom: '14px' }}>Danh Mục Máy In (Model Chuẩn: QL700)</h3>
-          <div className="data-table-container">
+          {/* Desktop View Table */}
+          <div className="desktop-only data-table-container">
             <table className="data-table">
               <thead>
                 <tr>
@@ -523,6 +711,47 @@ export default function AssetManagement({
                 ))}
               </tbody>
             </table>
+          </div>
+
+          {/* Mobile View Cards */}
+          <div className="mobile-only mobile-card-list">
+            {printers.map(item => (
+              <div className="mobile-card" key={item.id}>
+                <div className="mobile-card-header">
+                  <div>
+                    <span className="mobile-card-title">{item.model}</span>
+                    <div className="mobile-card-subtitle">Seri: {item.serial}</div>
+                  </div>
+                  <div>
+                    <span className="badge badge-info">{item.status}</span>
+                  </div>
+                </div>
+                <div className="mobile-card-body">
+                  <div className="mobile-card-row">
+                    <span className="mobile-card-label">Mã Quản Lý:</span>
+                    <span className="mobile-card-value">{item.id}</span>
+                  </div>
+                  <div className="mobile-card-row">
+                    <span className="mobile-card-label">Kết nối:</span>
+                    <span className="mobile-card-value">{item.connection}</span>
+                  </div>
+                  <div className="mobile-card-row">
+                    <span className="mobile-card-label">Cấp phát:</span>
+                    <span className="mobile-card-value">{item.isAssigned ? 'Đã gán bộ' : 'Tự do trong kho'}</span>
+                  </div>
+                </div>
+                <div className="mobile-card-actions">
+                  <button className="btn btn-secondary btn-sm" onClick={() => handleOpenEditDevice('printer', item)}>
+                    <Edit3 size={14} color="var(--accent-cyan)" />
+                    <span>Sửa</span>
+                  </button>
+                  <button className="btn btn-danger btn-sm" onClick={() => handleDeleteDevice('printer', item)}>
+                    <Trash2 size={14} />
+                    <span>Xóa</span>
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}

@@ -322,7 +322,7 @@ export default function RemoteFormulaUpdates({
           Trạng Thái Kết Nối Agent, Thư Mục Cài Đặt & Trích Xuất Dữ Liệu ({filteredSets.length} NPP)
         </h3>
 
-        <div className="data-table-container">
+        <div className="desktop-only data-table-container">
           <table className="data-table">
             <thead>
               <tr>
@@ -409,6 +409,92 @@ export default function RemoteFormulaUpdates({
               })}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile View Cards */}
+        <div className="mobile-only mobile-card-list">
+          {filteredSets.map(set => {
+            const isSynced = set.softwareVersion?.includes('v3.4') || set.softwareVersion?.includes('v1.15') || set.softwareVersion?.includes('v2.9');
+            const pathInfo = softwarePaths[set.tintingSoftware] || {};
+            return (
+              <div className="mobile-card" key={set.id}>
+                <div className="mobile-card-header">
+                  <div>
+                    <span className="mobile-card-title" style={{ color: 'var(--accent-cyan)' }}>{set.setCode}</span>
+                    <div className="mobile-card-subtitle">{set.nppName}</div>
+                  </div>
+                  <div>
+                    {set.agentStatus === 'Online' ? (
+                      <span className="badge badge-success" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.65rem' }}>
+                        <Wifi size={10} /> Online
+                      </span>
+                    ) : (
+                      <span className="badge badge-neutral" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.65rem' }}>
+                        <WifiOff size={10} /> Offline
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="mobile-card-body">
+                  <div className="mobile-card-row">
+                    <span className="mobile-card-label">Phần mềm:</span>
+                    <span className="mobile-card-value">{set.tintingSoftware}</span>
+                  </div>
+                  <div className="mobile-card-row">
+                    <span className="mobile-card-label">Cập nhật:</span>
+                    <span className="mobile-card-value">
+                      {isSynced ? (
+                        <span className="badge badge-success" style={{ fontSize: '0.65rem' }}>✓ ĐÃ ĐỒNG BỘ</span>
+                      ) : (
+                        <span className="badge badge-warning" style={{ fontSize: '0.65rem' }}>⏳ CHỜ CẬP NHẬT</span>
+                      )}
+                    </span>
+                  </div>
+                  <div className="mobile-card-row">
+                    <span className="mobile-card-label">Log Pha:</span>
+                    <span className="mobile-card-value">
+                      {set.agentStatus === 'Online' ? (
+                        <button
+                          disabled={extractingSetCodes[set.setCode]}
+                          onClick={() => handleExtractLogs(set)}
+                          className="btn btn-secondary btn-xs"
+                          style={{
+                            borderColor: 'var(--accent-purple)',
+                            color: 'var(--accent-purple)',
+                            fontSize: '0.65rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            padding: '3px 8px',
+                            background: extractingSetCodes[set.setCode] ? 'rgba(147,51,234,0.1)' : 'transparent'
+                          }}
+                        >
+                          <RefreshCw size={10} className={extractingSetCodes[set.setCode] ? 'spin' : ''} style={{ flexShrink: 0 }} />
+                          {extractingSetCodes[set.setCode] ? 'Trích xuất...' : '⚡ Trích Xuất'}
+                        </button>
+                      ) : (
+                        <span className="badge badge-neutral" style={{ fontSize: '0.65rem' }}>✕ Offline</span>
+                      )}
+                    </span>
+                  </div>
+                  <div className="mobile-card-row" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '2px' }}>
+                    <span className="mobile-card-label">Thư mục DB:</span>
+                    <span className="mobile-card-value" style={{ fontSize: '0.7rem', fontFamily: 'var(--font-mono)', textAlign: 'left', wordBreak: 'break-all' }}>
+                      {pathInfo.historyDbFile}
+                    </span>
+                  </div>
+                </div>
+                <div className="mobile-card-actions">
+                  <button className="btn btn-secondary btn-sm" onClick={() => handlePushNow(selectedVersion, set.tintingSoftware)}>
+                    Đẩy Công Thức
+                  </button>
+                  <button className="btn btn-danger btn-sm" onClick={() => handleRollback(set)}>
+                    <RotateCcw size={12} /> Rollback
+                  </button>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 
