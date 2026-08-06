@@ -45,7 +45,7 @@ export default function App() {
   } = useAssets();
   const { repairTickets, addTicket, editTicket, deleteTicket } = useRepairs();
   const { auditLogs, addAuditLog, editAuditLog, deleteAuditLog } = useAuditLogs();
-  const { lockedMonths, lockMonth, unlockMonth, isDateLocked } = useLockedMonths();
+  const { lockedMonths, lockMonth, unlockMonth, isDateLocked, loading: lockLoading, error: lockError } = useLockedMonths();
 
 
   const [formulaVersions, setFormulaVersions] = useState(INITIAL_FORMULA_VERSIONS);
@@ -492,6 +492,7 @@ export default function App() {
               onDeleteTicket={handleDeleteTicket}
               prefilledTicket={prefilledRepairData}
               onClearPrefill={() => setPrefilledRepairData(null)}
+              isDateLocked={isDateLocked}
             />
           )}
 
@@ -594,7 +595,13 @@ export default function App() {
           )}
 
           {activeTab === 'users' && (
-            <UserManagement />
+            <UserManagement
+              lockedMonths={lockedMonths}
+              lockMonth={lockMonth}
+              unlockMonth={unlockMonth}
+              lockLoading={lockLoading}
+              lockError={lockError}
+            />
           )}
 
         </main>
@@ -620,6 +627,7 @@ export default function App() {
           onSubmitWithdraw={handleWithdrawSubmit}
           onSubmitTransfer={handleTransferSubmit}
           onPrintProtocol={(pData) => setPrintProtocolData(pData)}
+          isDateLocked={isDateLocked}
         />
       )}
 

@@ -20,7 +20,6 @@ import {
   ShieldAlert,
   PackageCheck
 } from 'lucide-react';
-import { useLockedMonths } from '../hooks/useLockedMonths.js';
 import { sanitizeFormData, validatePhone, validateSerial } from '../security/sanitize.js';
 
 export const MACHINE_MODELS = [
@@ -55,9 +54,9 @@ export default function DeviceRepairProcessing({
   onDeleteTicket,
   onPrintTicket,
   prefilledTicket,
-  onClearPrefill
+  onClearPrefill,
+  isDateLocked = () => false
 }) {
-  const { isDateLocked } = useLockedMonths();
   const [activeTab, setActiveTab] = useState('ALL'); // ALL | PENDING | NOT_RETURNED | REPLACED
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('ALL');

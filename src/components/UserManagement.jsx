@@ -2,8 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { UserCheck, ShieldAlert, Trash2, Key, RefreshCw, Award, Lock, Unlock, Calendar } from 'lucide-react';
-import { useLockedMonths } from '../hooks/useLockedMonths.js';
-
 
 const MOCK_PROFILES = [
   { id: 'dev-admin', email: 'dat291219962.hust@gmail.com', full_name: 'Nguyễn Tiến Đạt (Admin)', role: 'admin', created_at: '2026-07-28' },
@@ -11,7 +9,13 @@ const MOCK_PROFILES = [
   { id: 'dev-viewer', email: 'viewer@dev.local', full_name: 'Đại Lý Sơn Nasun Hải Phòng', role: 'viewer', created_at: '2026-07-31' }
 ];
 
-export default function UserManagement() {
+export default function UserManagement({
+  lockedMonths = [],
+  lockMonth,
+  unlockMonth,
+  lockLoading = false,
+  lockError = null
+}) {
   const { user: currentUser } = useAuth();
   const [profiles, setProfiles] = useState(MOCK_PROFILES);
   const [loading, setLoading] = useState(false);
@@ -21,8 +25,6 @@ export default function UserManagement() {
   // Sub-tab selection state
   const [activeSubTab, setActiveSubTab] = useState('users');
 
-  // Locked Months State and Hook
-  const { lockedMonths, lockMonth, unlockMonth, loading: lockLoading, error: lockError } = useLockedMonths();
   const [newLockMonth, setNewLockMonth] = useState('');
   const [lockReason, setLockReason] = useState('');
   const [lockSuccess, setLockSuccess] = useState('');
@@ -90,6 +92,8 @@ export default function UserManagement() {
   useEffect(() => {
     fetchProfiles();
   }, []);
+
+  if (!currentUser) return null;
 
   const handleRoleChange = async (profileId, newRole) => {
     // Prevent admin from demoting themselves

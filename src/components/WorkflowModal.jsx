@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { ArrowLeftRight, CheckCircle2, AlertTriangle, ShieldCheck, Printer, Calendar, Camera, X } from 'lucide-react';
 import { compressImage } from '../utils/imageCompressor.js';
-import { useLockedMonths } from '../hooks/useLockedMonths.js';
 
 export default function WorkflowModal({
   mode, // 'INSTALL' | 'WITHDRAW' | 'TRANSFER'
@@ -11,9 +10,9 @@ export default function WorkflowModal({
   onSubmitInstall,
   onSubmitWithdraw,
   onSubmitTransfer,
-  onPrintProtocol
+  onPrintProtocol,
+  isDateLocked = () => false
 }) {
-  const { isDateLocked } = useLockedMonths();
   // Common states
   const [selectedSetCode, setSelectedSetCode] = useState('');
   const [targetNppId, setTargetNppId] = useState('');
