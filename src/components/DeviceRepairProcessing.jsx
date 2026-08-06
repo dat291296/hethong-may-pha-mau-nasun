@@ -17,7 +17,8 @@ import {
   Building2,
   BookOpen,
   ClipboardCheck,
-  ShieldAlert
+  ShieldAlert,
+  PackageCheck
 } from 'lucide-react';
 import { useLockedMonths } from '../hooks/useLockedMonths.js';
 import { sanitizeFormData, validatePhone, validateSerial } from '../security/sanitize.js';
