@@ -33,8 +33,8 @@ namespace NasunAgent
                 try
                 {
                     string json = File.ReadAllText(configFile, Encoding.UTF8);
-                    string apiUrl = GetJsonVal(json, "api_url", "https://kythuat.nasun.workers.dev/api");
-                    string apiKey = GetJsonVal(json, "api_key", "");
+                    string apiUrl = GetJsonVal(json, "api_url", "https://tqoxyharlsubyqjxjnfg.supabase.co");
+                    string apiKey = GetJsonVal(json, "api_key", "sb_publishable_0AaZT5TafLGaFRF0IIqynA_gmGtwHs8");
                     string softwareType = GetJsonVal(json, "software_type", "ColorExpert 3");
                     
                     StartRealtimeWebSocket(apiUrl, apiKey, softwareType, configFile, logFile);
@@ -192,27 +192,39 @@ namespace NasunAgent
                     "  \"pc_name\": \"{3}\",\r\n" +
                     "  \"username\": \"{4}\",\r\n" +
                     "  \"free_space_gb\": {5:F2},\r\n" +
-                    "  \"total_space_gb\": {6:F2},\r\n" +
-                    "  \"timestamp\": \"{7:yyyy-MM-dd HH:mm:ss}\"\r\n" +
+                    "  \"total_space_gb\": {6:F2}\r\n" +
                     "}}",
-                    setCode, machineGuid, os, pcName, username, freeSpaceGb, totalSizeGb, DateTime.Now
+                    setCode, machineGuid, os, pcName, username, freeSpaceGb, totalSizeGb
                 );
 
                 ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072; // TLS 1.2
                 using (WebClient client = new WebClient())
                 {
                     client.Headers[HttpRequestHeader.ContentType] = "application/json";
+                    client.Headers["apikey"] = apiKey;
                     client.Headers["Authorization"] = "Bearer " + apiKey;
-                    string url = apiUrl.TrimEnd('/') + "/telemetry";
+                    string url = apiUrl.TrimEnd('/') + "/rest/v1/agent_telemetry";
                     
                     try
                     {
                         client.UploadString(url, "POST", payload);
+                        Log(logFile, "✓ Đã gửi dữ liệu giám sát phần cứng (telemetry) lên Supabase.");
                     }
                     catch (Exception ex)
                     {
-                        // Ignore telemetry server endpoints failing in dev workers fallback
-                        Log(logFile, "[Telemetry] Không thể gửi dữ liệu giám sát phần cứng lên Cloud: " + ex.Message);
+                        Log(logFile, "[Telemetry] Lỗi gửi telemetry: " + ex.Message);
+                    }
+
+                    // Update heartbeat status to Online on system_sets
+                    try
+                    {
+                        string heartbeatPayload = "{\r\n  \"agent_status\": \"Online\",\r\n  \"updated_at\": \"" + DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ") + "\"\r\n}";
+                        string heartbeatUrl = apiUrl.TrimEnd('/') + "/rest/v1/system_sets?set_code=eq." + Uri.EscapeDataString(setCode);
+                        client.UploadString(heartbeatUrl, "PATCH", heartbeatPayload);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log(logFile, "[Telemetry] Không thể cập nhật trạng thái hoạt động (Heartbeat): " + ex.Message);
                     }
                 }
             }
@@ -237,7 +249,7 @@ namespace NasunAgent
                             ws.ConnectAsync(new Uri(wsUrl), CancellationToken.None).Wait();
                             Log(logFile, "✓ Đã kết nối Realtime WebSocket thành công!");
 
-                            string joinPayload = "{\"event\":\"phx_join\",\"topic\":\"realtime:public:formulas\",\"payload\":{},\"ref\":\"1\"}";
+                            string joinPayload = "{\"event\":\"phx_join\",\"topic\":\"realtime:public:formula_versions\",\"payload\":{},\"ref\":\"1\"}";
                             byte[] sendBuffer = Encoding.UTF8.GetBytes(joinPayload);
                             ws.SendAsync(new ArraySegment<byte>(sendBuffer), WebSocketMessageType.Text, true, CancellationToken.None).Wait();
 
@@ -248,7 +260,7 @@ namespace NasunAgent
                             {
                                 if ((DateTime.Now - lastHeartbeat).TotalSeconds > 25)
                                 {
-                                    string ping = "{\"topic\":\"realtime:public:formulas\",\"event\":\"heartbeat\",\"payload\":{},\"ref\":\"" + DateTime.Now.Ticks + "\"}";
+                                    string ping = "{\"topic\":\"realtime:public:formula_versions\",\"event\":\"heartbeat\",\"payload\":{},\"ref\":\"" + DateTime.Now.Ticks + "\"}";
                                     ws.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(ping)), WebSocketMessageType.Text, true, CancellationToken.None).Wait();
                                     lastHeartbeat = DateTime.Now;
                                 }
@@ -259,7 +271,7 @@ namespace NasunAgent
                                 if (result.Result.MessageType == WebSocketMessageType.Text)
                                 {
                                     string msg = Encoding.UTF8.GetString(receiveBuffer, 0, result.Result.Count);
-                                    if (msg.Contains("insert") || msg.Contains("update") || msg.Contains("formulas"))
+                                    if (msg.Contains("insert") || msg.Contains("update") || msg.Contains("formula_versions"))
                                     {
                                         Log(logFile, "⚡ Nhận tín hiệu Realtime: Phát hiện công thức màu mới. Tự động kích hoạt đồng bộ...");
                                         SyncData(configFile, logFile);
@@ -283,14 +295,16 @@ namespace NasunAgent
         {
             try
             {
-                string reqUrl = string.Format("{0}/commands/pending?set_code={1}", apiUrl.TrimEnd('/'), Uri.EscapeDataString(setCode));
+                string reqUrl = string.Format("{0}/rest/v1/diagnostic_commands?set_code=eq.{1}&status=eq.PENDING&order=created_at.asc&limit=1", apiUrl.TrimEnd('/'), Uri.EscapeDataString(setCode));
                 using (WebClient client = new WebClient())
                 {
+                    client.Headers["apikey"] = apiKey;
                     client.Headers["Authorization"] = "Bearer " + apiKey;
+                    client.Headers["Accept"] = "application/json";
                     string jsonResponse = client.DownloadString(reqUrl);
                     
-                    string cmdId = ExtractJsonStringValue(jsonResponse, "commandId");
-                    string cmdText = ExtractJsonStringValue(jsonResponse, "commandText");
+                    string cmdId = ExtractJsonStringValue(jsonResponse, "id");
+                    string cmdText = ExtractJsonStringValue(jsonResponse, "command_text");
 
                     if (!string.IsNullOrEmpty(cmdId) && !string.IsNullOrEmpty(cmdText))
                     {
@@ -354,16 +368,21 @@ namespace NasunAgent
             try
             {
                 string payload = string.Format(
-                    "{{\r\n  \"set_code\": \"{0}\",\r\n  \"command_id\": \"{1}\",\r\n  \"success\": {2},\r\n  \"output\": \"{3}\"\r\n}}",
-                    setCode, cmdId, success ? "true" : "false", output.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\r", "").Replace("\n", "\\n")
+                    "{{\r\n  \"status\": \"{0}\",\r\n  \"response_output\": \"{1}\",\r\n  \"executed_at\": \"{2:yyyy-MM-ddTHH:mm:ss.fffZ}\"\r\n}}",
+                    success ? "COMPLETED" : "FAILED", 
+                    output.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\r", "").Replace("\n", "\\n"),
+                    DateTime.UtcNow
                 );
 
                 using (WebClient client = new WebClient())
                 {
                     client.Headers[HttpRequestHeader.ContentType] = "application/json";
+                    client.Headers["apikey"] = apiKey;
                     client.Headers["Authorization"] = "Bearer " + apiKey;
-                    string url = apiUrl.TrimEnd('/') + "/commands/result";
-                    client.UploadString(url, "POST", payload);
+                    string url = apiUrl.TrimEnd('/') + "/rest/v1/diagnostic_commands?id=eq." + Uri.EscapeDataString(cmdId);
+                    
+                    // Support PATCH method
+                    client.UploadString(url, "PATCH", payload);
                 }
             }
             catch (Exception ex)
@@ -384,25 +403,27 @@ namespace NasunAgent
                     if (string.IsNullOrEmpty(line.Trim())) continue;
                     Dictionary<string, object> log = new Dictionary<string, object>();
                     log["id"] = GetJsonVal(line, "id", "");
-                    log["nppId"] = GetJsonVal(line, "nppId", "");
-                    log["setCode"] = GetJsonVal(line, "setCode", "");
+                    log["npp_id"] = GetJsonVal(line, "npp_id", "");
+                    log["npp_name"] = GetJsonVal(line, "npp_name", "");
+                    log["set_code"] = GetJsonVal(line, "set_code", "");
+                    log["dispenser_serial"] = GetJsonVal(line, "dispenser_serial", "");
                     log["timestamp"] = GetJsonVal(line, "timestamp", "");
-                    log["colorCode"] = GetJsonVal(line, "colorCode", "");
-                    log["productLine"] = GetJsonVal(line, "productLine", "");
+                    log["color_code"] = GetJsonVal(line, "color_code", "");
+                    log["product_line"] = GetJsonVal(line, "product_line", "");
                     log["base"] = GetJsonVal(line, "base", "");
-                    log["containerSize"] = GetJsonVal(line, "containerSize", "");
+                    log["container_size"] = GetJsonVal(line, "container_size", "");
                     
                     int qty = 1;
                     int.TryParse(GetJsonVal(line, "quantity", "1"), out qty);
                     log["quantity"] = qty;
 
                     double vol = 1.0;
-                    double.TryParse(GetJsonVal(line, "totalVolumeLiters", "1"), out vol);
-                    log["totalVolumeLiters"] = vol;
+                    double.TryParse(GetJsonVal(line, "total_volume_liters", "1"), out vol);
+                    log["total_volume_liters"] = vol;
 
                     double pig = 0.0;
-                    double.TryParse(GetJsonVal(line, "pigmentUsedMl", "0"), out pig);
-                    log["pigmentUsedMl"] = pig;
+                    double.TryParse(GetJsonVal(line, "pigment_used_ml", "0"), out pig);
+                    log["pigment_used_ml"] = pig;
 
                     log["operator"] = GetJsonVal(line, "operator", "");
                     log["status"] = GetJsonVal(line, "status", "");
@@ -602,7 +623,7 @@ namespace NasunAgent
             return null;
         }
 
-        public static List<Dictionary<string, object>> ProcessSqliteLogs(string dbPath, ref int lastId, string setCode, string logFile)
+        public static List<Dictionary<string, object>> ProcessSqliteLogs(string dbPath, ref int lastId, string setCode, string nppId, string nppName, string logFile)
         {
             List<Dictionary<string, object>> results = new List<Dictionary<string, object>>();
             if (!File.Exists(dbPath))
@@ -659,16 +680,18 @@ namespace NasunAgent
 
                                 Dictionary<string, object> log = new Dictionary<string, object>();
                                 log["id"] = string.Format("SQL-{0}-{1}", setCode, idVal);
-                                log["nppId"] = setCode;
-                                log["setCode"] = setCode;
+                                log["npp_id"] = nppId;
+                                log["npp_name"] = nppName;
+                                log["set_code"] = setCode;
+                                log["dispenser_serial"] = "";
                                 log["timestamp"] = timestamp;
-                                log["colorCode"] = color;
-                                log["productLine"] = prod;
+                                log["color_code"] = color;
+                                log["product_line"] = prod;
                                 log["base"] = baseVal;
-                                log["containerSize"] = size;
+                                log["container_size"] = size;
                                 log["quantity"] = qty;
-                                log["totalVolumeLiters"] = sizeVol * qty;
-                                log["pigmentUsedMl"] = pigment;
+                                log["total_volume_liters"] = sizeVol * qty;
+                                log["pigment_used_ml"] = pigment;
                                 log["operator"] = op;
                                 log["status"] = "HOÀN THÀNH";
 
@@ -687,7 +710,7 @@ namespace NasunAgent
             return results;
         }
 
-        public static List<Dictionary<string, object>> ProcessMdbLogs(string dbPath, ref int lastId, string setCode, string logFile)
+        public static List<Dictionary<string, object>> ProcessMdbLogs(string dbPath, ref int lastId, string setCode, string nppId, string nppName, string logFile)
         {
             List<Dictionary<string, object>> results = new List<Dictionary<string, object>>();
             if (!File.Exists(dbPath))
@@ -731,16 +754,18 @@ namespace NasunAgent
 
                                 Dictionary<string, object> log = new Dictionary<string, object>();
                                 log["id"] = string.Format("MDB-{0}-{1}", setCode, idVal);
-                                log["nppId"] = setCode;
-                                log["setCode"] = setCode;
+                                log["npp_id"] = nppId;
+                                log["npp_name"] = nppName;
+                                log["set_code"] = setCode;
+                                log["dispenser_serial"] = "";
                                 log["timestamp"] = timestamp;
-                                log["colorCode"] = color;
-                                log["productLine"] = prod;
+                                log["color_code"] = color;
+                                log["product_line"] = prod;
                                 log["base"] = baseVal;
-                                log["containerSize"] = size;
+                                log["container_size"] = size;
                                 log["quantity"] = qty;
-                                log["totalVolumeLiters"] = sizeVol * qty;
-                                log["pigmentUsedMl"] = pigment;
+                                log["total_volume_liters"] = sizeVol * qty;
+                                log["pigment_used_ml"] = pigment;
                                 log["operator"] = op;
                                 log["status"] = "HOÀN THÀNH";
 
@@ -759,7 +784,7 @@ namespace NasunAgent
             return results;
         }
 
-        public static List<Dictionary<string, object>> ProcessXmlLogs(string xmlPath, ref int lastIdx, string setCode, string logFile)
+        public static List<Dictionary<string, object>> ProcessXmlLogs(string xmlPath, ref int lastIdx, string setCode, string nppId, string nppName, string logFile)
         {
             List<Dictionary<string, object>> results = new List<Dictionary<string, object>>();
             if (!File.Exists(xmlPath))
@@ -808,16 +833,18 @@ namespace NasunAgent
 
                         Dictionary<string, object> log = new Dictionary<string, object>();
                         log["id"] = string.Format("XML-{0}-{1}", setCode, idx);
-                        log["nppId"] = setCode;
-                        log["setCode"] = setCode;
+                        log["npp_id"] = nppId;
+                        log["npp_name"] = nppName;
+                        log["set_code"] = setCode;
+                        log["dispenser_serial"] = "";
                         log["timestamp"] = timestamp;
-                        log["colorCode"] = color;
-                        log["productLine"] = prod;
+                        log["color_code"] = color;
+                        log["product_line"] = prod;
                         log["base"] = baseVal;
-                        log["containerSize"] = size;
+                        log["container_size"] = size;
                         log["quantity"] = qty;
-                        log["totalVolumeLiters"] = sizeVol * qty;
-                        log["pigmentUsedMl"] = pigment;
+                        log["total_volume_liters"] = sizeVol * qty;
+                        log["pigment_used_ml"] = pigment;
                         log["operator"] = op;
                         log["status"] = "HOÀN THÀNH";
 
@@ -835,12 +862,10 @@ namespace NasunAgent
             return results;
         }
 
-        public static string SerializeLogsPayload(List<Dictionary<string, object>> logs, string setCode)
+        public static string SerializeLogsPayload(List<Dictionary<string, object>> logs)
         {
             StringBuilder sb = new StringBuilder();
-            sb.Append("{\r\n");
-            sb.AppendFormat("  \"set_code\": \"{0}\",\r\n", setCode);
-            sb.Append("  \"logs\": [\r\n");
+            sb.Append("[\r\n");
             
             for (int i = 0; i < logs.Count; i++)
             {
@@ -872,12 +897,11 @@ namespace NasunAgent
                 sb.Append(i < logs.Count - 1 ? "    },\r\n" : "    }\r\n");
             }
             
-            sb.Append("  ]\r\n");
-            sb.Append("}");
+            sb.Append("]");
             return sb.ToString();
         }
 
-        public static bool PostLogsToCloud(string apiUrl, string apiKey, string setCode, List<Dictionary<string, object>> logs, string logFile)
+        public static bool PostLogsToCloud(string apiUrl, string apiKey, List<Dictionary<string, object>> logs, string logFile)
         {
             try
             {
@@ -885,19 +909,21 @@ namespace NasunAgent
                 using (WebClient client = new WebClient())
                 {
                     client.Headers[HttpRequestHeader.ContentType] = "application/json";
+                    client.Headers["apikey"] = apiKey;
                     client.Headers["Authorization"] = "Bearer " + apiKey;
+                    client.Headers["Prefer"] = "resolution=merge-duplicates";
                     
-                    string payload = SerializeLogsPayload(logs, setCode);
-                    string url = apiUrl.TrimEnd('/') + "/sync-logs";
+                    string payload = SerializeLogsPayload(logs);
+                    string url = apiUrl.TrimEnd('/') + "/rest/v1/tinting_logs";
                     
-                    string response = client.UploadString(url, "POST", payload);
-                    Log(logFile, "✓ Đã đồng bộ thành công nhật ký lên Cloud: " + (response.Length > 40 ? response.Substring(0, 40) + "..." : response));
+                    client.UploadString(url, "POST", payload);
+                    Log(logFile, string.Format("✓ Đã đồng bộ thành công {0} nhật ký lên Supabase Cloud!", logs.Count));
                     return true;
                 }
             }
             catch (Exception ex)
             {
-                Log(logFile, "Lỗi tải nhật ký lên Cloud: " + ex.Message);
+                Log(logFile, "Lỗi tải nhật ký lên Supabase: " + ex.Message);
                 return false;
             }
         }
@@ -906,14 +932,16 @@ namespace NasunAgent
         {
             try
             {
-                string reqUrl = string.Format("{0}/formulas/latest?software_type={1}", apiUrl.TrimEnd('/'), Uri.EscapeDataString(softwareType));
+                string reqUrl = string.Format("{0}/rest/v1/formula_versions?software_type=eq.{1}&order=release_date.desc&limit=1", apiUrl.TrimEnd('/'), Uri.EscapeDataString(softwareType));
                 using (WebClient client = new WebClient())
                 {
+                    client.Headers["apikey"] = apiKey;
                     client.Headers["Authorization"] = "Bearer " + apiKey;
+                    client.Headers["Accept"] = "application/json";
                     string jsonResponse = client.DownloadString(reqUrl);
                     
-                    string latestVersion = ExtractJsonStringValue(jsonResponse, "versionId");
-                    string downloadUrl = ExtractJsonStringValue(jsonResponse, "downloadUrl");
+                    string latestVersion = ExtractJsonStringValue(jsonResponse, "version_id");
+                    string downloadUrl = ExtractJsonStringValue(jsonResponse, "download_url");
                     string filename = ExtractJsonStringValue(jsonResponse, "filename");
                     
                     if (!string.IsNullOrEmpty(latestVersion) && latestVersion != formulaVersion && !string.IsNullOrEmpty(downloadUrl) && !string.IsNullOrEmpty(filename))
@@ -971,8 +999,8 @@ namespace NasunAgent
                 }
 
                 string json = File.ReadAllText(configFile, Encoding.UTF8);
-                string apiUrl = GetJsonVal(json, "api_url", "https://kythuat.nasun.workers.dev/api");
-                string apiKey = GetJsonVal(json, "api_key", "");
+                string apiUrl = GetJsonVal(json, "api_url", "https://tqoxyharlsubyqjxjnfg.supabase.co");
+                string apiKey = GetJsonVal(json, "api_key", "sb_publishable_0AaZT5TafLGaFRF0IIqynA_gmGtwHs8");
                 string setCode = GetJsonVal(json, "set_code", "");
                 string softwareType = GetJsonVal(json, "software_type", "ColorExpert 3");
                 
@@ -1008,6 +1036,29 @@ namespace NasunAgent
                     }
                 }
 
+                // Query nppId and nppName from Supabase first
+                string nppId = setCode;
+                string nppName = "NPP Nasun";
+                try
+                {
+                    string queryUrl = string.Format("{0}/rest/v1/system_sets?set_code=eq.{1}&select=npp_id,npp_name", apiUrl.TrimEnd('/'), Uri.EscapeDataString(setCode));
+                    using (WebClient client = new WebClient())
+                    {
+                        client.Headers["apikey"] = apiKey;
+                        client.Headers["Authorization"] = "Bearer " + apiKey;
+                        client.Headers["Accept"] = "application/json";
+                        string sysSetJson = client.DownloadString(queryUrl);
+                        string fetchedNppId = ExtractJsonStringValue(sysSetJson, "npp_id");
+                        string fetchedNppName = ExtractJsonStringValue(sysSetJson, "npp_name");
+                        if (!string.IsNullOrEmpty(fetchedNppId)) nppId = fetchedNppId;
+                        if (!string.IsNullOrEmpty(fetchedNppName)) nppName = fetchedNppName;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log(logFile, "[Sync] Không thể lấy thông tin NPP từ Supabase: " + ex.Message + ". Sử dụng mặc định.");
+                }
+
                 // Load state
                 string appDir = Path.GetDirectoryName(configFile);
                 string stateFile = Path.Combine(appDir, "last_sync.json");
@@ -1037,15 +1088,15 @@ namespace NasunAgent
 
                 if (softwareType == "ColorExpert 3")
                 {
-                    newLogs = ProcessSqliteLogs(historyLogFile, ref lastSqliteId, setCode, logFile);
+                    newLogs = ProcessSqliteLogs(historyLogFile, ref lastSqliteId, setCode, nppId, nppName, logFile);
                 }
                 else if (softwareType == "ColorExpert 2")
                 {
-                    newLogs = ProcessMdbLogs(historyLogFile, ref lastSqliteId, setCode, logFile);
+                    newLogs = ProcessMdbLogs(historyLogFile, ref lastSqliteId, setCode, nppId, nppName, logFile);
                 }
                 else if (softwareType == "CorobTINT")
                 {
-                    newLogs = ProcessXmlLogs(historyLogFile, ref lastXmlIndex, setCode, logFile);
+                    newLogs = ProcessXmlLogs(historyLogFile, ref lastXmlIndex, setCode, nppId, nppName, logFile);
                 }
 
                 // Load existing offline queue
@@ -1061,7 +1112,7 @@ namespace NasunAgent
                 if (uploadQueue.Count > 0)
                 {
                     Log(logFile, string.Format("Đang truyền gửi {0} bản ghi pha màu từ hàng đợi đệm...", uploadQueue.Count));
-                    uploadSuccess = PostLogsToCloud(apiUrl, apiKey, setCode, uploadQueue, logFile);
+                    uploadSuccess = PostLogsToCloud(apiUrl, apiKey, uploadQueue, logFile);
                     
                     if (uploadSuccess)
                     {
@@ -1376,9 +1427,9 @@ namespace NasunAgent
                 try
                 {
                     string json = File.ReadAllText(configFile, Encoding.UTF8);
-                    txtApiUrl.Text = GetJsonVal(json, "api_url", "https://kythuat.nasun.workers.dev/api");
-                    txtApiKey.Text = GetJsonVal(json, "api_key", "supabase-anon-key");
-                    txtSetCode.Text = GetJsonVal(json, "set_code", "SET-001");
+                    txtApiUrl.Text = GetJsonVal(json, "api_url", "https://tqoxyharlsubyqjxjnfg.supabase.co");
+                    txtApiKey.Text = GetJsonVal(json, "api_key", "sb_publishable_0AaZT5TafLGaFRF0IIqynA_gmGtwHs8");
+                    txtSetCode.Text = GetJsonVal(json, "set_code", "SET-2024-001");
                     txtFormulaDir.Text = GetJsonVal(json, "formula_override_dir", @"C:\ColorExpert3\Data\Formulas");
                     txtLogFile.Text = GetJsonVal(json, "history_log_file", @"C:\ColorExpert3\Data\History.db");
                     txtBackupDir.Text = GetJsonVal(json, "backup_dir", @"C:\NasunAgent\Backups");
@@ -1387,9 +1438,9 @@ namespace NasunAgent
                 catch { }
             }
 
-            txtApiUrl.Text = "https://kythuat.nasun.workers.dev/api";
-            txtApiKey.Text = "supabase-anon-key-chuyen-biet-cua-he-thong";
-            txtSetCode.Text = "SET-001";
+            txtApiUrl.Text = "https://tqoxyharlsubyqjxjnfg.supabase.co";
+            txtApiKey.Text = "sb_publishable_0AaZT5TafLGaFRF0IIqynA_gmGtwHs8";
+            txtSetCode.Text = "SET-2024-001";
             txtFormulaDir.Text = @"C:\ColorExpert3\Data\Formulas";
             txtLogFile.Text = @"C:\ColorExpert3\Data\History.db";
             txtBackupDir.Text = @"C:\NasunAgent\Backups";

@@ -40,78 +40,85 @@ def save_state(state):
     with open(STATE_FILE, 'w', encoding='utf-8') as f:
         json.dump(state, f, indent=2)
 
-def post_to_cloud(url, api_key, payload):
+def post_to_cloud(url, api_key, logs):
     """Sends synced logs payload to Cloud/Supabase backend"""
     req = urllib.request.Request(
-        f"{url}/sync-logs",
-        data=json.dumps(payload).encode('utf-8'),
+        f"{url}/rest/v1/tinting_logs",
+        data=json.dumps(logs).encode('utf-8'),
         headers={
             'Content-Type': 'application/json',
-            'Authorization': f'Bearer {api_key}'
+            'apikey': api_key,
+            'Authorization': f'Bearer {api_key}',
+            'Prefer': 'resolution=merge-duplicates'
         },
         method='POST'
     )
     try:
         with urllib.request.urlopen(req, timeout=15) as res:
-            response_body = res.read().decode('utf-8')
-            logging.info(f"Đồng bộ Cloud thành công: {response_body}")
+            logging.info(f"Đồng bộ {len(logs)} nhật ký lên Supabase thành công!")
             return True
     except urllib.error.URLError as e:
-        logging.error(f"Lỗi kết nối tới Cloud Server: {e.reason}")
+        logging.error(f"Lỗi kết nối tới Supabase Cloud: {e.reason}")
     except Exception as e:
         logging.error(f"Lỗi không xác định khi đồng bộ: {str(e)}")
     return False
 
 def check_for_formula_updates(url, api_key, config, state):
     """Checks for new color formula database updates and downloads them"""
-    req_url = f"{url}/formulas/latest?software_type={config['software_type']}"
+    req_url = f"{url}/rest/v1/formula_versions?software_type=eq.{config['software_type']}&order=release_date.desc&limit=1"
     req = urllib.request.Request(
         req_url,
         headers={
-            'Authorization': f'Bearer {api_key}'
+            'apikey': api_key,
+            'Authorization': f'Bearer {api_key}',
+            'Accept': 'application/json'
         },
         method='GET'
     )
     try:
         with urllib.request.urlopen(req, timeout=15) as res:
             data = json.loads(res.read().decode('utf-8'))
-            latest_version = data.get("versionId")
-            download_url = data.get("downloadUrl")
-            filename = data.get("filename")
+            if data and len(data) > 0:
+                item = data[0]
+                latest_version = item.get("version_id")
+                download_url = item.get("download_url")
+                filename = item.get("filename")
 
-            if latest_version and latest_version != state.get("formula_version"):
-                logging.info(f"Phát hiện công thức màu mới: {latest_version}. Tiến hành tải về...")
-                
-                # Setup target paths
-                override_dir = config["paths"]["formula_override_dir"]
-                if not os.path.exists(override_dir):
-                    os.makedirs(override_dir)
-                
-                target_path = os.path.join(override_dir, filename)
-                backup_path = target_path + ".bak"
+                if latest_version and latest_version != state.get("formula_version"):
+                    logging.info(f"Phát hiện công thức màu mới: {latest_version}. Tiến hành tải về...")
+                    
+                    # Setup target paths
+                    override_dir = config["paths"]["formula_override_dir"]
+                    if not os.path.exists(override_dir):
+                        os.makedirs(override_dir)
+                    
+                    target_path = os.path.join(override_dir, filename)
+                    backup_path = target_path + ".bak"
 
-                # Download temp file
-                temp_file = "temp_formula.tmp"
-                urllib.request.urlretrieve(download_url, temp_file)
-                
-                # Backup old database
-                if os.path.exists(target_path):
-                    shutil.copy2(target_path, backup_path)
-                    logging.info(f"Đã tạo bản sao lưu backup công thức cũ tại: {backup_path}")
-                
-                # Overwrite with new file
-                shutil.move(temp_file, target_path)
-                logging.info(f"Đã ghi đè cập nhật tệp công thức mới tại: {target_path} thành công! 🟢")
-                
-                # Update local state
-                state["formula_version"] = latest_version
-                save_state(state)
+                    # Download temp file
+                    temp_file = "temp_formula.tmp"
+                    urllib.request.urlretrieve(download_url, temp_file)
+                    
+                    # Backup old database
+                    if os.path.exists(target_path):
+                        shutil.copy2(target_path, backup_path)
+                        logging.info(f"Đã tạo bản sao lưu backup công thức cũ tại: {backup_path}")
+                    
+                    # Overwrite with new file
+                    shutil.move(temp_file, target_path)
+                    logging.info(f"Đã ghi đè cập nhật tệp công thức mới tại: {target_path} thành công! 🟢")
+                    
+                    # Update local state
+                    state["formula_version"] = latest_version
+                    save_state(state)
+                else:
+                    logging.info("Công thức màu tại máy NPP hiện đã là phiên bản mới nhất.")
             else:
-                logging.info("Công thức màu tại máy NPP hiện đã là phiên bản mới nhất.")
+                logging.info("Chưa có phiên bản công thức màu nào được phát hành cho phần mềm này.")
     except Exception as e:
         logging.error(f"Lỗi kiểm tra cập nhật công thức màu: {str(e)}")
 
-def process_sqlite_logs(db_path, state, config):
+def process_sqlite_logs(db_path, state, config, npp_id, npp_name):
     """Parses SQLite database (ColorExpert 3) for new tinting logs"""
     if not os.path.exists(db_path):
         logging.warning(f"Không tìm thấy file database lịch sử SQLite: {db_path}")
@@ -136,16 +143,18 @@ def process_sqlite_logs(db_path, state, config):
             r_id, timestamp, color, prod, base, size, qty, pigment, operator = row
             new_logs.append({
                 "id": f"SQL-{config['set_code']}-{r_id}",
-                "nppId": config["set_code"],
-                "setCode": config["set_code"],
+                "npp_id": npp_id,
+                "npp_name": npp_name,
+                "set_code": config["set_code"],
+                "dispenser_serial": "",
                 "timestamp": timestamp,
-                "colorCode": color,
-                "productLine": prod,
+                "color_code": color,
+                "product_line": prod,
                 "base": base,
-                "containerSize": size,
+                "container_size": size,
                 "quantity": qty,
-                "totalVolumeLiters": float(size.replace("L", "").strip()) * qty if "L" in str(size) else qty,
-                "pigmentUsedMl": pigment,
+                "total_volume_liters": float(size.replace("L", "").strip()) * qty if "L" in str(size) else qty,
+                "pigment_used_ml": pigment,
                 "operator": operator,
                 "status": "HOÀN THÀNH"
             })
@@ -159,7 +168,7 @@ def process_sqlite_logs(db_path, state, config):
             conn.close()
     return new_logs
 
-def process_xml_logs(xml_path, state, config):
+def process_xml_logs(xml_path, state, config, npp_id, npp_name):
     """Parses XML file (CorobTINT log) for new tinting logs"""
     if not os.path.exists(xml_path):
         logging.warning(f"Không tìm thấy file log XML: {xml_path}")
@@ -179,16 +188,18 @@ def process_xml_logs(xml_path, state, config):
             if idx > last_idx:
                 new_logs.append({
                     "id": f"XML-{config['set_code']}-{idx}",
-                    "nppId": config["set_code"],
-                    "setCode": config["set_code"],
+                    "npp_id": npp_id,
+                    "npp_name": npp_name,
+                    "set_code": config["set_code"],
+                    "dispenser_serial": "",
                     "timestamp": log.get('timestamp', datetime.now().strftime('%Y-%m-%d %H:%M:%S')),
-                    "colorCode": log.get('color', 'N/A'),
-                    "productLine": log.get('product', 'Sơn Nasun'),
+                    "color_code": log.get('color', 'N/A'),
+                    "product_line": log.get('product', 'Sơn Nasun'),
                     "base": log.get('base', 'Base A'),
-                    "containerSize": log.get('size', '1L'),
+                    "container_size": log.get('size', '1L'),
                     "quantity": int(log.get('qty', 1)),
-                    "totalVolumeLiters": float(log.get('size', '1').replace('L', '')) * int(log.get('qty', 1)),
-                    "pigmentUsedMl": float(log.get('pigment', 0.0)),
+                    "total_volume_liters": float(log.get('size', '1').replace('L', '')) * int(log.get('qty', 1)),
+                    "pigment_used_ml": float(log.get('pigment', 0.0)),
                     "operator": log.get('operator', 'KTV'),
                     "status": "HOÀN THÀNH"
                 })
@@ -212,6 +223,29 @@ def main():
     logging.info(f"Đang chạy Agent với Mã bộ máy: {config['set_code']}")
     logging.info(f"Loại phần mềm: {config['software_type']}")
     logging.info(f"Chu kỳ đồng bộ: {config['sync_interval_minutes']} phút.")
+
+    # 0. Query npp_id and npp_name from Supabase on startup
+    npp_id = config["set_code"]
+    npp_name = "NPP Nasun"
+    try:
+        req_url = f"{url}/rest/v1/system_sets?set_code=eq.{config['set_code']}&select=npp_id,npp_name"
+        req = urllib.request.Request(
+            req_url,
+            headers={
+                'apikey': api_key,
+                'Authorization': f'Bearer {api_key}',
+                'Accept': 'application/json'
+            },
+            method='GET'
+        )
+        with urllib.request.urlopen(req, timeout=10) as res:
+            sys_set = json.loads(res.read().decode('utf-8'))
+            if sys_set and len(sys_set) > 0:
+                npp_id = sys_set[0].get("npp_id", npp_id)
+                npp_name = sys_set[0].get("npp_name", npp_name)
+                logging.info(f"✓ Đã liên kết thành công với NPP: {npp_name} (ID: {npp_id})")
+    except Exception as e:
+        logging.warning(f"Không thể lấy thông tin NPP từ Supabase: {str(e)}. Sử dụng mặc định.")
     
     while True:
         logging.info("Đang thực hiện chu kỳ đồng bộ dữ liệu...")
@@ -219,19 +253,40 @@ def main():
         # 1. Sync Tinting Machine Logs
         logs = []
         if config["software_type"] == "ColorExpert 3":
-            logs = process_sqlite_logs(config["paths"]["history_log_file"], state, config)
+            logs = process_sqlite_logs(config["paths"]["history_log_file"], state, config, npp_id, npp_name)
         elif config["software_type"] == "CorobTINT":
-            logs = process_xml_logs(config["paths"]["history_log_file"], state, config)
+            logs = process_xml_logs(config["paths"]["history_log_file"], state, config, npp_id, npp_name)
         
+        upload_success = True
         if logs:
             logging.info(f"Phát hiện {len(logs)} giao dịch pha màu mới. Đang đồng bộ lên Cloud...")
-            if post_to_cloud(url, api_key, {"logs": logs, "set_code": config["set_code"]}):
+            upload_success = post_to_cloud(url, api_key, logs)
+            if upload_success:
                 save_state(state)
         else:
             logging.info("Không phát hiện giao dịch pha màu mới nào.")
             
-        # 2. Check for Formula Database Updates
-        check_for_formula_updates(url, api_key, config, state)
+        # 2. Update heartbeat status to Online on system_sets
+        try:
+            heartbeat_url = f"{url}/rest/v1/system_sets?set_code=eq.{config['set_code']}"
+            req_hb = urllib.request.Request(
+                heartbeat_url,
+                data=json.dumps({"agent_status": "Online", "updated_at": datetime.utcnow().isoformat() + "Z"}).encode('utf-8'),
+                headers={
+                    'Content-Type': 'application/json',
+                    'apikey': api_key,
+                    'Authorization': f'Bearer {api_key}'
+                },
+                method='PATCH'
+            )
+            with urllib.request.urlopen(req_hb, timeout=10) as hb_res:
+                pass
+        except Exception as e:
+            logging.warning(f"Không thể cập nhật trạng thái hoạt động (Heartbeat): {str(e)}")
+
+        # 3. Check for Formula Database Updates
+        if upload_success:
+            check_for_formula_updates(url, api_key, config, state)
         
         logging.info(f"Chu kỳ hoàn tất. Chờ {config['sync_interval_minutes']} phút cho phiên kế tiếp...")
         time.sleep(interval)

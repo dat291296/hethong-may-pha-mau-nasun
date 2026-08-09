@@ -103,3 +103,35 @@ CREATE POLICY "audit_insert_auth"   ON audit_logs FOR INSERT WITH CHECK (auth.ro
 CREATE POLICY "lock_select_admin" ON locked_months FOR SELECT USING (get_my_role() = 'admin');
 CREATE POLICY "lock_insert_admin" ON locked_months FOR INSERT WITH CHECK (get_my_role() = 'admin');
 CREATE POLICY "lock_delete_admin" ON locked_months FOR DELETE USING (get_my_role() = 'admin');
+
+-- ══════════════════════════════════════════════════════════════
+-- AGENT TABLES POLICIES (Allowing public/anon access for agent client)
+-- ══════════════════════════════════════════════════════════════
+
+-- Enable RLS on new tables
+ALTER TABLE tinting_logs        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE formula_versions    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE agent_telemetry     ENABLE ROW LEVEL SECURITY;
+ALTER TABLE diagnostic_commands ENABLE ROW LEVEL SECURITY;
+
+-- 1. Tinting Logs
+CREATE POLICY "tinting_logs_anon_insert" ON tinting_logs FOR INSERT TO anon WITH CHECK (true);
+CREATE POLICY "tinting_logs_anon_select" ON tinting_logs FOR SELECT TO anon USING (true);
+CREATE POLICY "tinting_logs_auth_all"    ON tinting_logs FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+-- 2. Formula Versions
+CREATE POLICY "formula_versions_anon_read" ON formula_versions FOR SELECT TO anon USING (true);
+CREATE POLICY "formula_versions_auth_read" ON formula_versions FOR SELECT TO authenticated USING (true);
+CREATE POLICY "formula_versions_staff_all" ON formula_versions FOR ALL TO authenticated USING (get_my_role() IN ('admin', 'qc')) WITH CHECK (get_my_role() IN ('admin', 'qc'));
+
+-- 3. Agent Telemetry
+CREATE POLICY "agent_telemetry_anon_insert" ON agent_telemetry FOR INSERT TO anon WITH CHECK (true);
+CREATE POLICY "agent_telemetry_staff_all"    ON agent_telemetry FOR ALL TO authenticated USING (get_my_role() IN ('admin', 'qc')) WITH CHECK (get_my_role() IN ('admin', 'qc'));
+
+-- 4. Diagnostic Commands
+CREATE POLICY "diagnostic_commands_anon_all" ON diagnostic_commands FOR ALL TO anon USING (true) WITH CHECK (true);
+CREATE POLICY "diagnostic_commands_auth_all" ON diagnostic_commands FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+-- 5. System Sets updates from Agent (allow updating agent_status & updated_at)
+CREATE POLICY "sets_update_agent" ON system_sets FOR UPDATE TO anon USING (true) WITH CHECK (true);
+

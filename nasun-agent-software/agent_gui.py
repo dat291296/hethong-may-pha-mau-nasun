@@ -29,9 +29,9 @@ CONFIG_FILE = "config.json"
 STATE_FILE = "last_sync.json"
 
 DEFAULT_CONFIG = {
-    "api_url": "https://kythuat.nasun.workers.dev/api",
-    "api_key": "supabase-anon-key-chuyen-biet-cua-he-thong",
-    "set_code": "SET-001",
+    "api_url": "https://tqoxyharlsubyqjxjnfg.supabase.co",
+    "api_key": "sb_publishable_0AaZT5TafLGaFRF0IIqynA_gmGtwHs8",
+    "set_code": "SET-2024-001",
     "sync_interval_minutes": 15,
     "software_type": "ColorExpert 3",
     "paths": {

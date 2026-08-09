@@ -296,3 +296,63 @@ CREATE TRIGGER trg_sync_device_status_on_repair
 
 -- Done! Run rls_policies.sql next.
 
+-- ── 11. Tinting Logs ─────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS tinting_logs (
+  id                   TEXT PRIMARY KEY,
+  timestamp            TIMESTAMPTZ NOT NULL,
+  npp_id               TEXT REFERENCES distributors(id) ON DELETE SET NULL,
+  npp_name             TEXT NOT NULL DEFAULT '',
+  set_code             TEXT REFERENCES system_sets(set_code) ON DELETE SET NULL,
+  dispenser_serial     TEXT DEFAULT '',
+  color_code           TEXT NOT NULL,
+  product_line         TEXT DEFAULT '',
+  base                 TEXT DEFAULT '',
+  container_size       TEXT DEFAULT '',
+  quantity             INTEGER NOT NULL DEFAULT 1,
+  total_volume_liters  NUMERIC NOT NULL DEFAULT 0,
+  pigment_used_ml      NUMERIC NOT NULL DEFAULT 0,
+  operator             TEXT DEFAULT 'KTV',
+  status               TEXT DEFAULT 'HOÀN THÀNH',
+  created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_tint_npp ON tinting_logs (npp_id);
+CREATE INDEX IF NOT EXISTS idx_tint_set ON tinting_logs (set_code);
+CREATE INDEX IF NOT EXISTS idx_tint_time ON tinting_logs (timestamp DESC);
+
+-- ── 12. Formula Versions ─────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS formula_versions (
+  version_id           TEXT PRIMARY KEY,
+  version_group        TEXT NOT NULL,
+  title                TEXT NOT NULL,
+  notes                TEXT DEFAULT '',
+  release_date         DATE NOT NULL DEFAULT CURRENT_DATE,
+  author               TEXT DEFAULT 'Nasun Lab',
+  software_type        TEXT NOT NULL CHECK (software_type IN ('ColorExpert 3', 'ColorExpert 2', 'CorobTINT')),
+  filename             TEXT NOT NULL,
+  download_url         TEXT NOT NULL,
+  created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ── 13. Agent Telemetry ──────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS agent_telemetry (
+  id                   BIGSERIAL PRIMARY KEY,
+  set_code             TEXT REFERENCES system_sets(set_code) ON DELETE CASCADE,
+  machine_guid         TEXT,
+  os_version           TEXT,
+  pc_name              TEXT,
+  username             TEXT,
+  free_space_gb        NUMERIC,
+  total_space_gb       NUMERIC,
+  created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ── 14. Diagnostic Commands ──────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS diagnostic_commands (
+  id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  set_code             TEXT REFERENCES system_sets(set_code) ON DELETE CASCADE,
+  command_text         TEXT NOT NULL,
+  status               TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'RUNNING', 'COMPLETED', 'FAILED')),
+  response_output      TEXT,
+  created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  executed_at          TIMESTAMPTZ
+);

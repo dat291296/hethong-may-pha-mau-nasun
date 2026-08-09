@@ -30,6 +30,8 @@ import { useAssets } from './hooks/useAssets.js';
 import { useRepairs } from './hooks/useRepairs.js';
 import { useAuditLogs } from './hooks/useAuditLogs.js';
 import { useLockedMonths } from './hooks/useLockedMonths.js';
+import { useTintingLogs } from './hooks/useTintingLogs.js';
+import { useFormulaVersions } from './hooks/useFormulaVersions.js';
 
 
 export default function App() {
@@ -46,10 +48,8 @@ export default function App() {
   const { repairTickets, addTicket, editTicket, deleteTicket } = useRepairs();
   const { auditLogs, addAuditLog, editAuditLog, deleteAuditLog } = useAuditLogs();
   const { lockedMonths, lockMonth, unlockMonth, isDateLocked, loading: lockLoading, error: lockError } = useLockedMonths();
-
-
-  const [formulaVersions, setFormulaVersions] = useState(INITIAL_FORMULA_VERSIONS);
-  const [tintingLogs, setTintingLogs] = useState(INITIAL_TINTING_LOGS);
+  const { tintingLogs, setTintingLogs } = useTintingLogs();
+  const { formulaVersions } = useFormulaVersions();
 
   // Excel Import Modal state
   const [showImportModal, setShowImportModal] = useState(false);
