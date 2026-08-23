@@ -104,7 +104,7 @@ export function AuthProvider({ children }) {
       let finalRole = profile?.role || ROLES.VIEWER;
       
       // Auto bootstrap admin role for specific user email
-      if (authUser.email === 'dat291219962.hust@gmail.com') {
+      if (authUser.email?.toLowerCase() === 'dat291219962.hust@gmail.com') {
         finalRole = ROLES.ADMIN;
         // Attempt database updates if role in DB is different
         if (!profile || profile.role !== ROLES.ADMIN) {
@@ -132,7 +132,7 @@ export function AuthProvider({ children }) {
       setRole(finalRole);
     } catch (err) {
       console.error('[Auth] Failed to load user profile:', err.message);
-      const isSpecificAdmin = authUser.email === 'dat291219962.hust@gmail.com';
+      const isSpecificAdmin = authUser.email?.toLowerCase() === 'dat291219962.hust@gmail.com';
       setUser({ 
         id: authUser.id, 
         email: authUser.email, 

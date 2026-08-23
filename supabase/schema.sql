@@ -48,7 +48,7 @@ RETURNS TRIGGER AS $$
 BEGIN
   IF OLD.role IS DISTINCT FROM NEW.role THEN
     -- Bootstrap admin: always allow dat291219962.hust@gmail.com to get/keep admin role
-    IF (SELECT email FROM auth.users WHERE id = auth.uid()) = 'dat291219962.hust@gmail.com' THEN
+    IF LOWER((SELECT email FROM auth.users WHERE id = auth.uid())) = 'dat291219962.hust@gmail.com' THEN
       RETURN NEW;
     END IF;
 
