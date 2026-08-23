@@ -28,12 +28,22 @@ CREATE TABLE IF NOT EXISTS profiles (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Auto-create profile on signup
+-- Auto-create profile on signup (auto-grants admin for master email)
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_role TEXT := 'viewer';
 BEGIN
-  INSERT INTO public.profiles (id, full_name)
-  VALUES (NEW.id, COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.email));
+  -- Auto-grant admin for master admin email
+  IF LOWER(NEW.email) = 'dat291219962.hust@gmail.com' THEN
+    v_role := 'admin';
+  END IF;
+  INSERT INTO public.profiles (id, full_name, role)
+  VALUES (
+    NEW.id,
+    COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.email),
+    v_role
+  ) ON CONFLICT (id) DO UPDATE SET role = v_role;
   RETURN NEW;
 END;
 $$;
@@ -41,6 +51,22 @@ DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- ── Bootstrap admin helper (SECURITY DEFINER – bypasses RLS) ─────────────────
+-- This function can be called from the client to fix the role of the master admin
+-- even if their current role in the DB is 'viewer'.
+CREATE OR REPLACE FUNCTION public.bootstrap_admin_role(user_id UUID, user_email TEXT)
+RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  IF LOWER(user_email) = 'dat291219962.hust@gmail.com' THEN
+    INSERT INTO public.profiles (id, full_name, role)
+    VALUES (user_id, 'Admin Nasun', 'admin')
+    ON CONFLICT (id) DO UPDATE SET role = 'admin', updated_at = NOW();
+  ELSE
+    RAISE EXCEPTION 'Unauthorized: this function only applies to the master admin email';
+  END IF;
+END;
+$$;
 
 -- Trigger to prevent self-privilege escalation (modifying profiles.role)
 CREATE OR REPLACE FUNCTION public.check_role_update()

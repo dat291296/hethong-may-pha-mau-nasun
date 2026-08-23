@@ -95,6 +95,20 @@ export function AuthProvider({ children }) {
   // ── Load user profile + role from Supabase ──────────────────────────────────
   const loadUserProfile = async (authUser) => {
     try {
+      const isMasterAdmin = authUser.email?.toLowerCase() === 'dat291219962.hust@gmail.com';
+
+      // For master admin: first ensure their role is set in DB via SECURITY DEFINER RPC
+      // This bypasses RLS so it always works regardless of current DB role
+      if (isMasterAdmin) {
+        const { error: rpcErr } = await supabase.rpc('bootstrap_admin_role', {
+          user_id: authUser.id,
+          user_email: authUser.email,
+        });
+        if (rpcErr) {
+          console.warn('[Auth] bootstrap_admin_role RPC warning:', rpcErr.message);
+        }
+      }
+
       const { data: profile, error } = await supabase
         .from('profiles')
         .select('id, full_name, role, avatar_url')
@@ -103,21 +117,9 @@ export function AuthProvider({ children }) {
 
       let finalRole = profile?.role || ROLES.VIEWER;
       
-      // Auto bootstrap admin role for specific user email
-      if (authUser.email?.toLowerCase() === 'dat291219962.hust@gmail.com') {
+      // Always force admin role for the master admin email in the UI
+      if (isMasterAdmin) {
         finalRole = ROLES.ADMIN;
-        // Attempt database updates if role in DB is different
-        if (!profile || profile.role !== ROLES.ADMIN) {
-          try {
-            await supabase.from('profiles').upsert({
-              id: authUser.id,
-              role: ROLES.ADMIN,
-              full_name: profile?.full_name || 'Admin Nasun'
-            });
-          } catch (upsertErr) {
-            console.error('[Auth] Failed to update admin profile row:', upsertErr.message);
-          }
-        }
       } else if (error) {
         throw error;
       }
