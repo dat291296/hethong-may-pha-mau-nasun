@@ -309,9 +309,165 @@ body {
   gap: 12px;
 }
 
+/* ══════════════════════════════════════════════════
+   MODAL SYSTEM — Mobile-First, iPhone Safari Safe
+   ══════════════════════════════════════════════════ */
+
+/* Overlay: full-screen dimmed backdrop */
+.modal-overlay {
+  position: fixed;
+  inset: 0; /* top/right/bottom/left: 0 */
+  background: rgba(15, 23, 42, 0.80);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  z-index: 999;
+  display: flex;
+  align-items: flex-end; /* Default: bottom-sheet on all sizes */
+  justify-content: center;
+  padding: 0;
+  animation: fadeIn 0.18s ease-out;
+}
+
+/* Modal container: bottom-sheet by default (mobile-first) */
+.modal-content {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 20px 20px 0 0;
+  border-bottom: none !important;
+  width: 100%;
+  max-width: 100%;
+
+  /* ★ KEY FIX: Use dvh (Dynamic Viewport Height) to account for
+     Safari address bar. Falls back to svh then vh. */
+  height: 90dvh;
+  height: 90svh;
+  height: 90vh; /* fallback for older browsers */
+
+  /* Flex column: header fixed, body scrolls, footer fixed */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+
+  box-shadow: 0 -8px 40px rgba(0,0,0,0.5);
+  animation: slideUpSheet 0.3s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+}
+
+/* Pull-handle indicator on top of sheet */
+.modal-content::before {
+  content: '';
+  display: block;
+  width: 40px;
+  height: 4px;
+  background: var(--border-color);
+  border-radius: 2px;
+  margin: 12px auto 6px auto;
+  flex-shrink: 0;
+}
+
+/* Form inside modal: must also be full-height flex column */
+.modal-content form {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0; /* Critical: allows flex children to shrink below natural size */
+  overflow: hidden;
+}
+
+/* Header: fixed height, never scrolls */
+.modal-header {
+  padding: 10px 20px 14px 20px;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0; /* Never shrink */
+  gap: 12px;
+}
+
+.modal-header h3 {
+  font-size: 1rem;
+  line-height: 1.4;
+  margin: 0;
+}
+
+/* Body: takes remaining space, scrolls independently */
+.modal-body {
+  flex: 1;
+  min-height: 0; /* Critical: allows this to shrink and trigger scroll */
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch; /* Smooth momentum scroll on iOS */
+  padding: 16px 20px;
+  overscroll-behavior: contain; /* Prevent scroll chaining to page */
+}
+
+/* Footer: fixed at bottom, always visible, iPhone notch safe */
+.modal-footer {
+  flex-shrink: 0; /* Never shrink — always visible */
+  padding: 12px 20px;
+  /* ★ iPhone X/12/13/14 safe area — prevents buttons being hidden behind home indicator */
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-card); /* Solid background so content doesn't bleed through */
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap; /* Wrap on very narrow screens */
+}
+
+/* On tablet and desktop: center-dialog style instead of bottom-sheet */
+@media (min-width: 640px) {
+  .modal-overlay {
+    align-items: center;
+    padding: 20px;
+  }
+
+  .modal-content {
+    border-radius: var(--radius-lg);
+    border-bottom: 1px solid var(--border-color) !important;
+    max-width: 720px;
+    height: auto;
+    max-height: 90dvh;
+    max-height: 90svh;
+    max-height: 90vh;
+    animation: fadeInScale 0.2s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  }
+
+  .modal-content::before {
+    display: none; /* No pull handle needed on desktop */
+  }
+
+  .modal-header {
+    padding: 16px 24px;
+  }
+
+  .modal-header h3 {
+    font-size: 1.1rem;
+  }
+
+  .modal-body {
+    padding: 20px 24px;
+  }
+
+  .modal-footer {
+    padding: 14px 24px;
+    padding-bottom: 14px;
+  }
+}
+
 @keyframes fadeIn {
-  from { opacity: 0; transform: scale(0.97); }
-  to { opacity: 1; transform: scale(1); }
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes slideUpSheet {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
+@keyframes fadeInScale {
+  from { opacity: 0; transform: scale(0.96) translateY(8px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
 }
 
 /* Mobile Responsive Styles & Bottom Navigation */
@@ -371,14 +527,7 @@ body {
     padding-bottom: 80px !important;
   }
 
-  .modal-content {
-    max-height: 95vh !important;
-    border-radius: 12px !important;
-  }
 
-  .modal-body {
-    padding: 16px !important;
-  }
 }
 
 /* Print Rules */
@@ -734,39 +883,8 @@ body {
     display: block !important;
   }
   
-  /* Mobile Bottom Sheet Modal Styling */
-  .modal-overlay {
-    align-items: flex-end; /* Align to bottom for sheet effect */
-    padding: 0;
-  }
-  
-  .modal-content {
-    max-height: 85vh !important;
-    border-radius: 20px 20px 0 0 !important; /* Rounded top corners only */
-    border-bottom: none !important;
-    border-left: none !important;
-    border-right: none !important;
-    animation: slideUpSheet 0.3s cubic-bezier(0.32, 0.72, 0, 1) forwards;
-    position: relative;
-  }
-  
-  /* Bottom sheet pull handle indicator */
-  .modal-content::before {
-    content: '';
-    display: block;
-    width: 36px;
-    height: 4px;
-    background: var(--border-color);
-    border-radius: 2px;
-    margin: 10px auto 4px auto;
-    flex-shrink: 0;
-  }
-
-  .modal-header {
-    padding: 10px 20px 16px 20px !important;
-  }
-  
   /* Mobile Card Layout System */
+
   .mobile-card-list {
     display: flex;
     flex-direction: column;
