@@ -309,165 +309,164 @@ body {
   gap: 12px;
 }
 
-/* ══════════════════════════════════════════════════
-   MODAL SYSTEM — Mobile-First, iPhone Safari Safe
-   ══════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════
+   MODAL SYSTEM — Final fix for iOS Safari & Android Chrome
+   ══════════════════════════════════════════════════════════ */
 
-/* Overlay: full-screen dimmed backdrop */
+/* 1. Overlay */
 .modal-overlay {
   position: fixed;
-  inset: 0; /* top/right/bottom/left: 0 */
-  background: rgba(15, 23, 42, 0.80);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-  z-index: 999;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(10, 18, 36, 0.85);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  z-index: 1000;
   display: flex;
-  align-items: flex-end; /* Default: bottom-sheet on all sizes */
+  align-items: flex-end;
   justify-content: center;
   padding: 0;
-  animation: fadeIn 0.18s ease-out;
 }
 
-/* Modal container: bottom-sheet by default (mobile-first) */
+/* 2. Modal container — shared base */
 .modal-content {
+  position: relative;
   background: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: 20px 20px 0 0;
-  border-bottom: none !important;
   width: 100%;
-  max-width: 100%;
-
-  /* ★ KEY FIX: Use dvh (Dynamic Viewport Height) to account for
-     Safari address bar. Falls back to svh then vh. */
-  height: 90dvh;
-  height: 90svh;
-  height: 90vh; /* fallback for older browsers */
-
-  /* Flex column: header fixed, body scrolls, footer fixed */
   display: flex;
   flex-direction: column;
   overflow: hidden;
-
-  box-shadow: 0 -8px 40px rgba(0,0,0,0.5);
-  animation: slideUpSheet 0.3s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+  box-shadow: 0 -4px 40px rgba(0,0,0,0.6);
 }
 
-/* Pull-handle indicator on top of sheet */
+/* Pull handle (mobile only) */
 .modal-content::before {
   content: '';
   display: block;
-  width: 40px;
-  height: 4px;
-  background: var(--border-color);
-  border-radius: 2px;
-  margin: 12px auto 6px auto;
   flex-shrink: 0;
+  width: 44px;
+  height: 5px;
+  background: rgba(255,255,255,0.15);
+  border-radius: 3px;
+  margin: 10px auto 2px;
 }
 
-/* Form inside modal: must also be full-height flex column */
-.modal-content form {
+/* 3. MOBILE PORTRAIT: bottom-sheet, fixed full height so footer stays visible */
+@media (max-width: 599px) {
+  .modal-overlay {
+    align-items: flex-end;
+  }
+  .modal-content {
+    border-radius: 22px 22px 0 0;
+    border-bottom: none !important;
+    /* Fixed height = entire safe viewport. Never taller than screen. */
+    height: 90vh;
+    height: 90dvh;
+    max-height: 90vh;
+    max-height: 90dvh;
+    /* Override any inline maxWidth from JSX */
+    max-width: 100% !important;
+    animation: slideUpSheet 0.28s cubic-bezier(0.32, 0.72, 0, 1) both;
+  }
+}
+
+/* 4. TABLET & DESKTOP: centered dialog */
+@media (min-width: 600px) {
+  .modal-overlay {
+    align-items: center;
+    padding: 24px;
+  }
+  .modal-content {
+    border-radius: 14px;
+    border: 1px solid var(--border-color);
+    width: auto;
+    min-width: 480px;
+    max-width: 740px;
+    height: auto;
+    max-height: 92vh;
+    max-height: 92dvh;
+    animation: fadeScale 0.22s ease both;
+  }
+  .modal-content::before { display: none; }
+}
+
+/* 5. Form inside modal: flex column to pass height down */
+.modal-content > form,
+.modal-content > div > form {
   display: flex;
   flex-direction: column;
   flex: 1;
-  min-height: 0; /* Critical: allows flex children to shrink below natural size */
+  min-height: 0; /* CRITICAL */
   overflow: hidden;
 }
 
-/* Header: fixed height, never scrolls */
+/* 6. Header — always pinned at top */
 .modal-header {
-  padding: 10px 20px 14px 20px;
-  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  flex-shrink: 0; /* Never shrink */
   gap: 12px;
+  padding: 10px 18px 14px;
+  border-bottom: 1px solid var(--border-color);
 }
-
 .modal-header h3 {
-  font-size: 1rem;
+  font-size: 0.9rem;
+  font-weight: 800;
   line-height: 1.4;
   margin: 0;
+  word-break: break-word;
+}
+@media (min-width: 600px) {
+  .modal-header { padding: 18px 24px 16px; }
+  .modal-header h3 { font-size: 1.05rem; }
 }
 
-/* Body: takes remaining space, scrolls independently */
+/* 7. Body — scrollable, takes all remaining space between header & footer */
 .modal-body {
   flex: 1;
-  min-height: 0; /* Critical: allows this to shrink and trigger scroll */
+  min-height: 0; /* CRITICAL: allows shrinking below natural content height */
   overflow-y: auto;
-  -webkit-overflow-scrolling: touch; /* Smooth momentum scroll on iOS */
-  padding: 16px 20px;
-  overscroll-behavior: contain; /* Prevent scroll chaining to page */
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+  padding: 14px 18px;
+}
+@media (min-width: 600px) {
+  .modal-body { padding: 20px 24px; }
 }
 
-/* Footer: fixed at bottom, always visible, iPhone notch safe */
+/* 8. Footer — ALWAYS pinned at bottom, iPhone notch safe */
 .modal-footer {
-  flex-shrink: 0; /* Never shrink — always visible */
-  padding: 12px 20px;
-  /* ★ iPhone X/12/13/14 safe area — prevents buttons being hidden behind home indicator */
-  padding-bottom: max(12px, env(safe-area-inset-bottom));
-  border-top: 1px solid var(--border-color);
-  background: var(--bg-card); /* Solid background so content doesn't bleed through */
+  flex-shrink: 0; /* NEVER shrinks, NEVER scrolls away */
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 10px;
-  flex-wrap: wrap; /* Wrap on very narrow screens */
+  padding: 12px 18px;
+  padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-card);
 }
-
-/* On tablet and desktop: center-dialog style instead of bottom-sheet */
-@media (min-width: 640px) {
-  .modal-overlay {
-    align-items: center;
-    padding: 20px;
-  }
-
-  .modal-content {
-    border-radius: var(--radius-lg);
-    border-bottom: 1px solid var(--border-color) !important;
-    max-width: 720px;
-    height: auto;
-    max-height: 90dvh;
-    max-height: 90svh;
-    max-height: 90vh;
-    animation: fadeInScale 0.2s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
-  }
-
-  .modal-content::before {
-    display: none; /* No pull handle needed on desktop */
-  }
-
-  .modal-header {
-    padding: 16px 24px;
-  }
-
-  .modal-header h3 {
-    font-size: 1.1rem;
-  }
-
-  .modal-body {
-    padding: 20px 24px;
-  }
-
+@media (min-width: 600px) {
   .modal-footer {
     padding: 14px 24px;
     padding-bottom: 14px;
   }
 }
 
+@keyframes slideUpSheet {
+  from { transform: translateY(100%); opacity: 0.6; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+@keyframes fadeScale {
+  from { opacity: 0; transform: scale(0.95) translateY(12px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0); }
+}
 @keyframes fadeIn {
   from { opacity: 0; }
   to   { opacity: 1; }
-}
-
-@keyframes slideUpSheet {
-  from { transform: translateY(100%); }
-  to   { transform: translateY(0); }
-}
-
-@keyframes fadeInScale {
-  from { opacity: 0; transform: scale(0.96) translateY(8px); }
-  to   { opacity: 1; transform: scale(1) translateY(0); }
 }
 
 /* Mobile Responsive Styles & Bottom Navigation */
