@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ArrowLeftRight, CheckCircle2, AlertTriangle, ShieldCheck, Printer, Calendar, Camera, X } from 'lucide-react';
 import { compressImage } from '../utils/imageCompressor.js';
+import { useAuth } from '../context/AuthContext.jsx';
 
 export default function WorkflowModal({
   mode, // 'INSTALL' | 'WITHDRAW' | 'TRANSFER'
@@ -13,6 +14,18 @@ export default function WorkflowModal({
   onPrintProtocol,
   isDateLocked = () => false
 }) {
+  const { user } = useAuth();
+  const isRegionRestricted = user?.role === 'qc' && user?.managedRegion !== 'Toàn Quốc';
+  const myRegion = user?.managedRegion;
+
+  // Filter lists based on region restriction
+  const filteredNpps = isRegionRestricted 
+    ? npps.filter(n => n.region === myRegion) 
+    : npps;
+
+  const filteredSets = isRegionRestricted
+    ? systemSets.filter(s => s.region === myRegion)
+    : systemSets;
   // Common states
   const [selectedSetCode, setSelectedSetCode] = useState('');
   const [targetNppId, setTargetNppId] = useState('');
@@ -155,13 +168,13 @@ export default function WorkflowModal({
                   <label className="form-label">2. Chọn Nhà Phân Phối Nhận Bàn Giao *</label>
                   <select className="form-select" required value={targetNppId} onChange={e => setTargetNppId(e.target.value)}>
                     <option value="">-- Chọn NPP bàn giao --</option>
-                    {npps.filter(n => n.status === 'Đang hợp tác').map(n => (
+                    {filteredNpps.filter(n => n.status === 'Đang hợp tác').map(n => (
                       <option key={n.id} value={n.id}>[{n.id}] {n.name} - Khu vực: {n.region}</option>
                     ))}
                   </select>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div className="responsive-form-grid">
                   <div className="form-group">
                     <label className="form-label">Ngày Bàn Giao Lắp Đặt *</label>
                     <input type="date" className="form-input" value={handoverDate} onChange={e => setHandoverDate(e.target.value)} />
@@ -210,7 +223,7 @@ export default function WorkflowModal({
                   <label className="form-label">1. Chọn Bộ Máy Cần Thu Hồi Từ NPP *</label>
                   <select className="form-select" required value={selectedSetCode} onChange={e => setSelectedSetCode(e.target.value)}>
                     <option value="">-- Chọn bộ máy đang lắp đặt tại NPP --</option>
-                    {systemSets.filter(s => s.status === 'DA_LAP_DAT' || s.status === 'BAO_THUONG_BAO_TRI').map(s => (
+                    {filteredSets.filter(s => s.status === 'DA_LAP_DAT' || s.status === 'BAO_THUONG_BAO_TRI').map(s => (
                       <option key={s.id} value={s.setCode}>
                         [{s.setCode}] tại {s.nppName} (Chiết: {s.dispenserModel})
                       </option>
@@ -234,7 +247,7 @@ export default function WorkflowModal({
                   <input type="text" className="form-input" placeholder="Ví dụ: Máy chiết nghẹt 1 vòi, máy lắc hoạt động tốt..." value={deviceCondition} onChange={e => setDeviceCondition(e.target.value)} />
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div className="responsive-form-grid">
                   <div className="form-group">
                     <label className="form-label">Ngày Thu Hồi *</label>
                     <input type="date" className="form-input" value={handoverDate} onChange={e => setHandoverDate(e.target.value)} />
@@ -259,7 +272,7 @@ export default function WorkflowModal({
                   <label className="form-label">1. Chọn Bộ Máy Cần Điều Chuyển *</label>
                   <select className="form-select" required value={selectedSetCode} onChange={e => setSelectedSetCode(e.target.value)}>
                     <option value="">-- Chọn bộ máy cần điều chuyển --</option>
-                    {systemSets.filter(s => s.status === 'DA_LAP_DAT').map(s => (
+                    {filteredSets.filter(s => s.status === 'DA_LAP_DAT').map(s => (
                       <option key={s.id} value={s.setCode}>
                         [{s.setCode}] Đang ở: {s.nppName} ({s.region})
                       </option>
@@ -271,7 +284,7 @@ export default function WorkflowModal({
                   <label className="form-label">2. Chọn NPP Đích Nhận Điều Chuyển *</label>
                   <select className="form-select" required value={targetNppId} onChange={e => setTargetNppId(e.target.value)}>
                     <option value="">-- Chọn NPP nhận điều chuyển --</option>
-                    {npps.filter(n => n.status === 'Đang hợp tác').map(n => (
+                    {filteredNpps.filter(n => n.status === 'Đang hợp tác').map(n => (
                       <option key={n.id} value={n.id}>[{n.id}] {n.name} ({n.region})</option>
                     ))}
                   </select>
@@ -282,7 +295,7 @@ export default function WorkflowModal({
                   <input type="text" className="form-input" placeholder="Tối ưu sản lượng khu vực, NPP A nhượng lại cho NPP B..." value={reason} onChange={e => setReason(e.target.value)} />
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div className="responsive-form-grid">
                   <div className="form-group">
                     <label className="form-label">Ngày Thực Hiện *</label>
                     <input type="date" className="form-input" value={handoverDate} onChange={e => setHandoverDate(e.target.value)} />

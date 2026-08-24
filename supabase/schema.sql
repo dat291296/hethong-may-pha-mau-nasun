@@ -19,13 +19,15 @@ CREATE SEQUENCE IF NOT EXISTS audit_seq  START 100;
 
 -- ── 1. Profiles ──────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS profiles (
-  id         UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  full_name  TEXT NOT NULL DEFAULT '',
-  role       TEXT NOT NULL DEFAULT 'viewer'
-               CHECK (role IN ('admin', 'qc', 'viewer')),
-  avatar_url TEXT,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  id             UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  full_name      TEXT NOT NULL DEFAULT '',
+  role           TEXT NOT NULL DEFAULT 'viewer'
+                   CHECK (role IN ('admin', 'qc', 'viewer')),
+  managed_region TEXT DEFAULT 'Miền Bắc'
+                   CHECK (managed_region IN ('Miền Bắc', 'Miền Trung', 'Miền Nam', 'Toàn Quốc')),
+  avatar_url     TEXT,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- Auto-create profile on signup (auto-grants admin for master email)
@@ -33,17 +35,20 @@ CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
   v_role TEXT := 'viewer';
+  v_region TEXT := 'Miền Bắc';
 BEGIN
   -- Auto-grant admin for master admin email
   IF LOWER(NEW.email) = 'dat291219962.hust@gmail.com' THEN
     v_role := 'admin';
+    v_region := 'Toàn Quốc';
   END IF;
-  INSERT INTO public.profiles (id, full_name, role)
+  INSERT INTO public.profiles (id, full_name, role, managed_region)
   VALUES (
     NEW.id,
     COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.email),
-    v_role
-  ) ON CONFLICT (id) DO UPDATE SET role = v_role;
+    v_role,
+    v_region
+  ) ON CONFLICT (id) DO UPDATE SET role = v_role, managed_region = v_region;
   RETURN NEW;
 END;
 $$;
@@ -59,9 +64,9 @@ CREATE OR REPLACE FUNCTION public.bootstrap_admin_role(user_id UUID, user_email 
 RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 BEGIN
   IF LOWER(user_email) = 'dat291219962.hust@gmail.com' THEN
-    INSERT INTO public.profiles (id, full_name, role)
-    VALUES (user_id, 'Admin Nasun', 'admin')
-    ON CONFLICT (id) DO UPDATE SET role = 'admin', updated_at = NOW();
+    INSERT INTO public.profiles (id, full_name, role, managed_region)
+    VALUES (user_id, 'Admin Nasun', 'admin', 'Toàn Quốc')
+    ON CONFLICT (id) DO UPDATE SET role = 'admin', managed_region = 'Toàn Quốc', updated_at = NOW();
   ELSE
     RAISE EXCEPTION 'Unauthorized: this function only applies to the master admin email';
   END IF;

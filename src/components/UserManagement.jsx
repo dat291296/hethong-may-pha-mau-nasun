@@ -4,9 +4,9 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { UserCheck, ShieldAlert, Trash2, Key, RefreshCw, Award, Lock, Unlock, Calendar } from 'lucide-react';
 
 const MOCK_PROFILES = [
-  { id: 'dev-admin', email: 'dat291219962.hust@gmail.com', full_name: 'Nguyễn Tiến Đạt (Admin)', role: 'admin', created_at: '2026-07-28' },
-  { id: 'dev-qc', email: 'qc@dev.local', full_name: 'Trần Minh Hoàng (QC)', role: 'qc', created_at: '2026-07-30' },
-  { id: 'dev-viewer', email: 'viewer@dev.local', full_name: 'Đại Lý Sơn Nasun Hải Phòng', role: 'viewer', created_at: '2026-07-31' }
+  { id: 'dev-admin', email: 'dat291219962.hust@gmail.com', full_name: 'Nguyễn Tiến Đạt (Admin)', role: 'admin', managed_region: 'Toàn Quốc', created_at: '2026-07-28' },
+  { id: 'dev-qc', email: 'qc@dev.local', full_name: 'Trần Minh Hoàng (QC)', role: 'qc', managed_region: 'Miền Bắc', created_at: '2026-07-30' },
+  { id: 'dev-viewer', email: 'viewer@dev.local', full_name: 'Đại Lý Sơn Nasun Hải Phòng', role: 'viewer', managed_region: 'Miền Bắc', created_at: '2026-07-31' }
 ];
 
 export default function UserManagement({
@@ -125,6 +125,32 @@ export default function UserManagement({
     } catch (err) {
       console.error(err);
       setError('Lỗi cập nhật vai trò: ' + err.message);
+    }
+  };
+
+  const handleRegionChange = async (profileId, newRegion) => {
+    setSuccess('');
+    setError(null);
+
+    if (!isSupabaseConfigured) {
+      setProfiles(prev => prev.map(p => p.id === profileId ? { ...p, managed_region: newRegion } : p));
+      setSuccess('Đã cập nhật vùng quản lý thành công (Mô phỏng)!');
+      return;
+    }
+
+    try {
+      const { error: updateErr } = await supabase
+        .from('profiles')
+        .update({ managed_region: newRegion })
+        .eq('id', profileId);
+
+      if (updateErr) throw updateErr;
+      
+      setSuccess('Đã cập nhật vùng quản lý tài khoản thành công!');
+      fetchProfiles();
+    } catch (err) {
+      console.error(err);
+      setError('Lỗi cập nhật vùng quản lý: ' + err.message);
     }
   };
 
@@ -272,6 +298,7 @@ export default function UserManagement({
                     <th>Mã User ID</th>
                     <th>Ngày Tạo</th>
                     <th>Vai Trò (Role)</th>
+                    <th>Vùng Quản Lý</th>
                     <th style={{ textAlign: 'center' }}>Thao Tác</th>
                   </tr>
                 </thead>
@@ -327,6 +354,32 @@ export default function UserManagement({
                             <option value="qc">Kỹ Thuật Viên (QC)</option>
                             <option value="viewer">Đại Lý / NPP (Viewer)</option>
                           </select>
+                        </td>
+                        <td>
+                          {p.role === 'admin' ? (
+                            <span style={{ fontSize: '0.8rem', color: '#f59e0b', fontWeight: 'bold' }}>Toàn Quốc</span>
+                          ) : p.role === 'qc' ? (
+                            <select 
+                              value={p.managed_region || 'Miền Bắc'} 
+                              onChange={e => handleRegionChange(p.id, e.target.value)}
+                              className="form-input"
+                              style={{
+                                height: '32px',
+                                fontSize: '0.8rem',
+                                padding: '0 8px',
+                                fontWeight: '700',
+                                color: 'var(--accent-cyan)',
+                                borderColor: 'var(--border-color)'
+                              }}
+                            >
+                              <option value="Miền Bắc">Miền Bắc</option>
+                              <option value="Miền Trung">Miền Trung</option>
+                              <option value="Miền Nam">Miền Nam</option>
+                              <option value="Toàn Quốc">Toàn Quốc</option>
+                            </select>
+                          ) : (
+                            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Mặc định theo NPP</span>
+                          )}
                         </td>
                         <td style={{ textAlign: 'center' }}>
                           <button

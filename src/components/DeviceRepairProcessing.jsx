@@ -45,6 +45,7 @@ export const PRODUCT_CATEGORIES = [
 ];
 
 import { compressImage } from '../utils/imageCompressor.js';
+import { useAuth } from '../context/AuthContext.jsx';
 
 export default function DeviceRepairProcessing({
   repairTickets = [],
@@ -57,8 +58,20 @@ export default function DeviceRepairProcessing({
   onClearPrefill,
   isDateLocked = () => false
 }) {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('ALL'); // ALL | PENDING | NOT_RETURNED | REPLACED
   const [searchTerm, setSearchTerm] = useState('');
+
+  const isTicketAllowed = (ticketNppId) => {
+    if (!user) return false;
+    if (user.role === 'admin') return true;
+    if (user.role === 'qc') {
+      if (user.managedRegion === 'Toàn Quốc') return true;
+      const targetNpp = npps.find(n => n.id === ticketNppId);
+      return targetNpp ? user.managedRegion === targetNpp.region : false;
+    }
+    return false;
+  };
   const [categoryFilter, setCategoryFilter] = useState('ALL');
   const [modelFilter, setModelFilter] = useState('ALL');
 
@@ -139,6 +152,10 @@ export default function DeviceRepairProcessing({
       alert(`Thao tác bị khóa: Phiếu thuộc tháng ${ticket.date.substring(0, 7)} đã chốt sổ kế toán!`);
       return;
     }
+    if (!isTicketAllowed(ticket.nppId)) {
+      alert('Bạn không có quyền chỉnh sửa phiếu sửa chữa ở khu vực này!');
+      return;
+    }
     setEditingTicket(ticket);
     setFormData({ ...ticket });
     setShowModal(true);
@@ -203,6 +220,12 @@ export default function DeviceRepairProcessing({
       return;
     }
 
+    // Check region permission
+    if (!isTicketAllowed(sanitized.nppId)) {
+      alert('Bạn không có quyền tạo hoặc chỉnh sửa phiếu sửa chữa ở khu vực này!');
+      return;
+    }
+
     const selectedNppObj = npps.find(n => n.id === sanitized.nppId);
     const finalNppName = selectedNppObj ? selectedNppObj.name : sanitized.nppName || 'NPP Khác';
 
@@ -227,6 +250,10 @@ export default function DeviceRepairProcessing({
   const handleDelete = (ticket) => {
     if (isDateLocked(ticket.date)) {
       alert(`Thao tác bị khóa: Phiếu thuộc tháng ${ticket.date.substring(0, 7)} đã chốt sổ kế toán!`);
+      return;
+    }
+    if (!isTicketAllowed(ticket.nppId)) {
+      alert('Bạn không có quyền xóa phiếu sửa chữa ở khu vực này!');
       return;
     }
     if (confirm(`Bạn có chắc chắn muốn xóa Phiếu xử lý máy [${ticket.ticketCode}]?`)) {
@@ -458,19 +485,27 @@ export default function DeviceRepairProcessing({
                         </button>
                         <button 
                           className="btn btn-secondary btn-sm" 
-                          style={{ padding: '4px 8px', opacity: isDateLocked(ticket.date) ? 0.4 : 1, cursor: isDateLocked(ticket.date) ? 'not-allowed' : 'pointer' }} 
-                          title={isDateLocked(ticket.date) ? "Tháng đã chốt sổ" : "Chỉnh sửa phiếu"} 
-                          onClick={() => handleOpenEdit(ticket)}
+                          style={{ padding: '4px 8px', opacity: (isDateLocked(ticket.date) || !isTicketAllowed(ticket.nppId)) ? 0.4 : 1, cursor: (isDateLocked(ticket.date) || !isTicketAllowed(ticket.nppId)) ? 'not-allowed' : 'pointer' }} 
+                          title={isDateLocked(ticket.date) ? "Tháng đã chốt sổ" : !isTicketAllowed(ticket.nppId) ? "Bạn không phụ trách khu vực này" : "Chỉnh sửa phiếu"} 
+                          onClick={() => {
+                            if (!isDateLocked(ticket.date) && isTicketAllowed(ticket.nppId)) {
+                              handleOpenEdit(ticket);
+                            }
+                          }}
                         >
-                          <Edit3 size={14} color={isDateLocked(ticket.date) ? "var(--text-muted)" : "var(--accent-amber)"} />
+                          <Edit3 size={14} color={(isDateLocked(ticket.date) || !isTicketAllowed(ticket.nppId)) ? "var(--text-muted)" : "var(--accent-amber)"} />
                         </button>
                         <button 
                           className="btn btn-secondary btn-sm" 
-                          style={{ padding: '4px 8px', opacity: isDateLocked(ticket.date) ? 0.4 : 1, cursor: isDateLocked(ticket.date) ? 'not-allowed' : 'pointer' }} 
-                          title={isDateLocked(ticket.date) ? "Tháng đã chốt sổ" : "Xóa phiếu"} 
-                          onClick={() => handleDelete(ticket)}
+                          style={{ padding: '4px 8px', opacity: (isDateLocked(ticket.date) || !isTicketAllowed(ticket.nppId)) ? 0.4 : 1, cursor: (isDateLocked(ticket.date) || !isTicketAllowed(ticket.nppId)) ? 'not-allowed' : 'pointer' }} 
+                          title={isDateLocked(ticket.date) ? "Tháng đã chốt sổ" : !isTicketAllowed(ticket.nppId) ? "Bạn không phụ trách khu vực này" : "Xóa phiếu"} 
+                          onClick={() => {
+                            if (!isDateLocked(ticket.date) && isTicketAllowed(ticket.nppId)) {
+                              handleDelete(ticket);
+                            }
+                          }}
                         >
-                          <Trash2 size={14} color={isDateLocked(ticket.date) ? "var(--text-muted)" : "#ef4444"} />
+                          <Trash2 size={14} color={(isDateLocked(ticket.date) || !isTicketAllowed(ticket.nppId)) ? "var(--text-muted)" : "#ef4444"} />
                         </button>
                       </div>
                     </td>
@@ -545,20 +580,28 @@ export default function DeviceRepairProcessing({
                     <Eye size={14} color="var(--accent-cyan)" />
                     <span>Xem</span>
                   </button>
-                  <button 
+                   <button 
                     className="btn btn-secondary btn-sm" 
-                    disabled={isDateLocked(ticket.date)}
-                    style={{ opacity: isDateLocked(ticket.date) ? 0.4 : 1 }}
-                    onClick={() => handleOpenEdit(ticket)}
+                    disabled={isDateLocked(ticket.date) || !isTicketAllowed(ticket.nppId)}
+                    style={{ opacity: (isDateLocked(ticket.date) || !isTicketAllowed(ticket.nppId)) ? 0.4 : 1 }}
+                    onClick={() => {
+                      if (!isDateLocked(ticket.date) && isTicketAllowed(ticket.nppId)) {
+                        handleOpenEdit(ticket);
+                      }
+                    }}
                   >
-                    <Edit3 size={14} color={isDateLocked(ticket.date) ? "var(--text-muted)" : "var(--accent-amber)"} />
+                    <Edit3 size={14} color={(isDateLocked(ticket.date) || !isTicketAllowed(ticket.nppId)) ? "var(--text-muted)" : "var(--accent-amber)"} />
                     <span>Sửa</span>
                   </button>
                   <button 
                     className="btn btn-danger btn-sm" 
-                    disabled={isDateLocked(ticket.date)}
-                    style={{ opacity: isDateLocked(ticket.date) ? 0.4 : 1 }}
-                    onClick={() => handleDelete(ticket)}
+                    disabled={isDateLocked(ticket.date) || !isTicketAllowed(ticket.nppId)}
+                    style={{ opacity: (isDateLocked(ticket.date) || !isTicketAllowed(ticket.nppId)) ? 0.4 : 1 }}
+                    onClick={() => {
+                      if (!isDateLocked(ticket.date) && isTicketAllowed(ticket.nppId)) {
+                        handleDelete(ticket);
+                      }
+                    }}
                   >
                     <Trash2 size={14} />
                     <span>Xóa</span>
@@ -583,7 +626,7 @@ export default function DeviceRepairProcessing({
             <form onSubmit={handleSubmit}>
               <div className="modal-body">
                 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div className="responsive-form-grid">
                   <div className="form-group">
                     <label className="form-label">1. Ngày Đi Xử Lý *</label>
                     <input type="date" className="form-input" required value={formData.date} onChange={e => setFormData({ ...formData, date: e.target.value })} />
@@ -604,7 +647,7 @@ export default function DeviceRepairProcessing({
                   </select>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div className="responsive-form-grid">
                   <div className="form-group">
                     <label className="form-label">4. Phân Loại Sản Phẩm *</label>
                     <select className="form-select" value={formData.productCategory} onChange={e => setFormData({ ...formData, productCategory: e.target.value })}>
@@ -624,7 +667,7 @@ export default function DeviceRepairProcessing({
                   </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div className="responsive-form-grid">
                   <div className="form-group">
                     <label className="form-label">6. Số Seri Thiết Bị (Serial Number) *</label>
                     <input type="text" className="form-input" required placeholder="Nhập số seri duy nhất..." value={formData.serialNumber} onChange={e => setFormData({ ...formData, serialNumber: e.target.value })} />
@@ -646,7 +689,7 @@ export default function DeviceRepairProcessing({
                     🛠️ Phương Án & Tình Trạng Xử Lý
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                  <div className="responsive-form-grid" style={{ marginBottom: '12px' }}>
                     <div className="form-group">
                       <label className="form-label">Hướng Xử Lý</label>
                       <select className="form-select" value={formData.actionDirection} onChange={e => setFormData({ ...formData, actionDirection: e.target.value })}>
@@ -666,7 +709,7 @@ export default function DeviceRepairProcessing({
                     )}
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div className="responsive-form-grid">
                     <div className="form-group">
                       <label className="form-label">Tình Trạng Xử Lý</label>
                       <select className="form-select" value={formData.processingStatus} onChange={e => setFormData({ ...formData, processingStatus: e.target.value })}>
@@ -737,7 +780,7 @@ export default function DeviceRepairProcessing({
             </div>
             <div className="modal-body">
               
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', background: 'var(--bg-main)', padding: '16px', borderRadius: '8px', border: '1px solid var(--border-color)', marginBottom: '16px' }}>
+              <div className="ticket-detail-grid" style={{ background: 'var(--bg-main)', padding: '16px', borderRadius: '8px', border: '1px solid var(--border-color)', marginBottom: '16px' }}>
                 <div><strong>Ngày Xử Lý:</strong> {selectedTicket.date}</div>
                 <div><strong>Kỹ Thuật Viên:</strong> {selectedTicket.technician}</div>
                 <div style={{ gridColumn: 'span 2' }}><strong>Nhà Phân Phối:</strong> {selectedTicket.nppName}</div>

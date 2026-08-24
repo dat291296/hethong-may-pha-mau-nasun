@@ -19,8 +19,10 @@ import {
 } from 'lucide-react';
 
 import { compressImage } from '../utils/imageCompressor.js';
+import { useAuth } from '../context/AuthContext.jsx';
 
 export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, onDeleteNpp, onOpenImportModal }) {
+  const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [regionFilter, setRegionFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
@@ -53,11 +55,21 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
     return matchesSearch && matchesRegion && matchesStatus;
   });
 
+  const isRegionAllowed = (nppRegion) => {
+    if (!user) return false;
+    if (user.role === 'admin') return true;
+    if (user.role === 'qc') {
+      return user.managedRegion === 'Toàn Quốc' || user.managedRegion === nppRegion;
+    }
+    return false;
+  };
+
   const handleOpenAdd = () => {
+    const defaultRegion = (user?.role === 'qc' && user?.managedRegion !== 'Toàn Quốc') ? user.managedRegion : 'Miền Bắc';
     setFormData({
       name: '',
       phone: '',
-      region: 'Miền Bắc',
+      region: defaultRegion,
       province: 'Hà Nội',
       address: '',
       locationCoordinates: '',
@@ -69,6 +81,10 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
   };
 
   const handleOpenEdit = (npp) => {
+    if (!isRegionAllowed(npp.region)) {
+      alert(`Bạn không có quyền chỉnh sửa NPP ở khu vực ${npp.region}!`);
+      return;
+    }
     setEditingNpp(npp);
     setFormData({
       name: npp.name || '',
@@ -157,6 +173,11 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
       return;
     }
 
+    if (!isRegionAllowed(formData.region)) {
+      alert(`Bạn không có quyền thêm NPP mới ở khu vực ${formData.region}!`);
+      return;
+    }
+
     const newId = `NPP-${formData.region === 'Miền Bắc' ? 'HN' : formData.region === 'Miền Trung' ? 'DN' : 'HCM'}-00${npps.length + 1}`;
     const mapsUrl = formData.locationCoordinates 
       ? `https://maps.google.com/?q=${encodeURIComponent(formData.locationCoordinates)}`
@@ -176,6 +197,15 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
     e.preventDefault();
     if (!editingNpp) return;
 
+    if (!isRegionAllowed(formData.region)) {
+      alert(`Bạn không có quyền chuyển đổi NPP sang khu vực ${formData.region}!`);
+      return;
+    }
+    if (!isRegionAllowed(editingNpp.region)) {
+      alert(`Bạn không có quyền chỉnh sửa NPP ở khu vực ${editingNpp.region}!`);
+      return;
+    }
+
     const mapsUrl = formData.locationCoordinates 
       ? `https://maps.google.com/?q=${encodeURIComponent(formData.locationCoordinates)}`
       : '';
@@ -190,6 +220,10 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
   };
 
   const handleDelete = (npp) => {
+    if (!isRegionAllowed(npp.region)) {
+      alert(`Bạn không có quyền xóa NPP ở khu vực ${npp.region}!`);
+      return;
+    }
     if (confirm(`Bạn có chắc chắn muốn xóa Nhà Phân Phối "${npp.name}" (${npp.id}) khỏi hệ thống?`)) {
       onDeleteNpp(npp.id);
     }
@@ -259,22 +293,30 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
                     )}
 
                     {/* Edit & Delete Action Buttons */}
-                    <button 
-                      className="btn btn-secondary btn-sm" 
-                      style={{ padding: '4px 8px' }}
-                      title="Sửa thông tin NPP"
-                      onClick={() => handleOpenEdit(npp)}
-                    >
-                      <Edit3 size={14} color="var(--accent-cyan)" />
-                    </button>
-                    <button 
-                      className="btn btn-danger btn-sm" 
-                      style={{ padding: '4px 8px' }}
-                      title="Xóa NPP"
-                      onClick={() => handleDelete(npp)}
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                    {isRegionAllowed(npp.region) ? (
+                      <>
+                        <button 
+                          className="btn btn-secondary btn-sm" 
+                          style={{ padding: '4px 8px' }}
+                          title="Sửa thông tin NPP"
+                          onClick={() => handleOpenEdit(npp)}
+                        >
+                          <Edit3 size={14} color="var(--accent-cyan)" />
+                        </button>
+                        <button 
+                          className="btn btn-danger btn-sm" 
+                          style={{ padding: '4px 8px' }}
+                          title="Xóa NPP"
+                          onClick={() => handleDelete(npp)}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </>
+                    ) : (
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }} title="Không phụ trách khu vực này">
+                        🔒 {npp.region}
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -352,7 +394,7 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
                   <input type="text" className="form-input" required placeholder="Nhập tên NPP / Đại lý..." value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} />
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div className="responsive-form-grid">
                   <div className="form-group">
                     <label className="form-label">Số Điện Thoại *</label>
                     <input type="text" className="form-input" required placeholder="09xx xxx xxx" value={formData.phone} onChange={e => setFormData({ ...formData, phone: e.target.value })} />
@@ -363,10 +405,15 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
                   </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div className="responsive-form-grid">
                   <div className="form-group">
                     <label className="form-label">Khu Vực</label>
-                    <select className="form-select" value={formData.region} onChange={e => setFormData({ ...formData, region: e.target.value })}>
+                    <select 
+                      className="form-select" 
+                      value={formData.region} 
+                      disabled={user?.role === 'qc' && user?.managedRegion !== 'Toàn Quốc'}
+                      onChange={e => setFormData({ ...formData, region: e.target.value })}
+                    >
                       <option value="Miền Bắc">Miền Bắc</option>
                       <option value="Miền Trung">Miền Trung</option>
                       <option value="Miền Nam">Miền Nam</option>

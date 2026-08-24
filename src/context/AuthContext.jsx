@@ -7,9 +7,9 @@ const AuthContext = createContext(null);
 
 // Default dev user (used when Supabase not configured)
 const DEV_USERS = {
-  [ROLES.ADMIN]:  { id: 'dev-admin',  email: 'dat291219962.hust@gmail.com',  name: 'Admin Nasun',  role: ROLES.ADMIN  },
-  [ROLES.QC]:     { id: 'dev-qc',     email: 'qc@dev.local',     name: 'QC Dev',     role: ROLES.QC     },
-  [ROLES.VIEWER]: { id: 'dev-viewer', email: 'viewer@dev.local',  name: 'Viewer Dev', role: ROLES.VIEWER },
+  [ROLES.ADMIN]:  { id: 'dev-admin',  email: 'dat291219962.hust@gmail.com',  name: 'Admin Nasun',  role: ROLES.ADMIN,  managedRegion: 'Toàn Quốc'  },
+  [ROLES.QC]:     { id: 'dev-qc',     email: 'qc@dev.local',     name: 'QC Dev',     role: ROLES.QC,     managedRegion: 'Miền Bắc'  },
+  [ROLES.VIEWER]: { id: 'dev-viewer', email: 'viewer@dev.local',  name: 'Viewer Dev', role: ROLES.VIEWER, managedRegion: 'Miền Nam'  },
 };
 
 // ─── Auth Provider ────────────────────────────────────────────────────────────
@@ -111,15 +111,17 @@ export function AuthProvider({ children }) {
 
       const { data: profile, error } = await supabase
         .from('profiles')
-        .select('id, full_name, role, avatar_url')
+        .select('id, full_name, role, avatar_url, managed_region')
         .eq('id', authUser.id)
         .single();
 
       let finalRole = profile?.role || ROLES.VIEWER;
+      let finalRegion = profile?.managed_region || 'Miền Bắc';
       
       // Always force admin role for the master admin email in the UI
       if (isMasterAdmin) {
         finalRole = ROLES.ADMIN;
+        finalRegion = 'Toàn Quốc';
       } else if (error) {
         throw error;
       }
@@ -130,6 +132,7 @@ export function AuthProvider({ children }) {
         name: profile?.full_name || authUser.email,
         role: finalRole,
         avatarUrl: profile?.avatar_url || null,
+        managedRegion: finalRegion,
       });
       setRole(finalRole);
     } catch (err) {
@@ -139,7 +142,8 @@ export function AuthProvider({ children }) {
         id: authUser.id, 
         email: authUser.email, 
         name: authUser.email, 
-        role: isSpecificAdmin ? ROLES.ADMIN : ROLES.VIEWER 
+        role: isSpecificAdmin ? ROLES.ADMIN : ROLES.VIEWER,
+        managedRegion: isSpecificAdmin ? 'Toàn Quốc' : 'Miền Bắc'
       });
       setRole(isSpecificAdmin ? ROLES.ADMIN : ROLES.VIEWER);
     } finally {
