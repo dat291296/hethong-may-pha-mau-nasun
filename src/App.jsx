@@ -438,7 +438,7 @@ export default function App() {
         />
 
         {/* Dynamic View Content */}
-        <main style={{ flex: 1, padding: '28px', overflowY: 'auto' }}>
+        <main key={activeTab} className="page-transition" style={{ flex: 1, padding: '28px', overflowY: 'auto' }}>
           
           {activeTab === 'dashboard' && (
             <Dashboard

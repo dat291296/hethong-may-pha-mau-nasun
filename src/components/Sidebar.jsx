@@ -103,17 +103,19 @@ export default function Sidebar({ activeTab, setActiveTab, maintenanceCount, pen
 
   return (
     <aside 
-      className={`desktop-sidebar no-print ${isOpen ? 'mobile-open' : ''}`}
+      className={`desktop-sidebar no-print ${isOpen ? 'mobile-open sidebar-mobile-slide is-open' : 'sidebar-mobile-slide is-closed'}`}
       style={{
-        width: isOpen ? '285px' : '260px',
+        width: '270px',
         background: 'var(--bg-card)',
         borderRight: '1px solid var(--border-color)',
         display: 'flex',
         flexDirection: 'column',
         height: '100vh',
-        position: isOpen ? 'fixed' : 'sticky',
+        position: 'fixed',
         top: 0,
-        zIndex: isOpen ? 1000 : 100
+        left: 0,
+        zIndex: 1001,
+        /* Desktop: always visible via CSS (desktop-sidebar class handles display) */
       }} 
     >
       {/* Brand Logo */}
