@@ -103,7 +103,7 @@ export default function Sidebar({ activeTab, setActiveTab, maintenanceCount, pen
 
   return (
     <aside 
-      className={`desktop-sidebar no-print ${isOpen ? 'mobile-open sidebar-mobile-slide is-open' : 'sidebar-mobile-slide is-closed'}`}
+      className={`desktop-sidebar no-print ${isOpen ? 'mobile-open' : ''}`}
       style={{
         width: '270px',
         background: 'var(--bg-card)',
@@ -111,11 +111,6 @@ export default function Sidebar({ activeTab, setActiveTab, maintenanceCount, pen
         display: 'flex',
         flexDirection: 'column',
         height: '100vh',
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        zIndex: 1001,
-        /* Desktop: always visible via CSS (desktop-sidebar class handles display) */
       }} 
     >
       {/* Brand Logo */}

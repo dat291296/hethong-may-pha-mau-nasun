@@ -539,35 +539,74 @@ body {
   transform: translateX(0) !important;
 }
 
-/* Sidebar backdrop */
+/* Sidebar backdrop — hidden by default, visible on mobile when open */
 .sidebar-backdrop {
-  animation: fadeIn 0.2s ease both;
+  display: none !important;
 }
 
-/* Mobile Responsive Styles & Bottom Navigation */
-.desktop-sidebar {
-  display: flex;
+/* Mobile Bottom Nav — strictly hidden on desktop */
+.mobile-bottom-nav {
+  display: none !important;
 }
 
+/* ══════════════════════════════════════════
+   DESKTOP VIEW (>768px)
+   ══════════════════════════════════════════ */
 @media (min-width: 769px) {
   .desktop-sidebar {
     position: sticky !important;
+    top: 0 !important;
+    left: 0 !important;
     transform: none !important;
     display: flex !important;
     z-index: 100 !important;
   }
+  .mobile-bottom-nav {
+    display: none !important;
+  }
+  .sidebar-backdrop {
+    display: none !important;
+  }
 }
 
+/* ══════════════════════════════════════════
+   MOBILE VIEW (<=768px)
+   ══════════════════════════════════════════ */
 @media (max-width: 768px) {
-  .desktop-sidebar {
-    position: fixed !important;
+  .sidebar-backdrop {
+    display: block !important;
+    position: fixed;
     top: 0;
     left: 0;
-    z-index: 1001 !important;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    z-index: 1000;
+    animation: fadeIn 0.2s ease both;
   }
+
+  .desktop-sidebar {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    bottom: 0 !important;
+    z-index: 1001 !important;
+    height: 100vh !important;
+    width: 275px !important;
+    box-shadow: 10px 0 40px rgba(0, 0, 0, 0.65) !important;
+    transition: transform 0.28s cubic-bezier(0.32, 0.72, 0, 1) !important;
+  }
+
   .desktop-sidebar:not(.mobile-open) {
     display: flex !important;
     transform: translateX(-100%) !important;
+  }
+
+  .desktop-sidebar.mobile-open {
+    display: flex !important;
+    transform: translateX(0) !important;
   }
 
   .mobile-bottom-nav {
@@ -916,19 +955,6 @@ body {
 
   .header-menu-toggle-btn {
     display: flex !important; /* Show hamburger icon on mobile */
-  }
-
-  .desktop-sidebar.mobile-open {
-    display: flex !important;
-    position: fixed !important;
-    top: 0 !important;
-    left: 0 !important;
-    bottom: 0 !important;
-    width: 285px !important;
-    z-index: 1000 !important;
-    background: var(--bg-card) !important;
-    box-shadow: 10px 0 40px rgba(0,0,0,0.65) !important;
-    animation: slideRight 0.24s cubic-bezier(0.16, 1, 0.3, 1) !important;
   }
 }
 
