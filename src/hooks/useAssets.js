@@ -387,6 +387,6 @@ function mapDbToSystemSet(row) {
     computerId: row.computer_id, computerType: row.computer_type, computerSerial: row.computer_serial,
     printerId: row.printer_id, printerSerial: row.printer_serial,
     installDate: row.install_date, lastMaintenanceDate: row.last_maintenance_date, nextMaintenanceDue: row.next_maintenance_due,
-    technician: row.technician, notes: row.notes,
+    technician: row.technician, salesperson: row.salesperson || row.sales_person || '', notes: row.notes,
   };
 }

@@ -101,6 +101,7 @@ export default function AssetManagement({
   const handleOpenAddDevice = (category) => {
     setAddDeviceCategory(category);
     setAddFormData({
+      id: '',
       model: '',
       serial: '',
       status: 'Mới 100%',
@@ -119,6 +120,7 @@ export default function AssetManagement({
     setEditingDevice({ category, data });
     setEditFormData({
       ...data,
+      id: data.id || '',
       isAssigned: data.isAssigned || !!data.setCode,
       setCode: data.setCode || ''
     });
@@ -172,12 +174,14 @@ export default function AssetManagement({
   const handleOpenEditSet = (set) => {
     setEditingSet(set);
     setEditSetFormData({
+      nppId: set.nppId || '',
       nppName: set.nppName || '',
       region: set.region || '',
       province: set.province || '',
       status: set.status || 'TRONG_KHO',
       stabilizer: set.stabilizer || 'Không dùng ổn áp',
       technician: set.technician || '',
+      salesperson: set.salesperson || '',
       notes: set.notes || '',
       lastMaintenanceDate: set.lastMaintenanceDate || '',
       nextMaintenanceDue: set.nextMaintenanceDue || ''
@@ -315,6 +319,7 @@ export default function AssetManagement({
                   <th>Máy Lắc (Seri)</th>
                   <th>Máy Tính (Loại/OS)</th>
                   <th>Máy In (Model/Seri)</th>
+                  <th>Cán Bộ Phụ Trách</th>
                   <th>Ổn Áp (Ghi Nhận)</th>
                   <th>Trạng Thái</th>
                   <th>Thao Tác</th>
@@ -340,6 +345,10 @@ export default function AssetManagement({
                     <td>
                       <div>{set.printerModel}</div>
                       <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{set.printerSerial}</div>
+                    </td>
+                    <td>
+                      <div style={{ fontSize: '0.8rem', fontWeight: '600' }}>🛠️ {set.technician || 'Chưa gán KTV'}</div>
+                      <div style={{ fontSize: '0.775rem', color: 'var(--accent-cyan)', marginTop: '2px' }}>💼 KD: {set.salesperson || 'Chưa gán NVKD'}</div>
                     </td>
                     <td>
                       {set.stabilizer?.includes('Chưa') || set.stabilizer?.includes('Không') ? (
@@ -402,6 +411,10 @@ export default function AssetManagement({
                   <div className="mobile-card-row">
                     <span className="mobile-card-label">Máy In:</span>
                     <span className="mobile-card-value">{set.printerModel} ({set.printerSerial})</span>
+                  </div>
+                  <div className="mobile-card-row">
+                    <span className="mobile-card-label">Cán bộ phụ trách:</span>
+                    <span className="mobile-card-value">🛠️ KTV: {set.technician || 'Chưa gán'} | 💼 KD: {set.salesperson || 'Chưa gán'}</span>
                   </div>
                   <div className="mobile-card-row">
                     <span className="mobile-card-label">Ổn Áp:</span>
@@ -884,6 +897,20 @@ export default function AssetManagement({
             <form onSubmit={handleAddDeviceSubmit}>
               <div className="modal-body">
 
+                {/* Mã QL (ID) */}
+                <div className="form-group">
+                  <label className="form-label">
+                    Mã Quản Lý (Mã QL) <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>(Tùy chọn - Tự động tạo nếu để trống)</span>
+                  </label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder={`VD: ${addDeviceCategory.toUpperCase().slice(0, 4)}-009`}
+                    value={addFormData.id || ''}
+                    onChange={e => setAddFormData({ ...addFormData, id: e.target.value })}
+                  />
+                </div>
+
                 {/* Model */}
                 <div className="form-group">
                   <label className="form-label">
@@ -1007,6 +1034,17 @@ export default function AssetManagement({
             <form onSubmit={handleEditSubmit}>
               <div className="modal-body">
                 <div className="form-group">
+                  <label className="form-label">Mã Quản Lý (Mã QL)</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    required
+                    value={editFormData.id || ''}
+                    onChange={e => setEditFormData({ ...editFormData, id: e.target.value })}
+                  />
+                </div>
+
+                <div className="form-group">
                   <label className="form-label">Model / Hệ Máy</label>
                   <input type="text" className="form-input" required value={editFormData.model || editFormData.type || ''} onChange={e => setEditFormData({ ...editFormData, model: e.target.value })} />
                 </div>
@@ -1119,6 +1157,57 @@ export default function AssetManagement({
               <div className="modal-body">
                 <div style={{ padding: '12px', background: 'rgba(56, 189, 248, 0.1)', border: '1px solid var(--accent-blue)', borderRadius: '8px', marginBottom: '16px', fontSize: '0.825rem' }}>
                   💡 Quy chuẩn 1 Bộ Máy Pha Màu bao gồm: 1 Máy Chiết + 1 Máy Lắc + 1 Máy Tính + 1 Máy In QL700. (Ổn áp sẽ ghi nhận thêm khi lắp đặt tại NPP).
+                </div>
+
+                {/* NPP Selector */}
+                <div className="form-group">
+                  <label className="form-label">Chọn Nhà Phân Phối (Lấy dữ liệu từ Mục NPP)</label>
+                  <select
+                    className="form-select"
+                    value={newSetData.nppId || ''}
+                    onChange={e => {
+                      const selectedId = e.target.value;
+                      const targetNpp = npps.find(n => n.id === selectedId);
+                      setNewSetData({
+                        ...newSetData,
+                        nppId: selectedId,
+                        nppName: targetNpp ? targetNpp.name : 'Kho Tổng Trung Tâm',
+                        region: targetNpp ? (targetNpp.region || '') : '',
+                        province: targetNpp ? (targetNpp.province || '') : '',
+                        status: targetNpp ? 'DA_LAP_DAT' : 'TRONG_KHO'
+                      });
+                    }}
+                  >
+                    <option value="">-- Kho Tổng Trung Tâm (Chưa chọn NPP) --</option>
+                    {npps.map(npp => (
+                      <option key={npp.id} value={npp.id}>
+                        {npp.name} ({npp.code || npp.id}) — {npp.province || npp.region || 'TQ'}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                  <div className="form-group">
+                    <label className="form-label">Kỹ Thuật Viên Phụ Trách</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="VD: Nguyễn Văn Hùng..."
+                      value={newSetData.technician || ''}
+                      onChange={e => setNewSetData({ ...newSetData, technician: e.target.value })}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Kinh Doanh Phụ Trách</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="VD: Trần Văn Nam (NVKD)..."
+                      value={newSetData.salesperson || ''}
+                      onChange={e => setNewSetData({ ...newSetData, salesperson: e.target.value })}
+                    />
+                  </div>
                 </div>
 
                 {/* Helper logic for filtering available devices */}
@@ -1256,14 +1345,41 @@ export default function AssetManagement({
             <form onSubmit={handleEditSetSubmit}>
               <div className="modal-body" style={{ maxHeight: '60vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 
+                {/* NPP Dropdown */}
                 <div className="form-group">
-                  <label className="form-label">Tên Nhà Phân Phối</label>
-                  <input 
-                    type="text" 
-                    className="form-input" 
-                    value={editSetFormData.nppName} 
-                    onChange={e => setEditSetFormData({ ...editSetFormData, nppName: e.target.value })} 
-                  />
+                  <label className="form-label">Chọn Nhà Phân Phối (Lấy từ Mục NPP)</label>
+                  <select
+                    className="form-select"
+                    value={editSetFormData.nppId || ''}
+                    onChange={e => {
+                      const selectedId = e.target.value;
+                      if (!selectedId) {
+                        setEditSetFormData({
+                          ...editSetFormData,
+                          nppId: '',
+                          nppName: 'Kho Tổng Trung Tâm',
+                          region: '',
+                          province: ''
+                        });
+                      } else {
+                        const targetNpp = npps.find(n => n.id === selectedId);
+                        setEditSetFormData({
+                          ...editSetFormData,
+                          nppId: selectedId,
+                          nppName: targetNpp ? targetNpp.name : editSetFormData.nppName,
+                          region: targetNpp ? (targetNpp.region || editSetFormData.region) : editSetFormData.region,
+                          province: targetNpp ? (targetNpp.province || editSetFormData.province) : editSetFormData.province
+                        });
+                      }
+                    }}
+                  >
+                    <option value="">-- Kho Tổng Trung Tâm (Chưa chọn NPP) --</option>
+                    {npps.map(npp => (
+                      <option key={npp.id} value={npp.id}>
+                        {npp.name} ({npp.code || npp.id}) — {npp.province || npp.region || 'TQ'}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
@@ -1333,14 +1449,26 @@ export default function AssetManagement({
                   </div>
                 </div>
 
-                <div className="form-group">
-                  <label className="form-label">Kỹ Thuật Viên Phụ Trách</label>
-                  <input 
-                    type="text" 
-                    className="form-input" 
-                    value={editSetFormData.technician} 
-                    onChange={e => setEditSetFormData({ ...editSetFormData, technician: e.target.value })} 
-                  />
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div className="form-group">
+                    <label className="form-label">Kỹ Thuật Viên Phụ Trách</label>
+                    <input 
+                      type="text" 
+                      className="form-input" 
+                      value={editSetFormData.technician || ''} 
+                      onChange={e => setEditSetFormData({ ...editSetFormData, technician: e.target.value })} 
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Kinh Doanh Phụ Trách</label>
+                    <input 
+                      type="text" 
+                      className="form-input" 
+                      placeholder="VD: Trần Văn Nam (NVKD)..."
+                      value={editSetFormData.salesperson || ''} 
+                      onChange={e => setEditSetFormData({ ...editSetFormData, salesperson: e.target.value })} 
+                    />
+                  </div>
                 </div>
 
                 <div className="form-group">
