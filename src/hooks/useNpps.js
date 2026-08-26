@@ -74,20 +74,12 @@ export function useNpps() {
 
     if (isSupabaseConfigured && navigator.onLine) {
       try {
-        const { data, error: err } = await safeQuery(
-          (sb) => sb.from('distributors').insert(mapped).select().single(),
+        const { error: err } = await safeQuery(
+          (sb) => sb.from('distributors').insert(mapped),
           'addNpp'
         );
         if (err) throw err;
-        
-        // Update local state with official DB record if different (e.g. database serial ID)
-        if (data) {
-          setNpps(prev => {
-            const updated = prev.map(item => item.id === tempId ? mapDbToNpp(data) : item);
-            cacheOfflineData('npps', updated);
-            return updated;
-          });
-        }
+        await fetchNpps();
       } catch (err) {
         console.warn('[Offline] Failed online addNpp. Queueing action.', err);
         enqueueOfflineAction('ADD_NPP', mapped);

@@ -46,37 +46,58 @@ export function useAssets() {
     if (!isSupabaseConfigured) return;
     setLoading(true);
     const [dRes, mRes, cRes, pRes, sRes] = await Promise.all([
-      safeQuery(sb => sb.from('dispensers').select('*').order('created_at', { ascending: false }), 'fetchDispensers'),
-      safeQuery(sb => sb.from('mixers').select('*').order('created_at', { ascending: false }), 'fetchMixers'),
-      safeQuery(sb => sb.from('computers').select('*').order('created_at', { ascending: false }), 'fetchComputers'),
-      safeQuery(sb => sb.from('printers').select('*').order('created_at', { ascending: false }), 'fetchPrinters'),
-      safeQuery(sb => sb.from('system_sets').select('*').order('created_at', { ascending: false }), 'fetchSystemSets'),
+      safeQuery(sb => sb.from('dispensers').select('*'), 'fetchDispensers'),
+      safeQuery(sb => sb.from('mixers').select('*'), 'fetchMixers'),
+      safeQuery(sb => sb.from('computers').select('*'), 'fetchComputers'),
+      safeQuery(sb => sb.from('printers').select('*'), 'fetchPrinters'),
+      safeQuery(sb => sb.from('system_sets').select('*'), 'fetchSystemSets'),
     ]);
+
     if (dRes.data && dRes.data.length > 0) {
       const mapped = dRes.data.map(mapDbToDispenser);
       setDispensers(mapped);
       cacheOfflineData('dispensers', mapped);
+    } else if (dRes.error) {
+      const cached = await getCachedOfflineData('dispensers', null);
+      if (cached && cached.length > 0) setDispensers(cached);
     }
+
     if (mRes.data && mRes.data.length > 0) {
       const mapped = mRes.data.map(mapDbToMixer);
       setMixers(mapped);
       cacheOfflineData('mixers', mapped);
+    } else if (mRes.error) {
+      const cached = await getCachedOfflineData('mixers', null);
+      if (cached && cached.length > 0) setMixers(cached);
     }
+
     if (cRes.data && cRes.data.length > 0) {
       const mapped = cRes.data.map(mapDbToComputer);
       setComputers(mapped);
       cacheOfflineData('computers', mapped);
+    } else if (cRes.error) {
+      const cached = await getCachedOfflineData('computers', null);
+      if (cached && cached.length > 0) setComputers(cached);
     }
+
     if (pRes.data && pRes.data.length > 0) {
       const mapped = pRes.data.map(mapDbToPrinter);
       setPrinters(mapped);
       cacheOfflineData('printers', mapped);
+    } else if (pRes.error) {
+      const cached = await getCachedOfflineData('printers', null);
+      if (cached && cached.length > 0) setPrinters(cached);
     }
+
     if (sRes.data && sRes.data.length > 0) {
       const mapped = sRes.data.map(mapDbToSystemSet);
       setSystemSets(mapped);
       cacheOfflineData('system_sets', mapped);
+    } else if (sRes.error) {
+      const cached = await getCachedOfflineData('system_sets', null);
+      if (cached && cached.length > 0) setSystemSets(cached);
     }
+
     setLoading(false);
   }, []);
 
@@ -118,18 +139,12 @@ export function useAssets() {
 
     if (isSupabaseConfigured && navigator.onLine) {
       try {
-        const { data, error } = await safeQuery(
-          sb => sb.from(cfg.table).insert(dbPayload).select().single(),
+        const { error } = await safeQuery(
+          sb => sb.from(cfg.table).insert(dbPayload),
           `addStockDevice:${category}`
         );
         if (error) throw error;
-        if (data) {
-          cfg.setter(prev => {
-            const updated = prev.map(item => item.id === tempId ? cfg.mapper(data) : item);
-            cacheOfflineData(cfg.cacheKey, updated);
-            return updated;
-          });
-        }
+        await fetchAssets();
       } catch (err) {
         console.warn(`[Offline] Failed online addStockDevice for ${category}. Queueing action.`, err);
         enqueueOfflineAction('ADD_DEVICE', dbPayload, cfg.table);
@@ -138,7 +153,7 @@ export function useAssets() {
       console.log(`[Offline] Network down. Enqueueing addStockDevice for ${category}.`);
       enqueueOfflineAction('ADD_DEVICE', dbPayload, cfg.table);
     }
-  }, []);
+  }, [fetchAssets]);
 
   // ── Generic edit device ────────────────────────────────────────────────────
   const editDevice = useCallback(async (category, id, updates) => {

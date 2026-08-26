@@ -68,18 +68,12 @@ export function useAuditLogs() {
 
     if (isSupabaseConfigured && navigator.onLine) {
       try {
-        const { data, error } = await safeQuery(
-          sb => sb.from('audit_logs').insert(dbPayload).select().single(),
+        const { error } = await safeQuery(
+          sb => sb.from('audit_logs').insert(dbPayload),
           'addAuditLog'
         );
         if (error) throw error;
-        if (data) {
-          setAuditLogs(prev => {
-            const updated = prev.map(item => item.id === tempId ? mapDbToAudit(data) : item);
-            cacheOfflineData('audit_logs', updated);
-            return updated;
-          });
-        }
+        await fetchAuditLogs();
       } catch (err) {
         console.warn('[Offline] Failed online addAuditLog. Queueing.', err);
         enqueueOfflineAction('ADD_AUDIT_LOG', dbPayload);

@@ -64,18 +64,12 @@ export function useRepairs() {
 
     if (isSupabaseConfigured && navigator.onLine) {
       try {
-        const { data, error } = await safeQuery(
-          sb => sb.from('repair_tickets').insert(dbPayload).select().single(),
+        const { error } = await safeQuery(
+          sb => sb.from('repair_tickets').insert(dbPayload),
           'addTicket'
         );
         if (error) throw error;
-        if (data) {
-          setRepairTickets(prev => {
-            const updated = prev.map(item => item.id === tempId ? mapDbToRepair(data) : item);
-            cacheOfflineData('repair_tickets', updated);
-            return updated;
-          });
-        }
+        await fetchRepairs();
       } catch (err) {
         console.warn('[Offline] Failed online addTicket. Queueing.', err);
         enqueueOfflineAction('ADD_REPAIR', dbPayload);
