@@ -24,6 +24,7 @@ const IMPORT_CONFIGS = {
     columns: [
       { key: 'name',                label: 'Tên Nhà Phân Phối',    required: true  },
       { key: 'phone',               label: 'Số Điện Thoại',         required: true  },
+      { key: 'brand',               label: 'Hãng (Nasun / Natos)', required: false },
       { key: 'contactPerson',       label: 'Người Liên Hệ',         required: false },
       { key: 'region',              label: 'Khu Vực (Miền Bắc/Trung/Nam)', required: true  },
       { key: 'province',            label: 'Tỉnh / Thành Phố',      required: false },
@@ -32,8 +33,8 @@ const IMPORT_CONFIGS = {
       { key: 'status',              label: 'Trạng Thái (Đang hợp tác / Đã ngưng)', required: false },
     ],
     sampleRows: [
-      ['Nhà Phân Phối Sơn Minh Phát', '0912 345 678', 'Nguyễn Văn Phát', 'Miền Bắc', 'Hà Nội', 'Số 45 Đường Giải Phóng, Q. Hai Bà Trưng', '21.0024, 105.8412', 'Đang hợp tác'],
-      ['Đại Lý Sơn Nam Phương', '0908 123 456', 'Trần Thị Lan', 'Miền Nam', 'TP. Hồ Chí Minh', '120 Đường Lê Văn Việt, Quận 9', '', 'Đang hợp tác'],
+      ['Nhà Phân Phối Sơn Minh Phát', '0912 345 678', 'Nasun', 'Nguyễn Văn Phát', 'Miền Bắc', 'Hà Nội', 'Số 45 Đường Giải Phóng, Q. Hai Bà Trưng', '21.0024, 105.8412', 'Đang hợp tác'],
+      ['Đại Lý Sơn Nam Phương', '0908 123 456', 'Natos', 'Trần Thị Lan', 'Miền Nam', 'TP. Hồ Chí Minh', '120 Đường Lê Văn Việt, Quận 9', '', 'Đang hợp tác'],
     ],
   },
   dispenser: {
@@ -241,6 +242,10 @@ export default function ExcelImportModal({
 
           // Normalize
           if (obj.region) obj.region = normalizeRegion(obj.region);
+          if (importType === 'npp') {
+            const b = (obj.brand || '').trim().toLowerCase();
+            obj.brand = b.includes('natos') ? 'Natos' : 'Nasun';
+          }
           if (!obj.status) obj.status = importType === 'npp' ? 'Đang hợp tác' : 'Đang chạy tốt';
           if (!obj.type && importType === 'computer') obj.type = 'Case';
           if (!obj.connection && importType === 'printer') obj.connection = 'USB';

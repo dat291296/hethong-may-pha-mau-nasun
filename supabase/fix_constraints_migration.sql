@@ -26,5 +26,12 @@ ALTER TABLE printers ADD CONSTRAINT printers_status_check
 -- 5. Add salesperson column to distributors (NPP) table
 ALTER TABLE distributors ADD COLUMN IF NOT EXISTS salesperson TEXT DEFAULT '';
 
+-- 6. Add brand column (Nasun / Natos) to distributors (NPP) table
+ALTER TABLE distributors ADD COLUMN IF NOT EXISTS brand TEXT DEFAULT 'Nasun';
+ALTER TABLE distributors DROP CONSTRAINT IF EXISTS distributors_brand_check;
+ALTER TABLE distributors ADD CONSTRAINT distributors_brand_check
+  CHECK (brand IN ('Nasun', 'Natos'));
+
 -- Done! All constraints updated.
 SELECT 'Migration completed successfully.' AS result;
+

@@ -106,6 +106,7 @@ export function useNpps() {
     if ('contactPerson' in updates) mappedUpdates.contact_person = updates.contactPerson;
     if ('contact_person' in updates) mappedUpdates.contact_person = updates.contact_person;
     if ('salesperson' in updates) mappedUpdates.salesperson = updates.salesperson;
+    if ('brand' in updates) mappedUpdates.brand = updates.brand;
     if ('region' in updates) mappedUpdates.region = updates.region;
     if ('province' in updates) mappedUpdates.province = updates.province;
     if ('address' in updates) mappedUpdates.address = updates.address;
@@ -196,6 +197,7 @@ function mapDbToNpp(row) {
     phone:                row.phone,
     contactPerson:        row.contact_person,
     salesperson:          row.salesperson || '',
+    brand:                row.brand || 'Nasun',
     region:               row.region,
     province:             row.province,
     address:              row.address,
@@ -213,6 +215,7 @@ function mapNppToDb(npp) {
     phone:                npp.phone,
     contact_person:       npp.contactPerson || '',
     salesperson:          npp.salesperson || '',
+    brand:                npp.brand || 'Nasun',
     region:               npp.region,
     province:             npp.province || '',
     address:              npp.address || '',
@@ -222,3 +225,4 @@ function mapNppToDb(npp) {
     photos:               npp.photos || [],
   };
 }
+

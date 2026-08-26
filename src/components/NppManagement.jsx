@@ -26,6 +26,7 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
   const [searchTerm, setSearchTerm] = useState('');
   const [regionFilter, setRegionFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [brandFilter, setBrandFilter] = useState('ALL');
   const [selectedNpp, setSelectedNpp] = useState(null);
   
   // Modal states
@@ -36,6 +37,7 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
+    brand: 'Nasun',
     region: 'Miền Bắc',
     province: 'Hà Nội',
     address: '',
@@ -50,10 +52,12 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
     const matchesSearch = npp.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           npp.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           npp.phone.includes(searchTerm) ||
-                          npp.address.toLowerCase().includes(searchTerm.toLowerCase());
+                          npp.address.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          (npp.salesperson && npp.salesperson.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesRegion = regionFilter === 'ALL' || npp.region === regionFilter;
     const matchesStatus = statusFilter === 'ALL' || npp.status === statusFilter;
-    return matchesSearch && matchesRegion && matchesStatus;
+    const matchesBrand = brandFilter === 'ALL' || (npp.brand || 'Nasun') === brandFilter;
+    return matchesSearch && matchesRegion && matchesStatus && matchesBrand;
   });
 
   const isRegionAllowed = (nppRegion) => {
@@ -70,6 +74,7 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
     setFormData({
       name: '',
       phone: '',
+      brand: 'Nasun',
       region: defaultRegion,
       province: 'Hà Nội',
       address: '',
@@ -91,6 +96,7 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
     setFormData({
       name: npp.name || '',
       phone: npp.phone || '',
+      brand: npp.brand || 'Nasun',
       region: npp.region || 'Miền Bắc',
       province: npp.province || 'Hà Nội',
       address: npp.address || '',
@@ -253,8 +259,14 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
             />
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
             <Filter size={16} color="var(--text-muted)" />
+            <select className="form-select" value={brandFilter} onChange={e => setBrandFilter(e.target.value)} style={{ height: '38px', fontSize: '0.85rem' }}>
+              <option value="ALL">Tất Cả Hãng (Nasun / Natos)</option>
+              <option value="Nasun">Hãng Nasun</option>
+              <option value="Natos">Hãng Natos</option>
+            </select>
+
             <select className="form-select" value={regionFilter} onChange={e => setRegionFilter(e.target.value)} style={{ height: '38px', fontSize: '0.85rem' }}>
               <option value="ALL">Tất Cả Khu Vực</option>
               <option value="Miền Bắc">Miền Bắc</option>
@@ -290,7 +302,17 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
             <div key={npp.id} className="glass-panel glass-panel-hover" style={{ padding: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-                  <span className="badge badge-info" style={{ fontFamily: 'var(--font-mono)' }}>{npp.id}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span className="badge badge-info" style={{ fontFamily: 'var(--font-mono)' }}>{npp.id}</span>
+                    <span className="badge" style={{
+                      background: (npp.brand || 'Nasun') === 'Natos' ? 'rgba(168, 85, 247, 0.18)' : 'rgba(6, 182, 212, 0.18)',
+                      color: (npp.brand || 'Nasun') === 'Natos' ? '#c084fc' : '#22d3ee',
+                      border: (npp.brand || 'Nasun') === 'Natos' ? '1px solid rgba(168, 85, 247, 0.4)' : '1px solid rgba(6, 182, 212, 0.4)',
+                      fontWeight: '700'
+                    }}>
+                      {npp.brand || 'Nasun'}
+                    </span>
+                  </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     {npp.status === 'Đang hợp tác' ? (
                       <span className="badge badge-success">✓ Đang hợp tác</span>
@@ -403,9 +425,22 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
             </div>
             <form onSubmit={editingNpp ? handleEditSubmit : handleAddSubmit}>
               <div className="modal-body">
-                <div className="form-group">
-                  <label className="form-label">Tên Nhà Phân Phối *</label>
-                  <input type="text" className="form-input" required placeholder="Nhập tên NPP / Đại lý..." value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} />
+                <div className="responsive-form-grid">
+                  <div className="form-group">
+                    <label className="form-label">Hãng Phân Phối / Hãng Sơn *</label>
+                    <select
+                      className="form-select"
+                      value={formData.brand || 'Nasun'}
+                      onChange={e => setFormData({ ...formData, brand: e.target.value })}
+                    >
+                      <option value="Nasun">Nasun</option>
+                      <option value="Natos">Natos</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Tên Nhà Phân Phối *</label>
+                    <input type="text" className="form-input" required placeholder="Nhập tên NPP / Đại lý..." value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} />
+                  </div>
                 </div>
 
                 <div className="responsive-form-grid">
@@ -557,8 +592,9 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
             <div className="modal-body">
               
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px', background: 'var(--bg-main)', padding: '16px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                <div><strong>Hãng:</strong> <span className="badge badge-purple" style={{ fontSize: '0.8rem' }}>{selectedNpp.brand || 'Nasun'}</span></div>
                 <div><strong>Khu Vực:</strong> {selectedNpp.region} ({selectedNpp.province})</div>
-                <div><strong>SĐT Liên Hệ:</strong> {selectedNpp.phone} ({selectedNpp.contactPerson || 'Đại diện'})</div>
+                <div style={{ gridColumn: 'span 2' }}><strong>SĐT Liên Hệ:</strong> {selectedNpp.phone} ({selectedNpp.contactPerson || 'Đại diện'})</div>
                 {selectedNpp.salesperson && (
                   <div style={{ gridColumn: 'span 2' }}>
                     <strong>💼 Nhân Viên KD Phụ Trách:</strong> 

@@ -105,6 +105,8 @@ CREATE TABLE IF NOT EXISTS distributors (
   phone                TEXT NOT NULL DEFAULT '',
   contact_person       TEXT DEFAULT '',
   salesperson          TEXT DEFAULT '',
+  brand                TEXT NOT NULL DEFAULT 'Nasun'
+                         CHECK (brand IN ('Nasun', 'Natos')),
   region               TEXT NOT NULL DEFAULT 'Miền Bắc',
   province             TEXT DEFAULT '',
   address              TEXT DEFAULT '',
