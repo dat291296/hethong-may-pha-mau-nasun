@@ -9,6 +9,7 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "deploy": "npm run build && wrangler deploy",
+    "backup": "node scripts/backup-database.js",
     "electron:start": "node node_modules/electron/install.js && electron electron/main.cjs",
     "electron:build": "vite build && electron-builder"
   },
