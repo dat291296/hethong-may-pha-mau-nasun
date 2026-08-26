@@ -106,7 +106,8 @@ export function useAssets() {
     if (!cfg) throw new Error(`Unknown category: ${category}`);
 
     const tempId = deviceData.id || `${category.toUpperCase()}-${Date.now()}`;
-    const localDevice = { ...deviceData, id: tempId, isAssigned: false, setCode: null };
+    const dbPayload = sanitizeDeviceForDb(category, deviceData, tempId);
+    const localDevice = cfg.mapper(dbPayload);
 
     // Update local state immediately for instant feedback
     cfg.setter(prev => {
@@ -118,7 +119,7 @@ export function useAssets() {
     if (isSupabaseConfigured && navigator.onLine) {
       try {
         const { data, error } = await safeQuery(
-          sb => sb.from(cfg.table).insert(deviceData).select().single(),
+          sb => sb.from(cfg.table).insert(dbPayload).select().single(),
           `addStockDevice:${category}`
         );
         if (error) throw error;
@@ -131,11 +132,11 @@ export function useAssets() {
         }
       } catch (err) {
         console.warn(`[Offline] Failed online addStockDevice for ${category}. Queueing action.`, err);
-        enqueueOfflineAction('ADD_DEVICE', deviceData, cfg.table);
+        enqueueOfflineAction('ADD_DEVICE', dbPayload, cfg.table);
       }
     } else if (isSupabaseConfigured && !navigator.onLine) {
       console.log(`[Offline] Network down. Enqueueing addStockDevice for ${category}.`);
-      enqueueOfflineAction('ADD_DEVICE', deviceData, cfg.table);
+      enqueueOfflineAction('ADD_DEVICE', dbPayload, cfg.table);
     }
   }, []);
 
@@ -415,6 +416,51 @@ function mapDeviceToDb(obj) {
   delete dbObj.hasStabilizer;
   delete dbObj.stabilizerBrand;
   return dbObj;
+}
+
+function sanitizeDeviceForDb(category, data, tempId) {
+  const base = {
+    id: data.id || tempId,
+    serial: data.serial || 'N/A',
+    status: data.status || 'Mới 100%',
+    is_assigned: Boolean(data.isAssigned || data.is_assigned),
+    set_code: data.setCode || data.set_code || null
+  };
+
+  if (category === 'dispenser') {
+    return {
+      ...base,
+      model: data.model || 'Satint'
+    };
+  }
+
+  if (category === 'mixer') {
+    return {
+      ...base,
+      model: data.model || 'Satint ST-50',
+      type: data.type || 'Lắc xoay khép kín'
+    };
+  }
+
+  if (category === 'computer') {
+    return {
+      ...base,
+      type: data.type || 'AIO',
+      os: data.os || 'Windows 11 Pro',
+      specs: data.specs || 'Core i5',
+      network: data.network || 'Có mạng LAN'
+    };
+  }
+
+  if (category === 'printer') {
+    return {
+      ...base,
+      model: data.model || 'QL700',
+      connection: data.connection || 'USB'
+    };
+  }
+
+  return base;
 }
 
 function mapSystemSetToDb(obj) {
