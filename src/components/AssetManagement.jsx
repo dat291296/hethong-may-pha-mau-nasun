@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useAuth } from '../context/AuthContext.jsx';
 import { 
   Cpu, 
   Flame, 
@@ -39,6 +40,7 @@ export default function AssetManagement({
   onEditSet,
   onDeleteSet
 }) {
+  const { user } = useAuth();
   const [activeSubTab, setActiveSubTab] = useState('comboSets'); // comboSets | dispensers | mixers | computers | printers
   const [modelFilter, setModelFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
