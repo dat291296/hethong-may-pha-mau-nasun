@@ -96,7 +96,30 @@ export function useRepairs() {
       return updated;
     });
 
-    const dbUpdates = { ...mapRepairToDb({ ...updates }), id };
+    const dbUpdates = {};
+    const fieldMap = {
+      ticketCode: 'ticket_code',
+      date: 'date',
+      technician: 'technician',
+      nppId: 'npp_id',
+      nppName: 'npp_name',
+      productCategory: 'product_category',
+      machineModel: 'machine_model',
+      serialNumber: 'serial_number',
+      errorDescription: 'error_description',
+      errorCategory: 'error_category',
+      actionDirection: 'action_direction',
+      replacementCondition: 'replacement_condition',
+      processingStatus: 'processing_status',
+      customerReturnStatus: 'customer_return_status',
+      notes: 'notes',
+      photos: 'photos'
+    };
+
+    for (const key in updates) {
+      if (fieldMap[key]) dbUpdates[fieldMap[key]] = updates[key];
+      else dbUpdates[key] = updates[key];
+    }
 
     if (isSupabaseConfigured && navigator.onLine) {
       try {
@@ -107,11 +130,11 @@ export function useRepairs() {
         if (error) throw error;
       } catch (err) {
         console.warn('[Offline] Failed online editTicket. Queueing.', err);
-        enqueueOfflineAction('EDIT_REPAIR', dbUpdates);
+        enqueueOfflineAction('EDIT_REPAIR', { id, ...dbUpdates });
       }
     } else if (isSupabaseConfigured && !navigator.onLine) {
       console.log('[Offline] Network down. Enqueueing editTicket.');
-      enqueueOfflineAction('EDIT_REPAIR', dbUpdates);
+      enqueueOfflineAction('EDIT_REPAIR', { id, ...dbUpdates });
     }
   }, []);
 

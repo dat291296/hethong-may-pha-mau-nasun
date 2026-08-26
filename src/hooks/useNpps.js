@@ -108,7 +108,20 @@ export function useNpps() {
       return updated;
     });
 
-    const mappedUpdates = { ...mapNppToDb({ ...updates }), id };
+    const mappedUpdates = {};
+    if ('name' in updates) mappedUpdates.name = updates.name;
+    if ('phone' in updates) mappedUpdates.phone = updates.phone;
+    if ('contactPerson' in updates) mappedUpdates.contact_person = updates.contactPerson;
+    if ('contact_person' in updates) mappedUpdates.contact_person = updates.contact_person;
+    if ('region' in updates) mappedUpdates.region = updates.region;
+    if ('province' in updates) mappedUpdates.province = updates.province;
+    if ('address' in updates) mappedUpdates.address = updates.address;
+    if ('locationCoordinates' in updates) mappedUpdates.location_coordinates = updates.locationCoordinates;
+    if ('location_coordinates' in updates) mappedUpdates.location_coordinates = updates.location_coordinates;
+    if ('googleMapsUrl' in updates) mappedUpdates.google_maps_url = updates.googleMapsUrl;
+    if ('google_maps_url' in updates) mappedUpdates.google_maps_url = updates.google_maps_url;
+    if ('status' in updates) mappedUpdates.status = updates.status;
+    if ('photos' in updates) mappedUpdates.photos = updates.photos;
 
     if (isSupabaseConfigured && navigator.onLine) {
       try {
@@ -119,11 +132,11 @@ export function useNpps() {
         if (err) throw err;
       } catch (err) {
         console.warn('[Offline] Failed online editNpp. Queueing action.', err);
-        enqueueOfflineAction('EDIT_NPP', mappedUpdates);
+        enqueueOfflineAction('EDIT_NPP', { id, ...mappedUpdates });
       }
     } else if (isSupabaseConfigured && !navigator.onLine) {
       console.log('[Offline] Network down. Enqueueing editNpp.');
-      enqueueOfflineAction('EDIT_NPP', mappedUpdates);
+      enqueueOfflineAction('EDIT_NPP', { id, ...mappedUpdates });
     }
   }, []);
 

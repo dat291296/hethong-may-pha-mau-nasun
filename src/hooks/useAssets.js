@@ -148,16 +148,12 @@ export function useAssets() {
       printers:   { setter: setPrinters,   cacheKey: 'printers' },
     };
 
-    // Normalize property names for DB (snake_case) vs App (camelCase)
-    const dbUpdates = { ...updates, id };
+    const dbUpdates = mapDeviceToDb({ ...updates, id });
     const appUpdates = { ...updates };
 
-    if ('isAssigned' in updates) dbUpdates.is_assigned = updates.isAssigned;
-    if ('setCode' in updates) dbUpdates.set_code = updates.setCode;
     if ('is_assigned' in updates) appUpdates.isAssigned = updates.is_assigned;
     if ('set_code' in updates) appUpdates.setCode = updates.set_code;
 
-    // Update local state immediately
     const cfg = tableMap[category];
     if (cfg) {
       cfg.setter(prev => {
@@ -237,27 +233,32 @@ export function useAssets() {
     });
 
     if (isSupabaseConfigured) {
+      const dbItems = items.map(mapDeviceToDb);
       if (navigator.onLine) {
         try {
           const { error } = await safeQuery(
-            sb => sb.from(cfg.table).insert(items),
+            sb => sb.from(cfg.table).insert(dbItems),
             `importDevices:${type}`
           );
           if (error) throw error;
           await fetchAssets();
         } catch (err) {
-          items.forEach(item => enqueueOfflineAction('ADD_DEVICE', item, cfg.table));
+          dbItems.forEach(item => enqueueOfflineAction('ADD_DEVICE', item, cfg.table));
         }
       } else {
-        items.forEach(item => enqueueOfflineAction('ADD_DEVICE', item, cfg.table));
+        dbItems.forEach(item => enqueueOfflineAction('ADD_DEVICE', item, cfg.table));
       }
     }
   }, [fetchAssets]);
 
-  // ── Assemble set (Lắp đặt bộ máy) ─────────────────────────────────────────
-  const assembleSet = useCallback(async (setData) => {
+  // ── Assemble new system set ────────────────────────────────────────────────
+  const assembleSet = useCallback(async (newSet) => {
+    const setCode = newSet.setCode || newSet.set_code;
+    const dbPayload = mapSystemSetToDb({ ...newSet, setCode });
+    const appSetData = mapDbToSystemSet(dbPayload);
+
     setSystemSets(prev => {
-      const updated = [setData, ...prev];
+      const updated = [appSetData, ...prev];
       cacheOfflineData('system_sets', updated);
       return updated;
     });
@@ -265,18 +266,18 @@ export function useAssets() {
     if (isSupabaseConfigured && navigator.onLine) {
       try {
         const { error } = await safeQuery(
-          sb => sb.from('system_sets').insert(setData),
+          sb => sb.from('system_sets').insert(dbPayload),
           'assembleSet'
         );
         if (error) throw error;
         await fetchAssets();
       } catch (err) {
         console.warn('[Offline] Failed online assembleSet. Queueing action.', err);
-        enqueueOfflineAction('ASSEMBLE_SET', setData);
+        enqueueOfflineAction('ASSEMBLE_SET', dbPayload);
       }
     } else if (isSupabaseConfigured && !navigator.onLine) {
       console.log('[Offline] Network down. Enqueueing assembleSet.');
-      enqueueOfflineAction('ASSEMBLE_SET', setData);
+      enqueueOfflineAction('ASSEMBLE_SET', dbPayload);
     }
   }, [fetchAssets]);
 
@@ -288,12 +289,12 @@ export function useAssets() {
       return updated;
     });
 
-    const dbUpdates = { ...updates, set_code: setCode };
+    const dbPayload = mapSystemSetToDb({ ...updates, setCode });
 
     if (isSupabaseConfigured && navigator.onLine) {
       try {
         const { error } = await safeQuery(
-          sb => sb.from('system_sets').update(updates).eq('set_code', setCode),
+          sb => sb.from('system_sets').update(dbPayload).eq('set_code', setCode),
           'updateSystemSet'
         );
         if (error) throw error;
@@ -389,4 +390,123 @@ function mapDbToSystemSet(row) {
     installDate: row.install_date, lastMaintenanceDate: row.last_maintenance_date, nextMaintenanceDue: row.next_maintenance_due,
     technician: row.technician, salesperson: row.salesperson || row.sales_person || '', notes: row.notes,
   };
+}
+
+// ─── App → DB Field Mappers (Clean snake_case for Supabase) ────────────────────
+function mapDeviceToDb(obj) {
+  const dbObj = {};
+  const mapping = {
+    isAssigned: 'is_assigned',
+    setCode: 'set_code',
+    hasStabilizer: 'has_stabilizer',
+    stabilizerBrand: 'stabilizer_brand',
+    is_assigned: 'is_assigned',
+    set_code: 'set_code'
+  };
+  for (const k in obj) {
+    if (mapping[k]) {
+      dbObj[mapping[k]] = obj[k];
+    } else {
+      dbObj[k] = obj[k];
+    }
+  }
+  delete dbObj.isAssigned;
+  delete dbObj.setCode;
+  delete dbObj.hasStabilizer;
+  delete dbObj.stabilizerBrand;
+  return dbObj;
+}
+
+function mapSystemSetToDb(obj) {
+  const dbObj = {};
+  const mapping = {
+    setCode: 'set_code',
+    set_code: 'set_code',
+    nppId: 'npp_id',
+    npp_id: 'npp_id',
+    nppName: 'npp_name',
+    npp_name: 'npp_name',
+    region: 'region',
+    province: 'province',
+    status: 'status',
+    dispenserId: 'dispenser_id',
+    dispenser_id: 'dispenser_id',
+    dispenserModel: 'dispenser_model',
+    dispenser_model: 'dispenser_model',
+    dispenserSerial: 'dispenser_serial',
+    dispenser_serial: 'dispenser_serial',
+    mixerId: 'mixer_id',
+    mixer_id: 'mixer_id',
+    mixerModel: 'mixer_model',
+    mixer_model: 'mixer_model',
+    mixerSerial: 'mixer_serial',
+    mixer_serial: 'mixer_serial',
+    computerId: 'computer_id',
+    computer_id: 'computer_id',
+    computerType: 'computer_type',
+    computer_type: 'computer_type',
+    computerSerial: 'computer_serial',
+    computer_serial: 'computer_serial',
+    printerId: 'printer_id',
+    printer_id: 'printer_id',
+    printerSerial: 'printer_serial',
+    printer_serial: 'printer_serial',
+    printerModel: 'printer_model',
+    printer_model: 'printer_model',
+    stabilizer: 'stabilizer',
+    installDate: 'install_date',
+    installedDate: 'install_date',
+    install_date: 'install_date',
+    lastMaintenanceDate: 'last_maintenance_date',
+    last_maintenance_date: 'last_maintenance_date',
+    nextMaintenanceDue: 'next_maintenance_due',
+    next_maintenance_due: 'next_maintenance_due',
+    technician: 'technician',
+    salesperson: 'salesperson',
+    sales_person: 'salesperson',
+    notes: 'notes',
+    tintingSoftware: 'tinting_software',
+    tinting_software: 'tinting_software',
+    softwareVersion: 'software_version',
+    software_version: 'software_version',
+    agentStatus: 'agent_status',
+    agent_status: 'agent_status',
+    installationPhotos: 'installation_photos',
+    installation_photos: 'installation_photos'
+  };
+
+  for (const k in obj) {
+    if (mapping[k]) {
+      dbObj[mapping[k]] = obj[k];
+    } else {
+      dbObj[k] = obj[k];
+    }
+  }
+
+  delete dbObj.setCode;
+  delete dbObj.nppId;
+  delete dbObj.nppName;
+  delete dbObj.dispenserId;
+  delete dbObj.dispenserModel;
+  delete dbObj.dispenserSerial;
+  delete dbObj.mixerId;
+  delete dbObj.mixerModel;
+  delete dbObj.mixerSerial;
+  delete dbObj.computerId;
+  delete dbObj.computerType;
+  delete dbObj.computerSerial;
+  delete dbObj.printerId;
+  delete dbObj.printerModel;
+  delete dbObj.printerSerial;
+  delete dbObj.installDate;
+  delete dbObj.installedDate;
+  delete dbObj.lastMaintenanceDate;
+  delete dbObj.nextMaintenanceDue;
+  delete dbObj.salesperson;
+  delete dbObj.tintingSoftware;
+  delete dbObj.softwareVersion;
+  delete dbObj.agentStatus;
+  delete dbObj.installationPhotos;
+
+  return dbObj;
 }
