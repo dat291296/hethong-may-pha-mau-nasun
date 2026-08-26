@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
+import { supabase, isSupabaseConfigured } from '../lib/supabase.js';
 import { 
   Cpu, 
   Flame, 
@@ -41,6 +42,48 @@ export default function AssetManagement({
   onDeleteSet
 }) {
   const { user } = useAuth();
+  const [qcUsers, setQcUsers] = useState([]);
+
+  // Fetch QC and Admin user profiles for technician selection
+  useEffect(() => {
+    async function loadQcProfiles() {
+      if (isSupabaseConfigured && supabase) {
+        try {
+          const { data, error } = await supabase
+            .from('profiles')
+            .select('id, full_name, role, managed_region')
+            .in('role', ['qc', 'admin']);
+
+          if (data && !error && data.length > 0) {
+            const mapped = data.map(p => ({
+              id: p.id,
+              name: p.full_name || p.id,
+              role: p.role,
+              region: p.managed_region || 'Toàn Quốc'
+            }));
+            setQcUsers(mapped);
+            return;
+          }
+        } catch (err) {
+          console.warn('[AssetManagement] Error loading QC profiles:', err);
+        }
+      }
+
+      // Fallback: Current logged in user or dev QC
+      const fallbackList = [];
+      if (user && (user.name || user.full_name)) {
+        fallbackList.push({
+          id: user.id || 'current-user',
+          name: user.name || user.full_name,
+          role: user.role || 'qc',
+          region: user.managedRegion || 'Toàn Quốc'
+        });
+      }
+      setQcUsers(fallbackList);
+    }
+    loadQcProfiles();
+  }, [user]);
+
   const [activeSubTab, setActiveSubTab] = useState('comboSets'); // comboSets | dispensers | mixers | computers | printers
   const [modelFilter, setModelFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
@@ -97,10 +140,11 @@ export default function AssetManagement({
     region: '',
     province: '',
     salesperson: '',
-    technician: user?.name || user?.full_name || 'Nguyễn Văn Hùng'
+    technician: user?.name || user?.full_name || ''
   });
 
   const handleOpenAssembleModal = () => {
+    const defaultTech = (user && (user.role === 'qc' || user.role === 'admin')) ? (user.name || user.full_name) : (qcUsers[0]?.name || '');
     setNewSetData({
       dispenserId: '',
       mixerId: '',
@@ -111,7 +155,7 @@ export default function AssetManagement({
       region: '',
       province: '',
       salesperson: '',
-      technician: user?.name || user?.full_name || 'Nguyễn Văn Hùng'
+      technician: defaultTech
     });
     setShowAssembleModal(true);
   };
@@ -127,7 +171,7 @@ export default function AssetManagement({
     setNewSetData({
       dispenserId: '', mixerId: '', computerId: '', printerId: '',
       nppId: '', nppName: '', region: '', province: '', salesperson: '',
-      technician: user?.name || user?.full_name || 'Nguyễn Văn Hùng'
+      technician: ''
     });
   };
 
@@ -223,7 +267,7 @@ export default function AssetManagement({
       province: set.province || '',
       status: set.status || 'TRONG_KHO',
       stabilizer: set.stabilizer || 'Không dùng ổn áp',
-      technician: set.technician || (user ? (user.name || user.full_name) : 'Nguyễn Văn Hùng'),
+      technician: set.technician || ((user && (user.role === 'qc' || user.role === 'admin')) ? (user.name || user.full_name) : (qcUsers[0]?.name || '')),
       salesperson: set.salesperson || targetNpp?.salesperson || '',
       notes: set.notes || '',
       lastMaintenanceDate: set.lastMaintenanceDate || '',
@@ -1328,18 +1372,12 @@ export default function AssetManagement({
                       value={newSetData.technician || ''}
                       onChange={e => setNewSetData({ ...newSetData, technician: e.target.value })}
                     >
-                      <option value="">-- Chọn tài khoản Kỹ Thuật Viên --</option>
-                      {user && (user.name || user.full_name) && (
-                        <option value={user.name || user.full_name}>
-                          👤 {user.name || user.full_name} ({user.role === 'admin' ? 'Admin' : user.role === 'qc' ? 'QC/KTV' : 'Tài khoản'})
+                      <option value="">-- Chọn tài khoản Kỹ Thuật Viên (QC) --</option>
+                      {qcUsers.map(u => (
+                        <option key={u.id || u.name} value={u.name}>
+                          👤 {u.name} ({u.role?.toUpperCase() === 'QC' ? 'QC/KTV' : u.role?.toUpperCase() || 'KTV'} - {u.region || 'TQ'})
                         </option>
-                      )}
-                      <option value="Nguyễn Văn Hùng">🛠️ Nguyễn Văn Hùng (KTV Miền Bắc)</option>
-                      <option value="Lê Thanh Tùng">🛠️ Lê Thanh Tùng (KTV Miền Bắc)</option>
-                      <option value="Trần Minh Hoàng">🛠️ Trần Minh Hoàng (QC / KTV Trưởng)</option>
-                      <option value="Phạm Quốc Hùng">🛠️ Phạm Quốc Hùng (KTV Miền Trung)</option>
-                      <option value="Đặng Văn Nam">🛠️ Đặng Văn Nam (KTV Miền Nam)</option>
-                      <option value="Quản lý Kho">📦 Quản lý Kho</option>
+                      ))}
                     </select>
                   </div>
                   <div className="form-group">
@@ -1603,18 +1641,12 @@ export default function AssetManagement({
                       value={editSetFormData.technician || ''}
                       onChange={e => setEditSetFormData({ ...editSetFormData, technician: e.target.value })}
                     >
-                      <option value="">-- Chọn tài khoản Kỹ Thuật Viên --</option>
-                      {user && (user.name || user.full_name) && (
-                        <option value={user.name || user.full_name}>
-                          👤 {user.name || user.full_name} ({user.role === 'admin' ? 'Admin' : user.role === 'qc' ? 'QC/KTV' : 'Tài khoản'})
+                      <option value="">-- Chọn tài khoản Kỹ Thuật Viên (QC) --</option>
+                      {qcUsers.map(u => (
+                        <option key={u.id || u.name} value={u.name}>
+                          👤 {u.name} ({u.role?.toUpperCase() === 'QC' ? 'QC/KTV' : u.role?.toUpperCase() || 'KTV'} - {u.region || 'TQ'})
                         </option>
-                      )}
-                      <option value="Nguyễn Văn Hùng">🛠️ Nguyễn Văn Hùng (KTV Miền Bắc)</option>
-                      <option value="Lê Thanh Tùng">🛠️ Lê Thanh Tùng (KTV Miền Bắc)</option>
-                      <option value="Trần Minh Hoàng">🛠️ Trần Minh Hoàng (QC / KTV Trưởng)</option>
-                      <option value="Phạm Quốc Hùng">🛠️ Phạm Quốc Hùng (KTV Miền Trung)</option>
-                      <option value="Đặng Văn Nam">🛠️ Đặng Văn Nam (KTV Miền Nam)</option>
-                      <option value="Quản lý Kho">📦 Quản lý Kho</option>
+                      ))}
                     </select>
                   </div>
                   <div className="form-group">
