@@ -191,16 +191,81 @@ export default function App() {
   // Device CRUD Handlers
   const handleEditDevice = async (category, updatedData) => {
     try {
-      await editDevice(category === 'computer' ? 'computers' : category === 'dispenser' ? 'dispensers' : category === 'mixer' ? 'mixers' : 'printers', updatedData.id, updatedData);
+      const pluralCat = category === 'computer' ? 'computers' : category === 'dispenser' ? 'dispensers' : category === 'mixer' ? 'mixers' : 'printers';
+      const deviceList = category === 'dispenser' ? dispensers : category === 'mixer' ? mixers : category === 'computer' ? computers : printers;
+      const oldDevice = deviceList.find(d => d.id === updatedData.id);
+
+      await editDevice(pluralCat, updatedData.id, updatedData);
+
+      const oldSetCode = oldDevice?.setCode;
+      const newSetCode = updatedData.isAssigned ? updatedData.setCode : null;
+
+      if (oldSetCode !== newSetCode) {
+        if (oldSetCode) {
+          const oldSet = systemSets.find(s => s.setCode === oldSetCode);
+          if (oldSet) {
+            const updates = {};
+            if (category === 'dispenser') { updates.dispenserId = null; updates.dispenserSerial = null; updates.dispenserModel = null; }
+            if (category === 'mixer') { updates.mixerId = null; updates.mixerSerial = null; updates.mixerModel = null; }
+            if (category === 'computer') { updates.computerId = null; updates.computerSerial = null; updates.computerType = null; }
+            if (category === 'printer') { updates.printerId = null; updates.printerSerial = null; }
+            await updateSystemSet(oldSetCode, updates);
+          }
+        }
+        if (newSetCode) {
+          const newSet = systemSets.find(s => s.setCode === newSetCode);
+          if (newSet) {
+            const updates = {};
+            if (category === 'dispenser') {
+              updates.dispenserId = updatedData.id;
+              updates.dispenserSerial = updatedData.serial;
+              updates.dispenserModel = updatedData.model;
+            } else if (category === 'mixer') {
+              updates.mixerId = updatedData.id;
+              updates.mixerSerial = updatedData.serial;
+              updates.mixerModel = updatedData.model;
+            } else if (category === 'computer') {
+              updates.computerId = updatedData.id;
+              updates.computerSerial = updatedData.serial;
+              updates.computerType = updatedData.type;
+            } else if (category === 'printer') {
+              updates.printerId = updatedData.id;
+              updates.printerSerial = updatedData.serial;
+            }
+            await updateSystemSet(newSetCode, updates);
+          }
+        }
+      }
     } catch (err) {
       console.error(err);
       alert('Lỗi sửa thiết bị: ' + err.message);
     }
   };
 
-  const handleDeleteDevice = async (category, deviceId) => {
+  const handleDeleteDevice = async (category, deviceId, setCode) => {
     try {
-      await deleteDevice(category === 'computer' ? 'computers' : category === 'dispenser' ? 'dispensers' : category === 'mixer' ? 'mixers' : 'printers', deviceId);
+      const pluralCat = category === 'computer' ? 'computers' : category === 'dispenser' ? 'dispensers' : category === 'mixer' ? 'mixers' : 'printers';
+      await deleteDevice(pluralCat, deviceId);
+
+      const targetSetCode = setCode || systemSets.find(s => s.dispenserId === deviceId || s.mixerId === deviceId || s.computerId === deviceId || s.printerId === deviceId)?.setCode;
+      if (targetSetCode) {
+        const targetSet = systemSets.find(s => s.setCode === targetSetCode);
+        if (targetSet) {
+          const updates = {};
+          if (category === 'dispenser' && targetSet.dispenserId === deviceId) {
+            updates.dispenserId = null; updates.dispenserSerial = null; updates.dispenserModel = null;
+          } else if (category === 'mixer' && targetSet.mixerId === deviceId) {
+            updates.mixerId = null; updates.mixerSerial = null; updates.mixerModel = null;
+          } else if (category === 'computer' && targetSet.computerId === deviceId) {
+            updates.computerId = null; updates.computerSerial = null; updates.computerType = null;
+          } else if (category === 'printer' && targetSet.printerId === deviceId) {
+            updates.printerId = null; updates.printerSerial = null;
+          }
+          if (Object.keys(updates).length > 0) {
+            await updateSystemSet(targetSetCode, updates);
+          }
+        }
+      }
     } catch (err) {
       console.error(err);
       alert('Lỗi xóa thiết bị: ' + err.message);
@@ -459,6 +524,7 @@ export default function App() {
           {activeTab === 'assets' && (
             <AssetManagement
               systemSets={systemSets}
+              npps={npps}
               dispensers={dispensers}
               mixers={mixers}
               computers={computers}

@@ -23,6 +23,7 @@ import {
 
 export default function AssetManagement({
   systemSets,
+  npps = [],
   dispensers,
   mixers,
   computers,
@@ -39,6 +40,20 @@ export default function AssetManagement({
   const [modelFilter, setModelFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [showAssembleModal, setShowAssembleModal] = useState(false);
+
+  // Helper to find assigned set & NPP info for any device item
+  const getAssignedInfo = (item) => {
+    const isAssigned = item.isAssigned || !!item.setCode;
+    if (!isAssigned) {
+      return { isAssigned: false, setCode: '—', nppName: null };
+    }
+    const assignedSet = systemSets.find(s => s.setCode === item.setCode);
+    return {
+      isAssigned: true,
+      setCode: item.setCode || '—',
+      nppName: assignedSet?.nppName || 'Kho Tổng Trung Tâm'
+    };
+  };
 
   // Set Edit state
   const [editingSet, setEditingSet] = useState(null);
@@ -102,23 +117,45 @@ export default function AssetManagement({
 
   const handleOpenEditDevice = (category, data) => {
     setEditingDevice({ category, data });
-    setEditFormData({ ...data });
+    setEditFormData({
+      ...data,
+      isAssigned: data.isAssigned || !!data.setCode,
+      setCode: data.setCode || ''
+    });
   };
 
   const handleEditSubmit = (e) => {
     e.preventDefault();
     if (!editingDevice) return;
-    onEditDevice(editingDevice.category, editFormData);
+    const isAssigned = !!editFormData.isAssigned && !!editFormData.setCode;
+    const finalData = {
+      ...editFormData,
+      isAssigned,
+      setCode: isAssigned ? editFormData.setCode : null
+    };
+    onEditDevice(editingDevice.category, finalData);
     setEditingDevice(null);
   };
 
   const handleDeleteDevice = (category, item) => {
-    if (item.isAssigned) {
-      alert(`Không thể xóa thiết bị ${item.serial} vì đang được gán trong bộ máy ${item.setCode}. Vui lòng thu hồi bộ máy trước khi xóa!`);
-      return;
-    }
-    if (confirm(`Bạn có chắc chắn muốn xóa thiết bị Seri [${item.serial}] khỏi kho?`)) {
-      onDeleteDevice(category, item.id);
+    const categoryNameMap = {
+      dispenser: 'Máy chiết',
+      mixer: 'Máy lắc',
+      computer: 'Máy tính',
+      printer: 'Máy in'
+    };
+    const catLabel = categoryNameMap[category] || 'Thiết bị';
+    const assignedSet = item.setCode ? systemSets.find(s => s.setCode === item.setCode) : null;
+    const nppText = assignedSet?.nppName ? ` (Đã gán cho NPP: ${assignedSet.nppName})` : '';
+
+    if (item.isAssigned || item.setCode) {
+      if (window.confirm(`⚠️ [CẢNH BÁO ADMIN]\n${catLabel} [${item.serial}] đang được gán trong bộ máy [${item.setCode}]${nppText}.\n\nBạn có chắc chắn muốn XÓA THIẾT BỊ NÀY khỏi hệ thống không?\n(Hệ thống sẽ tự động gỡ/giải phóng thiết bị khỏi bộ máy ${item.setCode}).`)) {
+        onDeleteDevice(category, item.id, item.setCode);
+      }
+    } else {
+      if (window.confirm(`Bạn có chắc chắn muốn xóa ${catLabel} Seri [${item.serial}] khỏi kho?`)) {
+        onDeleteDevice(category, item.id, null);
+      }
     }
   };
 
@@ -417,7 +454,20 @@ export default function AssetManagement({
                       {item.status === 'Cần bảo trì' && <span className="badge badge-warning">{item.status}</span>}
                       {item.status === 'Hỏng đầu phun' && <span className="badge badge-danger">⚠️ {item.status}</span>}
                     </td>
-                    <td>{item.isAssigned ? <span className="badge badge-success">Đã gán bộ</span> : <span className="badge badge-neutral">Tự do trong kho</span>}</td>
+                    <td>
+                      {(() => {
+                        const info = getAssignedInfo(item);
+                        return info.isAssigned ? (
+                          <div>
+                            <span className="badge badge-success">🟢 Đã gán bộ</span>
+                            <div style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--accent-cyan)', marginTop: '2px' }}>{info.setCode}</div>
+                            <div style={{ fontSize: '0.725rem', color: 'var(--text-secondary)' }}>🏢 {info.nppName}</div>
+                          </div>
+                        ) : (
+                          <span className="badge badge-neutral">⚪ Tự do trong kho</span>
+                        );
+                      })()}
+                    </td>
                     <td>{item.setCode || 'Chưa gán'}</td>
                     <td>
                       <div style={{ display: 'flex', gap: '6px' }}>
@@ -457,12 +507,13 @@ export default function AssetManagement({
                     <span className="mobile-card-value">{item.id}</span>
                   </div>
                   <div className="mobile-card-row">
-                    <span className="mobile-card-label">Trạng thái:</span>
-                    <span className="mobile-card-value">{item.isAssigned ? 'Đã gán bộ' : 'Tự do trong kho'}</span>
-                  </div>
-                  <div className="mobile-card-row">
-                    <span className="mobile-card-label">Mã bộ máy:</span>
-                    <span className="mobile-card-value" style={{ fontWeight: '700', color: 'var(--accent-cyan)' }}>{item.setCode || 'Chưa gán'}</span>
+                    <span className="mobile-card-label">Trạng thái cấp phát:</span>
+                    <span className="mobile-card-value">
+                      {(() => {
+                        const info = getAssignedInfo(item);
+                        return info.isAssigned ? `🟢 Gán [${info.setCode}] (${info.nppName})` : '⚪ Tự do trong kho';
+                      })()}
+                    </span>
                   </div>
                 </div>
                 <div className="mobile-card-actions">
@@ -495,7 +546,7 @@ export default function AssetManagement({
                   <th>Loại Máy Lắc</th>
                   <th>Số Seri (Unique)</th>
                   <th>Tình Trạng Kỹ Thuật</th>
-                  <th>Cấp Phát</th>
+                  <th>Tình Trạng Cấp Phát & NPP</th>
                   <th>Thao Tác</th>
                 </tr>
               </thead>
@@ -507,7 +558,20 @@ export default function AssetManagement({
                     <td>{item.type}</td>
                     <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent-cyan)' }}>{item.serial}</td>
                     <td><span className="badge badge-info">{item.status}</span></td>
-                    <td>{item.isAssigned ? <span className="badge badge-success">Đã gán bộ</span> : <span className="badge badge-neutral">Tự do trong kho</span>}</td>
+                    <td>
+                      {(() => {
+                        const info = getAssignedInfo(item);
+                        return info.isAssigned ? (
+                          <div>
+                            <span className="badge badge-success">🟢 Đã gán bộ</span>
+                            <div style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--accent-cyan)', marginTop: '2px' }}>{info.setCode}</div>
+                            <div style={{ fontSize: '0.725rem', color: 'var(--text-secondary)' }}>🏢 {info.nppName}</div>
+                          </div>
+                        ) : (
+                          <span className="badge badge-neutral">⚪ Tự do trong kho</span>
+                        );
+                      })()}
+                    </td>
                     <td>
                       <div style={{ display: 'flex', gap: '6px' }}>
                         <button className="btn btn-secondary btn-sm" style={{ padding: '4px 8px' }} onClick={() => handleOpenEditDevice('mixer', item)}>
@@ -547,8 +611,13 @@ export default function AssetManagement({
                     <span className="mobile-card-value">{item.type}</span>
                   </div>
                   <div className="mobile-card-row">
-                    <span className="mobile-card-label">Cấp phát:</span>
-                    <span className="mobile-card-value">{item.isAssigned ? 'Đã gán bộ' : 'Tự do trong kho'}</span>
+                    <span className="mobile-card-label">Tình trạng cấp phát:</span>
+                    <span className="mobile-card-value">
+                      {(() => {
+                        const info = getAssignedInfo(item);
+                        return info.isAssigned ? `🟢 Gán [${info.setCode}] (${info.nppName})` : '⚪ Tự do trong kho';
+                      })()}
+                    </span>
                   </div>
                 </div>
                 <div className="mobile-card-actions">
@@ -586,6 +655,7 @@ export default function AssetManagement({
                   <th>Số Seri</th>
                   <th>Kết Nối Mạng</th>
                   <th>Ổn Áp (NPP Trang Bị)</th>
+                  <th>Tình Trạng Cấp Phát & NPP</th>
                   <th>Thao Tác</th>
                 </tr>
               </thead>
@@ -604,6 +674,20 @@ export default function AssetManagement({
                       ) : (
                         <span className="badge badge-neutral">Không có</span>
                       )}
+                    </td>
+                    <td>
+                      {(() => {
+                        const info = getAssignedInfo(item);
+                        return info.isAssigned ? (
+                          <div>
+                            <span className="badge badge-success">🟢 Đã gán bộ</span>
+                            <div style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--accent-cyan)', marginTop: '2px' }}>{info.setCode}</div>
+                            <div style={{ fontSize: '0.725rem', color: 'var(--text-secondary)' }}>🏢 {info.nppName}</div>
+                          </div>
+                        ) : (
+                          <span className="badge badge-neutral">⚪ Tự do trong kho</span>
+                        );
+                      })()}
                     </td>
                     <td>
                       <div style={{ display: 'flex', gap: '6px' }}>
@@ -642,6 +726,15 @@ export default function AssetManagement({
                   <div className="mobile-card-row">
                     <span className="mobile-card-label">Cấu hình:</span>
                     <span className="mobile-card-value" style={{ fontSize: '0.8rem' }}>{item.specs}</span>
+                  </div>
+                  <div className="mobile-card-row">
+                    <span className="mobile-card-label">Trạng thái cấp phát:</span>
+                    <span className="mobile-card-value">
+                      {(() => {
+                        const info = getAssignedInfo(item);
+                        return info.isAssigned ? `🟢 Gán [${info.setCode}] (${info.nppName})` : '⚪ Tự do trong kho';
+                      })()}
+                    </span>
                   </div>
                   <div className="mobile-card-row">
                     <span className="mobile-card-label">Mạng:</span>
@@ -684,7 +777,7 @@ export default function AssetManagement({
                   <th>Số Seri</th>
                   <th>Cổng Kết Nối</th>
                   <th>Tình Trạng</th>
-                  <th>Cấp Phát</th>
+                  <th>Tình Trạng Cấp Phát & NPP</th>
                   <th>Thao Tác</th>
                 </tr>
               </thead>
@@ -696,7 +789,20 @@ export default function AssetManagement({
                     <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent-cyan)' }}>{item.serial}</td>
                     <td>{item.connection}</td>
                     <td><span className="badge badge-info">{item.status}</span></td>
-                    <td>{item.isAssigned ? <span className="badge badge-success">Đã gán bộ</span> : <span className="badge badge-neutral">Tự do trong kho</span>}</td>
+                    <td>
+                      {(() => {
+                        const info = getAssignedInfo(item);
+                        return info.isAssigned ? (
+                          <div>
+                            <span className="badge badge-success">🟢 Đã gán bộ</span>
+                            <div style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--accent-cyan)', marginTop: '2px' }}>{info.setCode}</div>
+                            <div style={{ fontSize: '0.725rem', color: 'var(--text-secondary)' }}>🏢 {info.nppName}</div>
+                          </div>
+                        ) : (
+                          <span className="badge badge-neutral">⚪ Tự do trong kho</span>
+                        );
+                      })()}
+                    </td>
                     <td>
                       <div style={{ display: 'flex', gap: '6px' }}>
                         <button className="btn btn-secondary btn-sm" style={{ padding: '4px 8px' }} onClick={() => handleOpenEditDevice('printer', item)}>
@@ -736,8 +842,13 @@ export default function AssetManagement({
                     <span className="mobile-card-value">{item.connection}</span>
                   </div>
                   <div className="mobile-card-row">
-                    <span className="mobile-card-label">Cấp phát:</span>
-                    <span className="mobile-card-value">{item.isAssigned ? 'Đã gán bộ' : 'Tự do trong kho'}</span>
+                    <span className="mobile-card-label">Tình trạng cấp phát:</span>
+                    <span className="mobile-card-value">
+                      {(() => {
+                        const info = getAssignedInfo(item);
+                        return info.isAssigned ? `🟢 Gán [${info.setCode}] (${info.nppName})` : '⚪ Tự do trong kho';
+                      })()}
+                    </span>
                   </div>
                 </div>
                 <div className="mobile-card-actions">
@@ -940,6 +1051,51 @@ export default function AssetManagement({
                     </div>
                   </>
                 )}
+
+                {/* Admin Assignment Section - Available for ALL device categories */}
+                <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--border-color)' }}>
+                  <label className="form-label" style={{ fontWeight: '700', color: 'var(--accent-cyan)' }}>
+                    📌 Tình Trạng Cấp Phát & Nhà Phân Phối (Quyền Admin)
+                  </label>
+
+                  <div className="form-group" style={{ marginTop: '8px' }}>
+                    <label className="form-label">Trạng Thái Cấp Phát</label>
+                    <select
+                      className="form-select"
+                      value={editFormData.isAssigned ? 'ASSIGNED' : 'FREE'}
+                      onChange={e => {
+                        const isAssigned = e.target.value === 'ASSIGNED';
+                        setEditFormData({
+                          ...editFormData,
+                          isAssigned,
+                          setCode: isAssigned ? editFormData.setCode : ''
+                        });
+                      }}
+                    >
+                      <option value="FREE">⚪ Tự do trong kho (Chưa gán bộ máy nào)</option>
+                      <option value="ASSIGNED">🟢 Đã gán vào Bộ máy / Nhà Phân Phối</option>
+                    </select>
+                  </div>
+
+                  {editFormData.isAssigned && (
+                    <div className="form-group">
+                      <label className="form-label">Chọn Bộ Máy & NPP Gán Cho *</label>
+                      <select
+                        className="form-select"
+                        required={editFormData.isAssigned}
+                        value={editFormData.setCode || ''}
+                        onChange={e => setEditFormData({ ...editFormData, setCode: e.target.value })}
+                      >
+                        <option value="">-- Chọn bộ máy / NPP gán cho --</option>
+                        {systemSets.map(s => (
+                          <option key={s.setCode} value={s.setCode}>
+                            {s.setCode} — {s.nppName || 'Kho Tổng Trung Tâm'} ({s.province || s.region || 'TQ'})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
 
               </div>
               <div className="modal-footer">
