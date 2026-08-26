@@ -173,10 +173,10 @@ CREATE TABLE IF NOT EXISTS mixers (
   id          TEXT PRIMARY KEY,
   model       TEXT NOT NULL,
   type        TEXT NOT NULL DEFAULT 'Lắc xoay khép kín'
-                CHECK (type IN ('Lắc xoay khép kín','Lắc rung đứng')),
+                CHECK (type IN ('Lắc xoay khép kín','Lắc rung đứng','Lắc rung ngang','Lắc mâm xoay')),
   serial      TEXT NOT NULL UNIQUE,
   status      TEXT NOT NULL DEFAULT 'Đang chạy tốt'
-                CHECK (status IN ('Mới 100%','Đang chạy tốt','Cần bảo trì','Hỏng motor','Hỏng nặng')),
+                CHECK (status IN ('Mới 100%','Đang chạy tốt','Cần bảo trì','Hỏng motor','Hỏng nặng','Hỏng đầu phun')),
   is_assigned BOOLEAN NOT NULL DEFAULT FALSE,
   set_code    TEXT REFERENCES system_sets(set_code) ON DELETE SET NULL,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -206,9 +206,9 @@ CREATE TABLE IF NOT EXISTS printers (
   model       TEXT NOT NULL DEFAULT 'QL700',
   serial      TEXT NOT NULL UNIQUE,
   connection  TEXT DEFAULT 'USB'
-                CHECK (connection IN ('USB','LAN','Bluetooth')),
+                CHECK (connection IN ('USB','LAN','Bluetooth','Wifi')),
   status      TEXT NOT NULL DEFAULT 'Đang chạy tốt'
-                CHECK (status IN ('Mới 100%','Đang chạy tốt','Cần bảo trì','Hỏng đầu in','Hỏng nặng')),
+                CHECK (status IN ('Mới 100%','Đang chạy tốt','Cần bảo trì','Hỏng đầu in','Hỏng đầu phun','Hỏng nặng')),
   is_assigned BOOLEAN NOT NULL DEFAULT FALSE,
   set_code    TEXT REFERENCES system_sets(set_code) ON DELETE SET NULL,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),

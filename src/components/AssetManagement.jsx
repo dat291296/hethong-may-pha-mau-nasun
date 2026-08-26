@@ -997,7 +997,10 @@ export default function AssetManagement({
                     <option value="Mới 100%">Mới 100%</option>
                     <option value="Đang chạy tốt">Đang chạy tốt</option>
                     <option value="Cần bảo trì">Cần bảo trì</option>
-                    <option value="Hỏng đầu phun">Hỏng đầu phun / Hư hỏng</option>
+                    {addDeviceCategory === 'dispenser' && <option value="Hỏng đầu phun">Hỏng đầu phun</option>}
+                    {addDeviceCategory === 'mixer' && <option value="Hỏng motor">Hỏng motor</option>}
+                    {addDeviceCategory === 'printer' && <option value="Hỏng đầu in">Hỏng đầu in</option>}
+                    <option value="Hỏng nặng">Hỏng nặng</option>
                   </select>
                 </div>
 
@@ -1053,6 +1056,7 @@ export default function AssetManagement({
                       <option value="USB">USB</option>
                       <option value="LAN">LAN</option>
                       <option value="Wifi">Wifi</option>
+                      <option value="Bluetooth">Bluetooth</option>
                     </select>
                   </div>
                 )}
@@ -1127,9 +1131,25 @@ export default function AssetManagement({
                     <option value="Mới 100%">Mới 100%</option>
                     <option value="Đang chạy tốt">Đang chạy tốt</option>
                     <option value="Cần bảo trì">Cần bảo trì</option>
-                    <option value="Hỏng đầu phun">Hỏng đầu phun / Hư hỏng</option>
+                    {editingDevice.category === 'dispenser' && <option value="Hỏng đầu phun">Hỏng đầu phun</option>}
+                    {editingDevice.category === 'mixer' && <option value="Hỏng motor">Hỏng motor</option>}
+                    {editingDevice.category === 'printer' && <option value="Hỏng đầu in">Hỏng đầu in</option>}
+                    <option value="Hỏng nặng">Hỏng nặng</option>
                   </select>
                 </div>
+
+                {editingDevice.category === 'printer' && (
+                  <div className="form-group">
+                    <label className="form-label">Cổng Kết Nối</label>
+                    <select className="form-select" value={editFormData.connection || 'USB'} onChange={e => setEditFormData({ ...editFormData, connection: e.target.value })}>
+                      <option value="USB">USB</option>
+                      <option value="LAN">LAN</option>
+                      <option value="Wifi">Wifi</option>
+                      <option value="Bluetooth">Bluetooth</option>
+                    </select>
+                  </div>
+                )}
+
 
                 {editingDevice.category === 'mixer' && (
                   <div className="form-group">
