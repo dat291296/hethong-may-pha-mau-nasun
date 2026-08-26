@@ -90,7 +90,29 @@ export default function AssetManagement({
     mixerId: '',
     computerId: '',
     printerId: '',
+    nppId: '',
+    nppName: '',
+    region: '',
+    province: '',
+    salesperson: '',
+    technician: user?.name || user?.full_name || 'Nguyễn Văn Hùng'
   });
+
+  const handleOpenAssembleModal = () => {
+    setNewSetData({
+      dispenserId: '',
+      mixerId: '',
+      computerId: '',
+      printerId: '',
+      nppId: '',
+      nppName: '',
+      region: '',
+      province: '',
+      salesperson: '',
+      technician: user?.name || user?.full_name || 'Nguyễn Văn Hùng'
+    });
+    setShowAssembleModal(true);
+  };
 
   const handleAssembleSubmit = (e) => {
     e.preventDefault();
@@ -100,7 +122,11 @@ export default function AssetManagement({
     }
     onAssembleSet(newSetData);
     setShowAssembleModal(false);
-    setNewSetData({ dispenserId: '', mixerId: '', computerId: '', printerId: '' });
+    setNewSetData({
+      dispenserId: '', mixerId: '', computerId: '', printerId: '',
+      nppId: '', nppName: '', region: '', province: '', salesperson: '',
+      technician: user?.name || user?.full_name || 'Nguyễn Văn Hùng'
+    });
   };
 
   const handleOpenAddDevice = (category) => {
@@ -186,6 +212,7 @@ export default function AssetManagement({
   };
 
   const handleOpenEditSet = (set) => {
+    const targetNpp = npps.find(n => n.id === set.nppId);
     setEditingSet(set);
     setEditSetFormData({
       nppId: set.nppId || '',
@@ -194,8 +221,8 @@ export default function AssetManagement({
       province: set.province || '',
       status: set.status || 'TRONG_KHO',
       stabilizer: set.stabilizer || 'Không dùng ổn áp',
-      technician: set.technician || '',
-      salesperson: set.salesperson || '',
+      technician: set.technician || (user ? (user.name || user.full_name) : 'Nguyễn Văn Hùng'),
+      salesperson: set.salesperson || targetNpp?.salesperson || '',
       notes: set.notes || '',
       lastMaintenanceDate: set.lastMaintenanceDate || '',
       nextMaintenanceDue: set.nextMaintenanceDue || ''
@@ -301,7 +328,7 @@ export default function AssetManagement({
           )}
 
           {activeSubTab === 'comboSets' && (
-            <button className="btn btn-primary" onClick={() => setShowAssembleModal(true)}>
+            <button className="btn btn-primary" onClick={handleOpenAssembleModal}>
               <PlusCircle size={18} />
               <span>+ Ghép Bộ Thiết Bị Mới (Combo)</span>
             </button>
@@ -1277,6 +1304,7 @@ export default function AssetManagement({
                         nppName: targetNpp ? targetNpp.name : 'Kho Tổng Trung Tâm',
                         region: targetNpp ? (targetNpp.region || '') : '',
                         province: targetNpp ? (targetNpp.province || '') : '',
+                        salesperson: targetNpp ? (targetNpp.salesperson || '') : '',
                         status: targetNpp ? 'DA_LAP_DAT' : 'TRONG_KHO'
                       });
                     }}
@@ -1284,7 +1312,7 @@ export default function AssetManagement({
                     <option value="">-- Kho Tổng Trung Tâm (Chưa chọn NPP) --</option>
                     {npps.map(npp => (
                       <option key={npp.id} value={npp.id}>
-                        {npp.name} ({npp.code || npp.id}) — {npp.province || npp.region || 'TQ'}
+                        {npp.name} ({npp.code || npp.id}) — {npp.province || npp.region || 'TQ'} {npp.salesperson ? `(KD: ${npp.salesperson})` : ''}
                       </option>
                     ))}
                   </select>
@@ -1292,21 +1320,32 @@ export default function AssetManagement({
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
                   <div className="form-group">
-                    <label className="form-label">Kỹ Thuật Viên Phụ Trách</label>
-                    <input
-                      type="text"
-                      className="form-input"
-                      placeholder="VD: Nguyễn Văn Hùng..."
+                    <label className="form-label">🛠️ Kỹ Thuật Viên Phụ Trách</label>
+                    <select
+                      className="form-select"
                       value={newSetData.technician || ''}
                       onChange={e => setNewSetData({ ...newSetData, technician: e.target.value })}
-                    />
+                    >
+                      <option value="">-- Chọn tài khoản Kỹ Thuật Viên --</option>
+                      {user && (user.name || user.full_name) && (
+                        <option value={user.name || user.full_name}>
+                          👤 {user.name || user.full_name} ({user.role === 'admin' ? 'Admin' : user.role === 'qc' ? 'QC/KTV' : 'Tài khoản'})
+                        </option>
+                      )}
+                      <option value="Nguyễn Văn Hùng">🛠️ Nguyễn Văn Hùng (KTV Miền Bắc)</option>
+                      <option value="Lê Thanh Tùng">🛠️ Lê Thanh Tùng (KTV Miền Bắc)</option>
+                      <option value="Trần Minh Hoàng">🛠️ Trần Minh Hoàng (QC / KTV Trưởng)</option>
+                      <option value="Phạm Quốc Hùng">🛠️ Phạm Quốc Hùng (KTV Miền Trung)</option>
+                      <option value="Đặng Văn Nam">🛠️ Đặng Văn Nam (KTV Miền Nam)</option>
+                      <option value="Quản lý Kho">📦 Quản lý Kho</option>
+                    </select>
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Kinh Doanh Phụ Trách</label>
+                    <label className="form-label">💼 Kinh Doanh Phụ Trách (Tự động từ NPP)</label>
                     <input
                       type="text"
                       className="form-input"
-                      placeholder="VD: Trần Văn Nam (NVKD)..."
+                      placeholder="Tự động điền theo NPP chọn ở trên..."
                       value={newSetData.salesperson || ''}
                       onChange={e => setNewSetData({ ...newSetData, salesperson: e.target.value })}
                     />
@@ -1462,7 +1501,8 @@ export default function AssetManagement({
                           nppId: '',
                           nppName: 'Kho Tổng Trung Tâm',
                           region: '',
-                          province: ''
+                          province: '',
+                          salesperson: ''
                         });
                       } else {
                         const targetNpp = npps.find(n => n.id === selectedId);
@@ -1471,7 +1511,8 @@ export default function AssetManagement({
                           nppId: selectedId,
                           nppName: targetNpp ? targetNpp.name : editSetFormData.nppName,
                           region: targetNpp ? (targetNpp.region || editSetFormData.region) : editSetFormData.region,
-                          province: targetNpp ? (targetNpp.province || editSetFormData.province) : editSetFormData.province
+                          province: targetNpp ? (targetNpp.province || editSetFormData.province) : editSetFormData.province,
+                          salesperson: targetNpp ? (targetNpp.salesperson || editSetFormData.salesperson) : editSetFormData.salesperson
                         });
                       }
                     }}
@@ -1479,7 +1520,7 @@ export default function AssetManagement({
                     <option value="">-- Kho Tổng Trung Tâm (Chưa chọn NPP) --</option>
                     {npps.map(npp => (
                       <option key={npp.id} value={npp.id}>
-                        {npp.name} ({npp.code || npp.id}) — {npp.province || npp.region || 'TQ'}
+                        {npp.name} ({npp.code || npp.id}) — {npp.province || npp.region || 'TQ'} {npp.salesperson ? `(KD: ${npp.salesperson})` : ''}
                       </option>
                     ))}
                   </select>
@@ -1554,20 +1595,32 @@ export default function AssetManagement({
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                   <div className="form-group">
-                    <label className="form-label">Kỹ Thuật Viên Phụ Trách</label>
-                    <input 
-                      type="text" 
-                      className="form-input" 
-                      value={editSetFormData.technician || ''} 
-                      onChange={e => setEditSetFormData({ ...editSetFormData, technician: e.target.value })} 
-                    />
+                    <label className="form-label">🛠️ Kỹ Thuật Viên Phụ Trách</label>
+                    <select
+                      className="form-select"
+                      value={editSetFormData.technician || ''}
+                      onChange={e => setEditSetFormData({ ...editSetFormData, technician: e.target.value })}
+                    >
+                      <option value="">-- Chọn tài khoản Kỹ Thuật Viên --</option>
+                      {user && (user.name || user.full_name) && (
+                        <option value={user.name || user.full_name}>
+                          👤 {user.name || user.full_name} ({user.role === 'admin' ? 'Admin' : user.role === 'qc' ? 'QC/KTV' : 'Tài khoản'})
+                        </option>
+                      )}
+                      <option value="Nguyễn Văn Hùng">🛠️ Nguyễn Văn Hùng (KTV Miền Bắc)</option>
+                      <option value="Lê Thanh Tùng">🛠️ Lê Thanh Tùng (KTV Miền Bắc)</option>
+                      <option value="Trần Minh Hoàng">🛠️ Trần Minh Hoàng (QC / KTV Trưởng)</option>
+                      <option value="Phạm Quốc Hùng">🛠️ Phạm Quốc Hùng (KTV Miền Trung)</option>
+                      <option value="Đặng Văn Nam">🛠️ Đặng Văn Nam (KTV Miền Nam)</option>
+                      <option value="Quản lý Kho">📦 Quản lý Kho</option>
+                    </select>
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Kinh Doanh Phụ Trách</label>
+                    <label className="form-label">💼 Kinh Doanh Phụ Trách (Tự động từ NPP)</label>
                     <input 
                       type="text" 
                       className="form-input" 
-                      placeholder="VD: Trần Văn Nam (NVKD)..."
+                      placeholder="Tự động điền theo NPP..."
                       value={editSetFormData.salesperson || ''} 
                       onChange={e => setEditSetFormData({ ...editSetFormData, salesperson: e.target.value })} 
                     />

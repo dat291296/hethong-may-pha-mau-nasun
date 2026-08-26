@@ -558,12 +558,12 @@ function mapSystemSetToDb(obj) {
   delete dbObj.computerSerial;
   delete dbObj.printerId;
   delete dbObj.printerModel;
+  delete dbObj.printer_model;
   delete dbObj.printerSerial;
   delete dbObj.installDate;
   delete dbObj.installedDate;
   delete dbObj.lastMaintenanceDate;
   delete dbObj.nextMaintenanceDue;
-  delete dbObj.salesperson;
   delete dbObj.tintingSoftware;
   delete dbObj.softwareVersion;
   delete dbObj.agentStatus;

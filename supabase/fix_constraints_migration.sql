@@ -32,6 +32,9 @@ ALTER TABLE distributors DROP CONSTRAINT IF EXISTS distributors_brand_check;
 ALTER TABLE distributors ADD CONSTRAINT distributors_brand_check
   CHECK (brand IN ('Nasun', 'Natos'));
 
+-- 7. Add salesperson column to system_sets table
+ALTER TABLE system_sets ADD COLUMN IF NOT EXISTS salesperson TEXT DEFAULT '';
+
 -- Done! All constraints updated.
 SELECT 'Migration completed successfully.' AS result;
 

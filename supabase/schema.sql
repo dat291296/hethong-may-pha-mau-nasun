@@ -149,6 +149,7 @@ CREATE TABLE IF NOT EXISTS system_sets (
   last_maintenance_date DATE,
   next_maintenance_due  DATE,
   technician            TEXT DEFAULT '',
+  salesperson           TEXT DEFAULT '',
   stabilizer            TEXT DEFAULT '',
   notes                 TEXT DEFAULT '',
   installation_photos   JSONB DEFAULT '[]',
