@@ -41,6 +41,7 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
     address: '',
     locationCoordinates: '',
     contactPerson: '',
+    salesperson: '',
     status: 'Đang hợp tác',
     photos: []
   });
@@ -74,6 +75,7 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
       address: '',
       locationCoordinates: '',
       contactPerson: '',
+      salesperson: '',
       status: 'Đang hợp tác',
       photos: []
     });
@@ -94,6 +96,7 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
       address: npp.address || '',
       locationCoordinates: npp.locationCoordinates || '',
       contactPerson: npp.contactPerson || '',
+      salesperson: npp.salesperson || '',
       status: npp.status || 'Đang hợp tác',
       photos: npp.photos || []
     });
@@ -178,7 +181,10 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
       return;
     }
 
-    const newId = `NPP-${formData.region === 'Miền Bắc' ? 'HN' : formData.region === 'Miền Trung' ? 'DN' : 'HCM'}-00${npps.length + 1}`;
+    const regionCode = formData.region === 'Miền Bắc' ? 'MB' : formData.region === 'Miền Trung' ? 'MT' : 'MN';
+    const regionNpps = npps.filter(n => n.region === formData.region);
+    const seq = String(regionNpps.length + 1).padStart(3, '0');
+    const newId = `NPP-${regionCode}-${seq}`;
     const mapsUrl = formData.locationCoordinates 
       ? `https://maps.google.com/?q=${encodeURIComponent(formData.locationCoordinates)}`
       : '';
@@ -331,8 +337,16 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
                   </div>
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
                     <MapPin size={14} color="var(--accent-cyan)" style={{ flexShrink: 0, marginTop: '2px' }} />
-                    <span>{npp.address} ({npp.region})</span>
+                    <span>{npp.province} ({npp.region})</span>
                   </div>
+
+                  {/* Salesperson */}
+                  {npp.salesperson && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '0.8rem' }}>💼</span>
+                      <span style={{ color: 'var(--accent-emerald)', fontWeight: '600' }}>KD: {npp.salesperson}</span>
+                    </div>
+                  )}
 
                   {/* Location Coordinates & Google Maps Link */}
                   {npp.locationCoordinates && (
@@ -403,6 +417,17 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
                     <label className="form-label">Người Liên Hệ / Chủ Đại Lý</label>
                     <input type="text" className="form-input" placeholder="Tên người đại diện..." value={formData.contactPerson} onChange={e => setFormData({ ...formData, contactPerson: e.target.value })} />
                   </div>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">💼 Nhân Viên Kinh Doanh Phụ Trách</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Tên nhân viên kinh doanh quản lý NPP này..."
+                    value={formData.salesperson}
+                    onChange={e => setFormData({ ...formData, salesperson: e.target.value })}
+                  />
                 </div>
 
                 <div className="responsive-form-grid">
@@ -534,6 +559,12 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px', background: 'var(--bg-main)', padding: '16px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
                 <div><strong>Khu Vực:</strong> {selectedNpp.region} ({selectedNpp.province})</div>
                 <div><strong>SĐT Liên Hệ:</strong> {selectedNpp.phone} ({selectedNpp.contactPerson || 'Đại diện'})</div>
+                {selectedNpp.salesperson && (
+                  <div style={{ gridColumn: 'span 2' }}>
+                    <strong>💼 Nhân Viên KD Phụ Trách:</strong> 
+                    <span style={{ color: 'var(--accent-emerald)', fontWeight: '600' }}>{selectedNpp.salesperson}</span>
+                  </div>
+                )}
                 <div style={{ gridColumn: 'span 2' }}>
                   <strong>Địa Chỉ:</strong> {selectedNpp.address}
                 </div>

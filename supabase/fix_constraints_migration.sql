@@ -23,5 +23,8 @@ ALTER TABLE printers DROP CONSTRAINT IF EXISTS printers_status_check;
 ALTER TABLE printers ADD CONSTRAINT printers_status_check
   CHECK (status IN ('Mới 100%','Đang chạy tốt','Cần bảo trì','Hỏng đầu in','Hỏng đầu phun','Hỏng nặng'));
 
+-- 5. Add salesperson column to distributors (NPP) table
+ALTER TABLE distributors ADD COLUMN IF NOT EXISTS salesperson TEXT DEFAULT '';
+
 -- Done! All constraints updated.
 SELECT 'Migration completed successfully.' AS result;

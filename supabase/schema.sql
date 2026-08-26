@@ -104,6 +104,7 @@ CREATE TABLE IF NOT EXISTS distributors (
   name                 TEXT NOT NULL,
   phone                TEXT NOT NULL DEFAULT '',
   contact_person       TEXT DEFAULT '',
+  salesperson          TEXT DEFAULT '',
   region               TEXT NOT NULL DEFAULT 'Miền Bắc',
   province             TEXT DEFAULT '',
   address              TEXT DEFAULT '',
