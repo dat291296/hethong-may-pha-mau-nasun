@@ -12,8 +12,10 @@ import {
   Edit3,
   Trash2,
   X,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Camera
 } from 'lucide-react';
+import QrScannerModal from './QrScannerModal';
 import {
   INITIAL_DISPENSERS,
   INITIAL_MIXERS,
@@ -33,6 +35,7 @@ export default function AssetManagement({
   onEditDevice,
   onDeleteDevice,
   onOpenImportModal,
+  onExportDevicesExcel,
   onEditSet,
   onDeleteSet
 }) {
@@ -40,6 +43,8 @@ export default function AssetManagement({
   const [modelFilter, setModelFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [showAssembleModal, setShowAssembleModal] = useState(false);
+  const [showScanSerialModal, setShowScanSerialModal] = useState(false);
+  const [scanTargetField, setScanTargetField] = useState('add');
 
   // Helper to find assigned set & NPP info for any device item
   const getAssignedInfo = (item) => {
@@ -132,6 +137,7 @@ export default function AssetManagement({
     const isAssigned = !!editFormData.isAssigned && !!editFormData.setCode;
     const finalData = {
       ...editFormData,
+      serial: editFormData.serial?.trim() || (editingDevice.category === 'computer' ? 'Không seri' : editFormData.serial),
       isAssigned,
       setCode: isAssigned ? editFormData.setCode : null
     };
@@ -163,11 +169,19 @@ export default function AssetManagement({
 
   const handleAddDeviceSubmit = (e) => {
     e.preventDefault();
-    if (!addFormData.serial || !addFormData.model) {
-      alert('Vui lòng nhập Model và Số Seri!');
+    if (addDeviceCategory !== 'computer' && !addFormData.serial) {
+      alert('Vui lòng nhập Số Seri!');
       return;
     }
-    onAddStockDevice(addDeviceCategory, addFormData);
+    if (!addFormData.model && !addFormData.type) {
+      alert('Vui lòng nhập Model / Hệ máy!');
+      return;
+    }
+    const finalData = {
+      ...addFormData,
+      serial: addFormData.serial?.trim() || (addDeviceCategory === 'computer' ? 'Không seri' : 'N/A')
+    };
+    onAddStockDevice(addDeviceCategory, finalData);
     setShowAddDeviceModal(false);
   };
 
@@ -936,12 +950,28 @@ export default function AssetManagement({
 
                 {/* Serial */}
                 <div className="form-group">
-                  <label className="form-label">Số Seri (Serial Number - Duy nhất) *</label>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                    <label className="form-label" style={{ marginBottom: 0 }}>
+                      Số Seri (Serial Number) {addDeviceCategory !== 'computer' ? '*' : '(Không bắt buộc)'}
+                    </label>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      style={{ padding: '2px 10px', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'var(--accent-cyan)', border: '1px solid var(--accent-cyan)' }}
+                      onClick={() => {
+                        setScanTargetField('add');
+                        setShowScanSerialModal(true);
+                      }}
+                    >
+                      <Camera size={14} />
+                      <span>📷 Quét Mã Vạch</span>
+                    </button>
+                  </div>
                   <input
                     type="text"
                     className="form-input"
-                    required
-                    placeholder="VD: ST-A1-00123, HERO-EU-5541..."
+                    required={addDeviceCategory !== 'computer'}
+                    placeholder={addDeviceCategory === 'computer' ? 'Tùy chọn (Bấm Quét mã vạch hoặc để trống)' : 'Nhập seri hoặc bấm Quét mã vạch'}
                     value={addFormData.serial}
                     onChange={e => setAddFormData({ ...addFormData, serial: e.target.value })}
                   />
@@ -966,6 +996,7 @@ export default function AssetManagement({
                       <option value="Lắc xoay khép kín">Lắc xoay khép kín</option>
                       <option value="Lắc rung đứng">Lắc rung đứng</option>
                       <option value="Lắc rung ngang">Lắc rung ngang</option>
+                      <option value="Lắc mâm xoay">Lắc mâm xoay</option>
                     </select>
                   </div>
                 )}
@@ -1028,7 +1059,7 @@ export default function AssetManagement({
         <div className="modal-overlay">
           <div className="modal-content" style={{ maxWidth: '580px' }}>
             <div className="modal-header">
-              <h3 style={{ fontWeight: '800' }}>Chỉnh Sửa Thông Tin Thiết Bị [{editFormData.serial}]</h3>
+              <h3 style={{ fontWeight: '800' }}>Chỉnh Sửa Thông Tin Thiết Bị [{editFormData.serial || 'Không seri'}]</h3>
               <button className="btn btn-secondary btn-sm" onClick={() => setEditingDevice(null)}>✕</button>
             </div>
             <form onSubmit={handleEditSubmit}>
@@ -1050,8 +1081,31 @@ export default function AssetManagement({
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Số Seri (Serial Number - Duy nhất)</label>
-                  <input type="text" className="form-input" required value={editFormData.serial || ''} onChange={e => setEditFormData({ ...editFormData, serial: e.target.value })} />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                    <label className="form-label" style={{ marginBottom: 0 }}>
+                      Số Seri (Serial Number) {editingDevice.category !== 'computer' ? '*' : '(Không bắt buộc)'}
+                    </label>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      style={{ padding: '2px 10px', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'var(--accent-cyan)', border: '1px solid var(--accent-cyan)' }}
+                      onClick={() => {
+                        setScanTargetField('edit');
+                        setShowScanSerialModal(true);
+                      }}
+                    >
+                      <Camera size={14} />
+                      <span>📷 Quét Mã Vạch</span>
+                    </button>
+                  </div>
+                  <input
+                    type="text"
+                    className="form-input"
+                    required={editingDevice.category !== 'computer'}
+                    placeholder={editingDevice.category === 'computer' ? 'Tùy chọn (Bấm Quét mã vạch hoặc để trống)' : 'Nhập seri hoặc bấm Quét mã vạch'}
+                    value={editFormData.serial || ''}
+                    onChange={e => setEditFormData({ ...editFormData, serial: e.target.value })}
+                  />
                 </div>
 
                 <div className="form-group">
@@ -1063,6 +1117,22 @@ export default function AssetManagement({
                     <option value="Hỏng đầu phun">Hỏng đầu phun / Hư hỏng</option>
                   </select>
                 </div>
+
+                {editingDevice.category === 'mixer' && (
+                  <div className="form-group">
+                    <label className="form-label">Loại Máy Lắc (Chỉnh sửa)</label>
+                    <select
+                      className="form-select"
+                      value={editFormData.type || 'Lắc xoay khép kín'}
+                      onChange={e => setEditFormData({ ...editFormData, type: e.target.value })}
+                    >
+                      <option value="Lắc xoay khép kín">Lắc xoay khép kín</option>
+                      <option value="Lắc rung đứng">Lắc rung đứng</option>
+                      <option value="Lắc rung ngang">Lắc rung ngang</option>
+                      <option value="Lắc mâm xoay">Lắc mâm xoay</option>
+                    </select>
+                  </div>
+                )}
 
                 {editingDevice.category === 'computer' && (
                   <>
@@ -1489,6 +1559,21 @@ export default function AssetManagement({
             </form>
           </div>
         </div>
+      )}
+
+      {/* QR & BARCODE CAMERA SCANNER MODAL */}
+      {showScanSerialModal && (
+        <QrScannerModal
+          onScanSuccess={(scannedText) => {
+            if (scanTargetField === 'add') {
+              setAddFormData(prev => ({ ...prev, serial: scannedText }));
+            } else if (scanTargetField === 'edit') {
+              setEditFormData(prev => ({ ...prev, serial: scannedText }));
+            }
+            setShowScanSerialModal(false);
+          }}
+          onClose={() => setShowScanSerialModal(false)}
+        />
       )}
 
     </div>
