@@ -265,7 +265,7 @@ export default function Dashboard({
               </tr>
             </thead>
             <tbody>
-              {systemSets.map((set) => (
+              {[...systemSets].sort((a, b) => String(a.setCode || a.id || '').localeCompare(String(b.setCode || b.id || ''), undefined, { numeric: true, sensitivity: 'base' })).map((set) => (
                 <tr key={set.id}>
                   <td style={{ fontWeight: '700', color: 'var(--accent-cyan)' }}>{set.setCode}</td>
                   <td style={{ fontWeight: '600' }}>{set.nppName || 'Kho Tổng'}</td>
@@ -314,7 +314,7 @@ export default function Dashboard({
 
         {/* Mobile View Cards */}
         <div className="mobile-only mobile-card-list">
-          {systemSets.map((set) => (
+          {[...systemSets].sort((a, b) => String(a.setCode || a.id || '').localeCompare(String(b.setCode || b.id || ''), undefined, { numeric: true, sensitivity: 'base' })).map((set) => (
             <div className="mobile-card" key={set.id}>
               <div className="mobile-card-header">
                 <div>

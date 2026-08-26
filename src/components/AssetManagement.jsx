@@ -215,11 +215,24 @@ export default function AssetManagement({
     }
   };
 
-  const filteredSets = systemSets.filter(s => {
-    const matchesModel = modelFilter === 'ALL' || s.dispenserModel === modelFilter;
-    const matchesStatus = statusFilter === 'ALL' || s.status === statusFilter;
-    return matchesModel && matchesStatus;
-  });
+  const naturalSortCode = (a, b, key = 'id') => {
+    const valA = String(a?.[key] || a?.id || a?.setCode || '');
+    const valB = String(b?.[key] || b?.id || b?.setCode || '');
+    return valA.localeCompare(valB, undefined, { numeric: true, sensitivity: 'base' });
+  };
+
+  const filteredSets = [...systemSets]
+    .filter(s => {
+      const matchesModel = modelFilter === 'ALL' || s.dispenserModel === modelFilter;
+      const matchesStatus = statusFilter === 'ALL' || s.status === statusFilter;
+      return matchesModel && matchesStatus;
+    })
+    .sort((a, b) => naturalSortCode(a, b, 'setCode'));
+
+  const sortedDispensers = [...dispensers].sort((a, b) => naturalSortCode(a, b, 'id'));
+  const sortedMixers = [...mixers].sort((a, b) => naturalSortCode(a, b, 'id'));
+  const sortedComputers = [...computers].sort((a, b) => naturalSortCode(a, b, 'id'));
+  const sortedPrinters = [...printers].sort((a, b) => naturalSortCode(a, b, 'id'));
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -470,7 +483,7 @@ export default function AssetManagement({
                 </tr>
               </thead>
               <tbody>
-                {dispensers.map(item => (
+                {sortedDispensers.map(item => (
                   <tr key={item.id}>
                     <td>{item.id}</td>
                     <td style={{ fontWeight: '700' }}>{item.model}</td>
@@ -514,7 +527,7 @@ export default function AssetManagement({
 
           {/* Mobile View Cards */}
           <div className="mobile-only mobile-card-list">
-            {dispensers.map(item => (
+            {sortedDispensers.map(item => (
               <div className="mobile-card" key={item.id}>
                 <div className="mobile-card-header">
                   <div>
@@ -578,7 +591,7 @@ export default function AssetManagement({
                 </tr>
               </thead>
               <tbody>
-                {mixers.map(item => (
+                {sortedMixers.map(item => (
                   <tr key={item.id}>
                     <td>{item.id}</td>
                     <td style={{ fontWeight: '700' }}>{item.model}</td>
@@ -617,7 +630,7 @@ export default function AssetManagement({
 
           {/* Mobile View Cards */}
           <div className="mobile-only mobile-card-list">
-            {mixers.map(item => (
+            {sortedMixers.map(item => (
               <div className="mobile-card" key={item.id}>
                 <div className="mobile-card-header">
                   <div>
@@ -687,7 +700,7 @@ export default function AssetManagement({
                 </tr>
               </thead>
               <tbody>
-                {computers.map(item => (
+                {sortedComputers.map(item => (
                   <tr key={item.id}>
                     <td>{item.id}</td>
                     <td style={{ fontWeight: '700' }}>{item.type}</td>
@@ -734,7 +747,7 @@ export default function AssetManagement({
 
           {/* Mobile View Cards */}
           <div className="mobile-only mobile-card-list">
-            {computers.map(item => (
+            {sortedComputers.map(item => (
               <div className="mobile-card" key={item.id}>
                 <div className="mobile-card-header">
                   <div>
@@ -809,7 +822,7 @@ export default function AssetManagement({
                 </tr>
               </thead>
               <tbody>
-                {printers.map(item => (
+                {sortedPrinters.map(item => (
                   <tr key={item.id}>
                     <td>{item.id}</td>
                     <td style={{ fontWeight: '700' }}>{item.model}</td>
@@ -848,7 +861,7 @@ export default function AssetManagement({
 
           {/* Mobile View Cards */}
           <div className="mobile-only mobile-card-list">
-            {printers.map(item => (
+            {sortedPrinters.map(item => (
               <div className="mobile-card" key={item.id}>
                 <div className="mobile-card-header">
                   <div>
@@ -1292,19 +1305,19 @@ export default function AssetManagement({
 
                   const allDisp = (dispensers && dispensers.length > 0) ? dispensers : INITIAL_DISPENSERS;
                   const freeDisp = allDisp.filter(isDeviceFree);
-                  const availDisp = freeDisp.length > 0 ? freeDisp : allDisp;
+                  const availDisp = [...(freeDisp.length > 0 ? freeDisp : allDisp)].sort((a, b) => naturalSortCode(a, b, 'id'));
 
                   const allMix = (mixers && mixers.length > 0) ? mixers : INITIAL_MIXERS;
                   const freeMix = allMix.filter(isDeviceFree);
-                  const availMix = freeMix.length > 0 ? freeMix : allMix;
+                  const availMix = [...(freeMix.length > 0 ? freeMix : allMix)].sort((a, b) => naturalSortCode(a, b, 'id'));
 
                   const allPc = (computers && computers.length > 0) ? computers : INITIAL_COMPUTERS;
                   const freePc = allPc.filter(isDeviceFree);
-                  const availPc = freePc.length > 0 ? freePc : allPc;
+                  const availPc = [...(freePc.length > 0 ? freePc : allPc)].sort((a, b) => naturalSortCode(a, b, 'id'));
 
                   const allPrn = (printers && printers.length > 0) ? printers : INITIAL_PRINTERS;
                   const freePrn = allPrn.filter(isDeviceFree);
-                  const availPrn = freePrn.length > 0 ? freePrn : allPrn;
+                  const availPrn = [...(freePrn.length > 0 ? freePrn : allPrn)].sort((a, b) => naturalSortCode(a, b, 'id'));
 
                   return (
                     <>
