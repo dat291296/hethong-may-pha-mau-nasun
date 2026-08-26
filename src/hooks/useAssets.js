@@ -401,8 +401,8 @@ function mapDbToSystemSet(row) {
     setCode: row.set_code, nppId: row.npp_id, nppName: row.npp_name, region: row.region, province: row.province,
     status: row.status, dispenserId: row.dispenser_id, dispenserModel: row.dispenser_model, dispenserSerial: row.dispenser_serial,
     mixerId: row.mixer_id, mixerModel: row.mixer_model, mixerSerial: row.mixer_serial,
-    computerId: row.computer_id, computerType: row.computer_type, computerSerial: row.computer_serial,
-    printerId: row.printer_id, printerSerial: row.printer_serial,
+    computerId: row.computer_id, computerType: row.computer_type, computerSerial: row.computer_serial, pcType: row.computer_type, pcSerial: row.computer_serial,
+    printerId: row.printer_id, printerSerial: row.printer_serial, printerModel: 'QL700',
     installDate: row.install_date, lastMaintenanceDate: row.last_maintenance_date, nextMaintenanceDue: row.next_maintenance_due,
     technician: row.technician, salesperson: row.salesperson || row.sales_person || '', notes: row.notes,
   };

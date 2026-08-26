@@ -417,7 +417,7 @@ export default function AssetManagement({
                   <th>Nhà Phân Phối</th>
                   <th>Máy Chiết (Seri)</th>
                   <th>Máy Lắc (Seri)</th>
-                  <th>Máy Tính (Loại/OS)</th>
+                  <th>Máy Tính (Cấu hình)</th>
                   <th>Máy In (Model/Seri)</th>
                   <th>Cán Bộ Phụ Trách</th>
                   <th>Ổn Áp (Ghi Nhận)</th>
@@ -426,113 +426,133 @@ export default function AssetManagement({
                 </tr>
               </thead>
               <tbody>
-                {filteredSets.map(set => (
-                  <tr key={set.id}>
-                    <td style={{ fontWeight: '700', color: 'var(--accent-cyan)' }}>{set.setCode}</td>
-                    <td style={{ fontWeight: '600' }}>{set.nppName || 'Kho Tổng Trung Tâm'}</td>
-                    <td>
-                      <div style={{ fontWeight: '600' }}>{set.dispenserModel}</div>
-                      <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{set.dispenserSerial}</div>
-                    </td>
-                    <td>
-                      <div>{set.mixerModel}</div>
-                      <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{set.mixerSerial}</div>
-                    </td>
-                    <td>
-                      <div>{set.pcType} ({set.pcOs})</div>
-                      <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{set.pcSerial}</div>
-                    </td>
-                    <td>
-                      <div>{set.printerModel}</div>
-                      <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{set.printerSerial}</div>
-                    </td>
-                    <td>
-                      <div style={{ fontSize: '0.8rem', fontWeight: '600' }}>🛠️ {set.technician || 'Chưa gán KTV'}</div>
-                      <div style={{ fontSize: '0.775rem', color: 'var(--accent-cyan)', marginTop: '2px' }}>💼 KD: {set.salesperson || 'Chưa gán NVKD'}</div>
-                    </td>
-                    <td>
-                      {set.stabilizer?.includes('Chưa') || set.stabilizer?.includes('Không') ? (
-                        <span className="badge badge-warning">⚠️ {set.stabilizer}</span>
-                      ) : (
-                        <span className="badge badge-success">✓ {set.stabilizer}</span>
-                      )}
-                    </td>
-                    <td>
-                      {set.status === 'DA_LAP_DAT' && <span className="badge badge-success">● Đã Lắp Đặt</span>}
-                      {set.status === 'TRONG_KHO' && <span className="badge badge-info">● Trong Kho</span>}
-                      {set.status === 'DA_THU_HOI' && <span className="badge badge-danger">● Đã Thu Hồi</span>}
-                      {set.status === 'BAO_THUONG_BAO_TRI' && <span className="badge badge-warning">● Bảo Trì</span>}
-                    </td>
-                    <td>
-                      <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
-                        <button className="btn btn-secondary btn-sm" style={{ padding: '4px 8px' }} onClick={() => handleOpenEditSet(set)}>
-                          <Edit3 size={14} color="var(--accent-cyan)" />
-                        </button>
-                        <button className="btn btn-danger btn-sm" style={{ padding: '4px 8px' }} onClick={() => handleDeleteSet(set.setCode)}>
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {filteredSets.map(set => {
+                  const pcObj = (computers || []).find(c => (set.computerId && c.id === set.computerId) || (set.computerSerial && c.serial === set.computerSerial));
+                  const pcSpecsText = pcObj?.specs || set.pcSpecs || (set.pcType ? `${set.pcType} (${set.pcOs || ''})` : set.computerType || 'Core i5 / 16GB / 512GB SSD');
+                  const pcSerialText = set.computerSerial || set.pcSerial || pcObj?.serial || 'N/A';
+
+                  const prnObj = (printers || []).find(p => (set.printerId && p.id === set.printerId) || (set.printerSerial && p.serial === set.printerSerial));
+                  const printerModelText = prnObj?.model || set.printerModel || 'QL700';
+                  const printerSerialText = set.printerSerial || prnObj?.serial || 'N/A';
+
+                  return (
+                    <tr key={set.id || set.setCode}>
+                      <td style={{ fontWeight: '700', color: 'var(--accent-cyan)' }}>{set.setCode}</td>
+                      <td style={{ fontWeight: '600' }}>{set.nppName || 'Kho Tổng Trung Tâm'}</td>
+                      <td>
+                        <div style={{ fontWeight: '600' }}>{set.dispenserModel}</div>
+                        <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{set.dispenserSerial}</div>
+                      </td>
+                      <td>
+                        <div>{set.mixerModel}</div>
+                        <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{set.mixerSerial}</div>
+                      </td>
+                      <td>
+                        <div style={{ fontWeight: '600' }}>{pcSpecsText}</div>
+                        <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>Seri: {pcSerialText}</div>
+                      </td>
+                      <td>
+                        <div style={{ fontWeight: '600' }}>{printerModelText}</div>
+                        <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>Seri: {printerSerialText}</div>
+                      </td>
+                      <td>
+                        <div style={{ fontSize: '0.8rem', fontWeight: '600' }}>🛠️ {set.technician || 'Chưa gán KTV'}</div>
+                        <div style={{ fontSize: '0.775rem', color: 'var(--accent-cyan)', marginTop: '2px' }}>💼 KD: {set.salesperson || 'Chưa gán NVKD'}</div>
+                      </td>
+                      <td>
+                        {set.stabilizer?.includes('Chưa') || set.stabilizer?.includes('Không') ? (
+                          <span className="badge badge-warning">⚠️ {set.stabilizer}</span>
+                        ) : (
+                          <span className="badge badge-success">✓ {set.stabilizer}</span>
+                        )}
+                      </td>
+                      <td>
+                        {set.status === 'DA_LAP_DAT' && <span className="badge badge-success">● Đã Lắp Đặt</span>}
+                        {set.status === 'TRONG_KHO' && <span className="badge badge-info">● Trong Kho</span>}
+                        {set.status === 'DA_THU_HOI' && <span className="badge badge-danger">● Đã Thu Hồi</span>}
+                        {set.status === 'BAO_THUONG_BAO_TRI' && <span className="badge badge-warning">● Bảo Trì</span>}
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
+                          <button className="btn btn-secondary btn-sm" style={{ padding: '4px 8px' }} onClick={() => handleOpenEditSet(set)}>
+                            <Edit3 size={14} color="var(--accent-cyan)" />
+                          </button>
+                          <button className="btn btn-danger btn-sm" style={{ padding: '4px 8px' }} onClick={() => handleDeleteSet(set.setCode)}>
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
 
           {/* Mobile View Cards */}
           <div className="mobile-only mobile-card-list">
-            {filteredSets.map(set => (
-              <div className="mobile-card" key={set.id}>
-                <div className="mobile-card-header">
-                  <div>
-                    <span className="mobile-card-title" style={{ color: 'var(--accent-cyan)' }}>{set.setCode}</span>
-                    <div className="mobile-card-subtitle">{set.nppName || 'Kho Tổng Trung Tâm'}</div>
+            {filteredSets.map(set => {
+              const pcObj = (computers || []).find(c => (set.computerId && c.id === set.computerId) || (set.computerSerial && c.serial === set.computerSerial));
+              const pcSpecsText = pcObj?.specs || set.pcSpecs || (set.pcType ? `${set.pcType} (${set.pcOs || ''})` : set.computerType || 'Core i5 / 16GB / 512GB SSD');
+              const pcSerialText = set.computerSerial || set.pcSerial || pcObj?.serial || 'N/A';
+
+              const prnObj = (printers || []).find(p => (set.printerId && p.id === set.printerId) || (set.printerSerial && p.serial === set.printerSerial));
+              const printerModelText = prnObj?.model || set.printerModel || 'QL700';
+              const printerSerialText = set.printerSerial || prnObj?.serial || 'N/A';
+
+              return (
+                <div className="mobile-card" key={set.id || set.setCode}>
+                  <div className="mobile-card-header">
+                    <div>
+                      <span className="mobile-card-title" style={{ color: 'var(--accent-cyan)' }}>{set.setCode}</span>
+                      <div className="mobile-card-subtitle">{set.nppName || 'Kho Tổng Trung Tâm'}</div>
+                    </div>
+                    <div>
+                      {set.status === 'DA_LAP_DAT' && <span className="badge badge-success">🟢 Đã Lắp</span>}
+                      {set.status === 'TRONG_KHO' && <span className="badge badge-info">🔵 Kho</span>}
+                      {set.status === 'DA_THU_HOI' && <span className="badge badge-danger">🔴 Thu Hồi</span>}
+                      {set.status === 'BAO_THUONG_BAO_TRI' && <span className="badge badge-warning">🟡 Bảo Trì</span>}
+                    </div>
                   </div>
-                  <div>
-                    {set.status === 'DA_LAP_DAT' && <span className="badge badge-success">🟢 Đã Lắp</span>}
-                    {set.status === 'TRONG_KHO' && <span className="badge badge-info">🔵 Kho</span>}
-                    {set.status === 'DA_THU_HOI' && <span className="badge badge-danger">🔴 Thu Hồi</span>}
-                    {set.status === 'BAO_THUONG_BAO_TRI' && <span className="badge badge-warning">🟡 Bảo Trì</span>}
+                  <div className="mobile-card-body">
+                    <div className="mobile-card-row">
+                      <span className="mobile-card-label">Máy Chiết:</span>
+                      <span className="mobile-card-value">{set.dispenserModel} ({set.dispenserSerial})</span>
+                    </div>
+                    <div className="mobile-card-row">
+                      <span className="mobile-card-label">Máy Lắc:</span>
+                      <span className="mobile-card-value">{set.mixerModel} ({set.mixerSerial})</span>
+                    </div>
+                    <div className="mobile-card-row">
+                      <span className="mobile-card-label">Máy Tính:</span>
+                      <span className="mobile-card-value">{pcSpecsText} (Seri: {pcSerialText})</span>
+                    </div>
+                    <div className="mobile-card-row">
+                      <span className="mobile-card-label">Máy In:</span>
+                      <span className="mobile-card-value">{printerModelText} (Seri: {printerSerialText})</span>
+                    </div>
+                    <div className="mobile-card-row">
+                      <span className="mobile-card-label">Cán bộ phụ trách:</span>
+                      <span className="mobile-card-value">🛠️ KTV: {set.technician || 'Chưa gán'} | 💼 KD: {set.salesperson || 'Chưa gán'}</span>
+                    </div>
+                    <div className="mobile-card-row">
+                      <span className="mobile-card-label">Ổn Áp:</span>
+                      <span className="mobile-card-value">{set.stabilizer}</span>
+                    </div>
+                  </div>
+                  <div className="mobile-card-actions">
+                    <button className="btn btn-secondary btn-sm" onClick={() => handleOpenEditSet(set)}>
+                      <Edit3 size={14} color="var(--accent-cyan)" />
+                      <span>Sửa</span>
+                    </button>
+                    <button className="btn btn-danger btn-sm" onClick={() => handleDeleteSet(set.setCode)}>
+                      <Trash2 size={14} />
+                      <span>Xóa</span>
+                    </button>
                   </div>
                 </div>
-                <div className="mobile-card-body">
-                  <div className="mobile-card-row">
-                    <span className="mobile-card-label">Máy Chiết:</span>
-                    <span className="mobile-card-value">{set.dispenserModel} ({set.dispenserSerial})</span>
-                  </div>
-                  <div className="mobile-card-row">
-                    <span className="mobile-card-label">Máy Lắc:</span>
-                    <span className="mobile-card-value">{set.mixerModel} ({set.mixerSerial})</span>
-                  </div>
-                  <div className="mobile-card-row">
-                    <span className="mobile-card-label">Máy Tính:</span>
-                    <span className="mobile-card-value">{set.pcType} ({set.pcOs})</span>
-                  </div>
-                  <div className="mobile-card-row">
-                    <span className="mobile-card-label">Máy In:</span>
-                    <span className="mobile-card-value">{set.printerModel} ({set.printerSerial})</span>
-                  </div>
-                  <div className="mobile-card-row">
-                    <span className="mobile-card-label">Cán bộ phụ trách:</span>
-                    <span className="mobile-card-value">🛠️ KTV: {set.technician || 'Chưa gán'} | 💼 KD: {set.salesperson || 'Chưa gán'}</span>
-                  </div>
-                  <div className="mobile-card-row">
-                    <span className="mobile-card-label">Ổn Áp:</span>
-                    <span className="mobile-card-value">{set.stabilizer}</span>
-                  </div>
-                </div>
-                <div className="mobile-card-actions">
-                  <button className="btn btn-secondary btn-sm" onClick={() => handleOpenEditSet(set)}>
-                    <Edit3 size={14} color="var(--accent-cyan)" />
-                    <span>Sửa</span>
-                  </button>
-                  <button className="btn btn-danger btn-sm" onClick={() => handleDeleteSet(set.setCode)}>
-                    <Trash2 size={14} />
-                    <span>Xóa</span>
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
