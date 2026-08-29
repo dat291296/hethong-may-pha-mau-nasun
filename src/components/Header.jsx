@@ -1,3 +1,4 @@
+import React, { useState, useEffect } from 'react';
 import { Bell, Search, PlusCircle, AlertTriangle, ShieldAlert, CheckCircle2, UserCheck, Wifi, WifiOff, RefreshCw, Menu, Database } from 'lucide-react';
 import RoleSelector from './RoleSelector.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
