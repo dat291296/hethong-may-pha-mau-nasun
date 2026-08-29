@@ -106,6 +106,15 @@ export default function DeviceRepairProcessing({
     }
   }, [prefilledTicket]);
 
+  // Reset scroll position of modal-body to top when modal opens
+  React.useEffect(() => {
+    if (showModal || editingTicket || selectedTicket) {
+      setTimeout(() => {
+        document.querySelectorAll('.modal-body').forEach(el => el.scrollTop = 0);
+      }, 50);
+    }
+  }, [showModal, editingTicket, selectedTicket]);
+
   // Form State
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],

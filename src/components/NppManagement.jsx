@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Building2, 
   PlusCircle, 
@@ -34,6 +34,15 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
   // Modal states
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingNpp, setEditingNpp] = useState(null); // NPP object being edited
+
+  // Reset scroll position of modal-body to top when modal opens
+  useEffect(() => {
+    if (showAddModal || editingNpp) {
+      setTimeout(() => {
+        document.querySelectorAll('.modal-body').forEach(el => el.scrollTop = 0);
+      }, 50);
+    }
+  }, [showAddModal, editingNpp]);
 
   // Form State (For both Add & Edit)
   const [formData, setFormData] = useState({

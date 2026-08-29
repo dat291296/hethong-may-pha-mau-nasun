@@ -350,22 +350,34 @@ body {
    MODAL SYSTEM — Final fix for iOS Safari & Android Chrome
    ══════════════════════════════════════════════════════════ */
 
-/* 1. Overlay */
-.modal-overlay {
+/* 1. Overlay - Highest Priority Z-Index above everything */
+.modal-overlay,
+.modal-backdrop {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(10, 18, 36, 0.85);
-  backdrop-filter: blur(5px);
-  -webkit-backdrop-filter: blur(5px);
-  z-index: 1000;
+  background: rgba(10, 18, 36, 0.88);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  z-index: 100000 !important; /* Ensure modal is always on top of all fixed elements */
   display: flex;
   align-items: flex-end;
   justify-content: center;
   padding: 0;
 }
 
+/* Hide mobile bottom navigation bar whenever any modal is active */
+body:has(.modal-overlay) .mobile-bottom-nav,
+body:has(.modal-backdrop) .mobile-bottom-nav,
+.modal-overlay ~ .mobile-bottom-nav,
+.modal-backdrop ~ .mobile-bottom-nav {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
 /* 2. Modal container — shared base */
-.modal-content {
+.modal-content,
+.modal-container {
   position: relative;
   background: var(--bg-card);
   border: 1px solid var(--border-color);
@@ -373,63 +385,70 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  box-shadow: 0 -4px 40px rgba(0,0,0,0.6);
+  box-shadow: 0 -8px 40px rgba(0,0,0,0.7);
 }
 
 /* Pull handle (mobile only) */
-.modal-content::before {
+.modal-content::before,
+.modal-container::before {
   content: '';
   display: block;
   flex-shrink: 0;
   width: 44px;
   height: 5px;
-  background: rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.2);
   border-radius: 3px;
-  margin: 10px auto 2px;
+  margin: 8px auto 2px;
 }
 
-/* 3. MOBILE PORTRAIT: bottom-sheet, fixed full height so footer stays visible */
-@media (max-width: 599px) {
-  .modal-overlay {
-    align-items: flex-end;
+/* 3. MOBILE PORTRAIT: bottom-sheet with compact scrollable body & pinned footer */
+@media (max-width: 640px) {
+  .modal-overlay,
+  .modal-backdrop {
+    align-items: flex-end !important;
+    padding: 0 !important;
   }
-  .modal-content {
-    border-radius: 22px 22px 0 0;
+
+  .modal-content,
+  .modal-container {
+    border-radius: 22px 22px 0 0 !important;
     border-bottom: none !important;
-    /* Fixed height = entire safe viewport. Never taller than screen. */
-    height: 90vh;
-    height: 90dvh;
-    max-height: 90vh;
-    max-height: 90dvh;
-    /* Override any inline maxWidth from JSX */
+    height: 92vh !important;
+    height: 92dvh !important;
+    max-height: 92vh !important;
+    max-height: 92dvh !important;
     max-width: 100% !important;
-    animation: slideUpSheet 0.28s cubic-bezier(0.32, 0.72, 0, 1) both;
+    animation: slideUpSheet 0.25s cubic-bezier(0.32, 0.72, 0, 1) both !important;
   }
 }
 
 /* 4. TABLET & DESKTOP: centered dialog */
-@media (min-width: 600px) {
-  .modal-overlay {
-    align-items: center;
-    padding: 24px;
+@media (min-width: 641px) {
+  .modal-overlay,
+  .modal-backdrop {
+    align-items: center !important;
+    padding: 24px !important;
   }
-  .modal-content {
-    border-radius: 14px;
-    border: 1px solid var(--border-color);
-    width: auto;
-    min-width: 480px;
-    max-width: 740px;
-    height: auto;
-    max-height: 92vh;
-    max-height: 92dvh;
-    animation: fadeScale 0.22s ease both;
+  .modal-content,
+  .modal-container {
+    border-radius: 14px !important;
+    border: 1px solid var(--border-color) !important;
+    width: auto !important;
+    min-width: 480px !important;
+    max-width: 740px !important;
+    height: auto !important;
+    max-height: 90vh !important;
+    max-height: 90dvh !important;
+    animation: fadeScale 0.22s ease both !important;
   }
-  .modal-content::before { display: none; }
+  .modal-content::before,
+  .modal-container::before { display: none !important; }
 }
 
 /* 5. Form inside modal: flex column to pass height down */
 .modal-content > form,
-.modal-content > div > form {
+.modal-content > div > form,
+.modal-container > form {
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -441,27 +460,28 @@ body {
 .modal-header {
   flex-shrink: 0;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 10px 18px 14px;
+  padding: 12px 18px;
   border-bottom: 1px solid var(--border-color);
+  background: var(--bg-card);
 }
 .modal-header h3 {
-  font-size: 0.9rem;
+  font-size: 0.95rem;
   font-weight: 800;
-  line-height: 1.4;
+  line-height: 1.3;
   margin: 0;
   word-break: break-word;
 }
-@media (min-width: 600px) {
+@media (min-width: 641px) {
   .modal-header { padding: 18px 24px 16px; }
   .modal-header h3 { font-size: 1.05rem; }
 }
 
-/* 7. Body — scrollable, takes all remaining space between header & footer */
+/* 7. Body — scrollable, compact spacing on mobile for high density */
 .modal-body {
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0; /* CRITICAL: allows shrinking below natural content height */
   overflow-y: auto;
   overflow-x: hidden;
@@ -469,24 +489,78 @@ body {
   overscroll-behavior-y: contain;
   padding: 14px 18px;
 }
-@media (min-width: 600px) {
+@media (max-width: 640px) {
+  .modal-body {
+    padding: 12px 16px 20px !important;
+  }
+
+  .modal-body .form-group {
+    margin-bottom: 10px !important;
+  }
+
+  .modal-body .form-label {
+    margin-bottom: 3px !important;
+    font-size: 0.8rem !important;
+    font-weight: 600 !important;
+  }
+
+  .modal-body .form-input,
+  .modal-body .form-select,
+  .modal-body textarea {
+    padding: 8px 12px !important;
+    font-size: 0.875rem !important;
+    min-height: 38px !important;
+    border-radius: 8px !important;
+  }
+
+  .modal-body .responsive-form-grid {
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+    margin-bottom: 0 !important;
+  }
+}
+@media (min-width: 641px) {
   .modal-body { padding: 20px 24px; }
 }
 
-/* 8. Footer — ALWAYS pinned at bottom, iPhone notch safe */
+/* 8. Footer — ALWAYS PINNED AT BOTTOM, 100% VISIBLE WITH SAFE PADDING */
 .modal-footer {
-  flex-shrink: 0; /* NEVER shrinks, NEVER scrolls away */
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: 10px;
-  padding: 12px 18px;
-  padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
-  border-top: 1px solid var(--border-color);
-  background: var(--bg-card);
+  position: sticky !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  z-index: 50 !important;
+  flex-shrink: 0 !important; /* NEVER shrinks, NEVER scrolls away */
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 10px !important;
+  padding: 12px 18px !important;
+  padding-bottom: calc(16px + env(safe-area-inset-bottom, 12px)) !important;
+  border-top: 1px solid var(--border-color) !important;
+  background: var(--bg-card) !important;
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.6) !important;
 }
-@media (min-width: 600px) {
+
+@media (max-width: 640px) {
+  .modal-footer {
+    padding: 12px 16px !important;
+    padding-bottom: calc(18px + env(safe-area-inset-bottom, 14px)) !important;
+  }
+
+  .modal-footer .btn,
+  .modal-footer button {
+    flex: 1 !important;
+    min-height: 44px !important;
+    font-size: 0.9rem !important;
+    font-weight: 700 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border-radius: 10px !important;
+  }
+}
+@media (min-width: 641px) {
   .modal-footer {
     padding: 14px 24px;
     padding-bottom: 14px;
@@ -914,7 +988,7 @@ body {
 
 @media (max-width: 768px) {
   .main-header {
-    padding: 10px 14px !important;
+    padding: calc(10px + env(safe-area-inset-top, 0px)) 14px 10px !important;
     gap: 8px;
   }
 
