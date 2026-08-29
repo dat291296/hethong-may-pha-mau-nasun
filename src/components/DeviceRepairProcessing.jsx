@@ -46,6 +46,7 @@ export const PRODUCT_CATEGORIES = [
 
 import { compressImage } from '../utils/imageCompressor.js';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useModalScrollLock } from '../hooks/useModalScrollLock.js';
 
 export default function DeviceRepairProcessing({
   repairTickets = [],
@@ -79,6 +80,8 @@ export default function DeviceRepairProcessing({
   const [showModal, setShowModal] = useState(false);
   const [editingTicket, setEditingTicket] = useState(null);
   const [selectedTicket, setSelectedTicket] = useState(null);
+
+  useModalScrollLock(showModal || !!editingTicket || !!selectedTicket);
 
   // Auto-fill from Handbook if prefilledTicket is provided
   React.useEffect(() => {

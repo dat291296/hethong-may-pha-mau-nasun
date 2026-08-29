@@ -407,18 +407,18 @@ body:has(.modal-backdrop) .mobile-bottom-nav,
   .modal-backdrop {
     align-items: flex-end !important;
     padding: 0 !important;
+    overflow: hidden !important;
   }
 
   .modal-content,
   .modal-container {
-    border-radius: 22px 22px 0 0 !important;
+    border-radius: 20px 20px 0 0 !important;
     border-bottom: none !important;
-    height: 92vh !important;
-    height: 92dvh !important;
-    max-height: 92vh !important;
-    max-height: 92dvh !important;
+    height: auto !important;
+    max-height: 90vh !important;
+    max-height: 90dvh !important;
     max-width: 100% !important;
-    animation: slideUpSheet 0.25s cubic-bezier(0.32, 0.72, 0, 1) both !important;
+    animation: slideUpSheet 0.22s cubic-bezier(0.32, 0.72, 0, 1) both !important;
   }
 }
 
@@ -437,8 +437,8 @@ body:has(.modal-backdrop) .mobile-bottom-nav,
     min-width: 480px !important;
     max-width: 740px !important;
     height: auto !important;
-    max-height: 90vh !important;
-    max-height: 90dvh !important;
+    max-height: 88vh !important;
+    max-height: 88dvh !important;
     animation: fadeScale 0.22s ease both !important;
   }
   .modal-content::before,
@@ -456,30 +456,30 @@ body:has(.modal-backdrop) .mobile-bottom-nav,
   overflow: hidden;
 }
 
-/* 6. Header — always pinned at top */
+/* 6. Header — compact pinned header at top */
 .modal-header {
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 12px 18px;
+  gap: 10px;
+  padding: 10px 14px;
   border-bottom: 1px solid var(--border-color);
   background: var(--bg-card);
 }
 .modal-header h3 {
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   font-weight: 800;
-  line-height: 1.3;
+  line-height: 1.25;
   margin: 0;
   word-break: break-word;
 }
 @media (min-width: 641px) {
-  .modal-header { padding: 18px 24px 16px; }
+  .modal-header { padding: 16px 20px; }
   .modal-header h3 { font-size: 1.05rem; }
 }
 
-/* 7. Body — scrollable, compact spacing on mobile for high density */
+/* 7. Body — scrollable, ultra-compact spacing on mobile so input fields show immediately */
 .modal-body {
   flex: 1 1 auto;
   min-height: 0; /* CRITICAL: allows shrinking below natural content height */
@@ -487,40 +487,40 @@ body:has(.modal-backdrop) .mobile-bottom-nav,
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
-  padding: 14px 18px;
+  padding: 12px 16px;
 }
 @media (max-width: 640px) {
   .modal-body {
-    padding: 12px 16px 20px !important;
+    padding: 10px 14px 16px !important;
   }
 
   .modal-body .form-group {
-    margin-bottom: 10px !important;
+    margin-bottom: 8px !important;
   }
 
   .modal-body .form-label {
-    margin-bottom: 3px !important;
-    font-size: 0.8rem !important;
+    margin-bottom: 2px !important;
+    font-size: 0.775rem !important;
     font-weight: 600 !important;
   }
 
   .modal-body .form-input,
   .modal-body .form-select,
   .modal-body textarea {
-    padding: 8px 12px !important;
-    font-size: 0.875rem !important;
-    min-height: 38px !important;
-    border-radius: 8px !important;
+    padding: 6px 10px !important;
+    font-size: 0.85rem !important;
+    min-height: 36px !important;
+    border-radius: 6px !important;
   }
 
   .modal-body .responsive-form-grid {
     grid-template-columns: 1fr !important;
-    gap: 8px !important;
+    gap: 6px !important;
     margin-bottom: 0 !important;
   }
 }
 @media (min-width: 641px) {
-  .modal-body { padding: 20px 24px; }
+  .modal-body { padding: 18px 20px; }
 }
 
 /* 8. Footer — ALWAYS PINNED AT BOTTOM, 100% VISIBLE WITH SAFE PADDING */

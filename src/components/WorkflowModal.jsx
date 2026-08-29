@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ArrowLeftRight, CheckCircle2, AlertTriangle, ShieldCheck, Printer, Calendar, Camera, X } from 'lucide-react';
 import { compressImage } from '../utils/imageCompressor.js';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useModalScrollLock } from '../hooks/useModalScrollLock.js';
 
 export default function WorkflowModal({
   mode, // 'INSTALL' | 'WITHDRAW' | 'TRANSFER'
@@ -14,6 +15,7 @@ export default function WorkflowModal({
   onPrintProtocol,
   isDateLocked = () => false
 }) {
+  useModalScrollLock(true);
   const { user } = useAuth();
   const isRegionRestricted = user?.role === 'qc' && user?.managedRegion !== 'Toàn Quốc';
   const myRegion = user?.managedRegion;

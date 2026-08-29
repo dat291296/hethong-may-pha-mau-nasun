@@ -22,6 +22,7 @@ import { compressImage } from '../utils/imageCompressor.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { getRobustUserLocation, fetchIpLocation } from '../utils/gpsHelper.js';
 import GpsPermissionModal from './GpsPermissionModal.jsx';
+import { useModalScrollLock } from '../hooks/useModalScrollLock.js';
 
 export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, onDeleteNpp, onOpenImportModal }) {
   const { user } = useAuth();
@@ -35,14 +36,8 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingNpp, setEditingNpp] = useState(null); // NPP object being edited
 
-  // Reset scroll position of modal-body to top when modal opens
-  useEffect(() => {
-    if (showAddModal || editingNpp) {
-      setTimeout(() => {
-        document.querySelectorAll('.modal-body').forEach(el => el.scrollTop = 0);
-      }, 50);
-    }
-  }, [showAddModal, editingNpp]);
+  // Lock body scroll & reset modal-body scrollTop to 0 when modal opens
+  useModalScrollLock(showAddModal || !!editingNpp || !!selectedNpp);
 
   // Form State (For both Add & Edit)
   const [formData, setFormData] = useState({
@@ -453,8 +448,20 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
               <button className="btn btn-secondary btn-sm" onClick={() => { setShowAddModal(false); setEditingNpp(null); }}>✕</button>
             </div>
             <form onSubmit={editingNpp ? handleEditSubmit : handleAddSubmit}>
-              <div className="modal-body">
+              <div className="modal-body" ref={el => { if (el) el.scrollTop = 0; }}>
                 <div className="responsive-form-grid">
+                  <div className="form-group">
+                    <label className="form-label">Tên Nhà Phân Phối *</label>
+                    <input 
+                      type="text" 
+                      className="form-input" 
+                      required 
+                      autoFocus
+                      placeholder="Nhập tên NPP / Đại lý..." 
+                      value={formData.name} 
+                      onChange={e => setFormData({ ...formData, name: e.target.value })} 
+                    />
+                  </div>
                   <div className="form-group">
                     <label className="form-label">Hãng Phân Phối / Hãng Sơn *</label>
                     <select
@@ -465,10 +472,6 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
                       <option value="Nasun">Nasun</option>
                       <option value="Natos">Natos</option>
                     </select>
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Tên Nhà Phân Phối *</label>
-                    <input type="text" className="form-input" required placeholder="Nhập tên NPP / Đại lý..." value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} />
                   </div>
                 </div>
 

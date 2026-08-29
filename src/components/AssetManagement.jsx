@@ -24,6 +24,7 @@ import {
   INITIAL_COMPUTERS,
   INITIAL_PRINTERS
 } from '../data/mockData';
+import { useModalScrollLock } from '../hooks/useModalScrollLock.js';
 
 export default function AssetManagement({
   systemSets,
@@ -38,6 +39,7 @@ export default function AssetManagement({
   onDeleteDevice,
   onOpenImportModal,
   onExportDevicesExcel,
+  isDateLocked = () => false,
   onEditSet,
   onDeleteSet
 }) {
@@ -113,18 +115,12 @@ export default function AssetManagement({
   const [editingDevice, setEditingDevice] = useState(null); // { category: 'dispenser'|'mixer'|'computer'|'printer', data }
   const [editFormData, setEditFormData] = useState({});
 
-  // Reset scroll position of modal-body to top when any modal opens
-  useEffect(() => {
-    if (showAssembleModal || editingSet || editingDevice) {
-      setTimeout(() => {
-        document.querySelectorAll('.modal-body').forEach(el => el.scrollTop = 0);
-      }, 50);
-    }
-  }, [showAssembleModal, editingSet, editingDevice]);
-
   // New Device Add Modal state
   const [showAddDeviceModal, setShowAddDeviceModal] = useState(false);
   const [addDeviceCategory, setAddDeviceCategory] = useState('dispenser');
+
+  // Auto scroll lock & reset position when any modal opens
+  useModalScrollLock(showAssembleModal || !!editingSet || !!editingDevice || showAddDeviceModal);
   const [addFormData, setAddFormData] = useState({
     model: '',
     serial: '',
