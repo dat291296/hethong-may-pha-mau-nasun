@@ -145,7 +145,7 @@ export default function WorkflowModal({
         </div>
 
         <form onSubmit={handleSubmit}>
-          <div className="modal-body">
+          <div className="modal-body" ref={el => { if (el) el.scrollTop = 0; }}>
             
             {/* INSTALLATION FORM */}
             {mode === 'INSTALL' && (

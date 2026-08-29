@@ -1550,7 +1550,7 @@ export default function AssetManagement({
               <button className="btn btn-secondary btn-sm" onClick={() => setEditingSet(null)}>✕</button>
             </div>
             <form onSubmit={handleEditSetSubmit}>
-              <div className="modal-body" style={{ maxHeight: '60vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div className="modal-body" ref={el => { if (el) el.scrollTop = 0; }}>
                 
                 {/* NPP Dropdown */}
                 <div className="form-group">

@@ -449,9 +449,11 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
             </div>
             <form onSubmit={editingNpp ? handleEditSubmit : handleAddSubmit}>
               <div className="modal-body" ref={el => { if (el) el.scrollTop = 0; }}>
+                
+                {/* PRIMARY EDIT FIELDS - TOP OF FORM */}
                 <div className="responsive-form-grid">
                   <div className="form-group">
-                    <label className="form-label">Tên Nhà Phân Phối *</label>
+                    <label className="form-label">🏢 Tên Nhà Phân Phối *</label>
                     <input 
                       type="text" 
                       className="form-input" 
@@ -462,43 +464,31 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
                     />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Hãng Phân Phối / Hãng Sơn *</label>
-                    <select
-                      className="form-select"
-                      value={formData.brand || 'Nasun'}
-                      onChange={e => setFormData({ ...formData, brand: e.target.value })}
-                    >
-                      <option value="Nasun">Nasun</option>
-                      <option value="Natos">Natos</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="responsive-form-grid">
-                  <div className="form-group">
-                    <label className="form-label">Số Điện Thoại *</label>
+                    <label className="form-label">📞 Số Điện Thoại *</label>
                     <input type="text" className="form-input" required placeholder="09xx xxx xxx" value={formData.phone} onChange={e => setFormData({ ...formData, phone: e.target.value })} />
                   </div>
-                  <div className="form-group">
-                    <label className="form-label">Người Liên Hệ / Chủ Đại Lý</label>
-                    <input type="text" className="form-input" placeholder="Tên người đại diện..." value={formData.contactPerson} onChange={e => setFormData({ ...formData, contactPerson: e.target.value })} />
-                  </div>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">💼 Nhân Viên Kinh Doanh Phụ Trách</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="Tên nhân viên kinh doanh quản lý NPP này..."
-                    value={formData.salesperson}
-                    onChange={e => setFormData({ ...formData, salesperson: e.target.value })}
-                  />
                 </div>
 
                 <div className="responsive-form-grid">
                   <div className="form-group">
-                    <label className="form-label">Khu Vực</label>
+                    <label className="form-label">👤 Người Liên Hệ / Chủ Đại Lý</label>
+                    <input type="text" className="form-input" placeholder="Tên người đại diện..." value={formData.contactPerson} onChange={e => setFormData({ ...formData, contactPerson: e.target.value })} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">💼 Nhân Viên Kinh Doanh Phụ Trách</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="Tên nhân viên kinh doanh..."
+                      value={formData.salesperson}
+                      onChange={e => setFormData({ ...formData, salesperson: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="responsive-form-grid">
+                  <div className="form-group">
+                    <label className="form-label">📍 Khu Vực</label>
                     <select 
                       className="form-select" 
                       value={formData.region} 
@@ -511,13 +501,34 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
                     </select>
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Tỉnh / Thành Phố</label>
+                    <label className="form-label">🏙️ Tỉnh / Thành Phố</label>
                     <input type="text" className="form-input" placeholder="Hà Nội, TP.HCM, Hải Phòng..." value={formData.province} onChange={e => setFormData({ ...formData, province: e.target.value })} />
                   </div>
                 </div>
 
+                <div className="responsive-form-grid">
+                  <div className="form-group">
+                    <label className="form-label">🎨 Hãng Phân Phối / Hãng Sơn *</label>
+                    <select
+                      className="form-select"
+                      value={formData.brand || 'Nasun'}
+                      onChange={e => setFormData({ ...formData, brand: e.target.value })}
+                    >
+                      <option value="Nasun">Nasun</option>
+                      <option value="Natos">Natos</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">⚡ Trạng Thái Hoạt Động</label>
+                    <select className="form-select" value={formData.status} onChange={e => setFormData({ ...formData, status: e.target.value })}>
+                      <option value="Đang hợp tác">Đang hợp tác</option>
+                      <option value="Đã ngưng hợp tác">Đã ngưng hợp tác</option>
+                    </select>
+                  </div>
+                </div>
+
                 <div className="form-group">
-                  <label className="form-label">Địa Chỉ Chi Tiết</label>
+                  <label className="form-label">🏠 Địa Chỉ Chi Tiết</label>
                   <input type="text" className="form-input" placeholder="Số nhà, đường, phường/xã..." value={formData.address} onChange={e => setFormData({ ...formData, address: e.target.value })} />
                 </div>
 
