@@ -23,6 +23,7 @@ import {
   Map,
   UserCheck
 } from 'lucide-react';
+import { getRobustUserLocation } from '../utils/gpsHelper.js';
 
 export default function FieldRouteMap({
   npps = [],
@@ -70,17 +71,12 @@ export default function FieldRouteMap({
       setIsLScriptLoaded(true);
     }
 
-    // 3. User Geolocation on mount
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setUserLocation([position.coords.latitude, position.coords.longitude]);
-        },
-        (err) => {
-          console.warn('GPS location request denied or unavailable:', err.message);
-        }
-      );
-    }
+    // 3. User Geolocation on mount (with 3-stage fallback)
+    getRobustUserLocation({ allowIpFallback: true }).then((res) => {
+      if (res.success && res.coords) {
+        setUserLocation(res.coords);
+      }
+    });
   }, []);
 
   // Distance helper (Haversine formula in km)

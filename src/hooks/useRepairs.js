@@ -74,8 +74,8 @@ export function useRepairs() {
         console.warn('[Offline] Failed online addTicket. Queueing.', err);
         enqueueOfflineAction('ADD_REPAIR', dbPayload);
       }
-    } else if (isSupabaseConfigured && !navigator.onLine) {
-      console.log('[Offline] Network down. Enqueueing addTicket.');
+    } else {
+      console.log('[Offline] Network down or dev mode. Enqueueing addTicket.');
       enqueueOfflineAction('ADD_REPAIR', dbPayload);
     }
 

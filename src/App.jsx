@@ -456,6 +456,25 @@ export default function App() {
 
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
+  const handleImportData = async (importedPackage) => {
+    if (!importedPackage) return;
+    if (importedPackage.npps && Array.isArray(importedPackage.npps)) {
+      await importNpps(importedPackage.npps);
+    }
+    if (importedPackage.dispensers && Array.isArray(importedPackage.dispensers)) {
+      await importDevices('dispensers', importedPackage.dispensers);
+    }
+    if (importedPackage.mixers && Array.isArray(importedPackage.mixers)) {
+      await importDevices('mixers', importedPackage.mixers);
+    }
+    if (importedPackage.computers && Array.isArray(importedPackage.computers)) {
+      await importDevices('computers', importedPackage.computers);
+    }
+    if (importedPackage.printers && Array.isArray(importedPackage.printers)) {
+      await importDevices('printers', importedPackage.printers);
+    }
+  };
+
   if (!user) {
     return <LoginModal />;
   }
@@ -493,6 +512,16 @@ export default function App() {
           maintenanceAlerts={maintenanceAlerts}
           unstabilizedAlerts={unstabilizedAlerts}
           onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
+          npps={npps}
+          dispensers={dispensers}
+          mixers={mixers}
+          computers={computers}
+          printers={printers}
+          systemSets={systemSets}
+          repairTickets={repairTickets}
+          auditLogs={auditLogs}
+          tintingLogs={tintingLogs}
+          onImportData={handleImportData}
         />
 
         {/* Dynamic View Content */}

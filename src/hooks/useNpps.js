@@ -25,7 +25,11 @@ export function useNpps() {
 
   // ── Fetch all NPPs ─────────────────────────────────────────────────────────
   const fetchNpps = useCallback(async () => {
-    if (!isSupabaseConfigured) return; // use mock data
+    if (!isSupabaseConfigured) {
+      const cached = await getCachedOfflineData('npps', null);
+      if (cached && cached.length > 0) setNpps(cached);
+      return;
+    }
     setLoading(true);
     const { data, error: err } = await safeQuery(
       (sb) => sb.from('distributors').select('*').order('created_at', { ascending: false }),
@@ -35,12 +39,23 @@ export function useNpps() {
       setError(err.message); 
       // Loading cached data on network error
       const cached = await getCachedOfflineData('npps', null);
-      if (cached) setNpps(cached);
+      if (cached && cached.length > 0) setNpps(cached);
     }
-    else if (data && data.length > 0) { 
+    else if (data) { 
       const mapped = data.map(mapDbToNpp);
-      setNpps(mapped); 
-      cacheOfflineData('npps', mapped);
+      if (mapped.length > 0) {
+        setNpps(mapped); 
+        cacheOfflineData('npps', mapped);
+      } else {
+        // If DB table is empty but we have local cached additions, don't wipe local cache
+        const cached = await getCachedOfflineData('npps', null);
+        if (cached && cached.length > 0) {
+          setNpps(cached);
+        } else {
+          setNpps([]);
+          cacheOfflineData('npps', []);
+        }
+      }
     }
     setLoading(false);
   }, []);
@@ -84,13 +99,13 @@ export function useNpps() {
         console.warn('[Offline] Failed online addNpp. Queueing action.', err);
         enqueueOfflineAction('ADD_NPP', mapped);
       }
-    } else if (isSupabaseConfigured && !navigator.onLine) {
-      console.log('[Offline] Network down. Enqueueing addNpp.');
+    } else {
+      console.log('[Offline] Network down or dev mode. Enqueueing addNpp.');
       enqueueOfflineAction('ADD_NPP', mapped);
     }
 
     return localNpp;
-  }, []);
+  }, [fetchNpps]);
 
   const editNpp = useCallback(async (id, updates) => {
     // Update local state immediately
@@ -128,8 +143,8 @@ export function useNpps() {
         console.warn('[Offline] Failed online editNpp. Queueing action.', err);
         enqueueOfflineAction('EDIT_NPP', { id, ...mappedUpdates });
       }
-    } else if (isSupabaseConfigured && !navigator.onLine) {
-      console.log('[Offline] Network down. Enqueueing editNpp.');
+    } else {
+      console.log('[Offline] Network down or dev mode. Enqueueing editNpp.');
       enqueueOfflineAction('EDIT_NPP', { id, ...mappedUpdates });
     }
   }, []);
@@ -151,11 +166,10 @@ export function useNpps() {
         if (err) throw err;
       } catch (err) {
         console.warn('[Offline] Failed online deleteNpp. Queueing action.');
-        // We delete by id
         enqueueOfflineAction('DELETE_NPP', { id });
       }
-    } else if (isSupabaseConfigured && !navigator.onLine) {
-      console.log('[Offline] Network down. Enqueueing deleteNpp.');
+    } else {
+      console.log('[Offline] Network down or dev mode. Enqueueing deleteNpp.');
       enqueueOfflineAction('DELETE_NPP', { id });
     }
   }, []);

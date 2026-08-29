@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { Bell, Search, PlusCircle, AlertTriangle, ShieldAlert, CheckCircle2, UserCheck, Wifi, WifiOff, RefreshCw, Menu } from 'lucide-react';
+import { Bell, Search, PlusCircle, AlertTriangle, ShieldAlert, CheckCircle2, UserCheck, Wifi, WifiOff, RefreshCw, Menu, Database } from 'lucide-react';
 import RoleSelector from './RoleSelector.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { ROLE_LABELS, ROLE_COLORS } from '../security/rbac.js';
 import { getOfflineQueue, syncOfflineQueue } from '../lib/offlineSync.js';
+import DataBackupSyncModal from './DataBackupSyncModal.jsx';
 
 export default function Header({ 
   activeTab, 
@@ -12,9 +12,20 @@ export default function Header({
   onOpenNewInstallation,
   maintenanceAlerts,
   unstabilizedAlerts,
-  onOpenMobileSidebar
+  onOpenMobileSidebar,
+  npps = [],
+  dispensers = [],
+  mixers = [],
+  computers = [],
+  printers = [],
+  systemSets = [],
+  repairTickets = [],
+  auditLogs = [],
+  tintingLogs = [],
+  onImportData
 }) {
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showBackupSyncModal, setShowBackupSyncModal] = useState(false);
   const { role, user, isDevMode } = useAuth();
   
   // Connection and sync states
@@ -158,6 +169,22 @@ export default function Header({
           <span>Lắp Đặt Cho NPP</span>
         </button>
 
+        {/* Data Backup & Sync Button */}
+        <button 
+          className="btn btn-secondary btn-sm header-action-btn" 
+          onClick={() => setShowBackupSyncModal(true)}
+          title="Sao Lưu & Đồng Bộ Dữ Liệu Điện Thoại / Web Admin"
+          style={{ gap: '6px' }}
+        >
+          <Database size={15} style={{ color: 'var(--accent-purple)' }} />
+          <span>Sao Lưu & Đồng Bộ</span>
+          {queueCount > 0 && (
+            <span className="badge badge-purple" style={{ padding: '1px 6px', fontSize: '0.675rem' }}>
+              {queueCount}
+            </span>
+          )}
+        </button>
+
         {/* Role Selector (dev mode only) */}
         <RoleSelector />
 
@@ -269,6 +296,23 @@ export default function Header({
             <div style={{ fontSize: '0.7rem', color: 'var(--accent-emerald)' }}>● Admin System</div>
           </div>
         </div>
+
+        {/* Data Backup & Sync Modal */}
+        <DataBackupSyncModal
+          isOpen={showBackupSyncModal}
+          onClose={() => setShowBackupSyncModal(false)}
+          npps={npps}
+          dispensers={dispensers}
+          mixers={mixers}
+          computers={computers}
+          printers={printers}
+          systemSets={systemSets}
+          repairTickets={repairTickets}
+          auditLogs={auditLogs}
+          tintingLogs={tintingLogs}
+          onImportData={onImportData}
+        />
+
       </div>
     </header>
   );

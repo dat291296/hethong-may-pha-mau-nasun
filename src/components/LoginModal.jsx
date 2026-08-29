@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { supabase } from '../lib/supabase.js';
+import { syncOfflineQueue } from '../lib/offlineSync.js';
 import { Lock, Mail, ShieldAlert, Cpu, User, ArrowLeft, CheckCircle2, Eye, EyeOff } from 'lucide-react';
 
 export default function LoginModal() {
@@ -100,6 +101,8 @@ export default function LoginModal() {
         password: password
       });
       if (error) throw error;
+      // Auto sync queued offline actions after login
+      syncOfflineQueue();
     } catch (err) {
       console.error('[Login] Authentication error:', err.message);
       setErrorMessage(err.message || 'Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.');

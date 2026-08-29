@@ -20,6 +20,8 @@ import {
 
 import { compressImage } from '../utils/imageCompressor.js';
 import { useAuth } from '../context/AuthContext.jsx';
+import { getRobustUserLocation, fetchIpLocation } from '../utils/gpsHelper.js';
+import GpsPermissionModal from './GpsPermissionModal.jsx';
 
 export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, onDeleteNpp, onOpenImportModal }) {
   const { user } = useAuth();
@@ -139,40 +141,58 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
     }));
   };
 
-  const handleGetLocation = (e) => {
-    e.preventDefault();
-    if (!navigator.geolocation) {
-      alert("Trình duyệt không hỗ trợ lấy vị trí định vị.");
-      return;
+  // GPS & Permission states
+  const [isGpsLoading, setIsGpsLoading] = useState(false);
+  const [gpsStatusMsg, setGpsStatusMsg] = useState('');
+  const [showGpsPermissionModal, setShowGpsPermissionModal] = useState(false);
+  const [isNonSecureContext, setIsNonSecureContext] = useState(false);
+
+  const handleGetLocation = async (e) => {
+    if (e) e.preventDefault();
+    setIsGpsLoading(true);
+    setGpsStatusMsg('Đang lấy vị trí...');
+
+    const res = await getRobustUserLocation({ allowIpFallback: true });
+    setIsGpsLoading(false);
+
+    if (res.success && res.lat && res.lng) {
+      setFormData(prev => ({
+        ...prev,
+        locationCoordinates: `${res.lat}, ${res.lng}`
+      }));
+
+      let sourceName = 'GPS Phần Cứng';
+      if (res.source === 'GPS_LOW') sourceName = 'GPS Chuẩn (Cellular/Wi-Fi)';
+      if (res.source === 'IP_FALLBACK') sourceName = 'Định Vị IP Dự Phòng';
+
+      setGpsStatusMsg(`📍 Tự động ghi nhận (${sourceName})`);
+    } else {
+      if (res.isPermissionDenied || res.isNonSecureContext) {
+        setIsNonSecureContext(res.isNonSecureContext);
+        setShowGpsPermissionModal(true);
+      } else {
+        alert(res.errorMessage || 'Không thể lấy vị trí định vị.');
+      }
+      setGpsStatusMsg('');
     }
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const lat = position.coords.latitude.toFixed(6);
-        const lng = position.coords.longitude.toFixed(6);
-        setFormData(prev => ({
-          ...prev,
-          locationCoordinates: `${lat}, ${lng}`
-        }));
-      },
-      (error) => {
-        let msg = "Lỗi lấy GPS: ";
-        switch (error.code) {
-          case error.PERMISSION_DENIED:
-            msg += "Quyền định vị bị từ chối.";
-            break;
-          case error.POSITION_UNAVAILABLE:
-            msg += "Tín hiệu định vị không có sẵn.";
-            break;
-          case error.TIMEOUT:
-            msg += "Hết thời gian chờ phản hồi GPS.";
-            break;
-          default:
-            msg += error.message;
-        }
-        alert(msg);
-      },
-      { enableHighAccuracy: true, timeout: 8000 }
-    );
+  };
+
+  const handleRetryIpFallback = async () => {
+    setIsGpsLoading(true);
+    setGpsStatusMsg('Đang định vị qua IP dự phòng...');
+    const ipRes = await fetchIpLocation('Người dùng chọn định vị IP dự phòng.');
+    setIsGpsLoading(false);
+
+    if (ipRes.success && ipRes.lat && ipRes.lng) {
+      setFormData(prev => ({
+        ...prev,
+        locationCoordinates: `${ipRes.lat}, ${ipRes.lng}`
+      }));
+      setGpsStatusMsg('📍 Đã cập nhật vị trí IP dự phòng');
+    } else {
+      alert(ipRes.errorMessage || 'Không thể định vị qua IP dự phòng.');
+      setGpsStatusMsg('');
+    }
   };
 
   const handleAddSubmit = (e) => {
@@ -499,6 +519,7 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
                     <button 
                       type="button" 
                       onClick={handleGetLocation} 
+                      disabled={isGpsLoading}
                       style={{
                         padding: '4px 10px',
                         fontSize: '0.725rem',
@@ -507,16 +528,17 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
                         border: '1px solid rgba(6, 182, 212, 0.3)',
                         background: 'rgba(6, 182, 212, 0.08)',
                         borderRadius: '6px',
-                        cursor: 'pointer',
+                        cursor: isGpsLoading ? 'wait' : 'pointer',
                         display: 'flex',
                         alignItems: 'center',
                         gap: '4px',
-                        transition: 'all 0.15s ease'
+                        transition: 'all 0.15s ease',
+                        opacity: isGpsLoading ? 0.7 : 1
                       }}
                       onMouseOver={e => e.currentTarget.style.background = 'rgba(6, 182, 212, 0.15)'}
                       onMouseOut={e => e.currentTarget.style.background = 'rgba(6, 182, 212, 0.08)'}
                     >
-                      <span>📍 Lấy GPS Tự Động</span>
+                      <span>{isGpsLoading ? '⌛ Đang lấy vị trí...' : '📍 Lấy GPS Tự Động'}</span>
                     </button>
                   </div>
                   <input 
@@ -526,6 +548,11 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
                     value={formData.locationCoordinates} 
                     onChange={e => setFormData({ ...formData, locationCoordinates: e.target.value })} 
                   />
+                  {gpsStatusMsg && (
+                    <span style={{ display: 'block', fontSize: '0.75rem', color: '#10b981', marginTop: '4px' }}>
+                      {gpsStatusMsg}
+                    </span>
+                  )}
                 </div>
 
                 <div className="form-group">
@@ -708,6 +735,14 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
           </div>
         </div>
       )}
+
+      {/* GPS Permission Guidance Modal */}
+      <GpsPermissionModal 
+        isOpen={showGpsPermissionModal}
+        onClose={() => setShowGpsPermissionModal(false)}
+        onRetryIpFallback={handleRetryIpFallback}
+        isNonSecureContext={isNonSecureContext}
+      />
 
     </div>
   );
