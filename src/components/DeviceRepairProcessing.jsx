@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
 
   PlusCircle,
@@ -626,7 +627,7 @@ export default function DeviceRepairProcessing({
       </div>
 
       {/* CREATE / EDIT TICKET MODAL */}
-      {showModal && (
+      {showModal && createPortal(
         <div className="modal-overlay">
           <div className="modal-content" style={{ maxWidth: '720px' }}>
             <div className="modal-header">
@@ -776,11 +777,12 @@ export default function DeviceRepairProcessing({
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* VIEW TICKET DETAIL MODAL */}
-      {selectedTicket && (
+      {selectedTicket && createPortal(
         <div className="modal-overlay">
           <div className="modal-content" style={{ maxWidth: '640px' }}>
             <div className="modal-header">

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   Building2, 
   PlusCircle, 
@@ -534,7 +535,7 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
       })()}
 
       {/* ADD / EDIT NPP MODAL */}
-      {(showAddModal || editingNpp) && (
+      {(showAddModal || editingNpp) && createPortal(
         <div className="modal-overlay">
           <div className="modal-content" style={{ maxWidth: '680px' }}>
             <div className="modal-header">
@@ -720,11 +721,12 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* NPP DETAIL & PHOTO GALLERY MODAL */}
-      {selectedNpp && (
+      {selectedNpp && createPortal(
         <div className="modal-overlay">
           <div className="modal-content" style={{ maxWidth: '800px' }}>
             <div className="modal-header">
@@ -734,7 +736,7 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
               </div>
               <button className="btn btn-secondary btn-sm" onClick={() => setSelectedNpp(null)}>✕</button>
             </div>
-            <div className="modal-body">
+            <div className="modal-body" ref={el => { if (el) el.scrollTop = 0; }}>
               
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px', background: 'var(--bg-main)', padding: '16px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
                 <div><strong>Hãng:</strong> <span className="badge badge-purple" style={{ fontSize: '0.8rem' }}>{selectedNpp.brand || 'Nasun'}</span></div>
@@ -758,37 +760,43 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
                       href={selectedNpp.googleMapsUrl || `https://maps.google.com/?q=${encodeURIComponent(selectedNpp.locationCoordinates)}`} 
                       target="_blank" 
                       rel="noreferrer"
-                      className="btn btn-primary btn-sm"
+                      style={{ fontSize: '0.8rem', color: 'var(--accent-cyan)', display: 'flex', alignItems: 'center', gap: '4px' }}
                     >
-                      <span>📍 Định Vị Google Maps</span>
+                      <span>Mở Google Maps</span>
                       <ExternalLink size={14} />
                     </a>
                   </div>
                 )}
               </div>
 
-              {/* Photos Gallery */}
+              {/* Photo Gallery Section */}
               {selectedNpp.photos && selectedNpp.photos.length > 0 && (
-                <div style={{ marginBottom: '20px' }}>
-                  <h4 style={{ fontWeight: '700', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Camera size={18} color="var(--accent-cyan)" />
-                    <span>Hình Ảnh Minh Họa Mặt Bằng / Lắp Máy ({selectedNpp.photos.length} Ảnh):</span>
+                <div style={{ marginBottom: '24px' }}>
+                  <h4 style={{ fontSize: '0.9rem', fontWeight: '700', marginBottom: '12px', color: 'var(--accent-emerald)' }}>
+                    📸 Hình Ảnh Minh Họa Mặt Bằng & Lắp Đặt ({selectedNpp.photos.length} Ảnh)
                   </h4>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '12px' }}>
-                    {selectedNpp.photos.map((url, idx) => (
-                      <a key={idx} href={url} target="_blank" rel="noreferrer" style={{ borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border-color)', height: '130px', display: 'block' }}>
-                        <img src={url} alt="NPP photo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    {selectedNpp.photos.map((photoUrl, pIdx) => (
+                      <a key={pIdx} href={photoUrl} target="_blank" rel="noreferrer" style={{ borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border-color)', display: 'block', height: '140px' }}>
+                        <img src={photoUrl} alt={`NPP ${selectedNpp.name} photo ${pIdx + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                       </a>
                     ))}
                   </div>
                 </div>
               )}
 
-              <h4 style={{ fontWeight: '700', marginBottom: '12px' }}>Danh Sách Bộ Máy Pha Màu Tại NPP Này:</h4>
+              {/* Assigned System Sets Detail */}
+              <h4 style={{ fontSize: '0.9rem', fontWeight: '700', marginBottom: '12px', color: 'var(--accent-cyan)' }}>
+                💻 Bộ Máy Pha Màu Đang Cấp Phát Tại NPP Này
+              </h4>
+
               {systemSets.filter(s => s.nppId === selectedNpp.id).length === 0 ? (
-                <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)' }}>Chưa có bộ máy pha màu nào được cấp phát cho NPP này.</div>
+                <div style={{ padding: '20px', background: 'var(--bg-card)', borderRadius: '8px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                  NPP này hiện chưa được gán Bộ máy pha màu nào.
+                </div>
               ) : (
                 <>
+                  {/* Desktop View Table */}
                   <div className="desktop-only data-table-container">
                     <table className="data-table">
                       <thead>
@@ -797,33 +805,34 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
                           <th>Máy Chiết</th>
                           <th>Máy Lắc</th>
                           <th>Máy Tính</th>
+                          <th>Máy In QL700</th>
                           <th>Ổn Áp</th>
-                          <th>Trạng Thái</th>
                         </tr>
                       </thead>
                       <tbody>
                         {systemSets.filter(s => s.nppId === selectedNpp.id).map(set => (
-                          <tr key={set.id}>
+                          <tr key={set.id || set.setCode}>
                             <td style={{ fontWeight: '700', color: 'var(--accent-cyan)' }}>{set.setCode}</td>
                             <td>{set.dispenserModel} ({set.dispenserSerial})</td>
                             <td>{set.mixerModel} ({set.mixerSerial})</td>
-                            <td>{set.pcType} ({set.pcOs})</td>
+                            <td>{set.pcSpecs || set.pcType} ({set.pcSerial || set.computerSerial || 'N/A'})</td>
+                            <td>{set.printerModel || 'QL700'} ({set.printerSerial || 'N/A'})</td>
                             <td>{set.stabilizer}</td>
-                            <td><span className="badge badge-success">● {set.status}</span></td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
 
+                  {/* Mobile View Cards */}
                   <div className="mobile-only mobile-card-list">
                     {systemSets.filter(s => s.nppId === selectedNpp.id).map(set => (
-                      <div className="mobile-card" key={set.id} style={{ padding: '12px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)' }}>
-                        <div className="mobile-card-header" style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '6px', marginBottom: '6px' }}>
-                          <span className="mobile-card-title" style={{ color: 'var(--accent-cyan)', fontSize: '0.85rem' }}>{set.setCode}</span>
-                          <span className="badge badge-success" style={{ fontSize: '0.65rem' }}>{set.status}</span>
+                      <div className="mobile-card" key={set.id || set.setCode}>
+                        <div className="mobile-card-header">
+                          <span className="mobile-card-title" style={{ color: 'var(--accent-cyan)' }}>{set.setCode}</span>
+                          <span className="badge badge-success">✓ Cấp phát</span>
                         </div>
-                        <div className="mobile-card-body" style={{ gap: '4px' }}>
+                        <div className="mobile-card-body">
                           <div className="mobile-card-row" style={{ fontSize: '0.8rem' }}>
                             <span className="mobile-card-label">Máy Chiết:</span>
                             <span className="mobile-card-value">{set.dispenserModel} ({set.dispenserSerial})</span>
@@ -834,7 +843,11 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
                           </div>
                           <div className="mobile-card-row" style={{ fontSize: '0.8rem' }}>
                             <span className="mobile-card-label">Máy Tính:</span>
-                            <span className="mobile-card-value">{set.pcType} ({set.pcOs})</span>
+                            <span className="mobile-card-value">{set.pcSpecs || set.pcType} ({set.pcSerial || set.computerSerial || 'N/A'})</span>
+                          </div>
+                          <div className="mobile-card-row" style={{ fontSize: '0.8rem' }}>
+                            <span className="mobile-card-label">Máy In:</span>
+                            <span className="mobile-card-value">{set.printerModel || 'QL700'} ({set.printerSerial || 'N/A'})</span>
                           </div>
                           <div className="mobile-card-row" style={{ fontSize: '0.8rem' }}>
                             <span className="mobile-card-label">Ổn Áp:</span>

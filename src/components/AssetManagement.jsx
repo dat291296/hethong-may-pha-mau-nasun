@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { supabase, isSupabaseConfigured } from '../lib/supabase.js';
 import { 
@@ -1270,19 +1271,6 @@ export default function AssetManagement({
                   </>
                 )}
 
-                {/* Printer-specific */}
-                {addDeviceCategory === 'printer' && (
-                  <div className="form-group">
-                    <label className="form-label">Cổng Kết Nối</label>
-                    <select className="form-select" value={addFormData.connection} onChange={e => setAddFormData({ ...addFormData, connection: e.target.value })}>
-                      <option value="USB">USB</option>
-                      <option value="LAN">LAN</option>
-                      <option value="Wifi">Wifi</option>
-                      <option value="Bluetooth">Bluetooth</option>
-                    </select>
-                  </div>
-                )}
-
               </div>
               <div className="modal-footer">
                 <button type="button" className="btn btn-secondary" onClick={() => setShowAddDeviceModal(false)}>Hủy Bỏ</button>
@@ -1294,7 +1282,7 @@ export default function AssetManagement({
       )}
 
       {/* EDIT DEVICE MODAL */}
-      {editingDevice && (
+      {editingDevice && createPortal(
         <div className="modal-overlay">
           <div className="modal-content" style={{ maxWidth: '580px' }}>
             <div className="modal-header">
@@ -1469,11 +1457,12 @@ export default function AssetManagement({
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Assemble Combo Modal */}
-      {showAssembleModal && (
+      {showAssembleModal && createPortal(
         <div className="modal-overlay">
           <div className="modal-content">
             <div className="modal-header">
@@ -1481,7 +1470,7 @@ export default function AssetManagement({
               <button className="btn btn-secondary btn-sm" onClick={() => setShowAssembleModal(false)}>✕</button>
             </div>
             <form onSubmit={handleAssembleSubmit}>
-              <div className="modal-body">
+              <div className="modal-body" ref={el => { if (el) el.scrollTop = 0; }}>
                 <div style={{ padding: '12px', background: 'rgba(56, 189, 248, 0.1)', border: '1px solid var(--accent-blue)', borderRadius: '8px', marginBottom: '16px', fontSize: '0.825rem' }}>
                   💡 Quy chuẩn 1 Bộ Máy Pha Màu bao gồm: 1 Máy Chiết + 1 Máy Lắc + 1 Máy Tính + 1 Máy In QL700. (Ổn áp sẽ ghi nhận thêm khi lắp đặt tại NPP).
                 </div>
@@ -1547,33 +1536,19 @@ export default function AssetManagement({
                 {(() => {
                   const isDeviceFree = (dev) => {
                     if (!dev) return false;
-                    if (dev.isAssigned === true || dev.isAssigned === 'true' || dev.is_assigned === true || dev.is_assigned === 'true') return false;
-                    if (dev.setCode && dev.setCode !== '' && dev.setCode !== 'null' && dev.setCode !== '—') return false;
-                    if (dev.set_code && dev.set_code !== '' && dev.set_code !== 'null' && dev.set_code !== '—') return false;
-                    return true;
+                    return !dev.isAssigned && (!dev.setCode || dev.setCode === '');
                   };
 
-                  const allDisp = (dispensers && dispensers.length > 0) ? dispensers : INITIAL_DISPENSERS;
-                  const freeDisp = allDisp.filter(isDeviceFree);
-                  const availDisp = [...(freeDisp.length > 0 ? freeDisp : allDisp)].sort((a, b) => naturalSortCode(a, b, 'id'));
-
-                  const allMix = (mixers && mixers.length > 0) ? mixers : INITIAL_MIXERS;
-                  const freeMix = allMix.filter(isDeviceFree);
-                  const availMix = [...(freeMix.length > 0 ? freeMix : allMix)].sort((a, b) => naturalSortCode(a, b, 'id'));
-
-                  const allPc = (computers && computers.length > 0) ? computers : INITIAL_COMPUTERS;
-                  const freePc = allPc.filter(isDeviceFree);
-                  const availPc = [...(freePc.length > 0 ? freePc : allPc)].sort((a, b) => naturalSortCode(a, b, 'id'));
-
-                  const allPrn = (printers && printers.length > 0) ? printers : INITIAL_PRINTERS;
-                  const freePrn = allPrn.filter(isDeviceFree);
-                  const availPrn = [...(freePrn.length > 0 ? freePrn : allPrn)].sort((a, b) => naturalSortCode(a, b, 'id'));
+                  const availDisp = dispensers.filter(d => isDeviceFree(d) || d.id === newSetData.dispenserId);
+                  const availMix = mixers.filter(m => isDeviceFree(m) || m.id === newSetData.mixerId);
+                  const availComp = computers.filter(c => isDeviceFree(c) || c.id === newSetData.computerId);
+                  const availPrn = printers.filter(p => isDeviceFree(p) || p.id === newSetData.printerId);
 
                   return (
                     <>
                       <div className="form-group">
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                          <label className="form-label" style={{ marginBottom: 0 }}>1. Chọn Máy Chiết Trong Kho *</label>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <label className="form-label" style={{ marginBottom: 0 }}>1. Chọn Máy Chiết *</label>
                           <button 
                             type="button" 
                             style={{ background: 'none', border: 'none', color: 'var(--accent-cyan)', fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline' }}
@@ -1583,7 +1558,7 @@ export default function AssetManagement({
                           </button>
                         </div>
                         <select className="form-select" required value={newSetData.dispenserId} onChange={e => setNewSetData({ ...newSetData, dispenserId: e.target.value })}>
-                          <option value="">-- Chọn máy chiết từ kho ({availDisp.length} máy) --</option>
+                          <option value="">-- Chọn máy chiết ({availDisp.length} máy) --</option>
                           {availDisp.map(d => (
                             <option key={d.id} value={d.id}>
                               {d.model} - Seri: {d.serial} {isDeviceFree(d) ? '🟢 (Tự do trong kho)' : `🟡 (Đang gán bộ ${d.setCode || d.set_code || ''})`}
@@ -1593,8 +1568,8 @@ export default function AssetManagement({
                       </div>
 
                       <div className="form-group">
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                          <label className="form-label" style={{ marginBottom: 0 }}>2. Chọn Máy Lắc Trong Kho *</label>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <label className="form-label" style={{ marginBottom: 0 }}>2. Chọn Máy Lắc *</label>
                           <button 
                             type="button" 
                             style={{ background: 'none', border: 'none', color: 'var(--accent-cyan)', fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline' }}
@@ -1604,18 +1579,18 @@ export default function AssetManagement({
                           </button>
                         </div>
                         <select className="form-select" required value={newSetData.mixerId} onChange={e => setNewSetData({ ...newSetData, mixerId: e.target.value })}>
-                          <option value="">-- Chọn máy lắc từ kho ({availMix.length} máy) --</option>
+                          <option value="">-- Chọn máy lắc ({availMix.length} máy) --</option>
                           {availMix.map(m => (
                             <option key={m.id} value={m.id}>
-                              {m.model} ({m.type}) - Seri: {m.serial} {isDeviceFree(m) ? '🟢 (Tự do trong kho)' : `🟡 (Đang gán bộ ${m.setCode || m.set_code || ''})`}
+                              {m.model} - Seri: {m.serial} {isDeviceFree(m) ? '🟢 (Tự do trong kho)' : `🟡 (Đang gán bộ ${m.setCode || m.set_code || ''})`}
                             </option>
                           ))}
                         </select>
                       </div>
 
                       <div className="form-group">
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                          <label className="form-label" style={{ marginBottom: 0 }}>3. Chọn Máy Tính Trong Kho *</label>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <label className="form-label" style={{ marginBottom: 0 }}>3. Chọn Máy Tính *</label>
                           <button 
                             type="button" 
                             style={{ background: 'none', border: 'none', color: 'var(--accent-cyan)', fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline' }}
@@ -1625,17 +1600,17 @@ export default function AssetManagement({
                           </button>
                         </div>
                         <select className="form-select" required value={newSetData.computerId} onChange={e => setNewSetData({ ...newSetData, computerId: e.target.value })}>
-                          <option value="">-- Chọn máy tính từ kho ({availPc.length} máy) --</option>
-                          {availPc.map(c => (
+                          <option value="">-- Chọn máy tính ({availComp.length} máy) --</option>
+                          {availComp.map(c => (
                             <option key={c.id} value={c.id}>
-                              {c.type} ({c.os}) - Seri: {c.serial} {isDeviceFree(c) ? '🟢 (Tự do trong kho)' : `🟡 (Đang gán bộ ${c.setCode || c.set_code || ''})`}
+                              {c.type} {c.os} - Seri: {c.serial || c.id} {isDeviceFree(c) ? '🟢 (Tự do trong kho)' : `🟡 (Đang gán bộ ${c.setCode || c.set_code || ''})`}
                             </option>
                           ))}
                         </select>
                       </div>
 
                       <div className="form-group">
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <label className="form-label" style={{ marginBottom: 0 }}>4. Chọn Máy In QL700 *</label>
                           <button 
                             type="button" 
@@ -1664,11 +1639,12 @@ export default function AssetManagement({
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* EDIT SYSTEM SET MODAL */}
-      {editingSet && (
+      {editingSet && createPortal(
         <div className="modal-overlay">
           <div className="modal-content" style={{ maxWidth: '600px' }}>
             <div className="modal-header">
@@ -1692,8 +1668,8 @@ export default function AssetManagement({
                             ...editSetFormData,
                             nppId: '',
                             nppName: 'Kho Tổng Trung Tâm',
-                            region: '',
-                            province: '',
+                            region: 'Kho Tổng',
+                            province: 'Kho Tổng',
                             salesperson: ''
                           });
                         } else {
@@ -1745,33 +1721,6 @@ export default function AssetManagement({
                     />
                   </div>
 
-                  <div className="form-group">
-                    <label className="form-label">🛠️ Kỹ Thuật Viên Phụ Trách</label>
-                    <select
-                      className="form-select"
-                      value={editSetFormData.technician || ''}
-                      onChange={e => setEditSetFormData({ ...editSetFormData, technician: e.target.value })}
-                    >
-                      <option value="">-- Chọn KTV phụ trách --</option>
-                      {qcUsers.map(u => (
-                        <option key={u.id || u.name} value={u.name}>
-                          👤 {u.name} ({u.role?.toUpperCase() || 'KTV'})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                  <div className="form-group">
-                    <label className="form-label">Ngày Bảo Trì Gần Nhất</label>
-                    <input 
-                      type="date" 
-                      className="form-input" 
-                      value={editSetFormData.lastMaintenanceDate || ''} 
-                      onChange={e => setEditSetFormData({ ...editSetFormData, lastMaintenanceDate: e.target.value })} 
-                    />
-                  </div>
                   <div className="form-group">
                     <label className="form-label">Hạn Bảo Trì Tiếp Theo</label>
                     <input 
@@ -1828,7 +1777,8 @@ export default function AssetManagement({
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* QR & BARCODE CAMERA SCANNER MODAL */}
