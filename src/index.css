@@ -1201,6 +1201,137 @@ body:has(.modal-backdrop) .mobile-bottom-nav,
   }
 }
 
+/* --- Checklist Design System UI Upgrades --- */
+
+/* Active Filter Chips Bar */
+.active-filter-chips {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+  margin-bottom: 12px;
+}
+
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: rgba(6, 182, 212, 0.12);
+  border: 1px solid rgba(6, 182, 212, 0.3);
+  color: var(--accent-cyan);
+  font-size: 0.775rem;
+  font-weight: 600;
+  border-radius: 20px;
+  transition: all 0.15s ease;
+}
+
+.filter-chip-remove {
+  cursor: pointer;
+  opacity: 0.7;
+  font-size: 0.85rem;
+  line-height: 1;
+}
+
+.filter-chip-remove:hover {
+  opacity: 1;
+  color: #ef4444;
+}
+
+/* Column Toggle Dropdown */
+.column-toggle-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.column-toggle-popover {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 6px;
+  width: 220px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+  padding: 10px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.column-toggle-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: var(--text-main);
+  cursor: pointer;
+  user-select: none;
+  padding: 4px 6px;
+  border-radius: 4px;
+}
+
+.column-toggle-item:hover {
+  background: var(--bg-card-hover);
+}
+
+/* Pagination Bar */
+.pagination-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  margin-top: 14px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.pagination-info {
+  font-size: 0.825rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pagination-btn {
+  padding: 5px 11px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  background: var(--bg-card-hover);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pagination-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.pagination-btn.active {
+  background: var(--accent-cyan);
+  color: #0b1329;
+  border-color: var(--accent-cyan);
+}
+
+.pagination-btn:not(:disabled):hover {
+  background: var(--accent-blue);
+  color: #ffffff;
+}
+
 
 
 

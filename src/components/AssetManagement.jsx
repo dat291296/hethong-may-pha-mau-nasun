@@ -87,11 +87,19 @@ export default function AssetManagement({
   }, [user]);
 
   const [activeSubTab, setActiveSubTab] = useState('comboSets'); // comboSets | dispensers | mixers | computers | printers
+  const [searchTerm, setSearchTerm] = useState('');
   const [modelFilter, setModelFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [showAssembleModal, setShowAssembleModal] = useState(false);
   const [showScanSerialModal, setShowScanSerialModal] = useState(false);
   const [scanTargetField, setScanTargetField] = useState('add');
+
+  // Reset pagination on tab or filter change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeSubTab, modelFilter, statusFilter, searchTerm]);
 
   // Helper to find assigned set & NPP info for any device item
   const getAssignedInfo = (item) => {
@@ -303,14 +311,84 @@ export default function AssetManagement({
     .filter(s => {
       const matchesModel = modelFilter === 'ALL' || s.dispenserModel === modelFilter;
       const matchesStatus = statusFilter === 'ALL' || s.status === statusFilter;
-      return matchesModel && matchesStatus;
+      const matchesSearch = !searchTerm || (
+        (s.setCode && s.setCode.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (s.nppName && s.nppName.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (s.dispenserSerial && s.dispenserSerial.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (s.mixerSerial && s.mixerSerial.toLowerCase().includes(searchTerm.toLowerCase()))
+      );
+      return matchesModel && matchesStatus && matchesSearch;
     })
     .sort((a, b) => naturalSortCode(a, b, 'setCode'));
 
-  const sortedDispensers = [...dispensers].sort((a, b) => naturalSortCode(a, b, 'id'));
-  const sortedMixers = [...mixers].sort((a, b) => naturalSortCode(a, b, 'id'));
-  const sortedComputers = [...computers].sort((a, b) => naturalSortCode(a, b, 'id'));
-  const sortedPrinters = [...printers].sort((a, b) => naturalSortCode(a, b, 'id'));
+  const filterDevice = (list) => {
+    return [...list].filter(item => {
+      const matchesStatus = statusFilter === 'ALL' || item.status === statusFilter;
+      const matchesSearch = !searchTerm || (
+        (item.id && item.id.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (item.model && item.model.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (item.serial && item.serial.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (item.setCode && item.setCode.toLowerCase().includes(searchTerm.toLowerCase()))
+      );
+      return matchesStatus && matchesSearch;
+    });
+  };
+
+  const sortedDispensers = filterDevice(dispensers).sort((a, b) => naturalSortCode(a, b, 'id'));
+  const sortedMixers = filterDevice(mixers).sort((a, b) => naturalSortCode(a, b, 'id'));
+  const sortedComputers = filterDevice(computers).sort((a, b) => naturalSortCode(a, b, 'id'));
+  const sortedPrinters = filterDevice(printers).sort((a, b) => naturalSortCode(a, b, 'id'));
+
+  const getPaginatedList = (list) => {
+    const start = (currentPage - 1) * pageSize;
+    return list.slice(start, start + pageSize);
+  };
+
+  const renderPaginationBar = (totalCount) => {
+    const totalPages = Math.ceil(totalCount / pageSize) || 1;
+    const startItem = totalCount === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+    const endItem = Math.min(currentPage * pageSize, totalCount);
+
+    return (
+      <div className="pagination-bar">
+        <div className="pagination-info">
+          Hiển thị <strong>{startItem}–{endItem}</strong> trong tổng số <strong>{totalCount}</strong> mục
+          <select 
+            className="form-select" 
+            value={pageSize} 
+            onChange={e => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}
+            style={{ marginLeft: '12px', padding: '2px 8px', fontSize: '0.8rem', width: 'auto', display: 'inline-block' }}
+          >
+            <option value={10}>10 dòng/trang</option>
+            <option value={25}>25 dòng/trang</option>
+            <option value={50}>50 dòng/trang</option>
+          </select>
+        </div>
+
+        <div className="pagination-controls">
+          <button 
+            className="pagination-btn" 
+            disabled={currentPage <= 1}
+            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+          >
+            ‹ Trang Trước
+          </button>
+          
+          <span style={{ fontSize: '0.8rem', fontWeight: '700', color: 'var(--accent-cyan)', padding: '0 8px' }}>
+            Trang {currentPage} / {totalPages}
+          </span>
+
+          <button 
+            className="pagination-btn" 
+            disabled={currentPage >= totalPages}
+            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+          >
+            Trang Sau ›
+          </button>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -391,10 +469,22 @@ export default function AssetManagement({
       {activeSubTab === 'comboSets' && (
         <div className="glass-panel" style={{ padding: '20px' }}>
           
-          {/* Filters Bar */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
+          {/* Filters Bar & Search Input */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px', flexWrap: 'wrap' }}>
+            <div style={{ position: 'relative', width: '240px' }}>
+              <input
+                type="text"
+                placeholder="Tìm Mã bộ, NPP, Seri..."
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                className="form-input"
+                style={{ height: '36px', fontSize: '0.825rem', paddingLeft: '32px' }}
+              />
+              <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', opacity: 0.6 }}>🔍</span>
+            </div>
+
             <Filter size={16} color="var(--text-muted)" />
-            <span style={{ fontSize: '0.85rem', fontWeight: '600' }}>Lọc Hệ Máy:</span>
+            <span style={{ fontSize: '0.85rem', fontWeight: '600' }}>Hệ Máy:</span>
             <select className="form-select" value={modelFilter} onChange={e => setModelFilter(e.target.value)} style={{ height: '36px', fontSize: '0.825rem' }}>
               <option value="ALL">Tất Cả Hệ Máy Chiết</option>
               <option value="Satint A2">Satint A2</option>
@@ -403,15 +493,46 @@ export default function AssetManagement({
               <option value="Fast & Fluid HA480">Fast & Fluid HA480</option>
             </select>
 
-            <span style={{ fontSize: '0.85rem', fontWeight: '600' }}>Trạng Thái Bộ Máy:</span>
+            <span style={{ fontSize: '0.85rem', fontWeight: '600' }}>Trạng Thái:</span>
             <select className="form-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{ height: '36px', fontSize: '0.825rem' }}>
               <option value="ALL">Tất Cả Trạng Thái</option>
-              <option value="DA_LAP_DAT">Đã Lắp Đặt</option>
-              <option value="TRONG_KHO">Trong Kho</option>
-              <option value="DA_THU_HOI">Đã Thu Hồi</option>
-              <option value="BAO_THUONG_BAO_TRI">Đang Bảo Trì</option>
+              <option value="DA_LAP_DAT">🟢 Đã Lắp Đặt</option>
+              <option value="TRONG_KHO">⚪ Trong Kho</option>
+              <option value="DA_THU_HOI">🔴 Đã Thu Hồi</option>
+              <option value="BAO_THUONG_BAO_TRI">🟡 Đang Bảo Trì</option>
             </select>
           </div>
+
+          {/* Active Filter Chips */}
+          {(searchTerm || modelFilter !== 'ALL' || statusFilter !== 'ALL') && (
+            <div className="active-filter-chips">
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600' }}>Bộ lọc đang chọn:</span>
+              {searchTerm && (
+                <div className="filter-chip">
+                  <span>🔍 "{searchTerm}"</span>
+                  <span className="filter-chip-remove" onClick={() => setSearchTerm('')}>✕</span>
+                </div>
+              )}
+              {modelFilter !== 'ALL' && (
+                <div className="filter-chip">
+                  <span>⚙️ {modelFilter}</span>
+                  <span className="filter-chip-remove" onClick={() => setModelFilter('ALL')}>✕</span>
+                </div>
+              )}
+              {statusFilter !== 'ALL' && (
+                <div className="filter-chip">
+                  <span>⚡ {statusFilter}</span>
+                  <span className="filter-chip-remove" onClick={() => setStatusFilter('ALL')}>✕</span>
+                </div>
+              )}
+              <button 
+                style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline' }}
+                onClick={() => { setSearchTerm(''); setModelFilter('ALL'); setStatusFilter('ALL'); }}
+              >
+                Xóa tất cả bộ lọc
+              </button>
+            </div>
+          )}
 
           {/* Desktop View Table */}
           <div className="desktop-only data-table-container">
@@ -431,7 +552,7 @@ export default function AssetManagement({
                 </tr>
               </thead>
               <tbody>
-                {filteredSets.map(set => {
+                {getPaginatedList(filteredSets).map(set => {
                   const pcObj = (computers || []).find(c => (set.computerId && c.id === set.computerId) || (set.computerSerial && c.serial === set.computerSerial));
                   const pcSpecsText = pcObj?.specs || set.pcSpecs || (set.pcType ? `${set.pcType} (${set.pcOs || ''})` : set.computerType || 'Core i5 / 16GB / 512GB SSD');
                   const pcSerialText = set.computerSerial || set.pcSerial || pcObj?.serial || 'N/A';
@@ -496,7 +617,7 @@ export default function AssetManagement({
 
           {/* Mobile View Cards */}
           <div className="mobile-only mobile-card-list">
-            {filteredSets.map(set => {
+            {getPaginatedList(filteredSets).map(set => {
               const pcObj = (computers || []).find(c => (set.computerId && c.id === set.computerId) || (set.computerSerial && c.serial === set.computerSerial));
               const pcSpecsText = pcObj?.specs || set.pcSpecs || (set.pcType ? `${set.pcType} (${set.pcOs || ''})` : set.computerType || 'Core i5 / 16GB / 512GB SSD');
               const pcSerialText = set.computerSerial || set.pcSerial || pcObj?.serial || 'N/A';
@@ -559,6 +680,9 @@ export default function AssetManagement({
               );
             })}
           </div>
+
+          {/* Pagination Footer */}
+          {renderPaginationBar(filteredSets.length)}
         </div>
       )}
 

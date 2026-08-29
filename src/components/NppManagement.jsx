@@ -32,6 +32,15 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
   const [brandFilter, setBrandFilter] = useState('ALL');
   const [selectedNpp, setSelectedNpp] = useState(null);
   
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(12);
+
+  // Reset pagination on filter change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, regionFilter, statusFilter, brandFilter]);
+
   // Modal states
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingNpp, setEditingNpp] = useState(null); // NPP object being edited
@@ -318,9 +327,48 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
         </div>
       </div>
 
+      {/* Active Filter Chips */}
+      {(searchTerm || regionFilter !== 'ALL' || statusFilter !== 'ALL' || brandFilter !== 'ALL') && (
+        <div className="active-filter-chips">
+          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600' }}>Bộ lọc đang chọn:</span>
+          {searchTerm && (
+            <div className="filter-chip">
+              <span>🔍 "{searchTerm}"</span>
+              <span className="filter-chip-remove" onClick={() => setSearchTerm('')}>✕</span>
+            </div>
+          )}
+          {brandFilter !== 'ALL' && (
+            <div className="filter-chip">
+              <span>🎨 {brandFilter}</span>
+              <span className="filter-chip-remove" onClick={() => setBrandFilter('ALL')}>✕</span>
+            </div>
+          )}
+          {regionFilter !== 'ALL' && (
+            <div className="filter-chip">
+              <span>📍 {regionFilter}</span>
+              <span className="filter-chip-remove" onClick={() => setRegionFilter('ALL')}>✕</span>
+            </div>
+          )}
+          {statusFilter !== 'ALL' && (
+            <div className="filter-chip">
+              <span>⚡ {statusFilter}</span>
+              <span className="filter-chip-remove" onClick={() => setStatusFilter('ALL')}>✕</span>
+            </div>
+          )}
+          <button 
+            style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline' }}
+            onClick={() => { setSearchTerm(''); setRegionFilter('ALL'); setStatusFilter('ALL'); setBrandFilter('ALL'); }}
+          >
+            Xóa tất cả bộ lọc
+          </button>
+        </div>
+      )}
+
       {/* NPP Cards Grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}>
-        {filteredNpps.map((npp) => {
+        {filteredNpps
+          .slice((currentPage - 1) * pageSize, currentPage * pageSize)
+          .map((npp) => {
           const assignedSets = systemSets.filter(s => s.nppId === npp.id);
           return (
             <div key={npp.id} className="glass-panel glass-panel-hover" style={{ padding: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
@@ -436,6 +484,54 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
           );
         })}
       </div>
+
+      {/* Pagination Footer */}
+      {(() => {
+        const totalCount = filteredNpps.length;
+        const totalPages = Math.ceil(totalCount / pageSize) || 1;
+        const startItem = totalCount === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+        const endItem = Math.min(currentPage * pageSize, totalCount);
+
+        return (
+          <div className="pagination-bar">
+            <div className="pagination-info">
+              Hiển thị <strong>{startItem}–{endItem}</strong> trong tổng số <strong>{totalCount}</strong> Nhà Phân Phối
+              <select 
+                className="form-select" 
+                value={pageSize} 
+                onChange={e => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}
+                style={{ marginLeft: '12px', padding: '2px 8px', fontSize: '0.8rem', width: 'auto', display: 'inline-block' }}
+              >
+                <option value={12}>12 NPP/trang</option>
+                <option value={24}>24 NPP/trang</option>
+                <option value={48}>48 NPP/trang</option>
+              </select>
+            </div>
+
+            <div className="pagination-controls">
+              <button 
+                className="pagination-btn" 
+                disabled={currentPage <= 1}
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+              >
+                ‹ Trang Trước
+              </button>
+              
+              <span style={{ fontSize: '0.8rem', fontWeight: '700', color: 'var(--accent-cyan)', padding: '0 8px' }}>
+                Trang {currentPage} / {totalPages}
+              </span>
+
+              <button 
+                className="pagination-btn" 
+                disabled={currentPage >= totalPages}
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+              >
+                Trang Sau ›
+              </button>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ADD / EDIT NPP MODAL */}
       {(showAddModal || editingNpp) && (
