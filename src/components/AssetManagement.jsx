@@ -1178,64 +1178,72 @@ export default function AssetManagement({
               <button className="btn btn-secondary btn-sm" onClick={() => setEditingDevice(null)}>✕</button>
             </div>
             <form onSubmit={handleEditSubmit}>
-              <div className="modal-body">
-                <div className="form-group">
-                  <label className="form-label">Mã Quản Lý (Mã QL)</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    required
-                    value={editFormData.id || ''}
-                    onChange={e => setEditFormData({ ...editFormData, id: e.target.value })}
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Model / Hệ Máy</label>
-                  <input type="text" className="form-input" required value={editFormData.model || editFormData.type || ''} onChange={e => setEditFormData({ ...editFormData, model: e.target.value })} />
-                </div>
-
-                <div className="form-group">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                    <label className="form-label" style={{ marginBottom: 0 }}>
-                      Số Seri (Serial Number) {editingDevice.category !== 'computer' ? '*' : '(Không bắt buộc)'}
-                    </label>
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-sm"
-                      style={{ padding: '2px 10px', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'var(--accent-cyan)', border: '1px solid var(--accent-cyan)' }}
-                      onClick={() => {
-                        setScanTargetField('edit');
-                        setShowScanSerialModal(true);
-                      }}
-                    >
-                      <Camera size={14} />
-                      <span>📷 Quét Mã Vạch</span>
-                    </button>
+              <div className="modal-body" ref={el => { if (el) el.scrollTop = 0; }}>
+                
+                {/* ROW 1: SERIAL NUMBER & MODEL - TOP OF FORM */}
+                <div className="responsive-form-grid">
+                  <div className="form-group">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                      <label className="form-label" style={{ marginBottom: 0 }}>
+                        🏷️ Số Seri (Serial) {editingDevice.category !== 'computer' ? '*' : ''}
+                      </label>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        style={{ padding: '2px 8px', fontSize: '0.725rem', display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'var(--accent-cyan)', border: '1px solid var(--accent-cyan)' }}
+                        onClick={() => {
+                          setScanTargetField('edit');
+                          setShowScanSerialModal(true);
+                        }}
+                      >
+                        <Camera size={12} />
+                        <span>📷 Quét Mã</span>
+                      </button>
+                    </div>
+                    <input
+                      type="text"
+                      className="form-input"
+                      required={editingDevice.category !== 'computer'}
+                      placeholder={editingDevice.category === 'computer' ? 'Tùy chọn' : 'Nhập seri hoặc bấm Quét mã'}
+                      value={editFormData.serial || ''}
+                      onChange={e => setEditFormData({ ...editFormData, serial: e.target.value })}
+                    />
                   </div>
-                  <input
-                    type="text"
-                    className="form-input"
-                    required={editingDevice.category !== 'computer'}
-                    placeholder={editingDevice.category === 'computer' ? 'Tùy chọn (Bấm Quét mã vạch hoặc để trống)' : 'Nhập seri hoặc bấm Quét mã vạch'}
-                    value={editFormData.serial || ''}
-                    onChange={e => setEditFormData({ ...editFormData, serial: e.target.value })}
-                  />
+
+                  <div className="form-group">
+                    <label className="form-label">⚙️ Model / Hệ Máy *</label>
+                    <input type="text" className="form-input" required value={editFormData.model || editFormData.type || ''} onChange={e => setEditFormData({ ...editFormData, model: e.target.value })} />
+                  </div>
                 </div>
 
-                <div className="form-group">
-                  <label className="form-label">Tình Trạng Kỹ Thuật</label>
-                  <select className="form-select" value={editFormData.status || 'Đang chạy tốt'} onChange={e => setEditFormData({ ...editFormData, status: e.target.value })}>
-                    <option value="Mới 100%">Mới 100%</option>
-                    <option value="Đang chạy tốt">Đang chạy tốt</option>
-                    <option value="Cần bảo trì">Cần bảo trì</option>
-                    {editingDevice.category === 'dispenser' && <option value="Hỏng đầu phun">Hỏng đầu phun</option>}
-                    {editingDevice.category === 'mixer' && <option value="Hỏng motor">Hỏng motor</option>}
-                    {editingDevice.category === 'printer' && <option value="Hỏng đầu in">Hỏng đầu in</option>}
-                    <option value="Hỏng nặng">Hỏng nặng</option>
-                  </select>
+                {/* ROW 2: MÃ QL & TÌNH TRẠNG KỸ THUẬT */}
+                <div className="responsive-form-grid">
+                  <div className="form-group">
+                    <label className="form-label">🔢 Mã Quản Lý (Mã QL) *</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      required
+                      value={editFormData.id || ''}
+                      onChange={e => setEditFormData({ ...editFormData, id: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">🛠️ Tình Trạng Kỹ Thuật</label>
+                    <select className="form-select" value={editFormData.status || 'Đang chạy tốt'} onChange={e => setEditFormData({ ...editFormData, status: e.target.value })}>
+                      <option value="Mới 100%">Mới 100%</option>
+                      <option value="Đang chạy tốt">Đang chạy tốt</option>
+                      <option value="Cần bảo trì">Cần bảo trì</option>
+                      {editingDevice.category === 'dispenser' && <option value="Hỏng đầu phun">Hỏng đầu phun</option>}
+                      {editingDevice.category === 'mixer' && <option value="Hỏng motor">Hỏng motor</option>}
+                      {editingDevice.category === 'printer' && <option value="Hỏng đầu in">Hỏng đầu in</option>}
+                      <option value="Hỏng nặng">Hỏng nặng</option>
+                    </select>
+                  </div>
                 </div>
 
+                {/* CATEGORY SPECIFIC OPTIONS */}
                 {editingDevice.category === 'printer' && (
                   <div className="form-group">
                     <label className="form-label">Cổng Kết Nối</label>
@@ -1248,10 +1256,9 @@ export default function AssetManagement({
                   </div>
                 )}
 
-
                 {editingDevice.category === 'mixer' && (
                   <div className="form-group">
-                    <label className="form-label">Loại Máy Lắc (Chỉnh sửa)</label>
+                    <label className="form-label">Loại Máy Lắc</label>
                     <select
                       className="form-select"
                       value={editFormData.type || 'Lắc xoay khép kín'}
@@ -1266,18 +1273,15 @@ export default function AssetManagement({
                 )}
 
                 {editingDevice.category === 'computer' && (
-                  <>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                      <div className="form-group">
-                        <label className="form-label">Loại Máy Tính</label>
-                        <select className="form-select" value={editFormData.type || 'AIO'} onChange={e => setEditFormData({ ...editFormData, type: e.target.value })}>
-                          <option value="AIO">AIO (All in One)</option>
-                          <option value="Case">Case Để Bàn</option>
+                  <div className="responsive-form-grid">
+                    <div className="form-group">
+                      <label className="form-label">Loại Máy Tính & OS</label>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <select className="form-select" style={{ width: '110px' }} value={editFormData.type || 'AIO'} onChange={e => setEditFormData({ ...editFormData, type: e.target.value })}>
+                          <option value="AIO">AIO</option>
+                          <option value="Case">Case</option>
                         </select>
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label">Hệ Điều Hành</label>
-                        <input type="text" className="form-input" value={editFormData.os || ''} onChange={e => setEditFormData({ ...editFormData, os: e.target.value })} />
+                        <input type="text" className="form-input" style={{ flex: 1 }} placeholder="Hệ điều hành..." value={editFormData.os || ''} onChange={e => setEditFormData({ ...editFormData, os: e.target.value })} />
                       </div>
                     </div>
                     <div className="form-group">
@@ -1288,52 +1292,50 @@ export default function AssetManagement({
                         <option value="Không có mạng">Không có mạng</option>
                       </select>
                     </div>
-                  </>
+                  </div>
                 )}
 
-                {/* Admin Assignment Section - Available for ALL device categories */}
-                <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--border-color)' }}>
-                  <label className="form-label" style={{ fontWeight: '700', color: 'var(--accent-cyan)' }}>
-                    📌 Tình Trạng Cấp Phát & Nhà Phân Phối (Quyền Admin)
-                  </label>
-
-                  <div className="form-group" style={{ marginTop: '8px' }}>
-                    <label className="form-label">Trạng Thái Cấp Phát</label>
-                    <select
-                      className="form-select"
-                      value={editFormData.isAssigned ? 'ASSIGNED' : 'FREE'}
-                      onChange={e => {
-                        const isAssigned = e.target.value === 'ASSIGNED';
-                        setEditFormData({
-                          ...editFormData,
-                          isAssigned,
-                          setCode: isAssigned ? editFormData.setCode : ''
-                        });
-                      }}
-                    >
-                      <option value="FREE">⚪ Tự do trong kho (Chưa gán bộ máy nào)</option>
-                      <option value="ASSIGNED">🟢 Đã gán vào Bộ máy / Nhà Phân Phối</option>
-                    </select>
-                  </div>
-
-                  {editFormData.isAssigned && (
+                {/* ASSIGNMENT & NPP SECTION */}
+                <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px dashed var(--border-color)' }}>
+                  <div className="responsive-form-grid">
                     <div className="form-group">
-                      <label className="form-label">Chọn Bộ Máy & NPP Gán Cho *</label>
+                      <label className="form-label">📌 Trạng Thái Cấp Phát</label>
                       <select
                         className="form-select"
-                        required={editFormData.isAssigned}
-                        value={editFormData.setCode || ''}
-                        onChange={e => setEditFormData({ ...editFormData, setCode: e.target.value })}
+                        value={editFormData.isAssigned ? 'ASSIGNED' : 'FREE'}
+                        onChange={e => {
+                          const isAssigned = e.target.value === 'ASSIGNED';
+                          setEditFormData({
+                            ...editFormData,
+                            isAssigned,
+                            setCode: isAssigned ? editFormData.setCode : ''
+                          });
+                        }}
                       >
-                        <option value="">-- Chọn bộ máy / NPP gán cho --</option>
-                        {systemSets.map(s => (
-                          <option key={s.setCode} value={s.setCode}>
-                            {s.setCode} — {s.nppName || 'Kho Tổng Trung Tâm'} ({s.province || s.region || 'TQ'})
-                          </option>
-                        ))}
+                        <option value="FREE">⚪ Tự do trong kho</option>
+                        <option value="ASSIGNED">🟢 Đã gán vào Bộ máy / NPP</option>
                       </select>
                     </div>
-                  )}
+
+                    {editFormData.isAssigned && (
+                      <div className="form-group">
+                        <label className="form-label">🏢 Bộ Máy & NPP Gán Cho *</label>
+                        <select
+                          className="form-select"
+                          required={editFormData.isAssigned}
+                          value={editFormData.setCode || ''}
+                          onChange={e => setEditFormData({ ...editFormData, setCode: e.target.value })}
+                        >
+                          <option value="">-- Chọn bộ máy / NPP --</option>
+                          {systemSets.map(s => (
+                            <option key={s.setCode} value={s.setCode}>
+                              {s.setCode} — {s.nppName || 'Kho Trung Tâm'}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
               </div>
@@ -1552,88 +1554,87 @@ export default function AssetManagement({
             <form onSubmit={handleEditSetSubmit}>
               <div className="modal-body" ref={el => { if (el) el.scrollTop = 0; }}>
                 
-                {/* NPP Dropdown */}
-                <div className="form-group">
-                  <label className="form-label">Chọn Nhà Phân Phối (Lấy từ Mục NPP)</label>
-                  <select
-                    className="form-select"
-                    value={editSetFormData.nppId || ''}
-                    onChange={e => {
-                      const selectedId = e.target.value;
-                      if (!selectedId) {
-                        setEditSetFormData({
-                          ...editSetFormData,
-                          nppId: '',
-                          nppName: 'Kho Tổng Trung Tâm',
-                          region: '',
-                          province: '',
-                          salesperson: ''
-                        });
-                      } else {
-                        const targetNpp = npps.find(n => n.id === selectedId);
-                        setEditSetFormData({
-                          ...editSetFormData,
-                          nppId: selectedId,
-                          nppName: targetNpp ? targetNpp.name : editSetFormData.nppName,
-                          region: targetNpp ? (targetNpp.region || editSetFormData.region) : editSetFormData.region,
-                          province: targetNpp ? (targetNpp.province || editSetFormData.province) : editSetFormData.province,
-                          salesperson: targetNpp ? (targetNpp.salesperson || editSetFormData.salesperson) : editSetFormData.salesperson
-                        });
-                      }
-                    }}
-                  >
-                    <option value="">-- Kho Tổng Trung Tâm (Chưa chọn NPP) --</option>
-                    {npps.map(npp => (
-                      <option key={npp.id} value={npp.id}>
-                        {npp.name} ({npp.code || npp.id}) — {npp.province || npp.region || 'TQ'} {npp.salesperson ? `(KD: ${npp.salesperson})` : ''}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                {/* PRIMARY EDIT FIELDS - TOP OF FORM */}
+                <div className="responsive-form-grid">
                   <div className="form-group">
-                    <label className="form-label">Khu Vực (Vùng)</label>
-                    <input 
-                      type="text" 
-                      className="form-input" 
-                      value={editSetFormData.region} 
-                      onChange={e => setEditSetFormData({ ...editSetFormData, region: e.target.value })} 
-                    />
+                    <label className="form-label">🏢 Chọn Nhà Phân Phối Gán Cho</label>
+                    <select
+                      className="form-select"
+                      value={editSetFormData.nppId || ''}
+                      onChange={e => {
+                        const selectedId = e.target.value;
+                        if (!selectedId) {
+                          setEditSetFormData({
+                            ...editSetFormData,
+                            nppId: '',
+                            nppName: 'Kho Tổng Trung Tâm',
+                            region: '',
+                            province: '',
+                            salesperson: ''
+                          });
+                        } else {
+                          const targetNpp = npps.find(n => n.id === selectedId);
+                          setEditSetFormData({
+                            ...editSetFormData,
+                            nppId: selectedId,
+                            nppName: targetNpp ? targetNpp.name : editSetFormData.nppName,
+                            region: targetNpp ? (targetNpp.region || editSetFormData.region) : editSetFormData.region,
+                            province: targetNpp ? (targetNpp.province || editSetFormData.province) : editSetFormData.province,
+                            salesperson: targetNpp ? (targetNpp.salesperson || editSetFormData.salesperson) : editSetFormData.salesperson
+                          });
+                        }
+                      }}
+                    >
+                      <option value="">-- Kho Trung Tâm (Chưa gán NPP) --</option>
+                      {npps.map(npp => (
+                        <option key={npp.id} value={npp.id}>
+                          {npp.name} ({npp.code || npp.id}) — {npp.province || npp.region || 'TQ'}
+                        </option>
+                      ))}
+                    </select>
                   </div>
-                  <div className="form-group">
-                    <label className="form-label">Tỉnh / Thành Phố</label>
-                    <input 
-                      type="text" 
-                      className="form-input" 
-                      value={editSetFormData.province} 
-                      onChange={e => setEditSetFormData({ ...editSetFormData, province: e.target.value })} 
-                    />
-                  </div>
-                </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                   <div className="form-group">
-                    <label className="form-label">Trạng Thái Bộ Máy</label>
+                    <label className="form-label">⚡ Trạng Thái Bộ Máy</label>
                     <select 
                       className="form-select" 
                       value={editSetFormData.status} 
                       onChange={e => setEditSetFormData({ ...editSetFormData, status: e.target.value })}
                     >
-                      <option value="DA_LAP_DAT">Đã Lắp Đặt</option>
-                      <option value="TRONG_KHO">Trong Kho</option>
-                      <option value="DA_THU_HOI">Đã Thu Hồi</option>
-                      <option value="BAO_THUONG_BAO_TRI">Đang Bảo Trì</option>
+                      <option value="DA_LAP_DAT">🟢 Đã Lắp Đặt</option>
+                      <option value="TRONG_KHO">⚪ Trong Kho</option>
+                      <option value="DA_THU_HOI">🔴 Đã Thu Hồi</option>
+                      <option value="BAO_THUONG_BAO_TRI">🟡 Đang Bảo Trì</option>
                     </select>
                   </div>
+                </div>
+
+                <div className="responsive-form-grid">
                   <div className="form-group">
-                    <label className="form-label">Ghi Nhận Ổn Áp</label>
+                    <label className="form-label">🔌 Ghi Nhận Ổn Áp</label>
                     <input 
                       type="text" 
                       className="form-input" 
+                      placeholder="Lioa 2000VA..."
                       value={editSetFormData.stabilizer} 
                       onChange={e => setEditSetFormData({ ...editSetFormData, stabilizer: e.target.value })} 
                     />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">🛠️ Kỹ Thuật Viên Phụ Trách</label>
+                    <select
+                      className="form-select"
+                      value={editSetFormData.technician || ''}
+                      onChange={e => setEditSetFormData({ ...editSetFormData, technician: e.target.value })}
+                    >
+                      <option value="">-- Chọn KTV phụ trách --</option>
+                      {qcUsers.map(u => (
+                        <option key={u.id || u.name} value={u.name}>
+                          👤 {u.name} ({u.role?.toUpperCase() || 'KTV'})
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
 
