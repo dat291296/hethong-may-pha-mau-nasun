@@ -16,7 +16,8 @@ import {
   X,
   Upload,
   Image as ImageIcon,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Layers
 } from 'lucide-react';
 
 import { compressImage } from '../utils/imageCompressor.js';
