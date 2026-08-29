@@ -456,7 +456,6 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
                       type="text" 
                       className="form-input" 
                       required 
-                      autoFocus
                       placeholder="Nhập tên NPP / Đại lý..." 
                       value={formData.name} 
                       onChange={e => setFormData({ ...formData, name: e.target.value })} 

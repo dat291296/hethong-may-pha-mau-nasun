@@ -636,73 +636,61 @@ export default function DeviceRepairProcessing({
               <button className="btn btn-secondary btn-sm" onClick={() => setShowModal(false)}>✕</button>
             </div>
             <form onSubmit={handleSubmit}>
-              <div className="modal-body">
+              <div className="modal-body" ref={el => { if (el) el.scrollTop = 0; }}>
                 
+                {/* PRIMARY EDIT FIELDS - TOP OF FORM */}
                 <div className="responsive-form-grid">
                   <div className="form-group">
-                    <label className="form-label">1. Ngày Đi Xử Lý *</label>
-                    <input type="date" className="form-input" required value={formData.date} onChange={e => setFormData({ ...formData, date: e.target.value })} />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">2. Kỹ Thuật Viên Phụ Trách *</label>
-                    <input type="text" className="form-input" required placeholder="Tên KTV đi xử lý..." value={formData.technician} onChange={e => setFormData({ ...formData, technician: e.target.value })} />
-                  </div>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">3. Tên Nhà Phân Phối (NPP) *</label>
-                  <select className="form-select" value={formData.nppId} onChange={e => setFormData({ ...formData, nppId: e.target.value })}>
-                    <option value="">-- Chọn NPP từ danh sách --</option>
-                    {npps.map(n => (
-                      <option key={n.id} value={n.id}>[{n.id}] {n.name} - {n.region}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="responsive-form-grid">
-                  <div className="form-group">
-                    <label className="form-label">4. Phân Loại Sản Phẩm *</label>
-                    <select className="form-select" value={formData.productCategory} onChange={e => setFormData({ ...formData, productCategory: e.target.value })}>
-                      {PRODUCT_CATEGORIES.map(cat => (
-                        <option key={cat} value={cat}>{cat}</option>
+                    <label className="form-label">🏢 1. Tên Nhà Phân Phối (NPP) *</label>
+                    <select className="form-select" required value={formData.nppId} onChange={e => setFormData({ ...formData, nppId: e.target.value })}>
+                      <option value="">-- Chọn NPP từ danh sách --</option>
+                      {npps.map(n => (
+                        <option key={n.id} value={n.id}>[{n.id}] {n.name} - {n.region}</option>
                       ))}
                     </select>
                   </div>
-
                   <div className="form-group">
-                    <label className="form-label">5. Loại Máy / Model *</label>
-                    <select className="form-select" value={formData.machineModel} onChange={e => setFormData({ ...formData, machineModel: e.target.value })}>
-                      {MACHINE_MODELS.map(m => (
-                        <option key={m} value={m}>{m}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div className="responsive-form-grid">
-                  <div className="form-group">
-                    <label className="form-label">6. Số Seri Thiết Bị (Serial Number) *</label>
+                    <label className="form-label">🏷️ 2. Số Seri Thiết Bị (Serial) *</label>
                     <input type="text" className="form-input" required placeholder="Nhập số seri duy nhất..." value={formData.serialNumber} onChange={e => setFormData({ ...formData, serialNumber: e.target.value })} />
                   </div>
+                </div>
+
+                <div className="responsive-form-grid">
                   <div className="form-group">
-                    <label className="form-label">7. Phân Loại Tên Lỗi</label>
+                    <label className="form-label">⚙️ 3. Phân Loại Sản Phẩm & Model *</label>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <select className="form-select" style={{ flex: 1 }} value={formData.productCategory} onChange={e => setFormData({ ...formData, productCategory: e.target.value })}>
+                        {PRODUCT_CATEGORIES.map(cat => (
+                          <option key={cat} value={cat}>{cat}</option>
+                        ))}
+                      </select>
+                      <select className="form-select" style={{ flex: 1 }} value={formData.machineModel} onChange={e => setFormData({ ...formData, machineModel: e.target.value })}>
+                        {MACHINE_MODELS.map(m => (
+                          <option key={m} value={m}>{m}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">⚠️ 4. Phân Loại Tên Lỗi</label>
                     <input type="text" className="form-input" placeholder="Nghẹt vòi, hỏng bo, rò rỉ tinh màu..." value={formData.errorCategory} onChange={e => setFormData({ ...formData, errorCategory: e.target.value })} />
                   </div>
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">8. Diễn Giải Mô Tả Lỗi Chi Tiết *</label>
-                  <textarea className="form-textarea" rows={3} required placeholder="Mô tả hiện trạng hỏng hóc thực tế..." value={formData.errorDescription} onChange={e => setFormData({ ...formData, errorDescription: e.target.value })} />
+                  <label className="form-label">📝 5. Diễn Giải Mô Tả Lỗi Chi Tiết *</label>
+                  <textarea className="form-textarea" rows={2} required placeholder="Mô tả hiện trạng hỏng hóc thực tế..." value={formData.errorDescription} onChange={e => setFormData({ ...formData, errorDescription: e.target.value })} />
                 </div>
 
-                {/* Processing Directions */}
-                <div style={{ padding: '16px', background: 'var(--bg-main)', border: '1px solid var(--border-color)', borderRadius: '8px', marginBottom: '16px' }}>
-                  <div style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--accent-cyan)', marginBottom: '12px' }}>
+                {/* Processing Directions & Statuses */}
+                <div style={{ padding: '12px 14px', background: 'var(--bg-main)', border: '1px solid var(--border-color)', borderRadius: '8px', marginBottom: '12px' }}>
+                  <div style={{ fontSize: '0.825rem', fontWeight: '700', color: 'var(--accent-cyan)', marginBottom: '8px' }}>
                     🛠️ Phương Án & Tình Trạng Xử Lý
                   </div>
 
-                  <div className="responsive-form-grid" style={{ marginBottom: '12px' }}>
-                    <div className="form-group">
+                  <div className="responsive-form-grid" style={{ marginBottom: '8px' }}>
+                    <div className="form-group" style={{ marginBottom: 0 }}>
                       <label className="form-label">Hướng Xử Lý</label>
                       <select className="form-select" value={formData.actionDirection} onChange={e => setFormData({ ...formData, actionDirection: e.target.value })}>
                         <option value="Sửa chữa">Sửa chữa</option>
@@ -711,7 +699,7 @@ export default function DeviceRepairProcessing({
                     </div>
 
                     {formData.actionDirection === 'Xuất đổi' && (
-                      <div className="form-group">
+                      <div className="form-group" style={{ marginBottom: 0 }}>
                         <label className="form-label">Tình Trạng Máy Xuất Đổi</label>
                         <select className="form-select" value={formData.replacementCondition} onChange={e => setFormData({ ...formData, replacementCondition: e.target.value })}>
                           <option value="Mới">Mới (Đổi máy mới 100%)</option>
@@ -722,21 +710,33 @@ export default function DeviceRepairProcessing({
                   </div>
 
                   <div className="responsive-form-grid">
-                    <div className="form-group">
-                      <label className="form-label">Tình Trạng Xử Lý</label>
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label className="form-label">Tình Trạng Sửa</label>
                       <select className="form-select" value={formData.processingStatus} onChange={e => setFormData({ ...formData, processingStatus: e.target.value })}>
-                        <option value="Chưa xử lý">Chưa xử lý (Đang sửa/chờ linh kiện)</option>
-                        <option value="Đã xử lý">Đã xử lý (Khắc phục xong)</option>
+                        <option value="Chưa xử lý">⏳ Chưa xử lý (Đang sửa/chờ linh kiện)</option>
+                        <option value="Đã xử lý">✓ Đã xử lý (Khắc phục xong)</option>
                       </select>
                     </div>
 
-                    <div className="form-group">
-                      <label className="form-label">Gửi Trả Khách / NPP</label>
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label className="form-label">Gửi Trả Khách</label>
                       <select className="form-select" value={formData.customerReturnStatus} onChange={e => setFormData({ ...formData, customerReturnStatus: e.target.value })}>
-                        <option value="Chưa gửi trả">Chưa gửi trả (Còn nằm trong kho)</option>
-                        <option value="Đã gửi trả">Đã gửi trả (Đã giao lại NPP)</option>
+                        <option value="Chưa gửi trả">📦 Chưa gửi trả (Kho trung tâm)</option>
+                        <option value="Đã gửi trả">✓ Đã gửi trả (Đã giao lại NPP)</option>
                       </select>
                     </div>
+                  </div>
+                </div>
+
+                {/* SECONDARY METADATA - BOTTOM OF FORM */}
+                <div className="responsive-form-grid" style={{ paddingTop: '8px', borderTop: '1px dashed var(--border-color)' }}>
+                  <div className="form-group">
+                    <label className="form-label">📅 Ngày Đi Xử Lý</label>
+                    <input type="date" className="form-input" required value={formData.date} onChange={e => setFormData({ ...formData, date: e.target.value })} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">👤 Kỹ Thuật Viên Phụ Trách</label>
+                    <input type="text" className="form-input" required placeholder="Tên KTV đi xử lý..." value={formData.technician} onChange={e => setFormData({ ...formData, technician: e.target.value })} />
                   </div>
                 </div>
 

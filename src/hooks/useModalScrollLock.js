@@ -10,17 +10,12 @@ export function useModalScrollLock(isOpen) {
       const originalOverflow = document.body.style.overflow;
       document.body.style.overflow = 'hidden';
 
-      // Reset scroll position of all modal bodies to top
+      // Reset scroll position of all modal bodies to top immediately
       const timer = setTimeout(() => {
         document.querySelectorAll('.modal-body').forEach(el => {
           el.scrollTop = 0;
         });
-        // Auto-focus first visible input or select inside modal
-        const firstInput = document.querySelector('.modal-body input:not([type="hidden"]), .modal-body select');
-        if (firstInput && typeof firstInput.focus === 'function') {
-          firstInput.focus({ preventScroll: true });
-        }
-      }, 50);
+      }, 30);
 
       return () => {
         document.body.style.overflow = originalOverflow;
