@@ -23,6 +23,7 @@ import { compressImage } from '../utils/imageCompressor.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { getRobustUserLocation, fetchIpLocation } from '../utils/gpsHelper.js';
 import GpsPermissionModal from './GpsPermissionModal.jsx';
+import SafePortal from './SafePortal.jsx';
 import { useModalScrollLock } from '../hooks/useModalScrollLock.js';
 
 export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, onDeleteNpp, onOpenImportModal }) {
@@ -535,336 +536,261 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
       })()}
 
       {/* ADD / EDIT NPP MODAL */}
-      {(showAddModal || editingNpp) && createPortal(
-        <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '680px' }}>
-            <div className="modal-header">
-              <h3 style={{ fontWeight: '800' }}>
-                {editingNpp ? `Chỉnh Sửa Thông Tin NPP [${editingNpp.id}]` : 'Thêm Nhà Phân Phối (NPP) Mới'}
-              </h3>
-              <button className="btn btn-secondary btn-sm" onClick={() => { setShowAddModal(false); setEditingNpp(null); }}>✕</button>
-            </div>
-            <form onSubmit={editingNpp ? handleEditSubmit : handleAddSubmit}>
-              <div className="modal-body" ref={el => { if (el) el.scrollTop = 0; }}>
-                
-                {/* PRIMARY EDIT FIELDS - TOP OF FORM */}
-                <div className="responsive-form-grid">
+      {(showAddModal || editingNpp) && (
+        <SafePortal>
+          <div className="modal-overlay">
+            <div className="modal-content" style={{ maxWidth: '680px' }}>
+              <div className="modal-header">
+                <h3 style={{ fontWeight: '800' }}>
+                  {editingNpp ? `Chỉnh Sửa Thông Tin NPP [${editingNpp.id}]` : 'Thêm Nhà Phân Phối (NPP) Mới'}
+                </h3>
+                <button className="btn btn-secondary btn-sm" onClick={() => { setShowAddModal(false); setEditingNpp(null); }}>✕</button>
+              </div>
+              <form onSubmit={editingNpp ? handleEditSubmit : handleAddSubmit}>
+                <div className="modal-body" ref={el => { if (el) el.scrollTop = 0; }}>
+                  
+                  {/* PRIMARY EDIT FIELDS - TOP OF FORM */}
+                  <div className="responsive-form-grid">
+                    <div className="form-group">
+                      <label className="form-label">🏢 Tên Nhà Phân Phối *</label>
+                      <input 
+                        type="text" 
+                        className="form-input" 
+                        required 
+                        placeholder="Nhập tên NPP / Đại lý..." 
+                        value={formData.name} 
+                        onChange={e => setFormData({ ...formData, name: e.target.value })} 
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">📞 Số Điện Thoại *</label>
+                      <input type="text" className="form-input" required placeholder="09xx xxx xxx" value={formData.phone} onChange={e => setFormData({ ...formData, phone: e.target.value })} />
+                    </div>
+                  </div>
+
+                  <div className="responsive-form-grid">
+                    <div className="form-group">
+                      <label className="form-label">👤 Người Liên Hệ / Chủ Đại Lý</label>
+                      <input type="text" className="form-input" placeholder="Tên người đại diện..." value={formData.contactPerson} onChange={e => setFormData({ ...formData, contactPerson: e.target.value })} />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">💼 Nhân Viên Kinh Doanh Phụ Trách</label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="Tên nhân viên kinh doanh..."
+                        value={formData.salesperson}
+                        onChange={e => setFormData({ ...formData, salesperson: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="responsive-form-grid">
+                    <div className="form-group">
+                      <label className="form-label">📍 Khu Vực</label>
+                      <select 
+                        className="form-select" 
+                        value={formData.region} 
+                        disabled={user?.role === 'qc' && user?.managedRegion !== 'Toàn Quốc'}
+                        onChange={e => setFormData({ ...formData, region: e.target.value })}
+                      >
+                        <option value="Miền Bắc">Miền Bắc</option>
+                        <option value="Miền Trung">Miền Trung</option>
+                        <option value="Miền Nam">Miền Nam</option>
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">🏙️ Tỉnh / Thành Phố</label>
+                      <input type="text" className="form-input" placeholder="Hà Nội, TP.HCM, Hải Phòng..." value={formData.province} onChange={e => setFormData({ ...formData, province: e.target.value })} />
+                    </div>
+                  </div>
+
+                  <div className="responsive-form-grid">
+                    <div className="form-group">
+                      <label className="form-label">🎨 Hãng Phân Phối / Hãng Sơn *</label>
+                      <select
+                        className="form-select"
+                        value={formData.brand || 'Nasun'}
+                        onChange={e => setFormData({ ...formData, brand: e.target.value })}
+                      >
+                        <option value="Nasun">Nasun</option>
+                        <option value="Natos">Natos</option>
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">⚡ Trạng Thái Hoạt Động</label>
+                      <select className="form-select" value={formData.status} onChange={e => setFormData({ ...formData, status: e.target.value })}>
+                        <option value="Đang hợp tác">Đang hợp tác</option>
+                        <option value="Đã ngưng hợp tác">Đã ngưng hợp tác</option>
+                      </select>
+                    </div>
+                  </div>
+
                   <div className="form-group">
-                    <label className="form-label">🏢 Tên Nhà Phân Phối *</label>
+                    <label className="form-label">🏠 Địa Chỉ Chi Tiết</label>
+                    <input type="text" className="form-input" placeholder="Số nhà, đường, phường/xã..." value={formData.address} onChange={e => setFormData({ ...formData, address: e.target.value })} />
+                  </div>
+
+                  {/* GPS Location & Maps Coordinates */}
+                  <div className="form-group">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                      <label className="form-label" style={{ marginBottom: 0 }}>
+                        <span>📍 Vị Trí / Tọa Độ GPS (Cho Kỹ Thuật Viên)</span>
+                      </label>
+                      <button 
+                        type="button" 
+                        onClick={handleGetLocation} 
+                        disabled={isGpsLoading}
+                        style={{
+                          padding: '4px 10px',
+                          fontSize: '0.725rem',
+                          fontWeight: '700',
+                          color: 'var(--accent-cyan)',
+                          border: '1px solid rgba(6, 182, 212, 0.3)',
+                          background: 'rgba(6, 182, 212, 0.08)',
+                          borderRadius: '6px',
+                          cursor: isGpsLoading ? 'wait' : 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          transition: 'all 0.15s ease',
+                          opacity: isGpsLoading ? 0.7 : 1
+                        }}
+                        onMouseOver={e => e.currentTarget.style.background = 'rgba(6, 182, 212, 0.15)'}
+                        onMouseOut={e => e.currentTarget.style.background = 'rgba(6, 182, 212, 0.08)'}
+                      >
+                        <span>{isGpsLoading ? '⌛ Đang lấy vị trí...' : '📍 Lấy GPS Tự Động'}</span>
+                      </button>
+                    </div>
                     <input 
                       type="text" 
                       className="form-input" 
-                      required 
-                      placeholder="Nhập tên NPP / Đại lý..." 
-                      value={formData.name} 
-                      onChange={e => setFormData({ ...formData, name: e.target.value })} 
+                      placeholder="Ví dụ: 21.0024, 105.8412 hoặc dán Link Google Maps..." 
+                      value={formData.locationCoordinates} 
+                      onChange={e => setFormData({ ...formData, locationCoordinates: e.target.value })} 
                     />
+                    {gpsStatusMsg && (
+                      <span style={{ display: 'block', fontSize: '0.75rem', color: '#10b981', marginTop: '4px' }}>
+                        {gpsStatusMsg}
+                      </span>
+                    )}
                   </div>
-                  <div className="form-group">
-                    <label className="form-label">📞 Số Điện Thoại *</label>
-                    <input type="text" className="form-input" required placeholder="09xx xxx xxx" value={formData.phone} onChange={e => setFormData({ ...formData, phone: e.target.value })} />
-                  </div>
-                </div>
 
-                <div className="responsive-form-grid">
-                  <div className="form-group">
-                    <label className="form-label">👤 Người Liên Hệ / Chủ Đại Lý</label>
-                    <input type="text" className="form-input" placeholder="Tên người đại diện..." value={formData.contactPerson} onChange={e => setFormData({ ...formData, contactPerson: e.target.value })} />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">💼 Nhân Viên Kinh Doanh Phụ Trách</label>
-                    <input
-                      type="text"
-                      className="form-input"
-                      placeholder="Tên nhân viên kinh doanh..."
-                      value={formData.salesperson}
-                      onChange={e => setFormData({ ...formData, salesperson: e.target.value })}
-                    />
-                  </div>
-                </div>
-
-                <div className="responsive-form-grid">
-                  <div className="form-group">
-                    <label className="form-label">📍 Khu Vực</label>
-                    <select 
-                      className="form-select" 
-                      value={formData.region} 
-                      disabled={user?.role === 'qc' && user?.managedRegion !== 'Toàn Quốc'}
-                      onChange={e => setFormData({ ...formData, region: e.target.value })}
-                    >
-                      <option value="Miền Bắc">Miền Bắc</option>
-                      <option value="Miền Trung">Miền Trung</option>
-                      <option value="Miền Nam">Miền Nam</option>
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">🏙️ Tỉnh / Thành Phố</label>
-                    <input type="text" className="form-input" placeholder="Hà Nội, TP.HCM, Hải Phòng..." value={formData.province} onChange={e => setFormData({ ...formData, province: e.target.value })} />
-                  </div>
-                </div>
-
-                <div className="responsive-form-grid">
-                  <div className="form-group">
-                    <label className="form-label">🎨 Hãng Phân Phối / Hãng Sơn *</label>
-                    <select
-                      className="form-select"
-                      value={formData.brand || 'Nasun'}
-                      onChange={e => setFormData({ ...formData, brand: e.target.value })}
-                    >
-                      <option value="Nasun">Nasun</option>
-                      <option value="Natos">Natos</option>
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">⚡ Trạng Thái Hoạt Động</label>
-                    <select className="form-select" value={formData.status} onChange={e => setFormData({ ...formData, status: e.target.value })}>
-                      <option value="Đang hợp tác">Đang hợp tác</option>
-                      <option value="Đã ngưng hợp tác">Đã ngưng hợp tác</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">🏠 Địa Chỉ Chi Tiết</label>
-                  <input type="text" className="form-input" placeholder="Số nhà, đường, phường/xã..." value={formData.address} onChange={e => setFormData({ ...formData, address: e.target.value })} />
-                </div>
-
-                {/* GPS Location & Maps Coordinates */}
-                <div className="form-group">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                    <label className="form-label" style={{ marginBottom: 0 }}>
-                      <span>📍 Vị Trí / Tọa Độ GPS (Cho Kỹ Thuật Viên)</span>
+                  {/* Photo Upload Section */}
+                  <div style={{ marginTop: '16px', borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
+                    <label className="form-label" style={{ marginBottom: '8px' }}>
+                      <span>📸 Hình Ảnh Minh Họa / Ảnh Mặt Bằng Lắp Đặt Tại NPP</span>
                     </label>
-                    <button 
-                      type="button" 
-                      onClick={handleGetLocation} 
-                      disabled={isGpsLoading}
-                      style={{
-                        padding: '4px 10px',
-                        fontSize: '0.725rem',
-                        fontWeight: '700',
-                        color: 'var(--accent-cyan)',
-                        border: '1px solid rgba(6, 182, 212, 0.3)',
-                        background: 'rgba(6, 182, 212, 0.08)',
-                        borderRadius: '6px',
-                        cursor: isGpsLoading ? 'wait' : 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                        transition: 'all 0.15s ease',
-                        opacity: isGpsLoading ? 0.7 : 1
-                      }}
-                      onMouseOver={e => e.currentTarget.style.background = 'rgba(6, 182, 212, 0.15)'}
-                      onMouseOut={e => e.currentTarget.style.background = 'rgba(6, 182, 212, 0.08)'}
-                    >
-                      <span>{isGpsLoading ? '⌛ Đang lấy vị trí...' : '📍 Lấy GPS Tự Động'}</span>
-                    </button>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', marginBottom: '12px' }}>
+                      <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer' }}>
+                        <Camera size={16} />
+                        <span>Chụp / Tải Ảnh Lên</span>
+                        <input type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={handlePhotoUpload} />
+                      </label>
+                    </div>
+
+                    {formData.photos && formData.photos.length > 0 && (
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: '10px' }}>
+                        {formData.photos.map((url, idx) => (
+                          <div key={idx} style={{ position: 'relative', width: '100%', height: '80px', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border-color)' }}>
+                            <img src={url} alt="NPP photo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            <button
+                              type="button"
+                              onClick={() => handleRemovePhoto(idx)}
+                              style={{ position: 'absolute', top: '4px', right: '4px', background: 'rgba(0,0,0,0.7)', color: '#fff', border: 'none', borderRadius: '50%', width: '20px', height: '20px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                            >
+                              <X size={12} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  <input 
-                    type="text" 
-                    className="form-input" 
-                    placeholder="Ví dụ: 21.0024, 105.8412 hoặc dán Link Google Maps..." 
-                    value={formData.locationCoordinates} 
-                    onChange={e => setFormData({ ...formData, locationCoordinates: e.target.value })} 
-                  />
-                  {gpsStatusMsg && (
-                    <span style={{ display: 'block', fontSize: '0.75rem', color: '#10b981', marginTop: '4px' }}>
-                      {gpsStatusMsg}
-                    </span>
+
+                </div>
+                <div className="modal-footer">
+                  <button type="button" className="btn btn-secondary" onClick={() => { setShowAddModal(false); setEditingNpp(null); }}>Hủy Bỏ</button>
+                  <button type="submit" className="btn btn-primary">{editingNpp ? 'Cập Nhật NPP' : 'Lưu NPP Mới'}</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </SafePortal>
+      )}
+
+      {/* NPP DETAIL & PHOTO GALLERY MODAL */}
+      {selectedNpp && (
+        <SafePortal>
+          <div className="modal-overlay">
+            <div className="modal-content" style={{ maxWidth: '800px' }}>
+              <div className="modal-header">
+                <div>
+                  <span className="badge badge-info">{selectedNpp.id}</span>
+                  <h3 style={{ fontWeight: '800', marginTop: '4px' }}>{selectedNpp.name}</h3>
+                </div>
+                <button className="btn btn-secondary btn-sm" onClick={() => setSelectedNpp(null)}>✕</button>
+              </div>
+              <div className="modal-body" ref={el => { if (el) el.scrollTop = 0; }}>
+                
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px', background: 'var(--bg-main)', padding: '16px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                  <div><strong>Hãng:</strong> <span className="badge badge-purple" style={{ fontSize: '0.8rem' }}>{selectedNpp.brand || 'Nasun'}</span></div>
+                  <div><strong>Khu Vực:</strong> {selectedNpp.region} ({selectedNpp.province})</div>
+                  <div style={{ gridColumn: 'span 2' }}><strong>SĐT Liên Hệ:</strong> {selectedNpp.phone} ({selectedNpp.contactPerson || 'Đại diện'})</div>
+                  {selectedNpp.salesperson && (
+                    <div style={{ gridColumn: 'span 2' }}>
+                      <strong>💼 Nhân Viên KD Phụ Trách:</strong> 
+                      <span style={{ color: 'var(--accent-emerald)', fontWeight: '600' }}>{selectedNpp.salesperson}</span>
+                    </div>
                   )}
+                  <div style={{ gridColumn: 'span 2' }}><strong>Địa Chỉ:</strong> {selectedNpp.address}</div>
                 </div>
 
-                <div className="form-group">
-                  <label className="form-label">Trạng Thái Hoạt Động</label>
-                  <select className="form-select" value={formData.status} onChange={e => setFormData({ ...formData, status: e.target.value })}>
-                    <option value="Đang hợp tác">Đang hợp tác</option>
-                    <option value="Đã ngưng hợp tác">Đã ngưng hợp tác</option>
-                  </select>
-                </div>
-
-                {/* Photo Upload Section */}
-                <div style={{ marginTop: '16px', borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
-                  <label className="form-label" style={{ marginBottom: '8px' }}>
-                    <span>📸 Hình Ảnh Minh Họa / Ảnh Mặt Bằng Lắp Đặt Tại NPP</span>
-                  </label>
-
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', marginBottom: '12px' }}>
-                    <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer' }}>
-                      <Camera size={16} />
-                      <span>Chụp / Tải Ảnh Lên</span>
-                      <input type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={handlePhotoUpload} />
-                    </label>
-                  </div>
-
-                  {formData.photos && formData.photos.length > 0 && (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: '10px' }}>
-                      {formData.photos.map((url, idx) => (
-                        <div key={idx} style={{ position: 'relative', width: '100%', height: '80px', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border-color)' }}>
-                          <img src={url} alt="NPP photo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                          <button
-                            type="button"
-                            onClick={() => handleRemovePhoto(idx)}
-                            style={{ position: 'absolute', top: '4px', right: '4px', background: 'rgba(0,0,0,0.7)', color: '#fff', border: 'none', borderRadius: '50%', width: '20px', height: '20px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                          >
-                            <X size={12} />
-                          </button>
+                {/* Display Associated Color Machine Sets */}
+                <div style={{ marginBottom: '24px' }}>
+                  <h4 style={{ fontSize: '1rem', fontWeight: '800', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Layers size={18} style={{ color: 'var(--accent-blue)' }} />
+                    Bộ Máy Pha Màu Đang Gán ({(systemSets || []).filter(s => s && (String(s.nppId) === String(selectedNpp.id) || String(s.npp_id) === String(selectedNpp.id))).length} bộ)
+                  </h4>
+                  {(systemSets || []).filter(s => s && (String(s.nppId) === String(selectedNpp.id) || String(s.npp_id) === String(selectedNpp.id))).length === 0 ? (
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>Chưa có bộ máy pha màu nào được gán cho NPP này.</p>
+                  ) : (
+                    <div style={{ display: 'grid', gap: '10px' }}>
+                      {(systemSets || []).filter(s => s && (String(s.nppId) === String(selectedNpp.id) || String(s.npp_id) === String(selectedNpp.id))).map(set => (
+                        <div key={set.setCode || set.id} style={{ padding: '12px', background: 'var(--bg-main)', border: '1px solid var(--border-color)', borderRadius: '8px', fontSize: '0.85rem' }}>
+                          <div style={{ fontWeight: '700', color: 'var(--accent-cyan)' }}>Mã bộ: {set.setCode || set.id}</div>
+                          <div>Kỹ thuật viên: {set.technician || 'Chưa phân công'}</div>
+                          <div>Ghi chú: {set.notes || 'Không có'}</div>
                         </div>
                       ))}
                     </div>
                   )}
                 </div>
 
+                {/* Photo Gallery */}
+                {selectedNpp.photos && selectedNpp.photos.length > 0 && (
+                  <>
+                    <h4 style={{ fontSize: '1rem', fontWeight: '800', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Camera size={18} style={{ color: 'var(--accent-cyan)' }} />
+                      Thư viện ảnh hiện trường ({selectedNpp.photos.length} ảnh)
+                    </h4>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '12px' }}>
+                      {selectedNpp.photos.map((url, idx) => (
+                        <a key={idx} href={url} target="_blank" rel="noreferrer" style={{ borderRadius: '8px', overflow: 'hidden', height: '110px', display: 'block', border: '1px solid var(--border-color)' }}>
+                          <img src={url} alt={`NPP Photo ${idx + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        </a>
+                      ))}
+                    </div>
+                  </>
+                )}
+
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => { setShowAddModal(false); setEditingNpp(null); }}>Hủy Bỏ</button>
-                <button type="submit" className="btn btn-primary">{editingNpp ? 'Cập Nhật NPP' : 'Lưu NPP Mới'}</button>
+                <button className="btn btn-secondary" onClick={() => setSelectedNpp(null)}>Đóng</button>
               </div>
-            </form>
-          </div>
-        </div>,
-        document.body
-      )}
-
-      {/* NPP DETAIL & PHOTO GALLERY MODAL */}
-      {selectedNpp && createPortal(
-        <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '800px' }}>
-            <div className="modal-header">
-              <div>
-                <span className="badge badge-info">{selectedNpp.id}</span>
-                <h3 style={{ fontWeight: '800', marginTop: '4px' }}>{selectedNpp.name}</h3>
-              </div>
-              <button className="btn btn-secondary btn-sm" onClick={() => setSelectedNpp(null)}>✕</button>
-            </div>
-            <div className="modal-body" ref={el => { if (el) el.scrollTop = 0; }}>
-              
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px', background: 'var(--bg-main)', padding: '16px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-                <div><strong>Hãng:</strong> <span className="badge badge-purple" style={{ fontSize: '0.8rem' }}>{selectedNpp.brand || 'Nasun'}</span></div>
-                <div><strong>Khu Vực:</strong> {selectedNpp.region} ({selectedNpp.province})</div>
-                <div style={{ gridColumn: 'span 2' }}><strong>SĐT Liên Hệ:</strong> {selectedNpp.phone} ({selectedNpp.contactPerson || 'Đại diện'})</div>
-                {selectedNpp.salesperson && (
-                  <div style={{ gridColumn: 'span 2' }}>
-                    <strong>💼 Nhân Viên KD Phụ Trách:</strong> 
-                    <span style={{ color: 'var(--accent-emerald)', fontWeight: '600' }}>{selectedNpp.salesperson}</span>
-                  </div>
-                )}
-                <div style={{ gridColumn: 'span 2' }}>
-                  <strong>Địa Chỉ:</strong> {selectedNpp.address}
-                </div>
-                
-                {selectedNpp.locationCoordinates && (
-                  <div style={{ gridColumn: 'span 2', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <strong>Vị Trí Tọa Độ GPS:</strong>
-                    <span className="badge badge-purple">📍 {selectedNpp.locationCoordinates}</span>
-                    <a 
-                      href={selectedNpp.googleMapsUrl || `https://maps.google.com/?q=${encodeURIComponent(selectedNpp.locationCoordinates)}`} 
-                      target="_blank" 
-                      rel="noreferrer"
-                      style={{ fontSize: '0.8rem', color: 'var(--accent-cyan)', display: 'flex', alignItems: 'center', gap: '4px' }}
-                    >
-                      <span>Mở Google Maps</span>
-                      <ExternalLink size={14} />
-                    </a>
-                  </div>
-                )}
-              </div>
-
-              {/* Photo Gallery Section */}
-              {selectedNpp.photos && selectedNpp.photos.length > 0 && (
-                <div style={{ marginBottom: '24px' }}>
-                  <h4 style={{ fontSize: '0.9rem', fontWeight: '700', marginBottom: '12px', color: 'var(--accent-emerald)' }}>
-                    📸 Hình Ảnh Minh Họa Mặt Bằng & Lắp Đặt ({selectedNpp.photos.length} Ảnh)
-                  </h4>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '12px' }}>
-                    {selectedNpp.photos.map((photoUrl, pIdx) => (
-                      <a key={pIdx} href={photoUrl} target="_blank" rel="noreferrer" style={{ borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border-color)', display: 'block', height: '140px' }}>
-                        <img src={photoUrl} alt={`NPP ${selectedNpp.name} photo ${pIdx + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                      </a>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Assigned System Sets Detail */}
-              <h4 style={{ fontSize: '0.9rem', fontWeight: '700', marginBottom: '12px', color: 'var(--accent-cyan)' }}>
-                💻 Bộ Máy Pha Màu Đang Cấp Phát Tại NPP Này
-              </h4>
-
-              {systemSets.filter(s => s.nppId === selectedNpp.id).length === 0 ? (
-                <div style={{ padding: '20px', background: 'var(--bg-card)', borderRadius: '8px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                  NPP này hiện chưa được gán Bộ máy pha màu nào.
-                </div>
-              ) : (
-                <>
-                  {/* Desktop View Table */}
-                  <div className="desktop-only data-table-container">
-                    <table className="data-table">
-                      <thead>
-                        <tr>
-                          <th>Mã Bộ Máy</th>
-                          <th>Máy Chiết</th>
-                          <th>Máy Lắc</th>
-                          <th>Máy Tính</th>
-                          <th>Máy In QL700</th>
-                          <th>Ổn Áp</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {systemSets.filter(s => s.nppId === selectedNpp.id).map(set => (
-                          <tr key={set.id || set.setCode}>
-                            <td style={{ fontWeight: '700', color: 'var(--accent-cyan)' }}>{set.setCode}</td>
-                            <td>{set.dispenserModel} ({set.dispenserSerial})</td>
-                            <td>{set.mixerModel} ({set.mixerSerial})</td>
-                            <td>{set.pcSpecs || set.pcType} ({set.pcSerial || set.computerSerial || 'N/A'})</td>
-                            <td>{set.printerModel || 'QL700'} ({set.printerSerial || 'N/A'})</td>
-                            <td>{set.stabilizer}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {/* Mobile View Cards */}
-                  <div className="mobile-only mobile-card-list">
-                    {systemSets.filter(s => s.nppId === selectedNpp.id).map(set => (
-                      <div className="mobile-card" key={set.id || set.setCode}>
-                        <div className="mobile-card-header">
-                          <span className="mobile-card-title" style={{ color: 'var(--accent-cyan)' }}>{set.setCode}</span>
-                          <span className="badge badge-success">✓ Cấp phát</span>
-                        </div>
-                        <div className="mobile-card-body">
-                          <div className="mobile-card-row" style={{ fontSize: '0.8rem' }}>
-                            <span className="mobile-card-label">Máy Chiết:</span>
-                            <span className="mobile-card-value">{set.dispenserModel} ({set.dispenserSerial})</span>
-                          </div>
-                          <div className="mobile-card-row" style={{ fontSize: '0.8rem' }}>
-                            <span className="mobile-card-label">Máy Lắc:</span>
-                            <span className="mobile-card-value">{set.mixerModel} ({set.mixerSerial})</span>
-                          </div>
-                          <div className="mobile-card-row" style={{ fontSize: '0.8rem' }}>
-                            <span className="mobile-card-label">Máy Tính:</span>
-                            <span className="mobile-card-value">{set.pcSpecs || set.pcType} ({set.pcSerial || set.computerSerial || 'N/A'})</span>
-                          </div>
-                          <div className="mobile-card-row" style={{ fontSize: '0.8rem' }}>
-                            <span className="mobile-card-label">Máy In:</span>
-                            <span className="mobile-card-value">{set.printerModel || 'QL700'} ({set.printerSerial || 'N/A'})</span>
-                          </div>
-                          <div className="mobile-card-row" style={{ fontSize: '0.8rem' }}>
-                            <span className="mobile-card-label">Ổn Áp:</span>
-                            <span className="mobile-card-value">{set.stabilizer}</span>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-            <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setSelectedNpp(null)}>Đóng</button>
             </div>
           </div>
-        </div>
+        </SafePortal>
       )}
 
       {/* GPS Permission Guidance Modal */}

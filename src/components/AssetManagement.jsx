@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { createPortal } from 'react-dom';
+import SafePortal from './SafePortal.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { supabase, isSupabaseConfigured } from '../lib/supabase.js';
 import { 
@@ -1282,503 +1282,504 @@ export default function AssetManagement({
       )}
 
       {/* EDIT DEVICE MODAL */}
-      {editingDevice && createPortal(
-        <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '580px' }}>
-            <div className="modal-header">
-              <h3 style={{ fontWeight: '800' }}>Chỉnh Sửa Thông Tin Thiết Bị [{editFormData.serial || 'Không seri'}]</h3>
-              <button className="btn btn-secondary btn-sm" onClick={() => setEditingDevice(null)}>✕</button>
-            </div>
-            <form onSubmit={handleEditSubmit}>
-              <div className="modal-body" ref={el => { if (el) el.scrollTop = 0; }}>
-                
-                {/* ROW 1: SERIAL NUMBER & MODEL - TOP OF FORM */}
-                <div className="responsive-form-grid">
-                  <div className="form-group">
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                      <label className="form-label" style={{ marginBottom: 0 }}>
-                        🏷️ Số Seri (Serial) {editingDevice.category !== 'computer' ? '*' : ''}
-                      </label>
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-sm"
-                        style={{ padding: '2px 8px', fontSize: '0.725rem', display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'var(--accent-cyan)', border: '1px solid var(--accent-cyan)' }}
-                        onClick={() => {
-                          setScanTargetField('edit');
-                          setShowScanSerialModal(true);
-                        }}
-                      >
-                        <Camera size={12} />
-                        <span>📷 Quét Mã</span>
-                      </button>
-                    </div>
-                    <input
-                      type="text"
-                      className="form-input"
-                      required={editingDevice.category !== 'computer'}
-                      placeholder={editingDevice.category === 'computer' ? 'Tùy chọn' : 'Nhập seri hoặc bấm Quét mã'}
-                      value={editFormData.serial || ''}
-                      onChange={e => setEditFormData({ ...editFormData, serial: e.target.value })}
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">⚙️ Model / Hệ Máy *</label>
-                    <input type="text" className="form-input" required value={editFormData.model || editFormData.type || ''} onChange={e => setEditFormData({ ...editFormData, model: e.target.value })} />
-                  </div>
-                </div>
-
-                {/* ROW 2: MÃ QL & TÌNH TRẠNG KỸ THUẬT */}
-                <div className="responsive-form-grid">
-                  <div className="form-group">
-                    <label className="form-label">🔢 Mã Quản Lý (Mã QL) *</label>
-                    <input
-                      type="text"
-                      className="form-input"
-                      required
-                      value={editFormData.id || ''}
-                      onChange={e => setEditFormData({ ...editFormData, id: e.target.value })}
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">🛠️ Tình Trạng Kỹ Thuật</label>
-                    <select className="form-select" value={editFormData.status || 'Đang chạy tốt'} onChange={e => setEditFormData({ ...editFormData, status: e.target.value })}>
-                      <option value="Mới 100%">Mới 100%</option>
-                      <option value="Đang chạy tốt">Đang chạy tốt</option>
-                      <option value="Cần bảo trì">Cần bảo trì</option>
-                      {editingDevice.category === 'dispenser' && <option value="Hỏng đầu phun">Hỏng đầu phun</option>}
-                      {editingDevice.category === 'mixer' && <option value="Hỏng motor">Hỏng motor</option>}
-                      {editingDevice.category === 'printer' && <option value="Hỏng đầu in">Hỏng đầu in</option>}
-                      <option value="Hỏng nặng">Hỏng nặng</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* CATEGORY SPECIFIC OPTIONS */}
-                {editingDevice.category === 'printer' && (
-                  <div className="form-group">
-                    <label className="form-label">Cổng Kết Nối</label>
-                    <select className="form-select" value={editFormData.connection || 'USB'} onChange={e => setEditFormData({ ...editFormData, connection: e.target.value })}>
-                      <option value="USB">USB</option>
-                      <option value="LAN">LAN</option>
-                      <option value="Wifi">Wifi</option>
-                      <option value="Bluetooth">Bluetooth</option>
-                    </select>
-                  </div>
-                )}
-
-                {editingDevice.category === 'mixer' && (
-                  <div className="form-group">
-                    <label className="form-label">Loại Máy Lắc</label>
-                    <select
-                      className="form-select"
-                      value={editFormData.type || 'Lắc xoay khép kín'}
-                      onChange={e => setEditFormData({ ...editFormData, type: e.target.value })}
-                    >
-                      <option value="Lắc xoay khép kín">Lắc xoay khép kín</option>
-                      <option value="Lắc rung đứng">Lắc rung đứng</option>
-                      <option value="Lắc rung ngang">Lắc rung ngang</option>
-                      <option value="Lắc mâm xoay">Lắc mâm xoay</option>
-                    </select>
-                  </div>
-                )}
-
-                {editingDevice.category === 'computer' && (
+      {editingDevice && (
+        <SafePortal>
+          <div className="modal-overlay">
+            <div className="modal-content" style={{ maxWidth: '580px' }}>
+              <div className="modal-header">
+                <h3 style={{ fontWeight: '800' }}>Chỉnh Sửa Thông Tin Thiết Bị [{editFormData.serial || 'Không seri'}]</h3>
+                <button className="btn btn-secondary btn-sm" onClick={() => setEditingDevice(null)}>✕</button>
+              </div>
+              <form onSubmit={handleEditSubmit}>
+                <div className="modal-body" ref={el => { if (el) el.scrollTop = 0; }}>
+                  
+                  {/* ROW 1: SERIAL NUMBER & MODEL - TOP OF FORM */}
                   <div className="responsive-form-grid">
                     <div className="form-group">
-                      <label className="form-label">Loại Máy Tính & OS</label>
-                      <div style={{ display: 'flex', gap: '8px' }}>
-                        <select className="form-select" style={{ width: '110px' }} value={editFormData.type || 'AIO'} onChange={e => setEditFormData({ ...editFormData, type: e.target.value })}>
-                          <option value="AIO">AIO</option>
-                          <option value="Case">Case</option>
-                        </select>
-                        <input type="text" className="form-input" style={{ flex: 1 }} placeholder="Hệ điều hành..." value={editFormData.os || ''} onChange={e => setEditFormData({ ...editFormData, os: e.target.value })} />
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                        <label className="form-label" style={{ marginBottom: 0 }}>
+                          🏷️ Số Seri (Serial) {editingDevice.category !== 'computer' ? '*' : ''}
+                        </label>
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          style={{ padding: '2px 8px', fontSize: '0.725rem', display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'var(--accent-cyan)', border: '1px solid var(--accent-cyan)' }}
+                          onClick={() => {
+                            setScanTargetField('edit');
+                            setShowScanSerialModal(true);
+                          }}
+                        >
+                          <Camera size={12} />
+                          <span>📷 Quét Mã</span>
+                        </button>
                       </div>
+                      <input
+                        type="text"
+                        className="form-input"
+                        required={editingDevice.category !== 'computer'}
+                        placeholder={editingDevice.category === 'computer' ? 'Tùy chọn' : 'Nhập seri hoặc bấm Quét mã'}
+                        value={editFormData.serial || ''}
+                        onChange={e => setEditFormData({ ...editFormData, serial: e.target.value })}
+                      />
                     </div>
+
                     <div className="form-group">
-                      <label className="form-label">Kết Nối Mạng</label>
-                      <select className="form-select" value={editFormData.network || 'Có mạng LAN'} onChange={e => setEditFormData({ ...editFormData, network: e.target.value })}>
-                        <option value="Có mạng LAN">Có mạng LAN</option>
-                        <option value="Có mạng Wifi">Có mạng Wifi</option>
-                        <option value="Không có mạng">Không có mạng</option>
+                      <label className="form-label">⚙️ Model / Hệ Máy *</label>
+                      <input type="text" className="form-input" required value={editFormData.model || editFormData.type || ''} onChange={e => setEditFormData({ ...editFormData, model: e.target.value })} />
+                    </div>
+                  </div>
+
+                  {/* ROW 2: MÃ QL & TÌNH TRẠNG KỸ THUẬT */}
+                  <div className="responsive-form-grid">
+                    <div className="form-group">
+                      <label className="form-label">Mã Quản Lý (Nội bộ)</label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        required
+                        value={editFormData.id || ''}
+                        onChange={e => setEditFormData({ ...editFormData, id: e.target.value })}
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label">🛠️ Tình Trạng Kỹ Thuật</label>
+                      <select className="form-select" value={editFormData.status || 'Đang chạy tốt'} onChange={e => setEditFormData({ ...editFormData, status: e.target.value })}>
+                        <option value="Mới 100%">Mới 100%</option>
+                        <option value="Đang chạy tốt">Đang chạy tốt</option>
+                        <option value="Cần bảo trì">Cần bảo trì</option>
+                        {editingDevice.category === 'dispenser' && <option value="Hỏng đầu phun">Hỏng đầu phun</option>}
+                        {editingDevice.category === 'mixer' && <option value="Hỏng motor">Hỏng motor</option>}
+                        {editingDevice.category === 'printer' && <option value="Hỏng đầu in">Hỏng đầu in</option>}
+                        <option value="Hỏng nặng">Hỏng nặng</option>
                       </select>
                     </div>
                   </div>
-                )}
 
-                {/* ASSIGNMENT & NPP SECTION */}
-                <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px dashed var(--border-color)' }}>
-                  <div className="responsive-form-grid">
+                  {/* CATEGORY SPECIFIC OPTIONS */}
+                  {editingDevice.category === 'printer' && (
                     <div className="form-group">
-                      <label className="form-label">📌 Trạng Thái Cấp Phát</label>
+                      <label className="form-label">Cổng Kết Nối</label>
+                      <select className="form-select" value={editFormData.connection || 'USB'} onChange={e => setEditFormData({ ...editFormData, connection: e.target.value })}>
+                        <option value="USB">USB</option>
+                        <option value="LAN">LAN</option>
+                        <option value="Wifi">Wifi</option>
+                        <option value="Bluetooth">Bluetooth</option>
+                      </select>
+                    </div>
+                  )}
+
+                  {editingDevice.category === 'mixer' && (
+                    <div className="form-group">
+                      <label className="form-label">Loại Máy Lắc</label>
                       <select
                         className="form-select"
-                        value={editFormData.isAssigned ? 'ASSIGNED' : 'FREE'}
-                        onChange={e => {
-                          const isAssigned = e.target.value === 'ASSIGNED';
-                          setEditFormData({
-                            ...editFormData,
-                            isAssigned,
-                            setCode: isAssigned ? editFormData.setCode : ''
-                          });
-                        }}
+                        value={editFormData.type || 'Lắc xoay khép kín'}
+                        onChange={e => setEditFormData({ ...editFormData, type: e.target.value })}
                       >
-                        <option value="FREE">⚪ Tự do trong kho</option>
-                        <option value="ASSIGNED">🟢 Đã gán vào Bộ máy / NPP</option>
+                        <option value="Lắc xoay khép kín">Lắc xoay khép kín</option>
+                        <option value="Lắc rung đứng">Lắc rung đứng</option>
+                        <option value="Lắc rung ngang">Lắc rung ngang</option>
+                        <option value="Lắc mâm xoay">Lắc mâm xoay</option>
                       </select>
                     </div>
+                  )}
 
-                    {editFormData.isAssigned && (
+                  {editingDevice.category === 'computer' && (
+                    <div className="responsive-form-grid">
                       <div className="form-group">
-                        <label className="form-label">🏢 Bộ Máy & NPP Gán Cho *</label>
-                        <select
-                          className="form-select"
-                          required={editFormData.isAssigned}
-                          value={editFormData.setCode || ''}
-                          onChange={e => setEditFormData({ ...editFormData, setCode: e.target.value })}
-                        >
-                          <option value="">-- Chọn bộ máy / NPP --</option>
-                          {systemSets.map(s => (
-                            <option key={s.setCode} value={s.setCode}>
-                              {s.setCode} — {s.nppName || 'Kho Trung Tâm'}
-                            </option>
-                          ))}
+                        <label className="form-label">Loại Máy Tính & OS</label>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <select className="form-select" style={{ width: '110px' }} value={editFormData.type || 'AIO'} onChange={e => setEditFormData({ ...editFormData, type: e.target.value })}>
+                            <option value="AIO">AIO</option>
+                            <option value="Case">Case</option>
+                          </select>
+                          <input type="text" className="form-input" style={{ flex: 1 }} placeholder="Hệ điều hành..." value={editFormData.os || ''} onChange={e => setEditFormData({ ...editFormData, os: e.target.value })} />
+                        </div>
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">Kết Nối Mạng</label>
+                        <select className="form-select" value={editFormData.network || 'Có mạng LAN'} onChange={e => setEditFormData({ ...editFormData, network: e.target.value })}>
+                          <option value="Có mạng LAN">Có mạng LAN</option>
+                          <option value="Có mạng Wifi">Có mạng Wifi</option>
+                          <option value="Không có mạng">Không có mạng</option>
                         </select>
                       </div>
-                    )}
-                  </div>
-                </div>
+                    </div>
+                  )}
 
-              </div>
-              <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setEditingDevice(null)}>Hủy Bỏ</button>
-                <button type="submit" className="btn btn-primary">Lưu Thay Đổi</button>
-              </div>
-            </form>
+                  {/* ASSIGNMENT & NPP SECTION */}
+                  <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px dashed var(--border-color)' }}>
+                    <div className="responsive-form-grid">
+                      <div className="form-group">
+                        <label className="form-label">📌 Trạng Thái Cấp Phát</label>
+                        <select
+                          className="form-select"
+                          value={editFormData.isAssigned ? 'ASSIGNED' : 'FREE'}
+                          onChange={e => {
+                            const isAssigned = e.target.value === 'ASSIGNED';
+                            setEditFormData({
+                              ...editFormData,
+                              isAssigned,
+                              setCode: isAssigned ? editFormData.setCode : ''
+                            });
+                          }}
+                        >
+                          <option value="FREE">⚪ Tự do trong kho</option>
+                          <option value="ASSIGNED">🟢 Đã gán vào Bộ máy / NPP</option>
+                        </select>
+                      </div>
+
+                      {editFormData.isAssigned && (
+                        <div className="form-group">
+                          <label className="form-label">🏢 Bộ Máy & NPP Gán Cho *</label>
+                          <select
+                            className="form-select"
+                            required={editFormData.isAssigned}
+                            value={editFormData.setCode || ''}
+                            onChange={e => setEditFormData({ ...editFormData, setCode: e.target.value })}
+                          >
+                            <option value="">-- Chọn bộ máy / NPP --</option>
+                            {systemSets.map(s => (
+                              <option key={s.setCode} value={s.setCode}>
+                                {s.setCode} — {s.nppName || 'Kho Trung Tâm'}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                </div>
+                <div className="modal-footer">
+                  <button type="button" className="btn btn-secondary" onClick={() => setEditingDevice(null)}>Hủy Bỏ</button>
+                  <button type="submit" className="btn btn-primary">Lưu Thay Đổi</button>
+                </div>
+              </form>
+            </div>
           </div>
-        </div>,
-        document.body
+        </SafePortal>
       )}
 
       {/* Assemble Combo Modal */}
-      {showAssembleModal && createPortal(
-        <div className="modal-overlay">
-          <div className="modal-content">
-            <div className="modal-header">
-              <h3 style={{ fontWeight: '800' }}>Ghép Bộ Máy Pha Màu Mới (Combo Set)</h3>
-              <button className="btn btn-secondary btn-sm" onClick={() => setShowAssembleModal(false)}>✕</button>
-            </div>
-            <form onSubmit={handleAssembleSubmit}>
-              <div className="modal-body" ref={el => { if (el) el.scrollTop = 0; }}>
-                <div style={{ padding: '12px', background: 'rgba(56, 189, 248, 0.1)', border: '1px solid var(--accent-blue)', borderRadius: '8px', marginBottom: '16px', fontSize: '0.825rem' }}>
-                  💡 Quy chuẩn 1 Bộ Máy Pha Màu bao gồm: 1 Máy Chiết + 1 Máy Lắc + 1 Máy Tính + 1 Máy In QL700. (Ổn áp sẽ ghi nhận thêm khi lắp đặt tại NPP).
-                </div>
+      {showAssembleModal && (
+        <SafePortal>
+          <div className="modal-overlay">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h3 style={{ fontWeight: '800' }}>Ghép Bộ Máy Pha Màu Mới (Combo Set)</h3>
+                <button className="btn btn-secondary btn-sm" onClick={() => setShowAssembleModal(false)}>✕</button>
+              </div>
+              <form onSubmit={handleAssembleSubmit}>
+                <div className="modal-body" ref={el => { if (el) el.scrollTop = 0; }}>
+                  <div style={{ padding: '12px', background: 'rgba(56, 189, 248, 0.1)', border: '1px solid var(--accent-blue)', borderRadius: '8px', marginBottom: '16px', fontSize: '0.825rem' }}>
+                    💡 Quy chuẩn 1 Bộ Máy Pha Màu bao gồm: 1 Máy Chiết + 1 Máy Lắc + 1 Máy Tính + 1 Máy In QL700. (Ổn áp sẽ ghi nhận thêm khi lắp đặt tại NPP).
+                  </div>
 
-                {/* NPP Selector */}
-                <div className="form-group">
-                  <label className="form-label">Chọn Nhà Phân Phối (Lấy dữ liệu từ Mục NPP)</label>
-                  <select
-                    className="form-select"
-                    value={newSetData.nppId || ''}
-                    onChange={e => {
-                      const selectedId = e.target.value;
-                      const targetNpp = npps.find(n => n.id === selectedId);
-                      setNewSetData({
-                        ...newSetData,
-                        nppId: selectedId,
-                        nppName: targetNpp ? targetNpp.name : 'Kho Tổng Trung Tâm',
-                        region: targetNpp ? (targetNpp.region || '') : '',
-                        province: targetNpp ? (targetNpp.province || '') : '',
-                        salesperson: targetNpp ? (targetNpp.salesperson || '') : '',
-                        status: targetNpp ? 'DA_LAP_DAT' : 'TRONG_KHO'
-                      });
-                    }}
-                  >
-                    <option value="">-- Kho Tổng Trung Tâm (Chưa chọn NPP) --</option>
-                    {npps.map(npp => (
-                      <option key={npp.id} value={npp.id}>
-                        {npp.name} ({npp.code || npp.id}) — {npp.province || npp.region || 'TQ'} {npp.salesperson ? `(KD: ${npp.salesperson})` : ''}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                  {/* NPP Selector */}
                   <div className="form-group">
-                    <label className="form-label">🛠️ Kỹ Thuật Viên Phụ Trách</label>
+                    <label className="form-label">Chọn Nhà Phân Phối (Lấy dữ liệu từ Mục NPP)</label>
                     <select
                       className="form-select"
-                      value={newSetData.technician || ''}
-                      onChange={e => setNewSetData({ ...newSetData, technician: e.target.value })}
+                      value={newSetData.nppId || ''}
+                      onChange={e => {
+                        const selectedId = e.target.value;
+                        const targetNpp = npps.find(n => n.id === selectedId);
+                        setNewSetData({
+                          ...newSetData,
+                          nppId: selectedId,
+                          nppName: targetNpp ? targetNpp.name : 'Kho Tổng Trung Tâm',
+                          region: targetNpp ? (targetNpp.region || '') : '',
+                          province: targetNpp ? (targetNpp.province || '') : '',
+                          salesperson: targetNpp ? (targetNpp.salesperson || '') : '',
+                          status: targetNpp ? 'DA_LAP_DAT' : 'TRONG_KHO'
+                        });
+                      }}
                     >
-                      <option value="">-- Chọn tài khoản Kỹ Thuật Viên (QC) --</option>
-                      {qcUsers.map(u => (
-                        <option key={u.id || u.name} value={u.name}>
-                          👤 {u.name} ({u.role?.toUpperCase() === 'QC' ? 'QC/KTV' : u.role?.toUpperCase() || 'KTV'} - {u.region || 'TQ'})
+                      <option value="">-- Kho Tổng Trung Tâm (Chưa chọn NPP) --</option>
+                      {npps.map(npp => (
+                        <option key={npp.id} value={npp.id}>
+                          {npp.name} ({npp.code || npp.id}) — {npp.province || npp.region || 'TQ'} {npp.salesperson ? `(KD: ${npp.salesperson})` : ''}
                         </option>
                       ))}
                     </select>
                   </div>
-                  <div className="form-group">
-                    <label className="form-label">💼 Kinh Doanh Phụ Trách (Tự động từ NPP)</label>
-                    <input
-                      type="text"
-                      className="form-input"
-                      placeholder="Tự động điền theo NPP chọn ở trên..."
-                      value={newSetData.salesperson || ''}
-                      onChange={e => setNewSetData({ ...newSetData, salesperson: e.target.value })}
-                    />
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                    <div className="form-group">
+                      <label className="form-label">🛠️ Kỹ Thuật Viên Phụ Trách</label>
+                      <select
+                        className="form-select"
+                        value={newSetData.technician || ''}
+                        onChange={e => setNewSetData({ ...newSetData, technician: e.target.value })}
+                      >
+                        <option value="">-- Chọn tài khoản Kỹ Thuật Viên (QC) --</option>
+                        {qcUsers.map(u => (
+                          <option key={u.id || u.name} value={u.name}>
+                            👤 {u.name} ({u.role?.toUpperCase() === 'QC' ? 'QC/KTV' : u.role?.toUpperCase() || 'KTV'} - {u.region || 'TQ'})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">💼 Kinh Doanh Phụ Trách (Tự động từ NPP)</label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="Tự động điền theo NPP chọn ở trên..."
+                        value={newSetData.salesperson || ''}
+                        onChange={e => setNewSetData({ ...newSetData, salesperson: e.target.value })}
+                      />
+                    </div>
                   </div>
+
+                  {/* Helper logic for filtering available devices */}
+                  {(() => {
+                    const isDeviceFree = (dev) => {
+                      if (!dev) return false;
+                      return !dev.isAssigned && (!dev.setCode || dev.setCode === '');
+                    };
+
+                    const availDisp = dispensers.filter(d => isDeviceFree(d) || d.id === newSetData.dispenserId);
+                    const availMix = mixers.filter(m => isDeviceFree(m) || m.id === newSetData.mixerId);
+                    const availComp = computers.filter(c => isDeviceFree(c) || c.id === newSetData.computerId);
+                    const availPrn = printers.filter(p => isDeviceFree(p) || p.id === newSetData.printerId);
+
+                    return (
+                      <>
+                        <div className="form-group">
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <label className="form-label" style={{ marginBottom: 0 }}>1. Chọn Máy Chiết *</label>
+                            <button 
+                              type="button" 
+                              style={{ background: 'none', border: 'none', color: 'var(--accent-cyan)', fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline' }}
+                              onClick={() => { setShowAssembleModal(false); handleOpenAddDevice('dispenser'); }}
+                            >
+                              + Thêm máy chiết mới vào kho
+                            </button>
+                          </div>
+                          <select className="form-select" required value={newSetData.dispenserId} onChange={e => setNewSetData({ ...newSetData, dispenserId: e.target.value })}>
+                            <option value="">-- Chọn máy chiết ({availDisp.length} máy) --</option>
+                            {availDisp.map(d => (
+                              <option key={d.id} value={d.id}>
+                                {d.model} - Seri: {d.serial} {isDeviceFree(d) ? '🟢 (Tự do trong kho)' : `🟡 (Đang gán bộ ${d.setCode || d.set_code || ''})`}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="form-group">
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <label className="form-label" style={{ marginBottom: 0 }}>2. Chọn Máy Lắc *</label>
+                            <button 
+                              type="button" 
+                              style={{ background: 'none', border: 'none', color: 'var(--accent-cyan)', fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline' }}
+                              onClick={() => { setShowAssembleModal(false); handleOpenAddDevice('mixer'); }}
+                            >
+                              + Thêm máy lắc mới vào kho
+                            </button>
+                          </div>
+                          <select className="form-select" required value={newSetData.mixerId} onChange={e => setNewSetData({ ...newSetData, mixerId: e.target.value })}>
+                            <option value="">-- Chọn máy lắc ({availMix.length} máy) --</option>
+                            {availMix.map(m => (
+                              <option key={m.id} value={m.id}>
+                                {m.model} - Seri: {m.serial} {isDeviceFree(m) ? '🟢 (Tự do trong kho)' : `🟡 (Đang gán bộ ${m.setCode || m.set_code || ''})`}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="form-group">
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <label className="form-label" style={{ marginBottom: 0 }}>3. Chọn Máy Tính *</label>
+                            <button 
+                              type="button" 
+                              style={{ background: 'none', border: 'none', color: 'var(--accent-cyan)', fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline' }}
+                              onClick={() => { setShowAssembleModal(false); handleOpenAddDevice('computer'); }}
+                            >
+                              + Thêm máy tính mới vào kho
+                            </button>
+                          </div>
+                          <select className="form-select" required value={newSetData.computerId} onChange={e => setNewSetData({ ...newSetData, computerId: e.target.value })}>
+                            <option value="">-- Chọn máy tính ({availComp.length} máy) --</option>
+                            {availComp.map(c => (
+                              <option key={c.id} value={c.id}>
+                                {c.type} {c.os} - Seri: {c.serial || c.id} {isDeviceFree(c) ? '🟢 (Tự do trong kho)' : `🟡 (Đang gán bộ ${c.setCode || c.set_code || ''})`}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="form-group">
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <label className="form-label" style={{ marginBottom: 0 }}>4. Chọn Máy In QL700 *</label>
+                            <button 
+                              type="button" 
+                              style={{ background: 'none', border: 'none', color: 'var(--accent-cyan)', fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline' }}
+                              onClick={() => { setShowAssembleModal(false); handleOpenAddDevice('printer'); }}
+                            >
+                              + Thêm máy in mới vào kho
+                            </button>
+                          </div>
+                          <select className="form-select" required value={newSetData.printerId} onChange={e => setNewSetData({ ...newSetData, printerId: e.target.value })}>
+                            <option value="">-- Chọn máy in QL700 ({availPrn.length} máy) --</option>
+                            {availPrn.map(p => (
+                              <option key={p.id} value={p.id}>
+                                {p.model} - Seri: {p.serial} {isDeviceFree(p) ? '🟢 (Tự do trong kho)' : `🟡 (Đang gán bộ ${p.setCode || p.set_code || ''})`}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
-
-                {/* Helper logic for filtering available devices */}
-                {(() => {
-                  const isDeviceFree = (dev) => {
-                    if (!dev) return false;
-                    return !dev.isAssigned && (!dev.setCode || dev.setCode === '');
-                  };
-
-                  const availDisp = dispensers.filter(d => isDeviceFree(d) || d.id === newSetData.dispenserId);
-                  const availMix = mixers.filter(m => isDeviceFree(m) || m.id === newSetData.mixerId);
-                  const availComp = computers.filter(c => isDeviceFree(c) || c.id === newSetData.computerId);
-                  const availPrn = printers.filter(p => isDeviceFree(p) || p.id === newSetData.printerId);
-
-                  return (
-                    <>
-                      <div className="form-group">
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <label className="form-label" style={{ marginBottom: 0 }}>1. Chọn Máy Chiết *</label>
-                          <button 
-                            type="button" 
-                            style={{ background: 'none', border: 'none', color: 'var(--accent-cyan)', fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline' }}
-                            onClick={() => { setShowAssembleModal(false); handleOpenAddDevice('dispenser'); }}
-                          >
-                            + Thêm máy chiết mới vào kho
-                          </button>
-                        </div>
-                        <select className="form-select" required value={newSetData.dispenserId} onChange={e => setNewSetData({ ...newSetData, dispenserId: e.target.value })}>
-                          <option value="">-- Chọn máy chiết ({availDisp.length} máy) --</option>
-                          {availDisp.map(d => (
-                            <option key={d.id} value={d.id}>
-                              {d.model} - Seri: {d.serial} {isDeviceFree(d) ? '🟢 (Tự do trong kho)' : `🟡 (Đang gán bộ ${d.setCode || d.set_code || ''})`}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div className="form-group">
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <label className="form-label" style={{ marginBottom: 0 }}>2. Chọn Máy Lắc *</label>
-                          <button 
-                            type="button" 
-                            style={{ background: 'none', border: 'none', color: 'var(--accent-cyan)', fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline' }}
-                            onClick={() => { setShowAssembleModal(false); handleOpenAddDevice('mixer'); }}
-                          >
-                            + Thêm máy lắc mới vào kho
-                          </button>
-                        </div>
-                        <select className="form-select" required value={newSetData.mixerId} onChange={e => setNewSetData({ ...newSetData, mixerId: e.target.value })}>
-                          <option value="">-- Chọn máy lắc ({availMix.length} máy) --</option>
-                          {availMix.map(m => (
-                            <option key={m.id} value={m.id}>
-                              {m.model} - Seri: {m.serial} {isDeviceFree(m) ? '🟢 (Tự do trong kho)' : `🟡 (Đang gán bộ ${m.setCode || m.set_code || ''})`}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div className="form-group">
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <label className="form-label" style={{ marginBottom: 0 }}>3. Chọn Máy Tính *</label>
-                          <button 
-                            type="button" 
-                            style={{ background: 'none', border: 'none', color: 'var(--accent-cyan)', fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline' }}
-                            onClick={() => { setShowAssembleModal(false); handleOpenAddDevice('computer'); }}
-                          >
-                            + Thêm máy tính mới vào kho
-                          </button>
-                        </div>
-                        <select className="form-select" required value={newSetData.computerId} onChange={e => setNewSetData({ ...newSetData, computerId: e.target.value })}>
-                          <option value="">-- Chọn máy tính ({availComp.length} máy) --</option>
-                          {availComp.map(c => (
-                            <option key={c.id} value={c.id}>
-                              {c.type} {c.os} - Seri: {c.serial || c.id} {isDeviceFree(c) ? '🟢 (Tự do trong kho)' : `🟡 (Đang gán bộ ${c.setCode || c.set_code || ''})`}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div className="form-group">
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <label className="form-label" style={{ marginBottom: 0 }}>4. Chọn Máy In QL700 *</label>
-                          <button 
-                            type="button" 
-                            style={{ background: 'none', border: 'none', color: 'var(--accent-cyan)', fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline' }}
-                            onClick={() => { setShowAssembleModal(false); handleOpenAddDevice('printer'); }}
-                          >
-                            + Thêm máy in mới vào kho
-                          </button>
-                        </div>
-                        <select className="form-select" required value={newSetData.printerId} onChange={e => setNewSetData({ ...newSetData, printerId: e.target.value })}>
-                          <option value="">-- Chọn máy in QL700 ({availPrn.length} máy) --</option>
-                          {availPrn.map(p => (
-                            <option key={p.id} value={p.id}>
-                              {p.model} - Seri: {p.serial} {isDeviceFree(p) ? '🟢 (Tự do trong kho)' : `🟡 (Đang gán bộ ${p.setCode || p.set_code || ''})`}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </>
-                  );
-                })()}
-              </div>
-              <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowAssembleModal(false)}>Hủy Bỏ</button>
-                <button type="submit" className="btn btn-primary">Xác Nhận Tạo Bộ Combo</button>
-              </div>
-            </form>
+                <div className="modal-footer">
+                  <button type="button" className="btn btn-secondary" onClick={() => setShowAssembleModal(false)}>Hủy Bỏ</button>
+                  <button type="submit" className="btn btn-primary">Xác Nhận Tạo Bộ Combo</button>
+                </div>
+              </form>
+            </div>
           </div>
-        </div>,
-        document.body
+        </SafePortal>
       )}
 
       {/* EDIT SYSTEM SET MODAL */}
-      {editingSet && createPortal(
-        <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '600px' }}>
-            <div className="modal-header">
-              <h3 style={{ fontWeight: '800' }}>Chỉnh Sửa Thông Tin Bộ Máy [{editingSet.setCode}]</h3>
-              <button className="btn btn-secondary btn-sm" onClick={() => setEditingSet(null)}>✕</button>
+      {editingSet && (
+        <SafePortal>
+          <div className="modal-overlay">
+            <div className="modal-content" style={{ maxWidth: '600px' }}>
+              <div className="modal-header">
+                <h3 style={{ fontWeight: '800' }}>Chỉnh Sửa Thông Tin Bộ Máy [{editingSet.setCode}]</h3>
+                <button className="btn btn-secondary btn-sm" onClick={() => setEditingSet(null)}>✕</button>
+              </div>
+              <form onSubmit={handleEditSetSubmit}>
+                <div className="modal-body" ref={el => { if (el) el.scrollTop = 0; }}>
+                  
+                  {/* PRIMARY EDIT FIELDS - TOP OF FORM */}
+                  <div className="responsive-form-grid">
+                    <div className="form-group">
+                      <label className="form-label">🏢 Chọn Nhà Phân Phối Gán Cho</label>
+                      <select
+                        className="form-select"
+                        value={editSetFormData.nppId || ''}
+                        onChange={e => {
+                          const selectedId = e.target.value;
+                          if (!selectedId) {
+                            setEditSetFormData({
+                              ...editSetFormData,
+                              nppId: '',
+                              nppName: 'Kho Tổng Trung Tâm',
+                              region: 'Kho Tổng',
+                              province: 'Kho Tổng',
+                              salesperson: ''
+                            });
+                          } else {
+                            const targetNpp = npps.find(n => n.id === selectedId);
+                            setEditSetFormData({
+                              ...editSetFormData,
+                              nppId: selectedId,
+                              nppName: targetNpp ? targetNpp.name : editSetFormData.nppName,
+                              region: targetNpp ? (targetNpp.region || editSetFormData.region) : editSetFormData.region,
+                              province: targetNpp ? (targetNpp.province || editSetFormData.province) : editSetFormData.province,
+                              salesperson: targetNpp ? (targetNpp.salesperson || editSetFormData.salesperson) : editSetFormData.salesperson
+                            });
+                          }
+                        }}
+                      >
+                        <option value="">-- Kho Trung Tâm (Chưa gán NPP) --</option>
+                        {npps.map(npp => (
+                          <option key={npp.id} value={npp.id}>
+                            {npp.name} ({npp.code || npp.id}) — {npp.province || npp.region || 'TQ'}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label">⚡ Trạng Thái Bộ Máy</label>
+                      <select 
+                        className="form-select" 
+                        value={editSetFormData.status} 
+                        onChange={e => setEditSetFormData({ ...editSetFormData, status: e.target.value })}
+                      >
+                        <option value="DA_LAP_DAT">🟢 Đã Lắp Đặt</option>
+                        <option value="TRONG_KHO">⚪ Trong Kho</option>
+                        <option value="DA_THU_HOI">🔴 Đã Thu Hồi</option>
+                        <option value="BAO_THUONG_BAO_TRI">🟡 Đang Bảo Trì</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="responsive-form-grid">
+                    <div className="form-group">
+                      <label className="form-label">🔌 Ghi Nhận Ổn Áp</label>
+                      <input 
+                        type="text" 
+                        className="form-input" 
+                        placeholder="Lioa 2000VA..."
+                        value={editSetFormData.stabilizer} 
+                        onChange={e => setEditSetFormData({ ...editSetFormData, stabilizer: e.target.value })} 
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label">Hạn Bảo Trì Tiếp Theo</label>
+                      <input 
+                        type="date" 
+                        className="form-input" 
+                        value={editSetFormData.nextMaintenanceDue || ''} 
+                        onChange={e => setEditSetFormData({ ...editSetFormData, nextMaintenanceDue: e.target.value })} 
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <div className="form-group">
+                      <label className="form-label">🛠️ Kỹ Thuật Viên Phụ Trách</label>
+                      <select
+                        className="form-select"
+                        value={editSetFormData.technician || ''}
+                        onChange={e => setEditSetFormData({ ...editSetFormData, technician: e.target.value })}
+                      >
+                        <option value="">-- Chọn tài khoản Kỹ Thuật Viên (QC) --</option>
+                        {qcUsers.map(u => (
+                          <option key={u.id || u.name} value={u.name}>
+                            👤 {u.name} ({u.role?.toUpperCase() === 'QC' ? 'QC/KTV' : u.role?.toUpperCase() || 'KTV'} - {u.region || 'TQ'})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">💼 Kinh Doanh Phụ Trách (Tự động từ NPP)</label>
+                      <input 
+                        type="text" 
+                        className="form-input" 
+                        placeholder="Tự động điền theo NPP..."
+                        value={editSetFormData.salesperson || ''} 
+                        onChange={e => setEditSetFormData({ ...editSetFormData, salesperson: e.target.value })} 
+                      />
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Ghi Chú Chi Tiết</label>
+                    <textarea 
+                      className="form-textarea" 
+                      rows={2} 
+                      value={editSetFormData.notes} 
+                      onChange={e => setEditSetFormData({ ...editSetFormData, notes: e.target.value })} 
+                    />
+                  </div>                </div>
+                <div className="modal-footer">
+                  <button type="button" className="btn btn-secondary" onClick={() => setEditingSet(null)}>Hủy Bỏ</button>
+                  <button type="submit" className="btn btn-primary">Lưu Thay Đổi</button>
+                </div>
+              </form>
             </div>
-            <form onSubmit={handleEditSetSubmit}>
-              <div className="modal-body" ref={el => { if (el) el.scrollTop = 0; }}>
-                
-                {/* PRIMARY EDIT FIELDS - TOP OF FORM */}
-                <div className="responsive-form-grid">
-                  <div className="form-group">
-                    <label className="form-label">🏢 Chọn Nhà Phân Phối Gán Cho</label>
-                    <select
-                      className="form-select"
-                      value={editSetFormData.nppId || ''}
-                      onChange={e => {
-                        const selectedId = e.target.value;
-                        if (!selectedId) {
-                          setEditSetFormData({
-                            ...editSetFormData,
-                            nppId: '',
-                            nppName: 'Kho Tổng Trung Tâm',
-                            region: 'Kho Tổng',
-                            province: 'Kho Tổng',
-                            salesperson: ''
-                          });
-                        } else {
-                          const targetNpp = npps.find(n => n.id === selectedId);
-                          setEditSetFormData({
-                            ...editSetFormData,
-                            nppId: selectedId,
-                            nppName: targetNpp ? targetNpp.name : editSetFormData.nppName,
-                            region: targetNpp ? (targetNpp.region || editSetFormData.region) : editSetFormData.region,
-                            province: targetNpp ? (targetNpp.province || editSetFormData.province) : editSetFormData.province,
-                            salesperson: targetNpp ? (targetNpp.salesperson || editSetFormData.salesperson) : editSetFormData.salesperson
-                          });
-                        }
-                      }}
-                    >
-                      <option value="">-- Kho Trung Tâm (Chưa gán NPP) --</option>
-                      {npps.map(npp => (
-                        <option key={npp.id} value={npp.id}>
-                          {npp.name} ({npp.code || npp.id}) — {npp.province || npp.region || 'TQ'}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">⚡ Trạng Thái Bộ Máy</label>
-                    <select 
-                      className="form-select" 
-                      value={editSetFormData.status} 
-                      onChange={e => setEditSetFormData({ ...editSetFormData, status: e.target.value })}
-                    >
-                      <option value="DA_LAP_DAT">🟢 Đã Lắp Đặt</option>
-                      <option value="TRONG_KHO">⚪ Trong Kho</option>
-                      <option value="DA_THU_HOI">🔴 Đã Thu Hồi</option>
-                      <option value="BAO_THUONG_BAO_TRI">🟡 Đang Bảo Trì</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="responsive-form-grid">
-                  <div className="form-group">
-                    <label className="form-label">🔌 Ghi Nhận Ổn Áp</label>
-                    <input 
-                      type="text" 
-                      className="form-input" 
-                      placeholder="Lioa 2000VA..."
-                      value={editSetFormData.stabilizer} 
-                      onChange={e => setEditSetFormData({ ...editSetFormData, stabilizer: e.target.value })} 
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">Hạn Bảo Trì Tiếp Theo</label>
-                    <input 
-                      type="date" 
-                      className="form-input" 
-                      value={editSetFormData.nextMaintenanceDue || ''} 
-                      onChange={e => setEditSetFormData({ ...editSetFormData, nextMaintenanceDue: e.target.value })} 
-                    />
-                  </div>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                  <div className="form-group">
-                    <label className="form-label">🛠️ Kỹ Thuật Viên Phụ Trách</label>
-                    <select
-                      className="form-select"
-                      value={editSetFormData.technician || ''}
-                      onChange={e => setEditSetFormData({ ...editSetFormData, technician: e.target.value })}
-                    >
-                      <option value="">-- Chọn tài khoản Kỹ Thuật Viên (QC) --</option>
-                      {qcUsers.map(u => (
-                        <option key={u.id || u.name} value={u.name}>
-                          👤 {u.name} ({u.role?.toUpperCase() === 'QC' ? 'QC/KTV' : u.role?.toUpperCase() || 'KTV'} - {u.region || 'TQ'})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">💼 Kinh Doanh Phụ Trách (Tự động từ NPP)</label>
-                    <input 
-                      type="text" 
-                      className="form-input" 
-                      placeholder="Tự động điền theo NPP..."
-                      value={editSetFormData.salesperson || ''} 
-                      onChange={e => setEditSetFormData({ ...editSetFormData, salesperson: e.target.value })} 
-                    />
-                  </div>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Ghi Chú Chi Tiết</label>
-                  <textarea 
-                    className="form-textarea" 
-                    rows={2} 
-                    value={editSetFormData.notes} 
-                    onChange={e => setEditSetFormData({ ...editSetFormData, notes: e.target.value })} 
-                  />
-                </div>
-
-              </div>
-              <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setEditingSet(null)}>Hủy Bỏ</button>
-                <button type="submit" className="btn btn-primary">Lưu Thay Đổi</button>
-              </div>
-            </form>
           </div>
-        </div>,
-        document.body
+        </SafePortal>
       )}
 
       {/* QR & BARCODE CAMERA SCANNER MODAL */}

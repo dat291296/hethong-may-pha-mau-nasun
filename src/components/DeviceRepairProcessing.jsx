@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { createPortal } from 'react-dom';
+import SafePortal from './SafePortal.jsx';
 import {
 
   PlusCircle,
@@ -627,211 +627,171 @@ export default function DeviceRepairProcessing({
       </div>
 
       {/* CREATE / EDIT TICKET MODAL */}
-      {showModal && createPortal(
-        <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '720px' }}>
-            <div className="modal-header">
-              <h3 style={{ fontWeight: '800' }}>
-                {editingTicket ? `Chỉnh Sửa Phiếu Xử Lý Máy [${editingTicket.ticketCode}]` : 'Tạo Phiếu Xử Lý Máy & Sửa Chữa Mới'}
-              </h3>
-              <button className="btn btn-secondary btn-sm" onClick={() => setShowModal(false)}>✕</button>
-            </div>
-            <form onSubmit={handleSubmit}>
-              <div className="modal-body" ref={el => { if (el) el.scrollTop = 0; }}>
-                
-                {/* PRIMARY EDIT FIELDS - TOP OF FORM */}
-                <div className="responsive-form-grid">
-                  <div className="form-group">
-                    <label className="form-label">🏢 1. Tên Nhà Phân Phối (NPP) *</label>
-                    <select className="form-select" required value={formData.nppId} onChange={e => setFormData({ ...formData, nppId: e.target.value })}>
-                      <option value="">-- Chọn NPP từ danh sách --</option>
-                      {npps.map(n => (
-                        <option key={n.id} value={n.id}>[{n.id}] {n.name} - {n.region}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">🏷️ 2. Số Seri Thiết Bị (Serial) *</label>
-                    <input type="text" className="form-input" required placeholder="Nhập số seri duy nhất..." value={formData.serialNumber} onChange={e => setFormData({ ...formData, serialNumber: e.target.value })} />
-                  </div>
-                </div>
-
-                <div className="responsive-form-grid">
-                  <div className="form-group">
-                    <label className="form-label">⚙️ 3. Phân Loại Sản Phẩm & Model *</label>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <select className="form-select" style={{ flex: 1 }} value={formData.productCategory} onChange={e => setFormData({ ...formData, productCategory: e.target.value })}>
-                        {PRODUCT_CATEGORIES.map(cat => (
-                          <option key={cat} value={cat}>{cat}</option>
+      {showModal && (
+        <SafePortal>
+          <div className="modal-overlay">
+            <div className="modal-content" style={{ maxWidth: '720px' }}>
+              <div className="modal-header">
+                <h3 style={{ fontWeight: '800' }}>
+                  {editingTicket ? `Chỉnh Sửa Phiếu Xử Lý Máy [${editingTicket.ticketCode}]` : 'Tạo Phiếu Xử Lý Máy & Sửa Chữa Mới'}
+                </h3>
+                <button className="btn btn-secondary btn-sm" onClick={() => setShowModal(false)}>✕</button>
+              </div>
+              <form onSubmit={handleSubmit}>
+                <div className="modal-body" ref={el => { if (el) el.scrollTop = 0; }}>
+                  
+                  {/* PRIMARY EDIT FIELDS - TOP OF FORM */}
+                  <div className="responsive-form-grid">
+                    <div className="form-group">
+                      <label className="form-label">🏢 1. Tên Nhà Phân Phối (NPP) *</label>
+                      <select className="form-select" required value={formData.nppId} onChange={e => setFormData({ ...formData, nppId: e.target.value })}>
+                        <option value="">-- Chọn NPP từ danh sách --</option>
+                        {npps.map(n => (
+                          <option key={n.id} value={n.id}>[{n.id}] {n.name} - {n.region}</option>
                         ))}
                       </select>
-                      <select className="form-select" style={{ flex: 1 }} value={formData.machineModel} onChange={e => setFormData({ ...formData, machineModel: e.target.value })}>
-                        {MACHINE_MODELS.map(m => (
-                          <option key={m} value={m}>{m}</option>
-                        ))}
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">🏷️ 2. Số Seri Thiết Bị (Serial) *</label>
+                      <input type="text" className="form-input" required placeholder="Nhập số seri duy nhất..." value={formData.serialNumber} onChange={e => setFormData({ ...formData, serialNumber: e.target.value })} />
+                    </div>
+                  </div>
+
+                  <div className="responsive-form-grid">
+                    <div className="form-group">
+                      <label className="form-label">⚙️ 3. Phân Loại Sản Phẩm & Model *</label>
+                      <input type="text" className="form-input" required placeholder="Ví dụ: COROB D200, Mixer Natos V1..." value={formData.machineModel} onChange={e => setFormData({ ...formData, machineModel: e.target.value })} />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">📂 Phân Loại Thiết Bị *</label>
+                      <select className="form-select" required value={formData.productCategory} onChange={e => setFormData({ ...formData, productCategory: e.target.value })}>
+                        <option value="Máy Chiết Sơn">Máy Chiết Sơn</option>
+                        <option value="Máy Lắc Sơn">Máy Lắc Sơn</option>
+                        <option value="Máy Tính Bàn / Laptop">Máy Tính Bàn / Laptop</option>
+                        <option value="Máy In Tem QL700">Máy In Tem QL700</option>
                       </select>
                     </div>
                   </div>
 
                   <div className="form-group">
-                    <label className="form-label">⚠️ 4. Phân Loại Tên Lỗi</label>
-                    <input type="text" className="form-input" placeholder="Nghẹt vòi, hỏng bo, rò rỉ tinh màu..." value={formData.errorCategory} onChange={e => setFormData({ ...formData, errorCategory: e.target.value })} />
-                  </div>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">📝 5. Diễn Giải Mô Tả Lỗi Chi Tiết *</label>
-                  <textarea className="form-textarea" rows={2} required placeholder="Mô tả hiện trạng hỏng hóc thực tế..." value={formData.errorDescription} onChange={e => setFormData({ ...formData, errorDescription: e.target.value })} />
-                </div>
-
-                {/* Processing Directions & Statuses */}
-                <div style={{ padding: '12px 14px', background: 'var(--bg-main)', border: '1px solid var(--border-color)', borderRadius: '8px', marginBottom: '12px' }}>
-                  <div style={{ fontSize: '0.825rem', fontWeight: '700', color: 'var(--accent-cyan)', marginBottom: '8px' }}>
-                    🛠️ Phương Án & Tình Trạng Xử Lý
+                    <label className="form-label">⚠️ 4. Diễn Giải Tình Trạng Lỗi *</label>
+                    <textarea className="form-input" rows={2} required placeholder="Mô tả chi tiết sự cố kỹ thuật..." value={formData.errorDescription} onChange={e => setFormData({ ...formData, errorDescription: e.target.value })} />
                   </div>
 
-                  <div className="responsive-form-grid" style={{ marginBottom: '8px' }}>
-                    <div className="form-group" style={{ marginBottom: 0 }}>
-                      <label className="form-label">Hướng Xử Lý</label>
+                  <div className="responsive-form-grid">
+                    <div className="form-group">
+                      <label className="form-label">🛠️ Hướng Xử Lý Kỹ Thuật</label>
                       <select className="form-select" value={formData.actionDirection} onChange={e => setFormData({ ...formData, actionDirection: e.target.value })}>
-                        <option value="Sửa chữa">Sửa chữa</option>
-                        <option value="Xuất đổi">Xuất đổi máy khác</option>
+                        <option value="Sửa chữa">🛠️ Sửa Chữa Tại Kho/Đại Lý</option>
+                        <option value="Xuất đổi">🔄 Xuất Đổi Máy Khác</option>
                       </select>
                     </div>
+                    <div className="form-group">
+                      <label className="form-label">⚡ Tình Trạng Sửa Chữa</label>
+                      <select className="form-select" value={formData.processingStatus} onChange={e => setFormData({ ...formData, processingStatus: e.target.value })}>
+                        <option value="Chưa xử lý">⏳ Chưa Xử Lý</option>
+                        <option value="Đang xử lý">🔧 Đang Xử Lý</option>
+                        <option value="Đã xử lý">✓ Đã Xử Lý Xong</option>
+                      </select>
+                    </div>
+                  </div>
 
-                    {formData.actionDirection === 'Xuất đổi' && (
-                      <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label className="form-label">Tình Trạng Máy Xuất Đổi</label>
-                        <select className="form-select" value={formData.replacementCondition} onChange={e => setFormData({ ...formData, replacementCondition: e.target.value })}>
-                          <option value="Mới">Mới (Đổi máy mới 100%)</option>
-                          <option value="Cũ">Cũ (Đổi máy cũ chạy tốt)</option>
-                        </select>
+                  <div className="responsive-form-grid">
+                    <div className="form-group">
+                      <label className="form-label">📦 Trạng Thái Trả Khách</label>
+                      <select className="form-select" value={formData.customerReturnStatus} onChange={e => setFormData({ ...formData, customerReturnStatus: e.target.value })}>
+                        <option value="Chưa gửi trả">📦 Chưa Gửi Trả</option>
+                        <option value="Đã gửi trả">✓ Đã Gửi Trả NPP</option>
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">👨‍🔧 Kỹ Thuật Viên Xử Lý</label>
+                      <input type="text" className="form-input" value={formData.technician} onChange={e => setFormData({ ...formData, technician: e.target.value })} />
+                    </div>
+                  </div>
+
+                  {/* Photo Upload Section */}
+                  <div style={{ marginTop: '16px', borderTop: '1px solid var(--border-color)', paddingTop: '14px' }}>
+                    <label className="form-label">📸 Ảnh Chụp Hiện Trường / Thiết Bị Hỏng</label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+                      <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer' }}>
+                        <Camera size={14} />
+                        <span>Chụp / Chọn Ảnh</span>
+                        <input type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={handlePhotoUpload} />
+                      </label>
+                    </div>
+                    {formData.photos && formData.photos.length > 0 && (
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: '8px' }}>
+                        {formData.photos.map((url, idx) => (
+                          <div key={idx} style={{ position: 'relative', width: '100%', height: '65px', borderRadius: '6px', overflow: 'hidden', border: '1px solid var(--border-color)' }}>
+                            <img src={url} alt="ticket photo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            <button
+                              type="button"
+                              onClick={() => handleRemovePhoto(idx)}
+                              style={{ position: 'absolute', top: '2px', right: '2px', background: 'rgba(0,0,0,0.7)', color: '#fff', border: 'none', borderRadius: '50%', width: '18px', height: '18px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                            >
+                              <X size={12} />
+                            </button>
+                          </div>
+                        ))}
                       </div>
                     )}
                   </div>
 
-                  <div className="responsive-form-grid">
-                    <div className="form-group" style={{ marginBottom: 0 }}>
-                      <label className="form-label">Tình Trạng Sửa</label>
-                      <select className="form-select" value={formData.processingStatus} onChange={e => setFormData({ ...formData, processingStatus: e.target.value })}>
-                        <option value="Chưa xử lý">⏳ Chưa xử lý (Đang sửa/chờ linh kiện)</option>
-                        <option value="Đã xử lý">✓ Đã xử lý (Khắc phục xong)</option>
-                      </select>
-                    </div>
-
-                    <div className="form-group" style={{ marginBottom: 0 }}>
-                      <label className="form-label">Gửi Trả Khách</label>
-                      <select className="form-select" value={formData.customerReturnStatus} onChange={e => setFormData({ ...formData, customerReturnStatus: e.target.value })}>
-                        <option value="Chưa gửi trả">📦 Chưa gửi trả (Kho trung tâm)</option>
-                        <option value="Đã gửi trả">✓ Đã gửi trả (Đã giao lại NPP)</option>
-                      </select>
-                    </div>
-                  </div>
                 </div>
-
-                {/* SECONDARY METADATA - BOTTOM OF FORM */}
-                <div className="responsive-form-grid" style={{ paddingTop: '8px', borderTop: '1px dashed var(--border-color)' }}>
-                  <div className="form-group">
-                    <label className="form-label">📅 Ngày Đi Xử Lý</label>
-                    <input type="date" className="form-input" required value={formData.date} onChange={e => setFormData({ ...formData, date: e.target.value })} />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">👤 Kỹ Thuật Viên Phụ Trách</label>
-                    <input type="text" className="form-input" required placeholder="Tên KTV đi xử lý..." value={formData.technician} onChange={e => setFormData({ ...formData, technician: e.target.value })} />
-                  </div>
+                <div className="modal-footer">
+                  <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>Hủy Bỏ</button>
+                  <button type="submit" className="btn btn-primary">{editingTicket ? 'Cập Nhật Phiếu' : 'Tạo Phiếu Mới'}</button>
                 </div>
-
-                {/* Photo Capture Section */}
-                <div className="form-group">
-                  <label className="form-label">📸 Chụp Ảnh Hiện Trường Lỗi & Linh Kiện Hỏng</label>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
-                    <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer' }}>
-                      <Camera size={16} />
-                      <span>Chụp / Upload Ảnh Lỗi</span>
-                      <input type="file" accept="image/*" capture="environment" multiple style={{ display: 'none' }} onChange={handlePhotoUpload} />
-                    </label>
-                  </div>
-
-                  {formData.photos && formData.photos.length > 0 && (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))', gap: '8px' }}>
-                      {formData.photos.map((url, idx) => (
-                        <div key={idx} style={{ position: 'relative', width: '100%', height: '70px', borderRadius: '6px', overflow: 'hidden', border: '1px solid var(--border-color)' }}>
-                          <img src={url} alt="Error photo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                          <button
-                            type="button"
-                            onClick={() => handleRemovePhoto(idx)}
-                            style={{ position: 'absolute', top: '2px', right: '2px', background: 'rgba(0,0,0,0.7)', color: '#fff', border: 'none', borderRadius: '50%', width: '18px', height: '18px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                          >
-                            <X size={12} />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-              </div>
-              <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>Hủy Bỏ</button>
-                <button type="submit" className="btn btn-primary">{editingTicket ? 'Cập Nhật Phiếu' : 'Tạo Phiếu Mới'}</button>
-              </div>
-            </form>
+              </form>
+            </div>
           </div>
-        </div>,
-        document.body
+        </SafePortal>
       )}
 
       {/* VIEW TICKET DETAIL MODAL */}
-      {selectedTicket && createPortal(
-        <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '640px' }}>
-            <div className="modal-header">
-              <div>
-                <span className="badge badge-info">{selectedTicket.ticketCode}</span>
-                <h3 style={{ fontWeight: '800', marginTop: '4px' }}>Chi Tiết Phiếu Xử Lý Máy</h3>
-              </div>
-              <button className="btn btn-secondary btn-sm" onClick={() => setSelectedTicket(null)}>✕</button>
-            </div>
-            <div className="modal-body">
-              
-              <div className="ticket-detail-grid" style={{ background: 'var(--bg-main)', padding: '16px', borderRadius: '8px', border: '1px solid var(--border-color)', marginBottom: '16px' }}>
-                <div><strong>Ngày Xử Lý:</strong> {selectedTicket.date}</div>
-                <div><strong>Kỹ Thuật Viên:</strong> {selectedTicket.technician}</div>
-                <div style={{ gridColumn: 'span 2' }}><strong>Nhà Phân Phối:</strong> {selectedTicket.nppName}</div>
-                <div><strong>Sản Phẩm:</strong> {selectedTicket.productCategory}</div>
-                <div><strong>Loại Máy / Model:</strong> {selectedTicket.machineModel}</div>
-                <div><strong>Số Seri:</strong> <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent-cyan)' }}>{selectedTicket.serialNumber}</span></div>
-                <div><strong>Hướng Xử Lý:</strong> {selectedTicket.actionDirection} {selectedTicket.actionDirection === 'Xuất đổi' ? `(${selectedTicket.replacementCondition})` : ''}</div>
-                <div><strong>Tình Trạng Sửa:</strong> {selectedTicket.processingStatus}</div>
-                <div><strong>Gửi Trả Khách:</strong> {selectedTicket.customerReturnStatus}</div>
-              </div>
-
-              <div style={{ marginBottom: '16px' }}>
-                <h4 style={{ fontWeight: '700', marginBottom: '6px' }}>Diễn Giải Lỗi Hiện Trường:</h4>
-                <p style={{ padding: '12px', background: 'rgba(245, 158, 11, 0.1)', borderLeft: '3px solid var(--accent-amber)', borderRadius: '4px', fontSize: '0.9rem' }}>
-                  {selectedTicket.errorDescription}
-                </p>
-              </div>
-
-              {selectedTicket.photos && selectedTicket.photos.length > 0 && (
+      {selectedTicket && (
+        <SafePortal>
+          <div className="modal-overlay">
+            <div className="modal-content" style={{ maxWidth: '640px' }}>
+              <div className="modal-header">
                 <div>
-                  <h4 style={{ fontWeight: '700', marginBottom: '8px' }}>Hình Ảnh Linh Kiện Lỗi:</h4>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '8px' }}>
-                    {selectedTicket.photos.map((url, idx) => (
-                      <a key={idx} href={url} target="_blank" rel="noreferrer" style={{ height: '90px', borderRadius: '6px', overflow: 'hidden', display: 'block', border: '1px solid var(--border-color)' }}>
-                        <img src={url} alt="error photo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                      </a>
-                    ))}
-                  </div>
+                  <span className="badge badge-info">{selectedTicket.ticketCode}</span>
+                  <h3 style={{ fontWeight: '800', marginTop: '4px' }}>Chi Tiết Phiếu Xử Lý Máy</h3>
                 </div>
-              )}
+                <button className="btn btn-secondary btn-sm" onClick={() => setSelectedTicket(null)}>✕</button>
+              </div>
+              <div className="modal-body">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '0.85rem' }}>
+                  <div><strong>Nhà Phân Phối:</strong> {selectedTicket.nppName}</div>
+                  <div><strong>Sản Phẩm & Seri:</strong> {selectedTicket.machineModel} ({selectedTicket.serialNumber})</div>
+                  <div><strong>Kỹ Thuật Viên:</strong> {selectedTicket.technician}</div>
+                  <div><strong>Ngày Tạo:</strong> {selectedTicket.date}</div>
+                  <div><strong>Diễn Giải Lỗi:</strong> {selectedTicket.errorDescription}</div>
+                  <div><strong>Hướng Xử Lý:</strong> {selectedTicket.actionDirection}</div>
+                  <div><strong>Tình Trạng Sửa:</strong> {selectedTicket.processingStatus}</div>
+                  <div><strong>Gửi Trả Khách:</strong> {selectedTicket.customerReturnStatus}</div>
+                </div>
 
-            </div>
-            <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setSelectedTicket(null)}>Đóng</button>
+                {selectedTicket.photos && selectedTicket.photos.length > 0 && (
+                  <div style={{ marginTop: '16px', borderTop: '1px solid var(--border-color)', paddingTop: '12px' }}>
+                    <h4 style={{ fontSize: '0.85rem', fontWeight: '700', marginBottom: '8px' }}>📸 Ảnh Đính Kèm:</h4>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '8px' }}>
+                      {selectedTicket.photos.map((url, idx) => (
+                        <a key={idx} href={url} target="_blank" rel="noreferrer" style={{ height: '90px', borderRadius: '6px', overflow: 'hidden', display: 'block', border: '1px solid var(--border-color)' }}>
+                          <img src={url} alt="error photo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="modal-footer">
+                <button className="btn btn-secondary" onClick={() => setSelectedTicket(null)}>Đóng</button>
+              </div>
             </div>
           </div>
-        </div>
+        </SafePortal>
       )}
 
     </div>
