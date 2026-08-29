@@ -401,33 +401,36 @@ body:has(.modal-backdrop) .mobile-bottom-nav,
   margin: 8px auto 2px;
 }
 
-/* 3. MOBILE PORTRAIT: bottom-sheet with compact scrollable body & pinned footer */
+/* 3. MOBILE PORTRAIT: top-pinned sheet with compact scrollable body & sticky footer */
 @media (max-width: 640px) {
   .modal-overlay,
   .modal-backdrop {
-    align-items: flex-end !important;
-    padding: 0 !important;
+    align-items: flex-start !important;
+    padding-top: calc(10px + env(safe-area-inset-top, 8px)) !important;
+    padding-bottom: 0 !important;
     overflow: hidden !important;
   }
 
   .modal-content,
   .modal-container {
-    border-radius: 20px 20px 0 0 !important;
-    border-bottom: none !important;
+    border-radius: 16px 16px 16px 16px !important;
+    border-top: none !important;
     height: auto !important;
-    max-height: 90vh !important;
-    max-height: 90dvh !important;
+    max-height: 92vh !important;
+    max-height: 92dvh !important;
     max-width: 100% !important;
-    animation: slideUpSheet 0.22s cubic-bezier(0.32, 0.72, 0, 1) both !important;
+    margin-top: 0 !important;
+    animation: slideDownSheet 0.22s cubic-bezier(0.32, 0.72, 0, 1) both !important;
   }
 }
 
-/* 4. TABLET & DESKTOP: centered dialog */
+/* 4. TABLET & DESKTOP: top-pinned dialog */
 @media (min-width: 641px) {
   .modal-overlay,
   .modal-backdrop {
-    align-items: center !important;
-    padding: 24px !important;
+    align-items: flex-start !important;
+    padding-top: 40px !important;
+    padding-bottom: 24px !important;
   }
   .modal-content,
   .modal-container {
@@ -437,8 +440,9 @@ body:has(.modal-backdrop) .mobile-bottom-nav,
     min-width: 480px !important;
     max-width: 740px !important;
     height: auto !important;
-    max-height: 88vh !important;
-    max-height: 88dvh !important;
+    max-height: 86vh !important;
+    max-height: 86dvh !important;
+    margin-top: 0 !important;
     animation: fadeScale 0.22s ease both !important;
   }
   .modal-content::before,
@@ -1169,6 +1173,17 @@ body:has(.modal-backdrop) .mobile-bottom-nav,
   }
   to {
     transform: translateY(0);
+  }
+}
+
+@keyframes slideDownSheet {
+  from {
+    transform: translateY(-20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
   }
 }
 

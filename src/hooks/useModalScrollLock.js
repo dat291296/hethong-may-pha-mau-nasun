@@ -1,8 +1,8 @@
-import { useEffect } from 'react';
+import { useEffect, useLayoutEffect } from 'react';
 
 /**
  * Custom hook to lock body scrolling when a modal is open,
- * and automatically reset modal-body scroll position to top.
+ * and aggressively reset modal-body scroll position to 0 immediately.
  */
 export function useModalScrollLock(isOpen) {
   useEffect(() => {
@@ -10,17 +10,26 @@ export function useModalScrollLock(isOpen) {
       const originalOverflow = document.body.style.overflow;
       document.body.style.overflow = 'hidden';
 
-      // Reset scroll position of all modal bodies to top immediately
-      const timer = setTimeout(() => {
-        document.querySelectorAll('.modal-body').forEach(el => {
-          el.scrollTop = 0;
+      const resetScroll = () => {
+        document.querySelectorAll('.modal-body, .modal-content, .modal-container').forEach(el => {
+          if (el) el.scrollTop = 0;
         });
-      }, 30);
+      };
+
+      // Reset immediately & on animation frames
+      resetScroll();
+      requestAnimationFrame(resetScroll);
+      const t1 = setTimeout(resetScroll, 10);
+      const t2 = setTimeout(resetScroll, 50);
+      const t3 = setTimeout(resetScroll, 150);
 
       return () => {
         document.body.style.overflow = originalOverflow;
-        clearTimeout(timer);
+        clearTimeout(t1);
+        clearTimeout(t2);
+        clearTimeout(t3);
       };
     }
   }, [isOpen]);
 }
+
