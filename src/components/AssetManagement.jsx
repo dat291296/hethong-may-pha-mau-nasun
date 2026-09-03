@@ -1602,7 +1602,7 @@ export default function AssetManagement({
                             <option value="">-- Chọn máy chiết ({availDisp.length} máy) --</option>
                             {availDisp.map(d => (
                               <option key={d.id} value={d.id}>
-                                {d.model} - Seri: {d.serial} {isDeviceFree(d) ? '🟢 (Tự do trong kho)' : `🟡 (Đang gán bộ ${d.setCode || d.set_code || ''})`}
+                                [{d.id}] {d.model} — Seri: {d.serial} {isDeviceFree(d) ? '🟢 (Tự do trong kho)' : `🟡 (Đang gán bộ ${d.setCode || d.set_code || ''})`}
                               </option>
                             ))}
                           </select>
@@ -1623,7 +1623,7 @@ export default function AssetManagement({
                             <option value="">-- Chọn máy lắc ({availMix.length} máy) --</option>
                             {availMix.map(m => (
                               <option key={m.id} value={m.id}>
-                                {m.model} - Seri: {m.serial} {isDeviceFree(m) ? '🟢 (Tự do trong kho)' : `🟡 (Đang gán bộ ${m.setCode || m.set_code || ''})`}
+                                [{m.id}] {m.model} ({m.type || 'Lắc xoay'}) — Seri: {m.serial} {isDeviceFree(m) ? '🟢 (Tự do trong kho)' : `🟡 (Đang gán bộ ${m.setCode || m.set_code || ''})`}
                               </option>
                             ))}
                           </select>
@@ -1644,7 +1644,7 @@ export default function AssetManagement({
                             <option value="">-- Chọn máy tính ({availComp.length} máy) --</option>
                             {availComp.map(c => (
                               <option key={c.id} value={c.id}>
-                                {c.type} {c.os} - Seri: {c.serial || c.id} {isDeviceFree(c) ? '🟢 (Tự do trong kho)' : `🟡 (Đang gán bộ ${c.setCode || c.set_code || ''})`}
+                                [{c.id}] {c.type} ({c.os || 'Win'} | {c.specs || 'N/A'}) — Seri: {c.serial || 'Không seri'} {isDeviceFree(c) ? '🟢 (Tự do trong kho)' : `🟡 (Đang gán bộ ${c.setCode || c.set_code || ''})`}
                               </option>
                             ))}
                           </select>
@@ -1665,7 +1665,7 @@ export default function AssetManagement({
                             <option value="">-- Chọn máy in QL700 ({availPrn.length} máy) --</option>
                             {availPrn.map(p => (
                               <option key={p.id} value={p.id}>
-                                {p.model} - Seri: {p.serial} {isDeviceFree(p) ? '🟢 (Tự do trong kho)' : `🟡 (Đang gán bộ ${p.setCode || p.set_code || ''})`}
+                                [{p.id}] {p.model} — Seri: {p.serial} {isDeviceFree(p) ? '🟢 (Tự do trong kho)' : `🟡 (Đang gán bộ ${p.setCode || p.set_code || ''})`}
                               </option>
                             ))}
                           </select>
