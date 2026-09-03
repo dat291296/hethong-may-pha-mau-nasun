@@ -97,6 +97,8 @@ export default function AssetManagement({
   const [showAssembleModal, setShowAssembleModal] = useState(false);
   const [showScanSerialModal, setShowScanSerialModal] = useState(false);
   const [scanTargetField, setScanTargetField] = useState('add');
+  const [nppSearchTerm, setNppSearchTerm] = useState('');
+  const [editNppSearchTerm, setEditNppSearchTerm] = useState('');
 
   // Reset pagination on tab or filter change
   useEffect(() => {
@@ -161,6 +163,7 @@ export default function AssetManagement({
   const handleOpenAssembleModal = () => {
     const defaultTech = (user && (user.role === 'qc' || user.role === 'admin')) ? (user.name || user.full_name) : (qcUsers[0]?.name || '');
     const autoCode = generateNextSetCode(systemSets);
+    setNppSearchTerm('');
     setNewSetData({
       setCode: autoCode,
       dispenserId: '',
@@ -276,6 +279,7 @@ export default function AssetManagement({
 
   const handleOpenEditSet = (set) => {
     const targetNpp = npps.find(n => n.id === set.nppId);
+    setEditNppSearchTerm('');
     setEditingSet(set);
     setEditSetFormData({
       setCode: set.setCode || set.set_code || '',
@@ -1517,7 +1521,25 @@ export default function AssetManagement({
                       />
                     </div>
                     <div className="form-group">
-                      <label className="form-label">🏢 Chọn Nhà Phân Phối (Mục NPP)</label>
+                      <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span>🏢 Chọn Nhà Phân Phối (Mục NPP)</span>
+                        {nppSearchTerm && (
+                          <span 
+                            style={{ color: '#ef4444', fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline' }}
+                            onClick={() => setNppSearchTerm('')}
+                          >
+                            ✕ Xóa lọc
+                          </span>
+                        )}
+                      </label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="🔍 Tìm tên hoặc mã NPP..."
+                        value={nppSearchTerm}
+                        onChange={e => setNppSearchTerm(e.target.value)}
+                        style={{ marginBottom: '6px', fontSize: '0.8rem', padding: '4px 8px' }}
+                      />
                       <select
                         className="form-select"
                         value={newSetData.nppId || ''}
@@ -1536,11 +1558,23 @@ export default function AssetManagement({
                         }}
                       >
                         <option value="">-- Kho Tổng Trung Tâm (Chưa chọn NPP) --</option>
-                        {npps.map(npp => (
-                          <option key={npp.id} value={npp.id}>
-                            {npp.name} ({npp.code || npp.id}) — {npp.province || npp.region || 'TQ'} {npp.salesperson ? `(KD: ${npp.salesperson})` : ''}
-                          </option>
-                        ))}
+                        {npps
+                          .filter(npp => {
+                            if (!nppSearchTerm.trim()) return true;
+                            const term = nppSearchTerm.toLowerCase();
+                            return (
+                              (npp.name && npp.name.toLowerCase().includes(term)) ||
+                              (npp.code && npp.code.toLowerCase().includes(term)) ||
+                              (npp.id && npp.id.toLowerCase().includes(term)) ||
+                              (npp.province && npp.province.toLowerCase().includes(term)) ||
+                              (npp.salesperson && npp.salesperson.toLowerCase().includes(term))
+                            );
+                          })
+                          .map(npp => (
+                            <option key={npp.id} value={npp.id}>
+                              {npp.name} ({npp.code || npp.id}) — {npp.province || npp.region || 'TQ'} {npp.salesperson ? `(KD: ${npp.salesperson})` : ''}
+                            </option>
+                          ))}
                       </select>
                     </div>
                   </div>
@@ -1580,10 +1614,21 @@ export default function AssetManagement({
                       return !dev.isAssigned && (!dev.setCode || dev.setCode === '');
                     };
 
-                    const availDisp = dispensers.filter(d => isDeviceFree(d) || d.id === newSetData.dispenserId);
-                    const availMix = mixers.filter(m => isDeviceFree(m) || m.id === newSetData.mixerId);
-                    const availComp = computers.filter(c => isDeviceFree(c) || c.id === newSetData.computerId);
-                    const availPrn = printers.filter(p => isDeviceFree(p) || p.id === newSetData.printerId);
+                    const availDisp = dispensers
+                      .filter(d => isDeviceFree(d) || d.id === newSetData.dispenserId)
+                      .sort((a, b) => naturalSortCode(a, b, 'id'));
+
+                    const availMix = mixers
+                      .filter(m => isDeviceFree(m) || m.id === newSetData.mixerId)
+                      .sort((a, b) => naturalSortCode(a, b, 'id'));
+
+                    const availComp = computers
+                      .filter(c => isDeviceFree(c) || c.id === newSetData.computerId)
+                      .sort((a, b) => naturalSortCode(a, b, 'id'));
+
+                    const availPrn = printers
+                      .filter(p => isDeviceFree(p) || p.id === newSetData.printerId)
+                      .sort((a, b) => naturalSortCode(a, b, 'id'));
 
                     return (
                       <>
@@ -1710,7 +1755,25 @@ export default function AssetManagement({
                       />
                     </div>
                     <div className="form-group">
-                      <label className="form-label">🏢 Chọn Nhà Phân Phối Gán Cho</label>
+                      <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span>🏢 Chọn Nhà Phân Phối Gán Cho</span>
+                        {editNppSearchTerm && (
+                          <span 
+                            style={{ color: '#ef4444', fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline' }}
+                            onClick={() => setEditNppSearchTerm('')}
+                          >
+                            ✕ Xóa lọc
+                          </span>
+                        )}
+                      </label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="🔍 Tìm tên hoặc mã NPP..."
+                        value={editNppSearchTerm}
+                        onChange={e => setEditNppSearchTerm(e.target.value)}
+                        style={{ marginBottom: '6px', fontSize: '0.8rem', padding: '4px 8px' }}
+                      />
                       <select
                         className="form-select"
                         value={editSetFormData.nppId || ''}
@@ -1739,11 +1802,23 @@ export default function AssetManagement({
                         }}
                       >
                         <option value="">-- Kho Trung Tâm (Chưa gán NPP) --</option>
-                        {npps.map(npp => (
-                          <option key={npp.id} value={npp.id}>
-                            {npp.name} ({npp.code || npp.id}) — {npp.province || npp.region || 'TQ'}
-                          </option>
-                        ))}
+                        {npps
+                          .filter(npp => {
+                            if (!editNppSearchTerm.trim()) return true;
+                            const term = editNppSearchTerm.toLowerCase();
+                            return (
+                              (npp.name && npp.name.toLowerCase().includes(term)) ||
+                              (npp.code && npp.code.toLowerCase().includes(term)) ||
+                              (npp.id && npp.id.toLowerCase().includes(term)) ||
+                              (npp.province && npp.province.toLowerCase().includes(term)) ||
+                              (npp.salesperson && npp.salesperson.toLowerCase().includes(term))
+                            );
+                          })
+                          .map(npp => (
+                            <option key={npp.id} value={npp.id}>
+                              {npp.name} ({npp.code || npp.id}) — {npp.province || npp.region || 'TQ'}
+                            </option>
+                          ))}
                       </select>
                     </div>
                     <div className="form-group">
