@@ -298,29 +298,49 @@ export function useAssets() {
   }, [fetchAssets]);
 
   // ── Update system set ──────────────────────────────────────────────────────
-  const updateSystemSet = useCallback(async (setCode, updates) => {
+  const updateSystemSet = useCallback(async (oldSetCode, updates) => {
+    const newSetCode = (updates.setCode || updates.set_code || oldSetCode).trim();
+    const isCodeChanged = newSetCode !== oldSetCode;
+
     setSystemSets(prev => {
-      const updated = prev.map(s => s.setCode === setCode ? { ...s, ...updates } : s);
+      const updated = prev.map(s => (s.setCode === oldSetCode || s.set_code === oldSetCode) ? { ...s, ...updates, setCode: newSetCode, set_code: newSetCode } : s);
       cacheOfflineData('system_sets', updated);
       return updated;
     });
 
-    const dbPayload = mapSystemSetToDb({ ...updates, setCode });
+    if (isCodeChanged) {
+      const syncDeviceSetCode = (setter) => {
+        setter(prev => prev.map(d => (d.setCode === oldSetCode || d.set_code === oldSetCode) ? { ...d, setCode: newSetCode, set_code: newSetCode } : d));
+      };
+      syncDeviceSetCode(setDispensers);
+      syncDeviceSetCode(setMixers);
+      syncDeviceSetCode(setComputers);
+      syncDeviceSetCode(setPrinters);
+    }
+
+    const dbPayload = mapSystemSetToDb({ ...updates, set_code: newSetCode, setCode: newSetCode });
 
     if (isSupabaseConfigured && navigator.onLine) {
       try {
         const { error } = await safeQuery(
-          sb => sb.from('system_sets').update(dbPayload).eq('set_code', setCode),
+          sb => sb.from('system_sets').update(dbPayload).eq('set_code', oldSetCode),
           'updateSystemSet'
         );
         if (error) throw error;
+
+        if (isCodeChanged) {
+          await safeQuery(sb => sb.from('dispensers').update({ set_code: newSetCode }).eq('set_code', oldSetCode), 'updateDeviceSetCode');
+          await safeQuery(sb => sb.from('mixers').update({ set_code: newSetCode }).eq('set_code', oldSetCode), 'updateDeviceSetCode');
+          await safeQuery(sb => sb.from('computers').update({ set_code: newSetCode }).eq('set_code', oldSetCode), 'updateDeviceSetCode');
+          await safeQuery(sb => sb.from('printers').update({ set_code: newSetCode }).eq('set_code', oldSetCode), 'updateDeviceSetCode');
+        }
       } catch (err) {
         console.warn('[Offline] Failed online updateSystemSet. Queueing action.', err);
-        enqueueOfflineAction('UPDATE_SYSTEM_SET', dbUpdates);
+        enqueueOfflineAction('UPDATE_SYSTEM_SET', { oldSetCode, newSetCode, dbPayload });
       }
     } else if (isSupabaseConfigured && !navigator.onLine) {
       console.log('[Offline] Network down. Enqueueing updateSystemSet.');
-      enqueueOfflineAction('UPDATE_SYSTEM_SET', dbUpdates);
+      enqueueOfflineAction('UPDATE_SYSTEM_SET', { oldSetCode, newSetCode, dbPayload });
     }
   }, []);
 
@@ -570,4 +590,23 @@ function mapSystemSetToDb(obj) {
   delete dbObj.installationPhotos;
 
   return dbObj;
+}
+
+export function generateNextSetCode(systemSets = []) {
+  const currentYear = new Date().getFullYear();
+  let maxSeq = 0;
+
+  systemSets.forEach(s => {
+    const code = s.setCode || s.set_code || '';
+    const match = code.match(/SET(?:-\d+)?-(\d+)/i) || code.match(/(\d+)/);
+    if (match) {
+      const num = parseInt(match[1], 10);
+      if (!isNaN(num) && num > maxSeq) {
+        maxSeq = num;
+      }
+    }
+  });
+
+  const nextSeq = String(maxSeq + 1).padStart(3, '0');
+  return `SET-${currentYear}-${nextSeq}`;
 }

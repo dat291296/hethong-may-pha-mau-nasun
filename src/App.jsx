@@ -26,7 +26,7 @@ import {
 } from './data/mockData';
 
 import { useNpps } from './hooks/useNpps.js';
-import { useAssets } from './hooks/useAssets.js';
+import { useAssets, generateNextSetCode } from './hooks/useAssets.js';
 import { useRepairs } from './hooks/useRepairs.js';
 import { useAuditLogs } from './hooks/useAuditLogs.js';
 import { useLockedMonths } from './hooks/useLockedMonths.js';
@@ -287,7 +287,7 @@ export default function App() {
     const pc = computers.find(c => c.id === newCombo.computerId);
     const prn = printers.find(p => p.id === newCombo.printerId);
 
-    const setCode = `SET-2026-00${systemSets.length + 1}`;
+    const setCode = newCombo.setCode?.trim() || generateNextSetCode(systemSets);
 
     const newSetObj = {
       set_code: setCode,

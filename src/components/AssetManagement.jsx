@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import SafePortal from './SafePortal.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { supabase, isSupabaseConfigured } from '../lib/supabase.js';
+import { generateNextSetCode } from '../hooks/useAssets.js';
 import { 
   Cpu, 
   Flame, 
@@ -159,7 +160,9 @@ export default function AssetManagement({
 
   const handleOpenAssembleModal = () => {
     const defaultTech = (user && (user.role === 'qc' || user.role === 'admin')) ? (user.name || user.full_name) : (qcUsers[0]?.name || '');
+    const autoCode = generateNextSetCode(systemSets);
     setNewSetData({
+      setCode: autoCode,
       dispenserId: '',
       mixerId: '',
       computerId: '',
@@ -275,6 +278,7 @@ export default function AssetManagement({
     const targetNpp = npps.find(n => n.id === set.nppId);
     setEditingSet(set);
     setEditSetFormData({
+      setCode: set.setCode || set.set_code || '',
       nppId: set.nppId || '',
       nppName: set.nppName || '',
       region: set.region || '',
@@ -1477,33 +1481,46 @@ export default function AssetManagement({
                     💡 Quy chuẩn 1 Bộ Máy Pha Màu bao gồm: 1 Máy Chiết + 1 Máy Lắc + 1 Máy Tính + 1 Máy In QL700. (Ổn áp sẽ ghi nhận thêm khi lắp đặt tại NPP).
                   </div>
 
-                  {/* NPP Selector */}
-                  <div className="form-group">
-                    <label className="form-label">Chọn Nhà Phân Phối (Lấy dữ liệu từ Mục NPP)</label>
-                    <select
-                      className="form-select"
-                      value={newSetData.nppId || ''}
-                      onChange={e => {
-                        const selectedId = e.target.value;
-                        const targetNpp = npps.find(n => n.id === selectedId);
-                        setNewSetData({
-                          ...newSetData,
-                          nppId: selectedId,
-                          nppName: targetNpp ? targetNpp.name : 'Kho Tổng Trung Tâm',
-                          region: targetNpp ? (targetNpp.region || '') : '',
-                          province: targetNpp ? (targetNpp.province || '') : '',
-                          salesperson: targetNpp ? (targetNpp.salesperson || '') : '',
-                          status: targetNpp ? 'DA_LAP_DAT' : 'TRONG_KHO'
-                        });
-                      }}
-                    >
-                      <option value="">-- Kho Tổng Trung Tâm (Chưa chọn NPP) --</option>
-                      {npps.map(npp => (
-                        <option key={npp.id} value={npp.id}>
-                          {npp.name} ({npp.code || npp.id}) — {npp.province || npp.region || 'TQ'} {npp.salesperson ? `(KD: ${npp.salesperson})` : ''}
-                        </option>
-                      ))}
-                    </select>
+                  {/* NPP Selector & Set Code */}
+                  <div className="responsive-form-grid" style={{ marginBottom: '12px' }}>
+                    <div className="form-group">
+                      <label className="form-label">🏷️ Mã Bộ Máy (Tự động tăng dần *)</label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        required
+                        placeholder="VD: SET-2026-003"
+                        value={newSetData.setCode || ''}
+                        onChange={e => setNewSetData({ ...newSetData, setCode: e.target.value })}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">🏢 Chọn Nhà Phân Phối (Mục NPP)</label>
+                      <select
+                        className="form-select"
+                        value={newSetData.nppId || ''}
+                        onChange={e => {
+                          const selectedId = e.target.value;
+                          const targetNpp = npps.find(n => n.id === selectedId);
+                          setNewSetData({
+                            ...newSetData,
+                            nppId: selectedId,
+                            nppName: targetNpp ? targetNpp.name : 'Kho Tổng Trung Tâm',
+                            region: targetNpp ? (targetNpp.region || '') : '',
+                            province: targetNpp ? (targetNpp.province || '') : '',
+                            salesperson: targetNpp ? (targetNpp.salesperson || '') : '',
+                            status: targetNpp ? 'DA_LAP_DAT' : 'TRONG_KHO'
+                          });
+                        }}
+                      >
+                        <option value="">-- Kho Tổng Trung Tâm (Chưa chọn NPP) --</option>
+                        {npps.map(npp => (
+                          <option key={npp.id} value={npp.id}>
+                            {npp.name} ({npp.code || npp.id}) — {npp.province || npp.region || 'TQ'} {npp.salesperson ? `(KD: ${npp.salesperson})` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
@@ -1658,7 +1675,18 @@ export default function AssetManagement({
                 <div className="modal-body" ref={el => { if (el) el.scrollTop = 0; }}>
                   
                   {/* PRIMARY EDIT FIELDS - TOP OF FORM */}
-                  <div className="responsive-form-grid">
+                  <div className="responsive-form-grid" style={{ marginBottom: '12px' }}>
+                    <div className="form-group">
+                      <label className="form-label">🏷️ Mã Bộ Máy *</label>
+                      <input 
+                        type="text" 
+                        className="form-input" 
+                        required
+                        placeholder="VD: SET-2026-002"
+                        value={editSetFormData.setCode || ''} 
+                        onChange={e => setEditSetFormData({ ...editSetFormData, setCode: e.target.value })} 
+                      />
+                    </div>
                     <div className="form-group">
                       <label className="form-label">🏢 Chọn Nhà Phân Phối Gán Cho</label>
                       <select
@@ -1696,7 +1724,6 @@ export default function AssetManagement({
                         ))}
                       </select>
                     </div>
-
                     <div className="form-group">
                       <label className="form-label">⚡ Trạng Thái Bộ Máy</label>
                       <select 
