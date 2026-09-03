@@ -710,7 +710,7 @@ export default function AssetManagement({
                 </tr>
               </thead>
               <tbody>
-                {sortedDispensers.map(item => (
+                {getPaginatedList(sortedDispensers).map(item => (
                   <tr key={item.id}>
                     <td>{item.id}</td>
                     <td style={{ fontWeight: '700' }}>{item.model}</td>
@@ -754,7 +754,7 @@ export default function AssetManagement({
 
           {/* Mobile View Cards */}
           <div className="mobile-only mobile-card-list">
-            {sortedDispensers.map(item => (
+            {getPaginatedList(sortedDispensers).map(item => (
               <div className="mobile-card" key={item.id}>
                 <div className="mobile-card-header">
                   <div>
@@ -796,6 +796,9 @@ export default function AssetManagement({
               </div>
             ))}
           </div>
+
+          {/* Pagination Footer */}
+          {renderPaginationBar(sortedDispensers.length)}
         </div>
       )}
 
@@ -818,7 +821,7 @@ export default function AssetManagement({
                 </tr>
               </thead>
               <tbody>
-                {sortedMixers.map(item => (
+                {getPaginatedList(sortedMixers).map(item => (
                   <tr key={item.id}>
                     <td>{item.id}</td>
                     <td style={{ fontWeight: '700' }}>{item.model}</td>
@@ -857,7 +860,7 @@ export default function AssetManagement({
 
           {/* Mobile View Cards */}
           <div className="mobile-only mobile-card-list">
-            {sortedMixers.map(item => (
+            {getPaginatedList(sortedMixers).map(item => (
               <div className="mobile-card" key={item.id}>
                 <div className="mobile-card-header">
                   <div>
@@ -900,6 +903,9 @@ export default function AssetManagement({
               </div>
             ))}
           </div>
+
+          {/* Pagination Footer */}
+          {renderPaginationBar(sortedMixers.length)}
         </div>
       )}
 
@@ -927,7 +933,7 @@ export default function AssetManagement({
                 </tr>
               </thead>
               <tbody>
-                {sortedComputers.map(item => (
+                {getPaginatedList(sortedComputers).map(item => (
                   <tr key={item.id}>
                     <td>{item.id}</td>
                     <td style={{ fontWeight: '700' }}>{item.type}</td>
@@ -974,7 +980,7 @@ export default function AssetManagement({
 
           {/* Mobile View Cards */}
           <div className="mobile-only mobile-card-list">
-            {sortedComputers.map(item => (
+            {getPaginatedList(sortedComputers).map(item => (
               <div className="mobile-card" key={item.id}>
                 <div className="mobile-card-header">
                   <div>
@@ -1027,6 +1033,9 @@ export default function AssetManagement({
               </div>
             ))}
           </div>
+
+          {/* Pagination Footer */}
+          {renderPaginationBar(sortedComputers.length)}
         </div>
       )}
 
@@ -1049,7 +1058,7 @@ export default function AssetManagement({
                 </tr>
               </thead>
               <tbody>
-                {sortedPrinters.map(item => (
+                {getPaginatedList(sortedPrinters).map(item => (
                   <tr key={item.id}>
                     <td>{item.id}</td>
                     <td style={{ fontWeight: '700' }}>{item.model}</td>
@@ -1088,7 +1097,7 @@ export default function AssetManagement({
 
           {/* Mobile View Cards */}
           <div className="mobile-only mobile-card-list">
-            {sortedPrinters.map(item => (
+            {getPaginatedList(sortedPrinters).map(item => (
               <div className="mobile-card" key={item.id}>
                 <div className="mobile-card-header">
                   <div>
@@ -1131,6 +1140,9 @@ export default function AssetManagement({
               </div>
             ))}
           </div>
+
+          {/* Pagination Footer */}
+          {renderPaginationBar(sortedPrinters.length)}
         </div>
       )}
 

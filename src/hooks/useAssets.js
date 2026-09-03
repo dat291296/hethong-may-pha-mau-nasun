@@ -341,6 +341,7 @@ export function useAssets() {
           await safeQuery(sb => sb.from('computers').update({ set_code: newSetCode }).eq('set_code', oldSetCode), 'updateDeviceSetCode');
           await safeQuery(sb => sb.from('printers').update({ set_code: newSetCode }).eq('set_code', oldSetCode), 'updateDeviceSetCode');
         }
+        await fetchAssets();
       } catch (err) {
         console.warn('[Offline] Failed online updateSystemSet. Queueing action.', err);
         enqueueOfflineAction('UPDATE_SYSTEM_SET', { oldSetCode, newSetCode, dbPayload });
@@ -349,7 +350,7 @@ export function useAssets() {
       console.log('[Offline] Network down. Enqueueing updateSystemSet.');
       enqueueOfflineAction('UPDATE_SYSTEM_SET', { oldSetCode, newSetCode, dbPayload });
     }
-  }, []);
+  }, [fetchAssets]);
 
   // ── Delete system set ──────────────────────────────────────────────────────
   const deleteSystemSet = useCallback(async (setCode) => {
@@ -533,94 +534,42 @@ function sanitizeDeviceForDb(category, data, tempId) {
 
 function mapSystemSetToDb(obj) {
   const dbObj = {};
-  const mapping = {
-    setCode: 'set_code',
-    set_code: 'set_code',
-    nppId: 'npp_id',
-    npp_id: 'npp_id',
-    nppName: 'npp_name',
-    npp_name: 'npp_name',
-    region: 'region',
-    province: 'province',
-    status: 'status',
-    dispenserId: 'dispenser_id',
-    dispenser_id: 'dispenser_id',
-    dispenserModel: 'dispenser_model',
-    dispenser_model: 'dispenser_model',
-    dispenserSerial: 'dispenser_serial',
-    dispenser_serial: 'dispenser_serial',
-    mixerId: 'mixer_id',
-    mixer_id: 'mixer_id',
-    mixerModel: 'mixer_model',
-    mixer_model: 'mixer_model',
-    mixerSerial: 'mixer_serial',
-    mixer_serial: 'mixer_serial',
-    computerId: 'computer_id',
-    computer_id: 'computer_id',
-    computerType: 'computer_type',
-    computer_type: 'computer_type',
-    computerSerial: 'computer_serial',
-    computer_serial: 'computer_serial',
-    printerId: 'printer_id',
-    printer_id: 'printer_id',
-    printerSerial: 'printer_serial',
-    printer_serial: 'printer_serial',
-    printerModel: 'printer_model',
-    printer_model: 'printer_model',
-    stabilizer: 'stabilizer',
-    installDate: 'install_date',
-    installedDate: 'install_date',
-    install_date: 'install_date',
-    lastMaintenanceDate: 'last_maintenance_date',
-    last_maintenance_date: 'last_maintenance_date',
-    nextMaintenanceDue: 'next_maintenance_due',
-    next_maintenance_due: 'next_maintenance_due',
-    technician: 'technician',
-    salesperson: 'salesperson',
-    sales_person: 'salesperson',
-    notes: 'notes',
-    tintingSoftware: 'tinting_software',
-    tinting_software: 'tinting_software',
-    softwareVersion: 'software_version',
-    software_version: 'software_version',
-    agentStatus: 'agent_status',
-    agent_status: 'agent_status',
-    installationPhotos: 'installation_photos',
-    installation_photos: 'installation_photos'
-  };
 
-  for (const k in obj) {
-    if (mapping[k]) {
-      dbObj[mapping[k]] = obj[k];
-    } else {
-      dbObj[k] = obj[k];
-    }
-  }
+  if (obj.setCode || obj.set_code) dbObj.set_code = obj.setCode || obj.set_code;
+  if ('nppId' in obj || 'npp_id' in obj) dbObj.npp_id = obj.nppId ?? obj.npp_id ?? null;
+  if ('nppName' in obj || 'npp_name' in obj) dbObj.npp_name = obj.nppName ?? obj.npp_name ?? '';
+  if ('region' in obj) dbObj.region = obj.region ?? '';
+  if ('province' in obj) dbObj.province = obj.province ?? '';
+  if ('status' in obj) dbObj.status = obj.status;
 
-  delete dbObj.setCode;
-  delete dbObj.nppId;
-  delete dbObj.nppName;
-  delete dbObj.dispenserId;
-  delete dbObj.dispenserModel;
-  delete dbObj.dispenserSerial;
-  delete dbObj.mixerId;
-  delete dbObj.mixerModel;
-  delete dbObj.mixerSerial;
-  delete dbObj.computerId;
-  delete dbObj.computerType;
-  delete dbObj.computerSerial;
-  delete dbObj.printerId;
-  delete dbObj.printerModel;
-  delete dbObj.printer_model;
-  delete dbObj.printerSerial;
-  delete dbObj.installDate;
-  delete dbObj.installedDate;
-  delete dbObj.lastMaintenanceDate;
-  delete dbObj.nextMaintenanceDue;
-  delete dbObj.tintingSoftware;
-  delete dbObj.softwareVersion;
-  delete dbObj.agentStatus;
-  delete dbObj.installationPhotos;
+  if ('dispenserId' in obj || 'dispenser_id' in obj) dbObj.dispenser_id = obj.dispenserId ?? obj.dispenser_id ?? null;
+  if ('dispenserModel' in obj || 'dispenser_model' in obj) dbObj.dispenser_model = obj.dispenserModel ?? obj.dispenser_model ?? '';
+  if ('dispenserSerial' in obj || 'dispenser_serial' in obj) dbObj.dispenser_serial = obj.dispenserSerial ?? obj.dispenser_serial ?? '';
+
+  if ('mixerId' in obj || 'mixer_id' in obj) dbObj.mixer_id = obj.mixerId ?? obj.mixer_id ?? null;
+  if ('mixerModel' in obj || 'mixer_model' in obj) dbObj.mixer_model = obj.mixerModel ?? obj.mixer_model ?? '';
+  if ('mixerSerial' in obj || 'mixer_serial' in obj) dbObj.mixer_serial = obj.mixerSerial ?? obj.mixer_serial ?? '';
+
+  if ('computerId' in obj || 'computer_id' in obj) dbObj.computer_id = obj.computerId ?? obj.computer_id ?? null;
+  if ('computerType' in obj || 'computer_type' in obj || 'pcType' in obj) dbObj.computer_type = obj.computerType ?? obj.computer_type ?? obj.pcType ?? '';
+  if ('computerSerial' in obj || 'computer_serial' in obj || 'pcSerial' in obj) dbObj.computer_serial = obj.computerSerial ?? obj.computer_serial ?? obj.pcSerial ?? '';
+
+  if ('printerId' in obj || 'printer_id' in obj) dbObj.printer_id = obj.printerId ?? obj.printer_id ?? null;
+  if ('printerSerial' in obj || 'printer_serial' in obj) dbObj.printer_serial = obj.printerSerial ?? obj.printer_serial ?? '';
+
+  if ('tintingSoftware' in obj || 'tinting_software' in obj) dbObj.tinting_software = obj.tintingSoftware ?? obj.tinting_software ?? '';
+  if ('softwareVersion' in obj || 'software_version' in obj) dbObj.software_version = obj.softwareVersion ?? obj.software_version ?? '';
+  if ('agentStatus' in obj || 'agent_status' in obj) dbObj.agent_status = obj.agentStatus ?? obj.agent_status ?? 'Offline';
+
+  if ('installDate' in obj || 'installedDate' in obj || 'install_date' in obj) dbObj.install_date = obj.installDate ?? obj.installedDate ?? obj.install_date ?? null;
+  if ('lastMaintenanceDate' in obj || 'last_maintenance_date' in obj) dbObj.last_maintenance_date = obj.lastMaintenanceDate ?? obj.last_maintenance_date ?? null;
+  if ('nextMaintenanceDue' in obj || 'next_maintenance_due' in obj) dbObj.next_maintenance_due = obj.nextMaintenanceDue ?? obj.next_maintenance_due ?? null;
+
+  if ('technician' in obj) dbObj.technician = obj.technician ?? '';
+  if ('salesperson' in obj || 'sales_person' in obj) dbObj.salesperson = obj.salesperson ?? obj.sales_person ?? '';
+  if ('stabilizer' in obj) dbObj.stabilizer = obj.stabilizer ?? '';
+  if ('notes' in obj) dbObj.notes = obj.notes ?? '';
+  if ('installationPhotos' in obj || 'installation_photos' in obj) dbObj.installation_photos = obj.installationPhotos ?? obj.installation_photos ?? [];
 
   return dbObj;
 }
