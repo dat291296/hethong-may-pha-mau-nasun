@@ -158,19 +158,26 @@ export function useAssets() {
   // ── Generic edit device ────────────────────────────────────────────────────
   const editDevice = useCallback(async (category, id, updates) => {
     const tableMap = {
-      dispensers: { setter: setDispensers, cacheKey: 'dispensers' },
-      mixers:     { setter: setMixers,     cacheKey: 'mixers' },
-      computers:  { setter: setComputers,  cacheKey: 'computers' },
-      printers:   { setter: setPrinters,   cacheKey: 'printers' },
+      dispensers: { setter: setDispensers, cacheKey: 'dispensers', table: 'dispensers', singular: 'dispenser' },
+      mixers:     { setter: setMixers,     cacheKey: 'mixers',     table: 'mixers',     singular: 'mixer' },
+      computers:  { setter: setComputers,  cacheKey: 'computers',  table: 'computers',  singular: 'computer' },
+      printers:   { setter: setPrinters,   cacheKey: 'printers',   table: 'printers',   singular: 'printer' },
+      dispenser:  { setter: setDispensers, cacheKey: 'dispensers', table: 'dispensers', singular: 'dispenser' },
+      mixer:      { setter: setMixers,     cacheKey: 'mixers',     table: 'mixers',     singular: 'mixer' },
+      computer:   { setter: setComputers,  cacheKey: 'computers',  table: 'computers',  singular: 'computer' },
+      printer:    { setter: setPrinters,   cacheKey: 'printers',   table: 'printers',   singular: 'printer' },
     };
 
-    const dbUpdates = mapDeviceToDb({ ...updates, id });
+    const cfg = tableMap[category];
+    const targetTable = cfg ? cfg.table : category;
+    const singularCat = cfg ? cfg.singular : category;
+
+    const dbUpdates = mapDeviceToDb({ ...updates, id }, singularCat);
     const appUpdates = { ...updates };
 
     if ('is_assigned' in updates) appUpdates.isAssigned = updates.is_assigned;
     if ('set_code' in updates) appUpdates.setCode = updates.set_code;
 
-    const cfg = tableMap[category];
     if (cfg) {
       cfg.setter(prev => {
         const updated = prev.map(d => d.id === id ? { ...d, ...appUpdates } : d);
@@ -182,17 +189,17 @@ export function useAssets() {
     if (isSupabaseConfigured && navigator.onLine) {
       try {
         const { error } = await safeQuery(
-          sb => sb.from(category).update(dbUpdates).eq('id', id),
-          `editDevice:${category}`
+          sb => sb.from(targetTable).update(dbUpdates).eq('id', id),
+          `editDevice:${targetTable}`
         );
         if (error) throw error;
       } catch (err) {
-        console.warn(`[Offline] Failed online editDevice for ${category}. Queueing action.`, err);
-        enqueueOfflineAction('EDIT_DEVICE', dbUpdates, category);
+        console.warn(`[Offline] Failed online editDevice for ${targetTable}. Queueing action.`, err);
+        enqueueOfflineAction('EDIT_DEVICE', dbUpdates, targetTable);
       }
     } else if (isSupabaseConfigured && !navigator.onLine) {
-      console.log(`[Offline] Network down. Enqueueing editDevice for ${category}.`);
-      enqueueOfflineAction('EDIT_DEVICE', dbUpdates, category);
+      console.log(`[Offline] Network down. Enqueueing editDevice for ${targetTable}.`);
+      enqueueOfflineAction('EDIT_DEVICE', dbUpdates, targetTable);
     }
   }, []);
 
@@ -429,27 +436,53 @@ function mapDbToSystemSet(row) {
 }
 
 // ─── App → DB Field Mappers (Clean snake_case for Supabase) ────────────────────
-function mapDeviceToDb(obj) {
+function mapDeviceToDb(obj, category) {
   const dbObj = {};
-  const mapping = {
-    isAssigned: 'is_assigned',
-    setCode: 'set_code',
-    hasStabilizer: 'has_stabilizer',
-    stabilizerBrand: 'stabilizer_brand',
-    is_assigned: 'is_assigned',
-    set_code: 'set_code'
-  };
-  for (const k in obj) {
-    if (mapping[k]) {
-      dbObj[mapping[k]] = obj[k];
-    } else {
+  const cat = (category || '').toLowerCase();
+
+  // Basic identification & PK
+  if (obj.id !== undefined) dbObj.id = obj.id;
+  if (obj.serial !== undefined && obj.serial !== '') dbObj.serial = obj.serial;
+
+  // Assignment status & system set link
+  if (obj.isAssigned !== undefined || obj.is_assigned !== undefined) {
+    dbObj.is_assigned = Boolean(obj.isAssigned ?? obj.is_assigned);
+  }
+  if (obj.setCode !== undefined || obj.set_code !== undefined) {
+    dbObj.set_code = obj.setCode ?? obj.set_code ?? null;
+  }
+
+  // Category specific allowed fields (STRICT SCHEMA SANITIZATION)
+  if (cat === 'computer' || cat === 'computers') {
+    if (obj.type !== undefined) dbObj.type = obj.type;
+    if (obj.os !== undefined) dbObj.os = obj.os;
+    if (obj.specs !== undefined) dbObj.specs = obj.specs;
+    if (obj.network !== undefined) dbObj.network = obj.network;
+    if (obj.stabilizer !== undefined) dbObj.stabilizer = obj.stabilizer;
+  } else if (cat === 'dispenser' || cat === 'dispensers') {
+    if (obj.model !== undefined) dbObj.model = obj.model;
+    if (obj.status !== undefined) dbObj.status = obj.status;
+  } else if (cat === 'mixer' || cat === 'mixers') {
+    if (obj.model !== undefined) dbObj.model = obj.model;
+    if (obj.type !== undefined) dbObj.type = obj.type;
+    if (obj.status !== undefined) dbObj.status = obj.status;
+  } else if (cat === 'printer' || cat === 'printers') {
+    if (obj.model !== undefined) dbObj.model = obj.model;
+    if (obj.connection !== undefined) dbObj.connection = obj.connection;
+    if (obj.status !== undefined) dbObj.status = obj.status;
+  } else {
+    // Fallback if category not specified: copy valid properties, delete camelCase
+    for (const k in obj) {
       dbObj[k] = obj[k];
     }
+    if (obj.isAssigned !== undefined) dbObj.is_assigned = obj.isAssigned;
+    if (obj.setCode !== undefined) dbObj.set_code = obj.setCode;
+    delete dbObj.isAssigned;
+    delete dbObj.setCode;
+    delete dbObj.hasStabilizer;
+    delete dbObj.stabilizerBrand;
   }
-  delete dbObj.isAssigned;
-  delete dbObj.setCode;
-  delete dbObj.hasStabilizer;
-  delete dbObj.stabilizerBrand;
+
   return dbObj;
 }
 

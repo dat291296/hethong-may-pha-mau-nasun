@@ -1409,6 +1409,16 @@ export default function AssetManagement({
                           <option value="Không có mạng">Không có mạng</option>
                         </select>
                       </div>
+                      <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                        <label className="form-label">💻 Cấu Hình Chi Tiết (Specs: CPU / RAM / SSD)</label>
+                        <input 
+                          type="text" 
+                          className="form-input" 
+                          placeholder="VD: Core i5 / 16GB RAM / 512GB SSD" 
+                          value={editFormData.specs || ''} 
+                          onChange={e => setEditFormData({ ...editFormData, specs: e.target.value })} 
+                        />
+                      </div>
                     </div>
                   )}
 
