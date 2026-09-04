@@ -2,7 +2,7 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "kythuat",
   "account_id": "21ff310b4d7bd6a53a9b2f66d219c08e",
-  "compatibility_date": "2026-07-28",
+  "compatibility_date": "2024-09-23",
   "observability": {
     "enabled": true
   },

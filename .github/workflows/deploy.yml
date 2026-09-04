@@ -28,9 +28,15 @@ jobs:
           VITE_SUPABASE_URL: https://tqoxyharlsubyqjxjnfg.supabase.co
           VITE_SUPABASE_ANON_KEY: sb_publishable_0AaZT5TafLGaFRF0IIqynA_gmGtwHs8
 
+      - name: Validate Cloudflare Secret
+        run: |
+          if [ -z "${{ secrets.CLOUDFLARE_API_TOKEN }}" ]; then
+            echo "::error::CLOUDFLARE_API_TOKEN is not set in GitHub Secrets! Please configure it at https://github.com/${{ github.repository }}/settings/secrets/actions"
+            exit 1
+          fi
+
       - name: Deploy to Cloudflare Workers
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: 21ff310b4d7bd6a53a9b2f66d219c08e
-          command: deploy
+        run: npx wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 21ff310b4d7bd6a53a9b2f66d219c08e
