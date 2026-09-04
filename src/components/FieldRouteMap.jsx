@@ -45,7 +45,7 @@ export default function FieldRouteMap({
   // Leaflet & GPS states
   const [showMap, setShowMap] = useState(true);
   const [mapProvider, setMapProvider] = useState('LEAFLET'); // 'LEAFLET' | 'GOOGLE'
-  const [mapTileType, setMapTileType] = useState('GOOGLE_STREET'); // 'GOOGLE_STREET' | 'GOOGLE_SATELLITE' | 'GOOGLE_TERRAIN' | 'VOYAGER'
+  const [mapTileType, setMapTileType] = useState('VOYAGER'); // 'VOYAGER' | 'ESRI_STREET' | 'ESRI_SATELLITE' | 'OSM_DE'
   const [selectedGoogleNpp, setSelectedGoogleNpp] = useState(null);
   const [copiedCoord, setCopiedCoord] = useState(false);
   const [isLScriptLoaded, setIsLScriptLoaded] = useState(typeof window !== 'undefined' && !!window.L);
@@ -329,42 +329,39 @@ export default function FieldRouteMap({
     alert(`⚡ Đã tối ưu hóa đường đi thành công!\nSắp xếp lại ${optimized.length} chặng di chuyển theo khoảng cách ngắn nhất.`);
   };
 
-  // Tile layer configurations for reliable and high-resolution loading
+  // Tile layer configurations for 100% reliable, fast, and high-resolution loading
   const TILE_CONFIGS = {
-    GOOGLE_STREET: {
-      name: 'Google Maps Chuẩn',
-      url: 'https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
-      options: {
-        subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
-        maxZoom: 20,
-        attribution: '&copy; Google Maps'
-      }
-    },
-    GOOGLE_SATELLITE: {
-      name: 'Google Vệ Tinh',
-      url: 'https://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
-      options: {
-        subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
-        maxZoom: 20,
-        attribution: '&copy; Google Maps Vệ Tinh'
-      }
-    },
-    GOOGLE_TERRAIN: {
-      name: 'Google Địa Hình',
-      url: 'https://{s}.google.com/vt/lyrs=p&x={x}&y={y}&z={z}',
-      options: {
-        subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
-        maxZoom: 20,
-        attribution: '&copy; Google Maps Địa Hình'
-      }
-    },
     VOYAGER: {
-      name: 'CartoDB',
-      url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+      name: 'Đường Phố Sắc Nét',
+      url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
       options: {
         subdomains: 'abcd',
         maxZoom: 19,
-        attribution: '&copy; CARTO &copy; OSM'
+        attribution: '&copy; CartoDB &copy; OpenStreetMap'
+      }
+    },
+    ESRI_STREET: {
+      name: 'Bản Đồ Giao Thông',
+      url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+      options: {
+        maxZoom: 19,
+        attribution: 'Tiles &copy; Esri &mdash; Street Map'
+      }
+    },
+    ESRI_SATELLITE: {
+      name: 'Vệ Tinh Siêu Nét',
+      url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      options: {
+        maxZoom: 19,
+        attribution: 'Tiles &copy; Esri &mdash; Satellite'
+      }
+    },
+    OSM_DE: {
+      name: 'OpenStreetMap',
+      url: 'https://tile.openstreetmap.de/{z}/{x}/{y}.png',
+      options: {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap contributors'
       }
     }
   };
@@ -398,10 +395,21 @@ export default function FieldRouteMap({
     const map = window.L.map('leaflet-map-container', { zoomControl: true }).setView(center, initialZoom);
     mapInstanceRef.current = map;
 
-    // Apply active tile layer (Google Maps Street by default - 100% identical to Google Maps)
-    const currentTileConfig = TILE_CONFIGS[mapTileType] || TILE_CONFIGS.GOOGLE_STREET;
+    // Apply active tile layer (CartoDB Voyager by default - high speed and never blocked)
+    const currentTileConfig = TILE_CONFIGS[mapTileType] || TILE_CONFIGS.VOYAGER;
     const tileLayer = window.L.tileLayer(currentTileConfig.url, currentTileConfig.options).addTo(map);
     tileLayerRef.current = tileLayer;
+
+    // Automatic fallback if any individual tile encounters a network glitch
+    tileLayer.on('tileerror', function(error) {
+      if (error && error.tile && !error.tile._hasFallenBack) {
+        error.tile._hasFallenBack = true;
+        const c = error.coords;
+        if (c) {
+          error.tile.src = `https://a.basemaps.cartocdn.com/rastertiles/voyager/${c.z}/${c.x}/${c.y}.png`;
+        }
+      }
+    });
 
     // Force size recalculation across multiple time intervals to ensure tiles paint properly
     const timer1 = setTimeout(() => mapInstanceRef.current?.invalidateSize(), 100);
@@ -987,71 +995,71 @@ export default function FieldRouteMap({
               <div style={{ display: 'flex', gap: '4px', background: 'rgba(15,23,42,0.6)', padding: '2px', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
                 <button
                   type="button"
-                  onClick={() => setMapTileType('GOOGLE_STREET')}
-                  title="Bản đồ Google Maps chuẩn (Đường phố, giao thông, tỉnh thành)"
-                  style={{
-                    padding: '4px 10px',
-                    borderRadius: '4px',
-                    border: 'none',
-                    background: mapTileType === 'GOOGLE_STREET' ? 'rgba(6,182,212,0.3)' : 'transparent',
-                    color: mapTileType === 'GOOGLE_STREET' ? 'var(--accent-cyan)' : 'var(--text-muted)',
-                    fontSize: '0.72rem',
-                    fontWeight: '800',
-                    cursor: 'pointer'
-                  }}
-                >
-                  🗺️ Google Maps
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMapTileType('GOOGLE_SATELLITE')}
-                  title="Ảnh vệ tinh Google Maps độ nét cao kèm tên đường"
-                  style={{
-                    padding: '4px 10px',
-                    borderRadius: '4px',
-                    border: 'none',
-                    background: mapTileType === 'GOOGLE_SATELLITE' ? 'rgba(6,182,212,0.3)' : 'transparent',
-                    color: mapTileType === 'GOOGLE_SATELLITE' ? 'var(--accent-cyan)' : 'var(--text-muted)',
-                    fontSize: '0.72rem',
-                    fontWeight: '800',
-                    cursor: 'pointer'
-                  }}
-                >
-                  🛰️ Google Vệ Tinh
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMapTileType('GOOGLE_TERRAIN')}
-                  title="Bản đồ địa hình Google Maps"
-                  style={{
-                    padding: '4px 10px',
-                    borderRadius: '4px',
-                    border: 'none',
-                    background: mapTileType === 'GOOGLE_TERRAIN' ? 'rgba(6,182,212,0.3)' : 'transparent',
-                    color: mapTileType === 'GOOGLE_TERRAIN' ? 'var(--accent-cyan)' : 'var(--text-muted)',
-                    fontSize: '0.72rem',
-                    fontWeight: '800',
-                    cursor: 'pointer'
-                  }}
-                >
-                  🏔️ Địa Hình
-                </button>
-                <button
-                  type="button"
                   onClick={() => setMapTileType('VOYAGER')}
-                  title="Bản đồ đường phố CartoDB tốc độ cao"
+                  title="Bản đồ đường phố chi tiết, sắc nét, tốc độ cao (CartoDB)"
                   style={{
-                    padding: '4px 10px',
+                    padding: '5px 11px',
                     borderRadius: '4px',
                     border: 'none',
-                    background: mapTileType === 'VOYAGER' ? 'rgba(6,182,212,0.3)' : 'transparent',
+                    background: mapTileType === 'VOYAGER' ? 'rgba(6,182,212,0.35)' : 'transparent',
                     color: mapTileType === 'VOYAGER' ? 'var(--accent-cyan)' : 'var(--text-muted)',
-                    fontSize: '0.72rem',
+                    fontSize: '0.74rem',
                     fontWeight: '800',
                     cursor: 'pointer'
                   }}
                 >
-                  CartoDB
+                  🏙️ Đường Phố
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMapTileType('ESRI_STREET')}
+                  title="Bản đồ giao thông, quốc lộ, tỉnh lộ toàn cầu (Esri)"
+                  style={{
+                    padding: '5px 11px',
+                    borderRadius: '4px',
+                    border: 'none',
+                    background: mapTileType === 'ESRI_STREET' ? 'rgba(6,182,212,0.35)' : 'transparent',
+                    color: mapTileType === 'ESRI_STREET' ? 'var(--accent-cyan)' : 'var(--text-muted)',
+                    fontSize: '0.74rem',
+                    fontWeight: '800',
+                    cursor: 'pointer'
+                  }}
+                >
+                  🗺️ Giao Thông (Esri)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMapTileType('ESRI_SATELLITE')}
+                  title="Ảnh vệ tinh siêu nét độ phân giải cao toàn cầu (Esri)"
+                  style={{
+                    padding: '5px 11px',
+                    borderRadius: '4px',
+                    border: 'none',
+                    background: mapTileType === 'ESRI_SATELLITE' ? 'rgba(6,182,212,0.35)' : 'transparent',
+                    color: mapTileType === 'ESRI_SATELLITE' ? 'var(--accent-cyan)' : 'var(--text-muted)',
+                    fontSize: '0.74rem',
+                    fontWeight: '800',
+                    cursor: 'pointer'
+                  }}
+                >
+                  🛰️ Vệ Tinh
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMapTileType('OSM_DE')}
+                  title="Bản đồ OpenStreetMap mở rộng"
+                  style={{
+                    padding: '5px 11px',
+                    borderRadius: '4px',
+                    border: 'none',
+                    background: mapTileType === 'OSM_DE' ? 'rgba(6,182,212,0.35)' : 'transparent',
+                    color: mapTileType === 'OSM_DE' ? 'var(--accent-cyan)' : 'var(--text-muted)',
+                    fontSize: '0.74rem',
+                    fontWeight: '800',
+                    cursor: 'pointer'
+                  }}
+                >
+                  🌐 OpenStreetMap
                 </button>
               </div>
 
