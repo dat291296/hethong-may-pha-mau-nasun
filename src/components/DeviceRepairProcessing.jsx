@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import SafePortal from './SafePortal.jsx';
+import { formatDateVN } from '../utils/dateUtils.js';
 import {
-
   PlusCircle,
   Wrench,
   Eye,
@@ -19,8 +19,24 @@ import {
   BookOpen,
   ClipboardCheck,
   ShieldAlert,
-  PackageCheck
+  PackageCheck,
+  BarChart2,
+  PieChart as PieChartIcon,
+  Calendar
 } from 'lucide-react';
+import { 
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  ResponsiveContainer, 
+  Cell, 
+  PieChart, 
+  Pie, 
+  Legend 
+} from 'recharts';
 import { sanitizeFormData, validatePhone, validateSerial } from '../security/sanitize.js';
 
 export const MACHINE_MODELS = [
@@ -37,10 +53,10 @@ export const MACHINE_MODELS = [
 ];
 
 export const PRODUCT_CATEGORIES = [
-  'Máy chiết',
-  'Máy lắc',
-  'Máy tính',
-  'Máy in',
+  'Máy Chiết Sơn',
+  'Máy Lắc Sơn',
+  'Máy Tính Bàn / Laptop',
+  'Máy In Tem QL700',
   'Phụ kiện',
   'Linh kiện'
 ];
@@ -52,6 +68,8 @@ import { useModalScrollLock } from '../hooks/useModalScrollLock.js';
 export default function DeviceRepairProcessing({
   repairTickets = [],
   npps = [],
+  systemSets = [],
+  qcUsers = [],
   onAddTicket,
   onEditTicket,
   onDeleteTicket,
@@ -63,6 +81,7 @@ export default function DeviceRepairProcessing({
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('ALL'); // ALL | PENDING | NOT_RETURNED | REPLACED
   const [searchTerm, setSearchTerm] = useState('');
+  const [nppSearchTerm, setNppSearchTerm] = useState('');
 
   const isTicketAllowed = (ticketNppId) => {
     if (!user) return false;
@@ -84,16 +103,68 @@ export default function DeviceRepairProcessing({
 
   useModalScrollLock(showModal || !!editingTicket || !!selectedTicket);
 
+  // 1-Year failure statistics for dashboard charts
+  const failureStats = useMemo(() => {
+    const categoryCount = {};
+    const errorTypeCount = {};
+
+    repairTickets.forEach(t => {
+      const cat = t.productCategory || 'Khác';
+      categoryCount[cat] = (categoryCount[cat] || 0) + 1;
+
+      const err = t.errorCategory || (t.errorDescription ? t.errorDescription.slice(0, 20) : 'Sự cố chung');
+      errorTypeCount[err] = (errorTypeCount[err] || 0) + 1;
+    });
+
+    const categoryData = Object.keys(categoryCount).map(name => ({
+      name,
+      count: categoryCount[name]
+    })).sort((a, b) => b.count - a.count);
+
+    const colors = ['#f43f5e', '#f59e0b', '#3b82f6', '#10b981', '#a855f7', '#64748b'];
+    const pieData = Object.keys(categoryCount).map((name, idx) => ({
+      name,
+      value: categoryCount[name],
+      color: colors[idx % colors.length]
+    }));
+
+    return { categoryData, pieData };
+  }, [repairTickets]);
+
+  // Form State
+  const defaultTechnician = (user && (user.role === 'qc' || user.role === 'admin')) 
+    ? (user.name || user.full_name) 
+    : (qcUsers && qcUsers.length > 0 ? qcUsers[0].name : 'Nguyễn Văn Hùng');
+
+  const [formData, setFormData] = useState({
+    date: new Date().toISOString().split('T')[0],
+    technician: defaultTechnician,
+    nppId: '',
+    nppName: '',
+    productCategory: 'Máy Chiết Sơn',
+    machineModel: 'Satint A2',
+    serialNumber: '',
+    errorCategory: 'Lỗi phần cứng / Cụm chiết',
+    errorDescription: '',
+    photos: [],
+    actionDirection: 'Sửa chữa',
+    replacementCondition: 'Mới',
+    processingStatus: 'Chưa xử lý',
+    customerReturnStatus: 'Chưa gửi trả',
+    notes: ''
+  });
+
   // Auto-fill from Handbook if prefilledTicket is provided
   React.useEffect(() => {
     if (prefilledTicket) {
       setEditingTicket(null);
+      setNppSearchTerm('');
       setFormData({
         date: new Date().toISOString().split('T')[0],
-        technician: 'Nguyễn Văn Hùng',
+        technician: defaultTechnician,
         nppId: npps.length > 0 ? npps[0].id : '',
         nppName: npps.length > 0 ? npps[0].name : '',
-        productCategory: prefilledTicket.productCategory || 'Máy chiết',
+        productCategory: prefilledTicket.productCategory || 'Máy Chiết Sơn',
         machineModel: prefilledTicket.machineModel || 'Satint A2',
         serialNumber: prefilledTicket.serialNumber || '',
         errorCategory: prefilledTicket.errorCategory || 'Lỗi phần cứng',
@@ -119,33 +190,15 @@ export default function DeviceRepairProcessing({
     }
   }, [showModal, editingTicket, selectedTicket]);
 
-  // Form State
-  const [formData, setFormData] = useState({
-    date: new Date().toISOString().split('T')[0],
-    technician: 'Nguyễn Văn Hùng',
-    nppId: '',
-    nppName: '',
-    productCategory: 'Máy chiết',
-    machineModel: 'Satint A2',
-    serialNumber: '',
-    errorCategory: 'Lỗi phần cứng / Cụm chiết',
-    errorDescription: '',
-    photos: [],
-    actionDirection: 'Sửa chữa', // 'Sửa chữa' | 'Xuất đổi'
-    replacementCondition: 'Mới', // 'Mới' | 'Cũ'
-    processingStatus: 'Chưa xử lý', // 'Chưa xử lý' | 'Đã xử lý'
-    customerReturnStatus: 'Chưa gửi trả', // 'Chưa gửi trả' | 'Đã gửi trả'
-    notes: ''
-  });
-
   const handleOpenAdd = () => {
     setEditingTicket(null);
+    setNppSearchTerm('');
     setFormData({
       date: new Date().toISOString().split('T')[0],
-      technician: 'Nguyễn Văn Hùng',
-      nppId: npps.length > 0 ? npps[0].id : '',
-      nppName: npps.length > 0 ? npps[0].name : '',
-      productCategory: 'Máy chiết',
+      technician: defaultTechnician,
+      nppId: '',
+      nppName: '',
+      productCategory: 'Máy Chiết Sơn',
       machineModel: 'Satint A2',
       serialNumber: '',
       errorCategory: 'Lỗi phần cứng',
@@ -170,8 +223,50 @@ export default function DeviceRepairProcessing({
       return;
     }
     setEditingTicket(ticket);
+    setNppSearchTerm('');
     setFormData({ ...ticket });
     setShowModal(true);
+  };
+
+  // Helper when NPP is chosen: auto detect linked system set
+  const currentAssignedSet = useMemo(() => {
+    if (!formData.nppId) return null;
+    return systemSets.find(s => s.nppId === formData.nppId);
+  }, [systemSets, formData.nppId]);
+
+  const filteredNpps = useMemo(() => {
+    if (!nppSearchTerm.trim()) return npps;
+    const term = nppSearchTerm.toLowerCase();
+    return npps.filter(n => 
+      (n.name && n.name.toLowerCase().includes(term)) || 
+      (n.id && n.id.toLowerCase().includes(term)) || 
+      (n.region && n.region.toLowerCase().includes(term))
+    );
+  }, [npps, nppSearchTerm]);
+
+  const handleSelectNpp = (selectedId) => {
+    const targetNpp = npps.find(n => n.id === selectedId);
+    const assignedSet = systemSets.find(s => s.nppId === selectedId);
+
+    let autoCategory = formData.productCategory;
+    let autoModel = formData.machineModel;
+    let autoSerial = formData.serialNumber;
+
+    // If NPP has an assigned combo set, auto populate from its dispenser by default
+    if (assignedSet) {
+      autoCategory = 'Máy Chiết Sơn';
+      autoModel = assignedSet.dispenserModel || 'Satint A2';
+      autoSerial = assignedSet.dispenserSerial || '';
+    }
+
+    setFormData(prev => ({
+      ...prev,
+      nppId: selectedId,
+      nppName: targetNpp ? targetNpp.name : '',
+      productCategory: autoCategory,
+      machineModel: autoModel,
+      serialNumber: autoSerial
+    }));
   };
 
   const handlePhotoUpload = async (e) => {
@@ -301,6 +396,78 @@ export default function DeviceRepairProcessing({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       
+      {/* 1-YEAR FAILURE ANALYSIS DASHBOARD CHARTS */}
+      <div className="glass-panel" style={{ padding: '20px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
+          <div>
+            <h3 style={{ fontSize: '1.05rem', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--accent-cyan)' }}>
+              <BarChart2 size={20} /> Biểu Đồ Thống Kê Thiết Bị & Sự Cố Hay Hỏng Nhất Trong 1 Năm
+            </h3>
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '2px 0 0 0' }}>
+              Phân tích tần suất hỏng hóc theo chủng loại thiết bị và linh kiện để chuẩn bị vật tư dự phòng.
+            </p>
+          </div>
+          <span className="badge badge-info" style={{ fontSize: '0.75rem' }}>Tổng {repairTickets.length} phiếu sửa chữa</span>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
+          {/* Chart 1: Failure Count by Product Category */}
+          <div style={{ background: 'rgba(0,0,0,0.2)', padding: '14px', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
+            <span style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--accent-cyan)', display: 'block', marginBottom: '8px' }}>
+              📊 Số Lượng Sự Cố Theo Thiết Bị
+            </span>
+            <div style={{ height: '180px', width: '100%' }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={failureStats.categoryData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                  <XAxis dataKey="name" tick={{ fill: 'var(--text-muted)', fontSize: 10 }} />
+                  <YAxis allowDecimals={false} tick={{ fill: 'var(--text-muted)', fontSize: 10 }} />
+                  <Tooltip contentStyle={{ background: '#1e293b', border: '1px solid var(--border-color)', borderRadius: '8px', fontSize: '0.8rem' }} />
+                  <Bar dataKey="count" name="Số lần sự cố" fill="#f43f5e" radius={[4, 4, 0, 0]}>
+                    {failureStats.categoryData.map((entry, index) => {
+                      const colors = ['#f43f5e', '#f59e0b', '#3b82f6', '#10b981', '#a855f7'];
+                      return <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />;
+                    })}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Chart 2: Proportion Pie Chart */}
+          <div style={{ background: 'rgba(0,0,0,0.2)', padding: '14px', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
+            <span style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--accent-emerald)', display: 'block', marginBottom: '8px' }}>
+              🥧 Tỷ Lệ Hỏng Hóc Theo Chủng Loại
+            </span>
+            <div style={{ height: '180px', width: '100%' }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={failureStats.pieData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={40}
+                    outerRadius={65}
+                    paddingAngle={3}
+                    dataKey="value"
+                  >
+                    {failureStats.pieData.map((entry, index) => (
+                      <Cell key={`pie-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip contentStyle={{ background: '#1e293b', border: '1px solid var(--border-color)', borderRadius: '8px', fontSize: '0.8rem' }} />
+                  <Legend 
+                    verticalAlign="bottom" 
+                    height={26} 
+                    formatter={(val) => <span style={{ fontSize: '0.725rem', color: 'var(--text-main)' }}>{val}</span>} 
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Stat Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
         
@@ -453,7 +620,7 @@ export default function DeviceRepairProcessing({
                     <td style={{ fontWeight: '700', color: 'var(--accent-cyan)', fontFamily: 'var(--font-mono)' }}>
                       {ticket.ticketCode}
                     </td>
-                    <td>{ticket.date}</td>
+                    <td>{formatDateVN(ticket.date)}</td>
                     <td style={{ fontWeight: '600' }}>{ticket.technician}</td>
                     <td>{ticket.nppName}</td>
                     <td>
@@ -575,7 +742,7 @@ export default function DeviceRepairProcessing({
                   </div>
                   <div className="mobile-card-row">
                     <span className="mobile-card-label">Ngày xử lý:</span>
-                    <span className="mobile-card-value">{ticket.date}</span>
+                    <span className="mobile-card-value">{formatDateVN(ticket.date)}</span>
                   </div>
                   <div className="mobile-card-row">
                     <span className="mobile-card-label">Hướng xử lý:</span>
@@ -641,29 +808,173 @@ export default function DeviceRepairProcessing({
                 <div className="modal-body" ref={el => { if (el) el.scrollTop = 0; }}>
                   
                   {/* PRIMARY EDIT FIELDS - TOP OF FORM */}
-                  <div className="responsive-form-grid">
+                  {/* FIELD 1: NGÀY XỬ LÝ MÁY & KỸ THUẬT VIÊN */}
+                  <div className="responsive-form-grid" style={{ marginBottom: '14px' }}>
                     <div className="form-group">
-                      <label className="form-label">🏢 1. Tên Nhà Phân Phối (NPP) *</label>
-                      <select className="form-select" required value={formData.nppId} onChange={e => setFormData({ ...formData, nppId: e.target.value })}>
-                        <option value="">-- Chọn NPP từ danh sách --</option>
-                        {npps.map(n => (
-                          <option key={n.id} value={n.id}>[{n.id}] {n.name} - {n.region}</option>
-                        ))}
-                      </select>
+                      <label className="form-label" style={{ fontWeight: '700', color: 'var(--accent-cyan)' }}>
+                        📅 1. Ngày Xử Lý Máy / Báo Hỏng *
+                      </label>
+                      <input 
+                        type="date" 
+                        className="form-input" 
+                        required 
+                        value={formData.date || ''} 
+                        onChange={e => setFormData({ ...formData, date: e.target.value })} 
+                      />
                     </div>
                     <div className="form-group">
-                      <label className="form-label">🏷️ 2. Số Seri Thiết Bị (Serial) *</label>
-                      <input type="text" className="form-input" required placeholder="Nhập số seri duy nhất..." value={formData.serialNumber} onChange={e => setFormData({ ...formData, serialNumber: e.target.value })} />
+                      <label className="form-label" style={{ fontWeight: '700' }}>
+                        👨‍🔧 Kỹ Thuật Viên Phụ Trách / Xử Lý *
+                      </label>
+                      <select 
+                        className="form-select" 
+                        required 
+                        value={formData.technician || ''} 
+                        onChange={e => setFormData({ ...formData, technician: e.target.value })}
+                      >
+                        {qcUsers && qcUsers.length > 0 ? (
+                          qcUsers.map((u, idx) => (
+                            <option key={u.id || idx} value={u.name || u.full_name || u.id}>
+                              👤 {u.name || u.full_name || u.id} ({u.role === 'admin' ? 'Quản Trị' : 'QC Kỹ Thuật'} - {u.region || u.managedRegion || 'Toàn Quốc'})
+                            </option>
+                          ))
+                        ) : (
+                          <option value={user?.name || user?.full_name || 'Nguyễn Văn Hùng'}>
+                            👤 {user?.name || user?.full_name || 'Nguyễn Văn Hùng'} (Kỹ Thuật Viên)
+                          </option>
+                        )}
+                      </select>
                     </div>
                   </div>
 
+                  {/* FIELD 2: NHÀ PHÂN PHỐI VỚI TÌM KIẾM & BỘ MÁY TỰ ĐỘNG ĐIỀN */}
+                  <div className="form-group" style={{ background: 'var(--bg-tertiary)', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-color)', marginBottom: '14px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                      <label className="form-label" style={{ fontWeight: '700', color: 'var(--accent-cyan)', marginBottom: 0 }}>
+                        🏢 2. Tên Nhà Phân Phối (NPP) *
+                      </label>
+                      {formData.nppId && (
+                        <span className="badge badge-info" style={{ fontSize: '0.75rem' }}>
+                          Mã: {formData.nppId}
+                        </span>
+                      )}
+                    </div>
+                    
+                    <div style={{ position: 'relative', marginBottom: '8px' }}>
+                      <input
+                        type="text"
+                        className="form-input"
+                        style={{ paddingLeft: '32px', fontSize: '0.85rem' }}
+                        placeholder="🔍 Tìm nhanh tên hoặc mã NPP..."
+                        value={nppSearchTerm}
+                        onChange={e => setNppSearchTerm(e.target.value)}
+                      />
+                      <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', opacity: 0.5 }}>🔍</span>
+                      {nppSearchTerm && (
+                        <button
+                          type="button"
+                          onClick={() => setNppSearchTerm('')}
+                          style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
+                        >✕</button>
+                      )}
+                    </div>
+
+                    <select 
+                      className="form-select" 
+                      required 
+                      value={formData.nppId} 
+                      onChange={e => handleSelectNpp(e.target.value)}
+                    >
+                      <option value="">-- Chọn NPP từ danh sách ({filteredNpps.length} NPP) --</option>
+                      {filteredNpps.map(n => (
+                        <option key={n.id} value={n.id}>[{n.id}] {n.name} - {n.region}</option>
+                      ))}
+                    </select>
+
+                    {/* Quick selection of devices from the assigned combo set */}
+                    {currentAssignedSet && (
+                      <div style={{ marginTop: '10px', padding: '8px 10px', background: 'rgba(59, 130, 246, 0.08)', borderRadius: '6px', border: '1px dashed var(--accent-blue)' }}>
+                        <div style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--accent-blue)', marginBottom: '6px' }}>
+                          ⚡ Bộ máy [{currentAssignedSet.setCode}] - Bấm để chọn nhanh thiết bị sự cố:
+                        </div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                          {currentAssignedSet.dispenserSerial && (
+                            <button
+                              type="button"
+                              className={`btn btn-sm ${formData.productCategory === 'Máy Chiết Sơn' ? 'btn-primary' : 'btn-secondary'}`}
+                              style={{ fontSize: '0.75rem' }}
+                              onClick={() => {
+                                setFormData(prev => ({
+                                  ...prev,
+                                  productCategory: 'Máy Chiết Sơn',
+                                  machineModel: currentAssignedSet.dispenserModel || 'Satint A2',
+                                  serialNumber: currentAssignedSet.dispenserSerial || ''
+                                }));
+                              }}
+                            >
+                              🎯 Chiết: {currentAssignedSet.dispenserModel} ({currentAssignedSet.dispenserSerial})
+                            </button>
+                          )}
+                          {currentAssignedSet.mixerSerial && (
+                            <button
+                              type="button"
+                              className={`btn btn-sm ${formData.productCategory === 'Máy Lắc Sơn' ? 'btn-primary' : 'btn-secondary'}`}
+                              style={{ fontSize: '0.75rem' }}
+                              onClick={() => {
+                                setFormData(prev => ({
+                                  ...prev,
+                                  productCategory: 'Máy Lắc Sơn',
+                                  machineModel: currentAssignedSet.mixerModel || 'Natos V1',
+                                  serialNumber: currentAssignedSet.mixerSerial || ''
+                                }));
+                              }}
+                            >
+                              🌀 Lắc: {currentAssignedSet.mixerModel} ({currentAssignedSet.mixerSerial})
+                            </button>
+                          )}
+                          {currentAssignedSet.computerSerial && (
+                            <button
+                              type="button"
+                              className={`btn btn-sm ${formData.productCategory === 'Máy Tính Bàn / Laptop' ? 'btn-primary' : 'btn-secondary'}`}
+                              style={{ fontSize: '0.75rem' }}
+                              onClick={() => {
+                                setFormData(prev => ({
+                                  ...prev,
+                                  productCategory: 'Máy Tính Bàn / Laptop',
+                                  machineModel: currentAssignedSet.computerConfig || 'Máy Tính',
+                                  serialNumber: currentAssignedSet.computerSerial || ''
+                                }));
+                              }}
+                            >
+                              💻 Máy tính: {currentAssignedSet.computerConfig || currentAssignedSet.computerSerial}
+                            </button>
+                          )}
+                          {currentAssignedSet.printerSerial && (
+                            <button
+                              type="button"
+                              className={`btn btn-sm ${formData.productCategory === 'Máy In Tem QL700' ? 'btn-primary' : 'btn-secondary'}`}
+                              style={{ fontSize: '0.75rem' }}
+                              onClick={() => {
+                                setFormData(prev => ({
+                                  ...prev,
+                                  productCategory: 'Máy In Tem QL700',
+                                  machineModel: currentAssignedSet.printerModel || 'QL-700',
+                                  serialNumber: currentAssignedSet.printerSerial || ''
+                                }));
+                              }}
+                            >
+                              🖨️ Máy in: {currentAssignedSet.printerModel} ({currentAssignedSet.printerSerial})
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* FIELD 3 & 4: PHÂN LOẠI SẢN PHẨM & SỐ SERI */}
                   <div className="responsive-form-grid">
                     <div className="form-group">
-                      <label className="form-label">⚙️ 3. Phân Loại Sản Phẩm & Model *</label>
-                      <input type="text" className="form-input" required placeholder="Ví dụ: COROB D200, Mixer Natos V1..." value={formData.machineModel} onChange={e => setFormData({ ...formData, machineModel: e.target.value })} />
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label">📂 Phân Loại Thiết Bị *</label>
+                      <label className="form-label">📂 3. Phân Loại Thiết Bị *</label>
                       <select className="form-select" required value={formData.productCategory} onChange={e => setFormData({ ...formData, productCategory: e.target.value })}>
                         <option value="Máy Chiết Sơn">Máy Chiết Sơn</option>
                         <option value="Máy Lắc Sơn">Máy Lắc Sơn</option>
@@ -671,10 +982,28 @@ export default function DeviceRepairProcessing({
                         <option value="Máy In Tem QL700">Máy In Tem QL700</option>
                       </select>
                     </div>
+                    <div className="form-group">
+                      <label className="form-label">🏷️ 4. Số Seri Thiết Bị (Serial) *</label>
+                      <input type="text" className="form-input" required placeholder="Nhập số seri duy nhất..." value={formData.serialNumber} onChange={e => setFormData({ ...formData, serialNumber: e.target.value })} />
+                    </div>
+                  </div>
+
+                  <div className="responsive-form-grid">
+                    <div className="form-group">
+                      <label className="form-label">⚙️ Model Chi Tiết</label>
+                      <input type="text" className="form-input" placeholder="Ví dụ: COROB D200, Mixer Natos V1, QL-700..." value={formData.machineModel} onChange={e => setFormData({ ...formData, machineModel: e.target.value })} />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">📦 Trạng Thái Trả Khách</label>
+                      <select className="form-select" value={formData.customerReturnStatus} onChange={e => setFormData({ ...formData, customerReturnStatus: e.target.value })}>
+                        <option value="Chưa gửi trả">📦 Chưa Gửi Trả</option>
+                        <option value="Đã gửi trả">✓ Đã Gửi Trả NPP</option>
+                      </select>
+                    </div>
                   </div>
 
                   <div className="form-group">
-                    <label className="form-label">⚠️ 4. Diễn Giải Tình Trạng Lỗi *</label>
+                    <label className="form-label">⚠️ 5. Diễn Giải Tình Trạng Lỗi *</label>
                     <textarea className="form-input" rows={2} required placeholder="Mô tả chi tiết sự cố kỹ thuật..." value={formData.errorDescription} onChange={e => setFormData({ ...formData, errorDescription: e.target.value })} />
                   </div>
 
@@ -693,20 +1022,6 @@ export default function DeviceRepairProcessing({
                         <option value="Đang xử lý">🔧 Đang Xử Lý</option>
                         <option value="Đã xử lý">✓ Đã Xử Lý Xong</option>
                       </select>
-                    </div>
-                  </div>
-
-                  <div className="responsive-form-grid">
-                    <div className="form-group">
-                      <label className="form-label">📦 Trạng Thái Trả Khách</label>
-                      <select className="form-select" value={formData.customerReturnStatus} onChange={e => setFormData({ ...formData, customerReturnStatus: e.target.value })}>
-                        <option value="Chưa gửi trả">📦 Chưa Gửi Trả</option>
-                        <option value="Đã gửi trả">✓ Đã Gửi Trả NPP</option>
-                      </select>
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label">👨‍🔧 Kỹ Thuật Viên Xử Lý</label>
-                      <input type="text" className="form-input" value={formData.technician} onChange={e => setFormData({ ...formData, technician: e.target.value })} />
                     </div>
                   </div>
 
@@ -766,7 +1081,7 @@ export default function DeviceRepairProcessing({
                   <div><strong>Nhà Phân Phối:</strong> {selectedTicket.nppName}</div>
                   <div><strong>Sản Phẩm & Seri:</strong> {selectedTicket.machineModel} ({selectedTicket.serialNumber})</div>
                   <div><strong>Kỹ Thuật Viên:</strong> {selectedTicket.technician}</div>
-                  <div><strong>Ngày Tạo:</strong> {selectedTicket.date}</div>
+                  <div><strong>Ngày Tạo:</strong> {formatDateVN(selectedTicket.date)}</div>
                   <div><strong>Diễn Giải Lỗi:</strong> {selectedTicket.errorDescription}</div>
                   <div><strong>Hướng Xử Lý:</strong> {selectedTicket.actionDirection}</div>
                   <div><strong>Tình Trạng Sửa:</strong> {selectedTicket.processingStatus}</div>

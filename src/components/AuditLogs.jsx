@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { FileText, Filter, Search, Calendar, UserCheck, Download, ShieldAlert, Edit3, Trash2 } from 'lucide-react';
 import { useDebounce } from '../security/useDebounce.js';
 import { sanitizeForSheet } from '../security/sanitize.js';
+import { formatDateVN } from '../utils/dateUtils.js';
 import * as XLSX from 'xlsx';
 
 export default function AuditLogs({ auditLogs, onEditLog, onDeleteLog }) {
@@ -186,7 +187,7 @@ export default function AuditLogs({ auditLogs, onEditLog, onDeleteLog }) {
                 return (
                   <tr key={log.id} style={{ background: isCritical ? 'rgba(244,63,94,0.04)' : undefined }}>
                     <td style={{ fontFamily: 'var(--font-mono)', fontWeight: '600', color: 'var(--accent-cyan)' }}>{log.id}</td>
-                    <td style={{ fontSize: '0.8rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{log.timestamp}</td>
+                    <td style={{ fontSize: '0.8rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{formatDateVN(log.timestamp, true)}</td>
                     <td>{getSeverityBadge(log)}</td>
                     <td>
                       {log.type === 'LẮP ĐẶT MỚI'        && <span className="badge badge-success">Lắp Đặt Mới</span>}
@@ -236,7 +237,7 @@ export default function AuditLogs({ auditLogs, onEditLog, onDeleteLog }) {
                   <div className="mobile-card-header">
                     <div>
                       <span className="mobile-card-title" style={{ color: 'var(--accent-cyan)' }}>{log.id}</span>
-                      <div className="mobile-card-subtitle">{log.timestamp}</div>
+                      <div className="mobile-card-subtitle">{formatDateVN(log.timestamp, true)}</div>
                     </div>
                     <div>
                       {getSeverityBadge(log)}

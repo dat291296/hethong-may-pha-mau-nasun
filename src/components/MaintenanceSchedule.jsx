@@ -1,5 +1,19 @@
-import React, { useState } from 'react';
-import { CalendarClock, CheckCircle2, AlertTriangle, ShieldAlert, Wrench, Search, Edit3, Trash2 } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { CalendarClock, CheckCircle2, AlertTriangle, ShieldAlert, Wrench, Search, Edit3, Trash2, BarChart2, PieChart as PieChartIcon } from 'lucide-react';
+import { 
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  ResponsiveContainer, 
+  Cell, 
+  PieChart, 
+  Pie, 
+  Legend 
+} from 'recharts';
+import { formatDateVN } from '../utils/dateUtils.js';
 
 export default function MaintenanceSchedule({ systemSets, onCompleteMaintenance, onUpdateSystemSet, onDeleteSystemSet }) {
   const [filter, setFilter] = useState('ALL'); // ALL | DUE_SOON | OVERDUE | OK
@@ -35,25 +49,79 @@ export default function MaintenanceSchedule({ systemSets, onCompleteMaintenance,
     }
   };
 
-  const today = new Date('2026-07-26');
+  const naturalSortCode = (a, b, key = 'setCode') => {
+    const valA = String(a?.[key] || a?.setCode || a?.set_code || '');
+    const valB = String(b?.[key] || b?.setCode || b?.set_code || '');
+    return valA.localeCompare(valB, undefined, { numeric: true, sensitivity: 'base' });
+  };
 
-  const processedSets = systemSets.map(set => {
-    if (!set.nextMaintenanceDue) {
-      return { ...set, dueDays: 999, statusType: 'NO_DATE' };
-    }
-    const dueDate = new Date(set.nextMaintenanceDue);
-    const diffTime = dueDate - today;
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  const today = new Date();
 
-    let statusType = 'OK';
-    if (diffDays < 0) {
-      statusType = 'OVERDUE';
-    } else if (diffDays <= 30) {
-      statusType = 'DUE_SOON'; // Warning: within 1 month (30 days)
-    }
+  const processedSets = useMemo(() => {
+    return systemSets.map(set => {
+      if (!set.nextMaintenanceDue) {
+        return { ...set, dueDays: 999, statusType: 'NO_DATE' };
+      }
+      const dueDate = new Date(set.nextMaintenanceDue);
+      const diffTime = dueDate - today;
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-    return { ...set, dueDays: diffDays, statusType };
-  });
+      let statusType = 'OK';
+      if (diffDays < 0) {
+        statusType = 'OVERDUE';
+      } else if (diffDays <= 30) {
+        statusType = 'DUE_SOON'; // Warning: within 1 month (30 days)
+      }
+
+      return { ...set, dueDays: diffDays, statusType };
+    });
+  }, [systemSets]);
+
+  // Monthly stats for 12 months chart
+  const monthlyStats = useMemo(() => {
+    const months = [
+      { name: 'Thg 1', count: 0, overdue: 0 },
+      { name: 'Thg 2', count: 0, overdue: 0 },
+      { name: 'Thg 3', count: 0, overdue: 0 },
+      { name: 'Thg 4', count: 0, overdue: 0 },
+      { name: 'Thg 5', count: 0, overdue: 0 },
+      { name: 'Thg 6', count: 0, overdue: 0 },
+      { name: 'Thg 7', count: 0, overdue: 0 },
+      { name: 'Thg 8', count: 0, overdue: 0 },
+      { name: 'Thg 9', count: 0, overdue: 0 },
+      { name: 'Thg 10', count: 0, overdue: 0 },
+      { name: 'Thg 11', count: 0, overdue: 0 },
+      { name: 'Thg 12', count: 0, overdue: 0 },
+    ];
+    processedSets.forEach(s => {
+      if (s.nextMaintenanceDue) {
+        const d = new Date(s.nextMaintenanceDue);
+        if (!isNaN(d.getTime())) {
+          const m = d.getMonth();
+          if (m >= 0 && m < 12) {
+            months[m].count += 1;
+            if (s.statusType === 'OVERDUE') months[m].overdue += 1;
+          }
+        }
+      }
+    });
+    return months;
+  }, [processedSets]);
+
+  // Status breakdown data for donut chart
+  const statusPieData = useMemo(() => {
+    const okCount = processedSets.filter(s => s.statusType === 'OK').length;
+    const soonCount = processedSets.filter(s => s.statusType === 'DUE_SOON').length;
+    const overdueCount = processedSets.filter(s => s.statusType === 'OVERDUE').length;
+    const noDateCount = processedSets.filter(s => s.statusType === 'NO_DATE').length;
+
+    return [
+      { name: 'Bình thường (OK)', value: okCount, color: '#10b981' },
+      { name: 'Sắp hạn (≤30N)', value: soonCount, color: '#f59e0b' },
+      { name: 'Quá hạn bảo trì', value: overdueCount, color: '#f43f5e' },
+      { name: 'Chưa đặt lịch', value: noDateCount, color: '#64748b' }
+    ].filter(d => d.value > 0);
+  }, [processedSets]);
 
   const filteredSets = processedSets.filter(s => {
     if (filter === 'DUE_SOON') return s.statusType === 'DUE_SOON';
@@ -61,6 +129,9 @@ export default function MaintenanceSchedule({ systemSets, onCompleteMaintenance,
     if (filter === 'OK') return s.statusType === 'OK';
     return true;
   });
+
+  // Sort strictly in natural ascending order from 1 to N, top to bottom
+  const sortedSets = [...filteredSets].sort((a, b) => naturalSortCode(a, b, 'setCode'));
 
   const handleCompleteSubmit = (e) => {
     e.preventDefault();
@@ -93,11 +164,78 @@ export default function MaintenanceSchedule({ systemSets, onCompleteMaintenance,
           </div>
           <div>
             <h2 style={{ fontSize: '1.15rem', fontWeight: '800', color: 'var(--text-main)' }}>
-              Quy Trình Bảo Trì Định Kỳ (1 Năm / Lần)
+              Quy Trình & Biểu Đồ Lịch Bảo Trì Định Kỳ (1 Năm / Lần)
             </h2>
             <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '2px' }}>
               Quy định: Mỗi bộ máy pha màu được bảo dưỡng 1 lần mỗi năm. Hệ thống phát <strong>Cảnh Báo Thông Báo Trước 1 Tháng (30 Ngày)</strong> để kỹ thuật viên chuẩn bị xếp lịch đi thị trường.
             </p>
+          </div>
+        </div>
+      </div>
+
+      {/* CHARTS & KPI SECTION */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
+        {/* Chart 1: Monthly Maintenance Load */}
+        <div className="glass-panel" style={{ padding: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+            <span style={{ fontSize: '0.9rem', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--accent-cyan)' }}>
+              <BarChart2 size={16} /> Phân Bổ Hạn Bảo Trì 12 Tháng
+            </span>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Tổng: {processedSets.length} bộ máy</span>
+          </div>
+          <div style={{ height: '190px', width: '100%' }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={monthlyStats} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                <XAxis dataKey="name" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} />
+                <YAxis allowDecimals={false} tick={{ fill: 'var(--text-muted)', fontSize: 11 }} />
+                <Tooltip 
+                  contentStyle={{ background: '#1e293b', border: '1px solid var(--border-color)', borderRadius: '8px', fontSize: '0.8rem' }}
+                  labelStyle={{ color: 'var(--accent-cyan)', fontWeight: 'bold' }}
+                />
+                <Bar dataKey="count" name="Số bộ máy đến hạn" fill="var(--accent-blue)" radius={[4, 4, 0, 0]}>
+                  {monthlyStats.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.overdue > 0 ? '#f43f5e' : 'var(--accent-blue)'} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Chart 2: Status Breakdown Pie */}
+        <div className="glass-panel" style={{ padding: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+            <span style={{ fontSize: '0.9rem', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--accent-emerald)' }}>
+              <PieChartIcon size={16} /> Tỷ Lệ Tình Trạng Bảo Trì
+            </span>
+          </div>
+          <div style={{ height: '190px', width: '100%' }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={statusPieData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={45}
+                  outerRadius={75}
+                  paddingAngle={4}
+                  dataKey="value"
+                >
+                  {statusPieData.map((entry, index) => (
+                    <Cell key={`pie-cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip 
+                  contentStyle={{ background: '#1e293b', border: '1px solid var(--border-color)', borderRadius: '8px', fontSize: '0.8rem' }}
+                />
+                <Legend 
+                  verticalAlign="bottom" 
+                  height={30} 
+                  formatter={(val) => <span style={{ fontSize: '0.75rem', color: 'var(--text-main)' }}>{val}</span>} 
+                />
+              </PieChart>
+            </ResponsiveContainer>
           </div>
         </div>
       </div>
@@ -152,7 +290,7 @@ export default function MaintenanceSchedule({ systemSets, onCompleteMaintenance,
               </tr>
             </thead>
             <tbody>
-              {filteredSets.map(set => (
+              {sortedSets.map(set => (
                 <tr key={set.id}>
                   <td style={{ fontWeight: '700', color: 'var(--accent-cyan)' }}>{set.setCode}</td>
                   <td style={{ fontWeight: '600' }}>{set.nppName}</td>
@@ -161,8 +299,8 @@ export default function MaintenanceSchedule({ systemSets, onCompleteMaintenance,
                     <div>{set.dispenserModel}</div>
                     <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{set.dispenserSerial}</div>
                   </td>
-                  <td>{set.lastMaintenanceDate || 'Chưa thực hiện'}</td>
-                  <td style={{ fontWeight: '700' }}>{set.nextMaintenanceDue || 'N/A'}</td>
+                  <td>{formatDateVN(set.lastMaintenanceDate)}</td>
+                  <td style={{ fontWeight: '700' }}>{formatDateVN(set.nextMaintenanceDue)}</td>
                   <td>
                     {set.statusType === 'OVERDUE' && (
                       <span className="badge badge-danger">🚨 Quá Hạn ({Math.abs(set.dueDays)} Ngày)</span>
@@ -196,7 +334,7 @@ export default function MaintenanceSchedule({ systemSets, onCompleteMaintenance,
 
         {/* Mobile View Cards */}
         <div className="mobile-only mobile-card-list">
-          {filteredSets.map(set => (
+          {sortedSets.map(set => (
             <div className="mobile-card" key={set.id}>
               <div className="mobile-card-header">
                 <div>
@@ -222,11 +360,11 @@ export default function MaintenanceSchedule({ systemSets, onCompleteMaintenance,
                 </div>
                 <div className="mobile-card-row">
                   <span className="mobile-card-label">Bảo Trì Gần Nhất:</span>
-                  <span className="mobile-card-value">{set.lastMaintenanceDate || 'Chưa thực hiện'}</span>
+                  <span className="mobile-card-value">{formatDateVN(set.lastMaintenanceDate)}</span>
                 </div>
                 <div className="mobile-card-row">
                   <span className="mobile-card-label">Hạn Tiếp Theo:</span>
-                  <span className="mobile-card-value" style={{ fontWeight: '700' }}>{set.nextMaintenanceDue || 'N/A'}</span>
+                  <span className="mobile-card-value" style={{ fontWeight: '700' }}>{formatDateVN(set.nextMaintenanceDue)}</span>
                 </div>
               </div>
               <div className="mobile-card-actions">

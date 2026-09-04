@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import Dashboard from './components/Dashboard';
@@ -19,6 +19,7 @@ import UserManagement from './components/UserManagement';
 import TechHandbook from './components/TechHandbook';
 import FieldRouteMap from './components/FieldRouteMap';
 import { useAuth } from './context/AuthContext';
+import { supabase, isSupabaseConfigured } from './lib/supabase';
 
 import {
   INITIAL_FORMULA_VERSIONS,
@@ -38,6 +39,52 @@ export default function App() {
   const { user, isDevMode } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [globalSearch, setGlobalSearch] = useState('');
+  const [qcUsers, setQcUsers] = useState([]);
+
+  useEffect(() => {
+    async function loadQcProfiles() {
+      if (isSupabaseConfigured && supabase) {
+        try {
+          const { data, error } = await supabase
+            .from('profiles')
+            .select('id, full_name, role, managed_region')
+            .in('role', ['qc', 'admin']);
+
+          if (data && !error && data.length > 0) {
+            const mapped = data.map(p => ({
+              id: p.id,
+              name: p.full_name || p.id,
+              role: p.role,
+              region: p.managed_region || 'Toàn Quốc'
+            }));
+            setQcUsers(mapped);
+            return;
+          }
+        } catch (err) {
+          console.warn('[App] Error loading QC profiles:', err);
+        }
+      }
+
+      // Fallback
+      const fallbackList = [];
+      if (user && (user.name || user.full_name)) {
+        fallbackList.push({
+          id: user.id || 'current-user',
+          name: user.name || user.full_name,
+          role: user.role || 'qc',
+          region: user.managedRegion || 'Toàn Quốc'
+        });
+      }
+      fallbackList.push({
+        id: 'qc-hung',
+        name: 'Nguyễn Văn Hùng',
+        role: 'qc',
+        region: 'Miền Bắc'
+      });
+      setQcUsers(fallbackList);
+    }
+    loadQcProfiles();
+  }, [user]);
 
   // Main State via Supabase hooks
   const { npps, addNpp, editNpp, deleteNpp, importNpps } = useNpps();
@@ -575,6 +622,8 @@ export default function App() {
             <DeviceRepairProcessing
               repairTickets={repairTickets}
               npps={npps}
+              systemSets={systemSets}
+              qcUsers={qcUsers}
               onAddTicket={handleAddTicket}
               onEditTicket={handleEditTicket}
               onDeleteTicket={handleDeleteTicket}

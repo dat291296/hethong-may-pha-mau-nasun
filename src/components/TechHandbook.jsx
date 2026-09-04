@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   BookOpen,
   Search,
@@ -18,8 +18,13 @@ import {
   Check,
   User,
   Clock,
-  Tag
+  Tag,
+  Edit3,
+  Trash2,
+  Plus,
+  RotateCcw
 } from 'lucide-react';
+import SafePortal from './SafePortal';
 
 import {
   ERROR_CODES_DATA,
@@ -30,12 +35,194 @@ import {
 export default function TechHandbook({ onSelectErrorForRepair }) {
   const [activeSubTab, setActiveSubTab] = useState('ERRORS'); // 'ERRORS' | 'SOPS' | 'TIPS'
 
+  // Error Codes with LocalStorage Persistence
+  const [errorCodes, setErrorCodes] = useState(() => {
+    try {
+      const saved = localStorage.getItem('tech_handbook_errors');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      console.warn('Error loading error codes from storage:', e);
+    }
+    return ERROR_CODES_DATA;
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('tech_handbook_errors', JSON.stringify(errorCodes));
+    } catch (e) {
+      console.warn('Error saving error codes to storage:', e);
+    }
+  }, [errorCodes]);
+
   // Error Code Search & Filter States
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('ALL');
   const [modelFilter, setModelFilter] = useState('ALL');
   const [severityFilter, setSeverityFilter] = useState('ALL');
   const [expandedErrorId, setExpandedErrorId] = useState(null);
+
+  // Add / Edit Error Modal State
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [editingError, setEditingError] = useState(null);
+  const [errorFormData, setErrorFormData] = useState({
+    code: '',
+    title: '',
+    category: 'Máy chiết',
+    machineModel: 'Satint A2',
+    severity: 'MEDIUM',
+    symptoms: '',
+    rootCause: '',
+    actionSteps: '',
+    sparePartsNeeded: '',
+    preventiveMaintenance: '',
+    author: 'KTV. Kỹ Thuật Viên'
+  });
+
+  // Dynamic available models for filter
+  const availableModels = useMemo(() => {
+    const set = new Set();
+    errorCodes.forEach(e => {
+      if (e.machineModel) set.add(e.machineModel);
+    });
+    return Array.from(set);
+  }, [errorCodes]);
+
+  // Filter Error Codes
+  const filteredErrors = useMemo(() => {
+    const term = searchTerm.toLowerCase().trim();
+    return errorCodes.filter((item) => {
+      let matchesSearch = true;
+      if (term) {
+        const targets = [
+          item.code || '',
+          item.title || '',
+          item.machineModel || '',
+          item.category || '',
+          item.rootCause || '',
+          item.preventiveMaintenance || '',
+          item.sparePartsNeeded || '',
+          ...(item.symptoms || []),
+          ...(item.actionSteps || [])
+        ];
+        matchesSearch = targets.some(t => String(t).toLowerCase().includes(term));
+      }
+
+      const matchesCategory = categoryFilter === 'ALL' || item.category === categoryFilter;
+      const matchesModel = modelFilter === 'ALL' || item.machineModel === modelFilter;
+      const matchesSeverity = severityFilter === 'ALL' || item.severity === severityFilter;
+
+      return matchesSearch && matchesCategory && matchesModel && matchesSeverity;
+    });
+  }, [errorCodes, searchTerm, categoryFilter, modelFilter, severityFilter]);
+
+  const handleOpenAddError = () => {
+    setEditingError(null);
+    setErrorFormData({
+      code: '',
+      title: '',
+      category: 'Máy chiết',
+      machineModel: 'Satint A2',
+      severity: 'MEDIUM',
+      symptoms: '',
+      rootCause: '',
+      actionSteps: '',
+      sparePartsNeeded: '',
+      preventiveMaintenance: '',
+      author: 'KTV. Kỹ Thuật Viên'
+    });
+    setShowErrorModal(true);
+  };
+
+  const handleOpenEditError = (err) => {
+    setEditingError(err);
+    setErrorFormData({
+      code: err.code || '',
+      title: err.title || '',
+      category: err.category || 'Máy chiết',
+      machineModel: err.machineModel || '',
+      severity: err.severity || 'MEDIUM',
+      symptoms: Array.isArray(err.symptoms) ? err.symptoms.join('\n') : (err.symptoms || ''),
+      rootCause: err.rootCause || '',
+      actionSteps: Array.isArray(err.actionSteps) ? err.actionSteps.join('\n') : (err.actionSteps || ''),
+      sparePartsNeeded: Array.isArray(err.sparePartsNeeded) ? err.sparePartsNeeded.join(', ') : (err.sparePartsNeeded || ''),
+      preventiveMaintenance: err.preventiveMaintenance || '',
+      author: err.author || 'KTV. Kỹ Thuật Viên'
+    });
+    setShowErrorModal(true);
+  };
+
+  const handleDeleteError = (err) => {
+    if (window.confirm(`Bạn có chắc muốn xóa mã lỗi [${err.code}] ${err.title}?`)) {
+      setErrorCodes(prev => prev.filter(e => e.id !== err.id));
+    }
+  };
+
+  const handleResetDefaultErrors = () => {
+    if (window.confirm('Khôi phục danh sách mã lỗi về mặc định ban đầu?')) {
+      setErrorCodes(ERROR_CODES_DATA);
+    }
+  };
+
+  const handleSaveErrorSubmit = (e) => {
+    e.preventDefault();
+    if (!errorFormData.code.trim() || !errorFormData.title.trim()) {
+      alert('Vui lòng nhập Mã lỗi và Tên lỗi!');
+      return;
+    }
+
+    const symptomsArr = errorFormData.symptoms
+      .split('\n')
+      .map(s => s.trim())
+      .filter(Boolean);
+
+    const actionStepsArr = errorFormData.actionSteps
+      .split('\n')
+      .map(s => s.trim())
+      .filter(Boolean);
+
+    if (editingError) {
+      setErrorCodes(prev => prev.map(item => {
+        if (item.id === editingError.id) {
+          return {
+            ...item,
+            code: errorFormData.code.trim(),
+            title: errorFormData.title.trim(),
+            category: errorFormData.category,
+            machineModel: errorFormData.machineModel.trim(),
+            severity: errorFormData.severity,
+            symptoms: symptomsArr.length > 0 ? symptomsArr : ['Chưa có thông tin dấu hiệu'],
+            rootCause: errorFormData.rootCause.trim(),
+            actionSteps: actionStepsArr.length > 0 ? actionStepsArr : ['Chưa có thông tin quy trình khắc phục'],
+            sparePartsNeeded: errorFormData.sparePartsNeeded.trim(),
+            preventiveMaintenance: errorFormData.preventiveMaintenance.trim(),
+            author: errorFormData.author.trim() || 'KTV. Kỹ Thuật Viên'
+          };
+        }
+        return item;
+      }));
+    } else {
+      const newErr = {
+        id: `ERR-${Date.now()}`,
+        code: errorFormData.code.trim(),
+        title: errorFormData.title.trim(),
+        category: errorFormData.category,
+        machineModel: errorFormData.machineModel.trim() || 'Chung',
+        severity: errorFormData.severity,
+        symptoms: symptomsArr.length > 0 ? symptomsArr : ['Chưa có thông tin dấu hiệu'],
+        rootCause: errorFormData.rootCause.trim(),
+        actionSteps: actionStepsArr.length > 0 ? actionStepsArr : ['Chưa có thông tin quy trình khắc phục'],
+        sparePartsNeeded: errorFormData.sparePartsNeeded.trim(),
+        preventiveMaintenance: errorFormData.preventiveMaintenance.trim(),
+        author: errorFormData.author.trim() || 'KTV. Kỹ Thuật Viên'
+      };
+      setErrorCodes(prev => [newErr, ...prev]);
+    }
+
+    setShowErrorModal(false);
+  };
 
   // Field Tips State
   const [fieldTips, setFieldTips] = useState(FIELD_TIPS_DATA);
@@ -50,20 +237,7 @@ export default function TechHandbook({ onSelectErrorForRepair }) {
   // Expandable SOPs state
   const [expandedSopId, setExpandedSopId] = useState('SOP-01');
 
-  // Filter Error Codes
-  const filteredErrors = ERROR_CODES_DATA.filter((item) => {
-    const matchesSearch =
-      item.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.rootCause.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.symptoms.some((s) => s.toLowerCase().includes(searchTerm.toLowerCase()));
 
-    const matchesCategory = categoryFilter === 'ALL' || item.category === categoryFilter;
-    const matchesModel = modelFilter === 'ALL' || item.machineModel === modelFilter;
-    const matchesSeverity = severityFilter === 'ALL' || item.severity === severityFilter;
-
-    return matchesSearch && matchesCategory && matchesModel && matchesSeverity;
-  });
 
   // Severity Badge Helper
   const getSeverityBadge = (severity) => {
@@ -138,7 +312,7 @@ export default function TechHandbook({ onSelectErrorForRepair }) {
               }}
             >
               <AlertTriangle size={16} />
-              <span>Tra Cứu Mã Lỗi ({ERROR_CODES_DATA.length})</span>
+              <span>Tra Cứu Mã Lỗi ({errorCodes.length})</span>
             </button>
 
             <button
@@ -186,9 +360,42 @@ export default function TechHandbook({ onSelectErrorForRepair }) {
         </div>
       </div>
 
-      {/* 🔴 SUB-TAB 1: TRA CỨU MÃ LỖI */}
+      {/* 🔴 SUB-TAB 1: TRA CỨU & QUẢN LÝ MÃ LỖI */}
       {activeSubTab === 'ERRORS' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          {/* Top Action Toolbar */}
+          <div className="glass-panel" style={{ padding: '14px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
+                Hiển thị <strong>{filteredErrors.length}</strong> / <strong>{errorCodes.length}</strong> mã sự cố máy
+              </span>
+              {searchTerm && (
+                <span className="badge badge-info" style={{ fontSize: '0.75rem' }}>
+                  Khớp tìm kiếm "{searchTerm}"
+                </span>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button 
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={handleResetDefaultErrors}
+                title="Khôi phục danh sách mã lỗi chuẩn từ dữ liệu mẫu"
+              >
+                <RotateCcw size={14} />
+                <span>Khôi Phục Mặc Định</span>
+              </button>
+              <button 
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={handleOpenAddError}
+              >
+                <Plus size={14} />
+                <span>Thêm Mã Lỗi Mới</span>
+              </button>
+            </div>
+          </div>
+
           {/* Search & Filter Bar */}
           <div className="glass-panel" style={{ padding: '16px 20px' }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
@@ -197,7 +404,7 @@ export default function TechHandbook({ onSelectErrorForRepair }) {
                 <Search size={18} color="var(--text-muted)" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
                 <input
                   type="text"
-                  placeholder="Tra cứu mã lỗi (E-01, E-04...), từ khóa (kẹt piston, com port, nghẹt đầu vòi...)..."
+                  placeholder="🔍 Tra cứu theo mã lỗi (E-01..), tên lỗi, model máy, linh kiện, phân loại thiết bị..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   style={{
@@ -233,7 +440,10 @@ export default function TechHandbook({ onSelectErrorForRepair }) {
                   <option value="ALL">📦 Tất cả Phân loại</option>
                   <option value="Máy chiết">Máy chiết</option>
                   <option value="Máy lắc">Máy lắc</option>
+                  <option value="Máy tính">Máy tính</option>
+                  <option value="Máy in">Máy in</option>
                   <option value="Phần mềm">Phần mềm pha màu</option>
+                  <option value="Khác">Khác</option>
                 </select>
               </div>
 
@@ -253,12 +463,10 @@ export default function TechHandbook({ onSelectErrorForRepair }) {
                     fontSize: '0.85rem'
                   }}
                 >
-                  <option value="ALL">⚙️ Tất cả Dòng Máy</option>
-                  <option value="Satint A2">Satint A2</option>
-                  <option value="Satint AIO">Satint AIO</option>
-                  <option value="Satint A2-100">Satint A2-100</option>
-                  <option value="Case máy tính">Case máy tính</option>
-                  <option value="Khác / Linh kiện">Khác / Máy lắc</option>
+                  <option value="ALL">⚙️ Tất cả Dòng Máy ({availableModels.length})</option>
+                  {availableModels.map(m => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
                 </select>
               </div>
 
@@ -291,10 +499,10 @@ export default function TechHandbook({ onSelectErrorForRepair }) {
           {/* Results List */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {filteredErrors.length === 0 ? (
-              <div className="glass-panel" style={{ padding: '40px', textAlignment: 'center', color: 'var(--text-muted)' }}>
+              <div className="glass-panel" style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
                 <Info size={36} color="var(--accent-cyan)" style={{ marginBottom: '12px', opacity: 0.6 }} />
                 <p style={{ margin: 0, fontSize: '1rem', fontWeight: '600' }}>Không tìm thấy mã lỗi phù hợp với bộ lọc!</p>
-                <span style={{ fontSize: '0.8rem' }}>Thử thay đổi từ khóa hoặc đặt lại bộ lọc.</span>
+                <span style={{ fontSize: '0.8rem' }}>Thử thay đổi từ khóa hoặc bấm "Thêm Mã Lỗi Mới" để ghi nhận lỗi này.</span>
               </div>
             ) : (
               filteredErrors.map((error) => {
@@ -322,7 +530,9 @@ export default function TechHandbook({ onSelectErrorForRepair }) {
                         alignItems: 'center',
                         justifyContent: 'space-between',
                         cursor: 'pointer',
-                        userSelect: 'none'
+                        userSelect: 'none',
+                        flexWrap: 'wrap',
+                        gap: '12px'
                       }}
                       onClick={() => setExpandedErrorId(isExpanded ? null : error.id)}
                     >
@@ -354,14 +564,34 @@ export default function TechHandbook({ onSelectErrorForRepair }) {
                         </div>
                       </div>
 
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }} onClick={e => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          style={{ padding: '6px 10px' }}
+                          title="Chỉnh sửa mã lỗi"
+                          onClick={() => handleOpenEditError(error)}
+                        >
+                          <Edit3 size={14} color="var(--accent-amber)" />
+                          <span>Sửa</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          style={{ padding: '6px 10px' }}
+                          title="Xóa mã lỗi"
+                          onClick={() => handleDeleteError(error)}
+                        >
+                          <Trash2 size={14} color="#ef4444" />
+                          <span>Xóa</span>
+                        </button>
+
                         {onSelectErrorForRepair && (
                           <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onSelectErrorForRepair(error);
-                            }}
-                            className="btn btn-primary"
+                            type="button"
+                            onClick={() => onSelectErrorForRepair(error)}
+                            className="btn btn-primary btn-sm"
                             style={{
                               padding: '6px 12px',
                               fontSize: '0.75rem',
@@ -378,12 +608,15 @@ export default function TechHandbook({ onSelectErrorForRepair }) {
                         )}
 
                         <button
+                          type="button"
                           style={{
                             background: 'none',
                             border: 'none',
                             color: 'var(--text-muted)',
-                            cursor: 'pointer'
+                            cursor: 'pointer',
+                            padding: '4px'
                           }}
+                          onClick={() => setExpandedErrorId(isExpanded ? null : error.id)}
                         >
                           {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
                         </button>
@@ -396,10 +629,10 @@ export default function TechHandbook({ onSelectErrorForRepair }) {
                         {/* Symptoms */}
                         <div>
                           <div style={{ fontSize: '0.8rem', fontWeight: '800', color: '#f59e0b', textTransform: 'uppercase', marginBottom: '6px', letterSpacing: '0.05em' }}>
-                            🔍 Dấu hiệu nhận biết thực địa:
+                            🔍 Dấu hiệu nhận biết lỗi:
                           </div>
                           <ul style={{ margin: 0, paddingLeft: '20px', color: 'var(--text-muted)', fontSize: '0.875rem' }}>
-                            {error.symptoms.map((sym, idx) => (
+                            {(error.symptoms || []).map((sym, idx) => (
                               <li key={idx} style={{ marginBottom: '3px' }}>{sym}</li>
                             ))}
                           </ul>
@@ -408,7 +641,7 @@ export default function TechHandbook({ onSelectErrorForRepair }) {
                         {/* Root Cause */}
                         <div style={{ background: 'rgba(239, 68, 68, 0.06)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(239,68,68,0.2)' }}>
                           <span style={{ fontSize: '0.8rem', fontWeight: '800', color: '#ef4444', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '4px' }}>
-                            ⚡ Nguyên nhân gốc rễ (Root Cause):
+                            ⚡ Nguyên nhân lỗi (Root Cause):
                           </span>
                           <span style={{ fontSize: '0.875rem', color: '#fca5a5' }}>
                             {error.rootCause}
@@ -418,10 +651,10 @@ export default function TechHandbook({ onSelectErrorForRepair }) {
                         {/* Action Steps */}
                         <div>
                           <div style={{ fontSize: '0.8rem', fontWeight: '800', color: 'var(--accent-cyan)', textTransform: 'uppercase', marginBottom: '8px', letterSpacing: '0.05em' }}>
-                            🛠️ Quy trình khắc phục từng bước (Action Plan):
+                            🛠️ Quy trình khắc phục, sửa chữa từng bước:
                           </div>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                            {error.actionSteps.map((step, idx) => (
+                            {(error.actionSteps || []).map((step, idx) => (
                               <div
                                 key={idx}
                                 style={{
@@ -460,11 +693,23 @@ export default function TechHandbook({ onSelectErrorForRepair }) {
                           </div>
                         </div>
 
+                        {/* Spare parts needed */}
+                        {error.sparePartsNeeded && (
+                          <div style={{ background: 'rgba(59, 130, 246, 0.08)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(59, 130, 246, 0.25)' }}>
+                            <div style={{ fontSize: '0.8rem', fontWeight: '800', color: 'var(--accent-blue)', textTransform: 'uppercase', marginBottom: '4px', letterSpacing: '0.05em' }}>
+                              🔧 Linh kiện thay thế:
+                            </div>
+                            <span style={{ fontSize: '0.875rem', color: '#93c5fd', fontWeight: '500' }}>
+                              {Array.isArray(error.sparePartsNeeded) ? error.sparePartsNeeded.join(', ') : error.sparePartsNeeded}
+                            </span>
+                          </div>
+                        )}
+
                         {/* Preventive Maintenance & Author */}
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px', fontSize: '0.775rem', color: 'var(--text-muted)', paddingTop: '8px' }}>
                           <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                             <CheckCircle2 size={14} color="#10b981" />
-                            <strong>Khuyên dùng bảo dưỡng:</strong> {error.preventiveMaintenance}
+                            <strong>Cách phòng tránh:</strong> {error.preventiveMaintenance}
                           </span>
                           <span style={{ fontStyle: 'italic' }}>Biên soạn: {error.author}</span>
                         </div>
@@ -476,6 +721,178 @@ export default function TechHandbook({ onSelectErrorForRepair }) {
             )}
           </div>
         </div>
+      )}
+
+      {/* 🔴 MODAL THÊM / SỬA MÃ LỖI SỔ TAY KỸ THUẬT */}
+      {showErrorModal && (
+        <SafePortal>
+          <div className="modal-overlay">
+            <div className="modal-content" style={{ maxWidth: '680px' }}>
+              <div className="modal-header">
+                <h3 style={{ fontWeight: '800' }}>
+                  {editingError ? `Chỉnh Sửa Mã Lỗi [${editingError.code}]` : 'Thêm Mã Lỗi Mới Vào Sổ Tay'}
+                </h3>
+                <button type="button" className="btn btn-secondary btn-sm" onClick={() => setShowErrorModal(false)}>✕</button>
+              </div>
+              <form onSubmit={handleSaveErrorSubmit}>
+                <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px', maxHeight: '72vh', overflowY: 'auto' }}>
+                  <div className="responsive-form-grid">
+                    <div className="form-group">
+                      <label className="form-label" style={{ fontWeight: '700' }}>🏷️ Mã Lỗi (VD: E-01, M-03, P-05) *</label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        required
+                        placeholder="VD: E-18..."
+                        value={errorFormData.code}
+                        onChange={e => setErrorFormData({ ...errorFormData, code: e.target.value })}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label" style={{ fontWeight: '700' }}>🔴 Mức Độ Nghiêm Trọng</label>
+                      <select
+                        className="form-select"
+                        value={errorFormData.severity}
+                        onChange={e => setErrorFormData({ ...errorFormData, severity: e.target.value })}
+                      >
+                        <option value="CRITICAL">🔴 CRITICAL (Khẩn cấp / Dừng máy)</option>
+                        <option value="HIGH">🟠 HIGH (Nặng)</option>
+                        <option value="MEDIUM">🟡 MEDIUM (Vừa)</option>
+                        <option value="LIGHT">🟢 LIGHT (Nhẹ)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label" style={{ fontWeight: '700' }}>📝 Tên Lỗi / Mô Tả Ngắn *</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      required
+                      placeholder="VD: Lỗi lệch góc van chiết xoay, kẹt pít-tông..."
+                      value={errorFormData.title}
+                      onChange={e => setErrorFormData({ ...errorFormData, title: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="responsive-form-grid">
+                    <div className="form-group">
+                      <label className="form-label">📂 Phân Loại Thiết Bị *</label>
+                      <select
+                        className="form-select"
+                        value={errorFormData.category}
+                        onChange={e => setErrorFormData({ ...errorFormData, category: e.target.value })}
+                      >
+                        <option value="Máy chiết">Máy chiết</option>
+                        <option value="Máy lắc">Máy lắc</option>
+                        <option value="Máy tính">Máy tính</option>
+                        <option value="Máy in">Máy in</option>
+                        <option value="Phần mềm">Phần mềm</option>
+                        <option value="Khác">Khác</option>
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">⚙️ Model Máy Áp Dụng *</label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        required
+                        placeholder="VD: Satint A2, Satint AIO, Natos V1, QL-700..."
+                        value={errorFormData.machineModel}
+                        onChange={e => setErrorFormData({ ...errorFormData, machineModel: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label" style={{ fontWeight: '700', color: '#f59e0b' }}>
+                      🔍 Dấu Hiệu Nhận Biết Lỗi (Mỗi dòng một dấu hiệu) *
+                    </label>
+                    <textarea
+                      className="form-input"
+                      rows={3}
+                      required
+                      placeholder="VD:&#10;Máy phát tiếng cạch cạch khi đẩy màu&#10;Đèn đỏ nhấp nháy 3 lần"
+                      value={errorFormData.symptoms}
+                      onChange={e => setErrorFormData({ ...errorFormData, symptoms: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label" style={{ fontWeight: '700', color: '#ef4444' }}>
+                      ⚡ Nguyên Nhân Lỗi (Root Cause) *
+                    </label>
+                    <textarea
+                      className="form-input"
+                      rows={2}
+                      required
+                      placeholder="VD: Cặn sơn bám dính xy-lanh hoặc cảm biến quang đĩa van bị bám bụi..."
+                      value={errorFormData.rootCause}
+                      onChange={e => setErrorFormData({ ...errorFormData, rootCause: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label" style={{ fontWeight: '700', color: 'var(--accent-cyan)' }}>
+                      🛠️ Quy Trình Khắc Phục, Sửa Chữa (Mỗi dòng một bước thực hiện) *
+                    </label>
+                    <textarea
+                      className="form-input"
+                      rows={4}
+                      required
+                      placeholder="VD:&#10;Bước 1: Tắt nguồn máy và ngắt điện áp&#10;Bước 2: Dùng cồn Isopropyl 99% vệ sinh mắt đọc cảm biến&#10;Bước 3: Cắm lại giắc cáp và chạy test chẩn đoán"
+                      value={errorFormData.actionSteps}
+                      onChange={e => setErrorFormData({ ...errorFormData, actionSteps: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="responsive-form-grid">
+                    <div className="form-group">
+                      <label className="form-label">🔧 Linh Kiện Thay Thế</label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="VD: Zoăng pít-tông, Cảm biến van xoay, Nguồn 24V..."
+                        value={errorFormData.sparePartsNeeded}
+                        onChange={e => setErrorFormData({ ...errorFormData, sparePartsNeeded: e.target.value })}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">🛡️ Cách Phòng Tránh</label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="VD: Vệ sinh đầu vòi định kỳ 1 tuần/lần..."
+                        value={errorFormData.preventiveMaintenance}
+                        onChange={e => setErrorFormData({ ...errorFormData, preventiveMaintenance: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">👤 Kỹ Thuật Viên Biên Soạn</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="VD: KTV. Nguyễn Văn Hùng"
+                      value={errorFormData.author}
+                      onChange={e => setErrorFormData({ ...errorFormData, author: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="modal-footer">
+                  <button type="button" className="btn btn-secondary" onClick={() => setShowErrorModal(false)}>
+                    Hủy Bỏ
+                  </button>
+                  <button type="submit" className="btn btn-primary">
+                    {editingError ? 'Lưu Thay Đổi' : 'Thêm Vào Sổ Tay'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </SafePortal>
       )}
 
       {/* 📋 SUB-TAB 2: QUY TRÌNH CHUẨN SOPs */}

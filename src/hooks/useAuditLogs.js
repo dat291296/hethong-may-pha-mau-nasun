@@ -28,10 +28,25 @@ export function useAuditLogs() {
     if (error) {
       const cached = await getCachedOfflineData('audit_logs', null);
       if (cached) setAuditLogs(cached);
-    } else if (data && data.length > 0) {
-      const mapped = data.map(mapDbToAudit);
-      setAuditLogs(mapped);
-      cacheOfflineData('audit_logs', mapped);
+    } else if (data) {
+      if (data.length === 0) {
+        const cached = await getCachedOfflineData('audit_logs', null);
+        if (cached && Array.isArray(cached) && cached.length === 0) {
+          setAuditLogs([]);
+        } else if (cached && cached.length > 0) {
+          setAuditLogs(cached);
+        } else {
+          // Seed initial logs to Supabase if empty
+          const seedPayloads = INITIAL_AUDIT_LOGS.map(mapAuditToDb);
+          await safeQuery(sb => sb.from('audit_logs').upsert(seedPayloads), 'seedAuditLogs');
+          setAuditLogs(INITIAL_AUDIT_LOGS);
+          cacheOfflineData('audit_logs', INITIAL_AUDIT_LOGS);
+        }
+      } else {
+        const mapped = data.map(mapDbToAudit);
+        setAuditLogs(mapped);
+        cacheOfflineData('audit_logs', mapped);
+      }
     }
     setLoading(false);
   }, []);
@@ -45,13 +60,13 @@ export function useAuditLogs() {
     if (!isSupabaseConfigured || !supabase) return;
     const channel = supabase
       .channel('audit-changes')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'audit_logs' }, () => fetchAuditLogs())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'audit_logs' }, () => fetchAuditLogs())
       .subscribe();
     return () => supabase.removeChannel(channel);
   }, [fetchAuditLogs]);
 
   const addAuditLog = useCallback(async (logData) => {
-    const tempId = logData.id || `AUDIT-TEMP-${Date.now()}`;
+    const tempId = logData.id || `AUDIT-${Date.now()}`;
     const localLog = {
       ...logData,
       id: tempId,
@@ -84,24 +99,40 @@ export function useAuditLogs() {
     }
 
     return localLog;
-  }, []);
+  }, [fetchAuditLogs]);
 
   const editAuditLog = useCallback(async (id, updates) => {
+    let currentItem = null;
     setAuditLogs(prev => {
-      const updated = prev.map(item => item.id === id ? { ...item, ...updates } : item);
+      const updated = prev.map(item => {
+        if (item.id === id) {
+          currentItem = { ...item, ...updates };
+          return currentItem;
+        }
+        return item;
+      });
       cacheOfflineData('audit_logs', updated);
       return updated;
     });
 
-    const dbPayload = mapAuditToDb({ id, ...updates });
+    const dbPayload = mapAuditToDb({ id, ...(currentItem || updates) });
 
     if (isSupabaseConfigured && navigator.onLine) {
       try {
-        const { error } = await safeQuery(
-          sb => sb.from('audit_logs').update(dbPayload).eq('id', id),
+        const { data: updatedRows, error } = await safeQuery(
+          sb => sb.from('audit_logs').update(dbPayload).eq('id', id).select(),
           'editAuditLog'
         );
         if (error) throw error;
+
+        // If row did not exist in DB yet (e.g. from mock), upsert it
+        if (!updatedRows || updatedRows.length === 0) {
+          await safeQuery(
+            sb => sb.from('audit_logs').upsert(dbPayload),
+            'upsertAuditLog'
+          );
+        }
+        await fetchAuditLogs();
       } catch (err) {
         console.warn('[Offline] Failed online editAuditLog. Queueing.', err);
         enqueueOfflineAction('UPDATE_AUDIT_LOG', { id, ...dbPayload });
@@ -109,7 +140,7 @@ export function useAuditLogs() {
     } else if (isSupabaseConfigured && !navigator.onLine) {
       enqueueOfflineAction('UPDATE_AUDIT_LOG', { id, ...dbPayload });
     }
-  }, []);
+  }, [fetchAuditLogs]);
 
   const deleteAuditLog = useCallback(async (id) => {
     setAuditLogs(prev => {
@@ -125,6 +156,7 @@ export function useAuditLogs() {
           'deleteAuditLog'
         );
         if (error) throw error;
+        await fetchAuditLogs();
       } catch (err) {
         console.warn('[Offline] Failed online deleteAuditLog. Queueing.', err);
         enqueueOfflineAction('DELETE_AUDIT_LOG', { id });
@@ -132,7 +164,7 @@ export function useAuditLogs() {
     } else if (isSupabaseConfigured && !navigator.onLine) {
       enqueueOfflineAction('DELETE_AUDIT_LOG', { id });
     }
-  }, []);
+  }, [fetchAuditLogs]);
 
   return {
     auditLogs,
@@ -162,7 +194,7 @@ function mapDbToAudit(row) {
 }
 
 function mapAuditToDb(log) {
-  return {
+  const payload = {
     type:        log.type,
     set_code:    log.setCode || '—',
     npp_id:      log.nppId || '—',
@@ -173,4 +205,8 @@ function mapAuditToDb(log) {
     notes:       log.notes || '',
     severity:    log.severity || 'INFO',
   };
+  if (log.id) {
+    payload.id = log.id;
+  }
+  return payload;
 }
