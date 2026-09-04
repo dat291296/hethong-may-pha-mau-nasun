@@ -399,8 +399,205 @@ export default function AssetManagement({
     );
   };
 
+  // Inventory Stock Calculations (Items not yet assigned to any combo or setCode is null)
+  const stockDispensers = React.useMemo(() => (dispensers || []).filter(d => !d.isAssigned && !d.setCode), [dispensers]);
+  const stockMixers = React.useMemo(() => (mixers || []).filter(m => !m.isAssigned && !m.setCode), [mixers]);
+  const stockComputers = React.useMemo(() => (computers || []).filter(c => !c.isAssigned && !c.setCode), [computers]);
+  const stockPrinters = React.useMemo(() => (printers || []).filter(p => !p.isAssigned && !p.setCode), [printers]);
+  const stockSets = React.useMemo(() => (systemSets || []).filter(s => s.status === 'TRONG_KHO'), [systemSets]);
+
+  // Breakdown by model/type for stock items
+  const dispenserStockBreakdown = React.useMemo(() => {
+    const map = {};
+    stockDispensers.forEach(d => {
+      const model = d.model || 'Khác';
+      map[model] = (map[model] || 0) + 1;
+    });
+    return map;
+  }, [stockDispensers]);
+
+  const mixerStockBreakdown = React.useMemo(() => {
+    const map = {};
+    stockMixers.forEach(m => {
+      const key = m.model || m.type || 'Khác';
+      map[key] = (map[key] || 0) + 1;
+    });
+    return map;
+  }, [stockMixers]);
+
+  const computerStockBreakdown = React.useMemo(() => {
+    const map = {};
+    stockComputers.forEach(c => {
+      const key = c.type || (c.os?.includes('Windows') ? 'Case/AIO' : 'Máy Tính');
+      map[key] = (map[key] || 0) + 1;
+    });
+    return map;
+  }, [stockComputers]);
+
+  const printerStockBreakdown = React.useMemo(() => {
+    const map = {};
+    stockPrinters.forEach(p => {
+      const key = p.model || 'QL700';
+      map[key] = (map[key] || 0) + 1;
+    });
+    return map;
+  }, [stockPrinters]);
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      
+      {/* 📦 BẢNG TỔNG HỢP TỒN KHO THIẾT BỊ HIỆN TẠI */}
+      <div className="glass-panel" style={{ padding: '20px', background: 'linear-gradient(135deg, rgba(15,23,42,0.95) 0%, rgba(30,41,59,0.85) 100%)', border: '1px solid rgba(56,189,248,0.3)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
+          <div>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: '800', color: 'var(--accent-cyan)', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+              <span>📦 Thống Kê Tồn Kho Thiết Bị Hiện Tại (Sẵn Sàng Cấp Phát)</span>
+            </h3>
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '4px 0 0 0' }}>
+              Bao gồm các thiết bị lẻ lưu kho chưa ghép vào bộ máy và các bộ máy hoàn chỉnh đang nằm trong kho tổng
+            </p>
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <span className="badge badge-info" style={{ fontSize: '0.75rem', padding: '4px 10px' }}>
+              ● Tổng: {stockDispensers.length + stockMixers.length + stockComputers.length + stockPrinters.length} thiết bị lẻ + {stockSets.length} bộ máy kho
+            </span>
+          </div>
+        </div>
+
+        {/* 5 Stock Cards Grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
+          
+          {/* 1. Máy Chiết Tồn Kho */}
+          <div 
+            className="glass-panel glass-panel-hover" 
+            style={{ padding: '14px', cursor: 'pointer', borderTop: '3px solid #ec4899', background: activeSubTab === 'dispensers' ? 'rgba(236,72,153,0.12)' : 'rgba(15,23,42,0.6)' }}
+            onClick={() => { setActiveSubTab('dispensers'); setStatusFilter('ALL'); }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700', textTransform: 'uppercase' }}>Máy Chiết Trong Kho</span>
+              <Flame size={18} color="#ec4899" />
+            </div>
+            <div style={{ fontSize: '1.6rem', fontWeight: '900', color: '#ec4899', lineHeight: 1 }}>
+              {stockDispensers.length} <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 'normal' }}>máy</span>
+            </div>
+            <div style={{ marginTop: '10px', fontSize: '0.75rem', color: 'var(--text-main)', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '8px' }}>
+              {Object.keys(dispenserStockBreakdown).length === 0 ? (
+                <span style={{ color: 'var(--text-muted)' }}>Hết máy chiết tồn kho</span>
+              ) : (
+                Object.entries(dispenserStockBreakdown).map(([model, qty]) => (
+                  <div key={model} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                    <span style={{ color: 'var(--text-muted)' }}>• {model}:</span>
+                    <strong style={{ color: '#fff' }}>{qty} cái</strong>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* 2. Máy Lắc Tồn Kho */}
+          <div 
+            className="glass-panel glass-panel-hover" 
+            style={{ padding: '14px', cursor: 'pointer', borderTop: '3px solid #38bdf8', background: activeSubTab === 'mixers' ? 'rgba(56,189,248,0.12)' : 'rgba(15,23,42,0.6)' }}
+            onClick={() => { setActiveSubTab('mixers'); setStatusFilter('ALL'); }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700', textTransform: 'uppercase' }}>Máy Lắc Trong Kho</span>
+              <Cpu size={18} color="#38bdf8" />
+            </div>
+            <div style={{ fontSize: '1.6rem', fontWeight: '900', color: '#38bdf8', lineHeight: 1 }}>
+              {stockMixers.length} <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 'normal' }}>máy</span>
+            </div>
+            <div style={{ marginTop: '10px', fontSize: '0.75rem', color: 'var(--text-main)', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '8px' }}>
+              {Object.keys(mixerStockBreakdown).length === 0 ? (
+                <span style={{ color: 'var(--text-muted)' }}>Hết máy lắc tồn kho</span>
+              ) : (
+                Object.entries(mixerStockBreakdown).map(([model, qty]) => (
+                  <div key={model} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                    <span style={{ color: 'var(--text-muted)' }}>• {model}:</span>
+                    <strong style={{ color: '#fff' }}>{qty} cái</strong>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* 3. Máy Tính Tồn Kho */}
+          <div 
+            className="glass-panel glass-panel-hover" 
+            style={{ padding: '14px', cursor: 'pointer', borderTop: '3px solid #a855f7', background: activeSubTab === 'computers' ? 'rgba(168,85,247,0.12)' : 'rgba(15,23,42,0.6)' }}
+            onClick={() => { setActiveSubTab('computers'); setStatusFilter('ALL'); }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700', textTransform: 'uppercase' }}>Máy Tính Trong Kho</span>
+              <Monitor size={18} color="#a855f7" />
+            </div>
+            <div style={{ fontSize: '1.6rem', fontWeight: '900', color: '#a855f7', lineHeight: 1 }}>
+              {stockComputers.length} <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 'normal' }}>bộ</span>
+            </div>
+            <div style={{ marginTop: '10px', fontSize: '0.75rem', color: 'var(--text-main)', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '8px' }}>
+              {Object.keys(computerStockBreakdown).length === 0 ? (
+                <span style={{ color: 'var(--text-muted)' }}>Hết máy tính tồn kho</span>
+              ) : (
+                Object.entries(computerStockBreakdown).map(([type, qty]) => (
+                  <div key={type} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                    <span style={{ color: 'var(--text-muted)' }}>• {type}:</span>
+                    <strong style={{ color: '#fff' }}>{qty} cái</strong>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* 4. Máy In QL700 Tồn Kho */}
+          <div 
+            className="glass-panel glass-panel-hover" 
+            style={{ padding: '14px', cursor: 'pointer', borderTop: '3px solid #10b981', background: activeSubTab === 'printers' ? 'rgba(16,185,129,0.12)' : 'rgba(15,23,42,0.6)' }}
+            onClick={() => { setActiveSubTab('printers'); setStatusFilter('ALL'); }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700', textTransform: 'uppercase' }}>Máy In Trong Kho</span>
+              <Printer size={18} color="#10b981" />
+            </div>
+            <div style={{ fontSize: '1.6rem', fontWeight: '900', color: '#10b981', lineHeight: 1 }}>
+              {stockPrinters.length} <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 'normal' }}>máy</span>
+            </div>
+            <div style={{ marginTop: '10px', fontSize: '0.75rem', color: 'var(--text-main)', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '8px' }}>
+              {Object.keys(printerStockBreakdown).length === 0 ? (
+                <span style={{ color: 'var(--text-muted)' }}>Hết máy in tồn kho</span>
+              ) : (
+                Object.entries(printerStockBreakdown).map(([model, qty]) => (
+                  <div key={model} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                    <span style={{ color: 'var(--text-muted)' }}>• {model}:</span>
+                    <strong style={{ color: '#fff' }}>{qty} cái</strong>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* 5. Bộ Máy Sẵn Sàng (TRONG_KHO) */}
+          <div 
+            className="glass-panel glass-panel-hover" 
+            style={{ padding: '14px', cursor: 'pointer', borderTop: '3px solid #f59e0b', background: activeSubTab === 'comboSets' ? 'rgba(245,158,11,0.12)' : 'rgba(15,23,42,0.6)' }}
+            onClick={() => { setActiveSubTab('comboSets'); setStatusFilter('TRONG_KHO'); }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700', textTransform: 'uppercase' }}>Bộ Máy Trong Kho</span>
+              <Layers size={18} color="#f59e0b" />
+            </div>
+            <div style={{ fontSize: '1.6rem', fontWeight: '900', color: '#f59e0b', lineHeight: 1 }}>
+              {stockSets.length} <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 'normal' }}>bộ máy</span>
+            </div>
+            <div style={{ marginTop: '10px', fontSize: '0.75rem', color: 'var(--text-main)', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '8px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: 'var(--text-muted)' }}>• Tình trạng:</span>
+                <span className="badge badge-info" style={{ fontSize: '0.7rem' }}>Sẵn sàng lắp mới</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
       
       {/* Sub-Tab Navigation Header */}
       <div className="glass-panel" style={{ padding: '12px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>

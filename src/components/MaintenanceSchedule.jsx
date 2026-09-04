@@ -130,8 +130,21 @@ export default function MaintenanceSchedule({ systemSets, onCompleteMaintenance,
     return true;
   });
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filter]);
+
   // Sort strictly in natural ascending order from 1 to N, top to bottom
   const sortedSets = [...filteredSets].sort((a, b) => naturalSortCode(a, b, 'setCode'));
+
+  const totalPages = Math.ceil(sortedSets.length / pageSize) || 1;
+  const paginatedSets = sortedSets.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
+  );
 
   const handleCompleteSubmit = (e) => {
     e.preventDefault();
@@ -290,7 +303,7 @@ export default function MaintenanceSchedule({ systemSets, onCompleteMaintenance,
               </tr>
             </thead>
             <tbody>
-              {sortedSets.map(set => (
+              {paginatedSets.map(set => (
                 <tr key={set.id}>
                   <td style={{ fontWeight: '700', color: 'var(--accent-cyan)' }}>{set.setCode}</td>
                   <td style={{ fontWeight: '600' }}>{set.nppName}</td>
@@ -334,7 +347,7 @@ export default function MaintenanceSchedule({ systemSets, onCompleteMaintenance,
 
         {/* Mobile View Cards */}
         <div className="mobile-only mobile-card-list">
-          {sortedSets.map(set => (
+          {paginatedSets.map(set => (
             <div className="mobile-card" key={set.id}>
               <div className="mobile-card-header">
                 <div>
@@ -383,6 +396,45 @@ export default function MaintenanceSchedule({ systemSets, onCompleteMaintenance,
               </div>
             </div>
           ))}
+        </div>
+
+        {/* Pagination Bar */}
+        <div className="pagination-bar" style={{ marginTop: '16px' }}>
+          <div className="pagination-info">
+            Hiển thị <strong>{sortedSets.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, sortedSets.length)}</strong> trong tổng số <strong>{sortedSets.length}</strong> bộ máy
+            <select 
+              className="form-select" 
+              value={pageSize} 
+              onChange={e => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}
+              style={{ marginLeft: '12px', padding: '2px 8px', fontSize: '0.8rem', width: 'auto', display: 'inline-block' }}
+            >
+              <option value={10}>10 bộ/trang</option>
+              <option value={20}>20 bộ/trang</option>
+              <option value={50}>50 bộ/trang</option>
+            </select>
+          </div>
+
+          <div className="pagination-controls">
+            <button 
+              className="pagination-btn" 
+              disabled={currentPage <= 1}
+              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+            >
+              ‹ Trang Trước
+            </button>
+            
+            <span style={{ fontSize: '0.8rem', fontWeight: '700', color: 'var(--accent-cyan)', padding: '0 8px' }}>
+              Trang {currentPage} / {totalPages}
+            </span>
+
+            <button 
+              className="pagination-btn" 
+              disabled={currentPage >= totalPages}
+              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+            >
+              Trang Sau ›
+            </button>
+          </div>
         </div>
       </div>
 

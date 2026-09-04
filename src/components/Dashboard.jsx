@@ -67,6 +67,28 @@ export default function Dashboard({
 
   const COLORS = ['#38bdf8', '#06b6d4', '#10b981', '#f59e0b', '#a855f7'];
 
+  const [dashboardPage, setDashboardPage] = React.useState(1);
+  const [dashboardPageSize, setDashboardPageSize] = React.useState(10);
+
+  // Sắp xếp bộ máy mới lắp đặt gần nhất lên đầu
+  const sortedAllocatedSets = React.useMemo(() => {
+    return [...systemSets].sort((a, b) => {
+      const dateA = a.installedDate || a.installed_date || a.createdAt || a.created_at || '';
+      const dateB = b.installedDate || b.installed_date || b.createdAt || b.created_at || '';
+      if (dateA && dateB) {
+        const comp = dateB.localeCompare(dateA);
+        if (comp !== 0) return comp;
+      }
+      return String(b.setCode || b.id || '').localeCompare(String(a.setCode || a.id || ''), undefined, { numeric: true, sensitivity: 'base' });
+    });
+  }, [systemSets]);
+
+  const totalAllocatedPages = Math.ceil(sortedAllocatedSets.length / dashboardPageSize) || 1;
+  const paginatedAllocatedSets = sortedAllocatedSets.slice(
+    (dashboardPage - 1) * dashboardPageSize,
+    dashboardPage * dashboardPageSize
+  );
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       
@@ -233,13 +255,14 @@ export default function Dashboard({
 
       {/* Installed System Sets Table */}
       <div className="glass-panel" style={{ padding: '20px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
           <div>
-            <h3 style={{ fontSize: '1.05rem', fontWeight: '800', color: 'var(--text-main)' }}>
-              Danh Sách Bộ Máy Đã Cấp Phát Cho Nhà Phân Phối
+            <h3 style={{ fontSize: '1.05rem', fontWeight: '800', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span>Danh Mục Bộ Máy Cấp Phát (10 Bộ Mới Lắp Gần Nhất)</span>
+              <span className="badge badge-info" style={{ fontSize: '0.75rem' }}>Tổng {sortedAllocatedSets.length} bộ</span>
             </h3>
             <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-              Hiển thị chi tiết máy chiết, máy lắc, máy tính, máy in QL700 và tình trạng ổn áp
+              Tự động sắp xếp theo ngày lắp đặt mới nhất • Hiển thị 10 dòng/trang
             </span>
           </div>
           <button className="btn btn-primary btn-sm" onClick={onOpenNewInstallation}>
@@ -265,7 +288,7 @@ export default function Dashboard({
               </tr>
             </thead>
             <tbody>
-              {[...systemSets].sort((a, b) => String(a.setCode || a.id || '').localeCompare(String(b.setCode || b.id || ''), undefined, { numeric: true, sensitivity: 'base' })).map((set) => (
+              {paginatedAllocatedSets.map((set) => (
                 <tr key={set.id}>
                   <td style={{ fontWeight: '700', color: 'var(--accent-cyan)' }}>{set.setCode}</td>
                   <td style={{ fontWeight: '600' }}>{set.nppName || 'Kho Tổng'}</td>
@@ -314,7 +337,7 @@ export default function Dashboard({
 
         {/* Mobile View Cards */}
         <div className="mobile-only mobile-card-list">
-          {[...systemSets].sort((a, b) => String(a.setCode || a.id || '').localeCompare(String(b.setCode || b.id || ''), undefined, { numeric: true, sensitivity: 'base' })).map((set) => (
+          {paginatedAllocatedSets.map((set) => (
             <div className="mobile-card" key={set.id}>
               <div className="mobile-card-header">
                 <div>
@@ -363,6 +386,46 @@ export default function Dashboard({
             </div>
           ))}
         </div>
+
+        {/* Pagination Bar */}
+        <div className="pagination-bar" style={{ marginTop: '16px' }}>
+          <div className="pagination-info">
+            Hiển thị <strong>{sortedAllocatedSets.length === 0 ? 0 : (dashboardPage - 1) * dashboardPageSize + 1}–{Math.min(dashboardPage * dashboardPageSize, sortedAllocatedSets.length)}</strong> trong tổng số <strong>{sortedAllocatedSets.length}</strong> bộ máy
+            <select 
+              className="form-select" 
+              value={dashboardPageSize} 
+              onChange={e => { setDashboardPageSize(Number(e.target.value)); setDashboardPage(1); }}
+              style={{ marginLeft: '12px', padding: '2px 8px', fontSize: '0.8rem', width: 'auto', display: 'inline-block' }}
+            >
+              <option value={10}>10 bộ/trang</option>
+              <option value={20}>20 bộ/trang</option>
+              <option value={50}>50 bộ/trang</option>
+            </select>
+          </div>
+
+          <div className="pagination-controls">
+            <button 
+              className="pagination-btn" 
+              disabled={dashboardPage <= 1}
+              onClick={() => setDashboardPage(prev => Math.max(prev - 1, 1))}
+            >
+              ‹ Trang Trước
+            </button>
+            
+            <span style={{ fontSize: '0.8rem', fontWeight: '700', color: 'var(--accent-cyan)', padding: '0 8px' }}>
+              Trang {dashboardPage} / {totalAllocatedPages}
+            </span>
+
+            <button 
+              className="pagination-btn" 
+              disabled={dashboardPage >= totalAllocatedPages}
+              onClick={() => setDashboardPage(prev => Math.min(prev + 1, totalAllocatedPages))}
+            >
+              Trang Sau ›
+            </button>
+          </div>
+        </div>
+
       </div>
 
     </div>

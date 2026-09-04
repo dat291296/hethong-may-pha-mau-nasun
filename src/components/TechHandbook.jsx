@@ -440,10 +440,12 @@ export default function TechHandbook({ onSelectErrorForRepair }) {
                   <option value="ALL">📦 Tất cả Phân loại</option>
                   <option value="Máy chiết">Máy chiết</option>
                   <option value="Máy lắc">Máy lắc</option>
-                  <option value="Máy tính">Máy tính</option>
-                  <option value="Máy in">Máy in</option>
+                  <option value="Case">Case</option>
+                  <option value="AIO">AIO</option>
+                  <option value="QL700">QL700</option>
+                  <option value="Màn hình">Màn hình</option>
                   <option value="Phần mềm">Phần mềm pha màu</option>
-                  <option value="Khác">Khác</option>
+                  <option value="Khác">Khác / Linh kiện</option>
                 </select>
               </div>
 
@@ -785,10 +787,12 @@ export default function TechHandbook({ onSelectErrorForRepair }) {
                       >
                         <option value="Máy chiết">Máy chiết</option>
                         <option value="Máy lắc">Máy lắc</option>
-                        <option value="Máy tính">Máy tính</option>
-                        <option value="Máy in">Máy in</option>
-                        <option value="Phần mềm">Phần mềm</option>
-                        <option value="Khác">Khác</option>
+                        <option value="Case">Case</option>
+                        <option value="AIO">AIO</option>
+                        <option value="QL700">QL700</option>
+                        <option value="Màn hình">Màn hình</option>
+                        <option value="Phần mềm">Phần mềm pha màu</option>
+                        <option value="Khác">Khác / Linh kiện</option>
                       </select>
                     </div>
                     <div className="form-group">

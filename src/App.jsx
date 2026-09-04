@@ -115,11 +115,16 @@ export default function App() {
   const [prefilledRepairData, setPrefilledRepairData] = useState(null);
 
   const handleSelectErrorForRepair = (errorObj) => {
+    let cat = errorObj.category;
+    if (cat === 'Phần mềm') cat = 'Case';
+    else if (cat === 'Máy tính') cat = 'Case';
+    else if (cat === 'Máy in') cat = 'QL700';
+
     setPrefilledRepairData({
-      productCategory: errorObj.category === 'Phần mềm' ? 'Máy tính' : errorObj.category,
+      productCategory: cat,
       machineModel: errorObj.machineModel,
       errorCategory: errorObj.category === 'Phần mềm' ? 'Lỗi phần mềm' : 'Lỗi phần cứng',
-      errorDescription: `[${errorObj.code}] ${errorObj.title}\n- Dấu hiệu: ${errorObj.symptoms.join('; ')}\n- Nguyên nhân: ${errorObj.rootCause}`
+      errorDescription: `[${errorObj.code}] ${errorObj.title}\n- Dấu hiệu: ${Array.isArray(errorObj.symptoms) ? errorObj.symptoms.join('; ') : errorObj.symptoms}\n- Nguyên nhân: ${errorObj.rootCause}`
     });
     setActiveTab('repairs');
   };

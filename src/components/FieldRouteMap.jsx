@@ -21,7 +21,8 @@ import {
   ShieldCheck,
   Layers,
   Map,
-  UserCheck
+  UserCheck,
+  Copy
 } from 'lucide-react';
 import { getRobustUserLocation } from '../utils/gpsHelper.js';
 
@@ -44,10 +45,14 @@ export default function FieldRouteMap({
   // Leaflet & GPS states
   const [showMap, setShowMap] = useState(true);
   const [mapProvider, setMapProvider] = useState('LEAFLET'); // 'LEAFLET' | 'GOOGLE'
+  const [mapTileType, setMapTileType] = useState('VOYAGER'); // 'VOYAGER' | 'SATELLITE' | 'OSM'
   const [selectedGoogleNpp, setSelectedGoogleNpp] = useState(null);
+  const [copiedCoord, setCopiedCoord] = useState(false);
   const [isLScriptLoaded, setIsLScriptLoaded] = useState(false);
   const [userLocation, setUserLocation] = useState(null);
   const mapInstanceRef = useRef(null);
+  const tileLayerRef = useRef(null);
+  const resizeObserverRef = useRef(null);
 
   // Load Leaflet JS & CSS dynamically from CDN
   useEffect(() => {
@@ -324,9 +329,35 @@ export default function FieldRouteMap({
     alert(`⚡ Đã tối ưu hóa đường đi thành công!\nSắp xếp lại ${optimized.length} chặng di chuyển theo khoảng cách ngắn nhất.`);
   };
 
+  // Tile layer configurations for reliable and high-resolution loading
+  const TILE_CONFIGS = {
+    VOYAGER: {
+      url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+      options: {
+        subdomains: 'abcd',
+        maxZoom: 19,
+        attribution: '&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
+      }
+    },
+    SATELLITE: {
+      url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      options: {
+        maxZoom: 19,
+        attribution: 'Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics'
+      }
+    },
+    OSM: {
+      url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+      options: {
+        maxZoom: 19,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+      }
+    }
+  };
+
   // Leaflet Map Rendering and Markers synchronization
   useEffect(() => {
-    if (!window.L || !showMap || !isLScriptLoaded || mapProvider !== 'LEAFLET') return;
+    if (!window.L || !showMap || !isLScriptLoaded) return;
     
     const container = document.getElementById('leaflet-map-container');
     if (!container) return;
@@ -337,28 +368,42 @@ export default function FieldRouteMap({
     }
 
     let center = [21.0285, 105.8542]; // Default center (Hanoi)
-    if (filteredNpps.length > 0) {
+    if (selectedGoogleNpp) {
+      const gCoord = selectedGoogleNpp.locationCoordinates?.split(',').map(Number);
+      if (gCoord && gCoord.length === 2 && !isNaN(gCoord[0]) && !isNaN(gCoord[1])) {
+        center = gCoord;
+      }
+    } else if (filteredNpps.length > 0) {
       const firstCoord = filteredNpps[0].locationCoordinates?.split(',').map(Number);
       if (firstCoord && firstCoord.length === 2 && !isNaN(firstCoord[0]) && !isNaN(firstCoord[1])) {
         center = firstCoord;
       }
     }
 
-    const map = window.L.map('leaflet-map-container', { zoomControl: true }).setView(center, 6);
+    const initialZoom = selectedGoogleNpp ? 15 : 6;
+    const map = window.L.map('leaflet-map-container', { zoomControl: true }).setView(center, initialZoom);
     mapInstanceRef.current = map;
 
-    // Standard OpenStreetMap tile layer for reliable loading in Vietnam
-    window.L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-      maxZoom: 19
-    }).addTo(map);
+    // Apply active tile layer (CartoDB Voyager by default - high speed and never rate-limited)
+    const currentTileConfig = TILE_CONFIGS[mapTileType] || TILE_CONFIGS.VOYAGER;
+    const tileLayer = window.L.tileLayer(currentTileConfig.url, currentTileConfig.options).addTo(map);
+    tileLayerRef.current = tileLayer;
 
-    // Force size recalculation to prevent blank/grey tile issues
-    setTimeout(() => {
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.invalidateSize();
-      }
-    }, 250);
+    // Force size recalculation across multiple time intervals to ensure tiles paint properly
+    const timer1 = setTimeout(() => mapInstanceRef.current?.invalidateSize(), 100);
+    const timer2 = setTimeout(() => mapInstanceRef.current?.invalidateSize(), 300);
+    const timer3 = setTimeout(() => mapInstanceRef.current?.invalidateSize(), 700);
+
+    // Watch for container resizes to maintain perfect tile layout
+    if (window.ResizeObserver && container) {
+      if (resizeObserverRef.current) resizeObserverRef.current.disconnect();
+      resizeObserverRef.current = new ResizeObserver(() => {
+        if (mapInstanceRef.current) {
+          mapInstanceRef.current.invalidateSize();
+        }
+      });
+      resizeObserverRef.current.observe(container);
+    }
 
     // Pulse dot for User GPS Location
     if (userLocation) {
@@ -391,26 +436,27 @@ export default function FieldRouteMap({
       else if (npp.priority === 'DUE' || npp.priority === 'OVERDUE') color = '#f59e0b'; // Amber - warning
 
       const isSelected = selectedTripNpps.includes(npp.id);
+      const isFocusedInGoogle = selectedGoogleNpp?.id === npp.id;
       
       const customIcon = window.L.divIcon({
         html: `
           <div style="
-            width: 26px;
-            height: 26px;
-            background-color: ${color};
-            border: 2px solid ${isSelected ? '#fff' : 'rgba(255,255,255,0.6)'};
+            width: ${isFocusedInGoogle ? '32px' : '26px'};
+            height: ${isFocusedInGoogle ? '32px' : '26px'};
+            background-color: ${isFocusedInGoogle ? '#2563eb' : color};
+            border: 2px solid ${isSelected || isFocusedInGoogle ? '#fff' : 'rgba(255,255,255,0.7)'};
             border-radius: 50%;
-            box-shadow: 0 3px 8px rgba(0,0,0,0.5);
+            box-shadow: 0 3px 10px rgba(0,0,0,0.6);
             display: flex;
             align-items: center;
             justify-content: center;
             color: #fff;
-            font-size: 11px;
+            font-size: ${isFocusedInGoogle ? '13px' : '11px'};
             font-weight: 800;
-            transform: ${isSelected ? 'scale(1.2)' : 'scale(1)'};
+            transform: ${isSelected || isFocusedInGoogle ? 'scale(1.2)' : 'scale(1)'};
             transition: transform 0.2s;
           ">
-            ${isSelected ? '✓' : ''}
+            ${isFocusedInGoogle ? '📍' : isSelected ? '✓' : ''}
           </div>
         `,
         className: 'npp-map-marker',
@@ -421,20 +467,26 @@ export default function FieldRouteMap({
       const popupDiv = document.createElement('div');
       popupDiv.style.color = '#1e293b';
       popupDiv.style.fontSize = '12px';
-      popupDiv.style.width = '200px';
+      popupDiv.style.width = '210px';
       popupDiv.innerHTML = `
         <div style="font-weight: 800; font-size: 13px; color:#0f172a; margin-bottom: 3px;">${npp.name}</div>
         <div style="color:#64748b; margin-bottom: 6px; font-size:11px;">📍 ${npp.address}</div>
         <div style="margin-bottom: 8px;">
           <strong>Liên hệ:</strong> ${npp.contactPerson} (${npp.phone})
         </div>
-        <div style="display:flex; gap:6px;">
+        <div style="display:flex; gap:6px; margin-bottom:6px;">
           <button id="pop-select-${npp.id}" style="
             background: #0284c7; color:#fff; border:none; padding:4px 8px; border-radius:4px; font-size:11px; font-weight:700; cursor:pointer; flex: 1;
           ">${isSelected ? 'Bỏ Chọn' : 'Chọn Đi'}</button>
           <button id="pop-checkin-${npp.id}" style="
             background: #10b981; color:#fff; border:none; padding:4px 8px; border-radius:4px; font-size:11px; font-weight:700; cursor:pointer; flex: 1;
           ">Check-in</button>
+        </div>
+        <div>
+          <a href="${npp.googleMapsNavUrl}" target="_blank" rel="noopener noreferrer" style="
+            display: flex; align-items: center; justify-content: center; gap: 4px;
+            background: #059669; color: #fff; text-decoration: none; padding: 5px 8px; border-radius: 4px; font-size: 11px; font-weight: 700;
+          ">🧭 Mở Chỉ Đường Google Maps</a>
         </div>
       `;
 
@@ -457,6 +509,10 @@ export default function FieldRouteMap({
           };
         }
       });
+
+      if (isFocusedInGoogle) {
+        marker.openPopup();
+      }
     });
 
     // Draw route polyline for the selected trip sequence
@@ -476,8 +532,8 @@ export default function FieldRouteMap({
       }
     }
 
-    // Zoom map to fit all markers if we have multiple
-    if (filteredNpps.length > 1) {
+    // Zoom map to fit all markers if we have multiple and no specific Google NPP selected
+    if (!selectedGoogleNpp && filteredNpps.length > 1) {
       const validCoords = filteredNpps
         .map(n => n.locationCoordinates?.split(',').map(Number))
         .filter(c => c && c.length === 2 && !isNaN(c[0]) && !isNaN(c[1]));
@@ -488,12 +544,19 @@ export default function FieldRouteMap({
     }
 
     return () => {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      clearTimeout(timer3);
+      if (resizeObserverRef.current) {
+        resizeObserverRef.current.disconnect();
+        resizeObserverRef.current = null;
+      }
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
       }
     };
-  }, [filteredNpps, selectedTripNpps, showMap, userLocation, isLScriptLoaded, mapProvider]);
+  }, [filteredNpps, selectedTripNpps, showMap, userLocation, isLScriptLoaded, mapProvider, mapTileType, selectedGoogleNpp]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -846,88 +909,163 @@ export default function FieldRouteMap({
         </div>
       )}
 
-      {/* 📍 INTERACTIVE MAP PANEL (OSM & GOOGLE MAPS) */}
+      {/* 📍 INTERACTIVE MAP PANEL (LEAFLET MULTI-LAYER & GOOGLE MAPS NAVIGATION) */}
       {showMap && (
         <div className="glass-panel" style={{ padding: '16px', position: 'relative' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <span style={{ fontSize: '0.875rem', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--accent-cyan)' }}>
-                🗺️ Bản Đồ Tuyến Đường Thực Địa
+          {/* Top Bar: Mode Switcher & Layer Selector */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '0.9rem', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--accent-cyan)' }}>
+                🗺️ Bản Đồ Tuyến Đường
               </span>
-              <div style={{ display: 'flex', gap: '4px', background: 'rgba(0,0,0,0.3)', padding: '2px', borderRadius: '6px' }}>
+              {/* Provider Tabs */}
+              <div style={{ display: 'flex', gap: '4px', background: 'rgba(0,0,0,0.35)', padding: '3px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
                 <button
                   type="button"
-                  onClick={() => setMapProvider('LEAFLET')}
+                  onClick={() => {
+                    setMapProvider('LEAFLET');
+                    setTimeout(() => mapInstanceRef.current?.invalidateSize(), 150);
+                  }}
                   style={{
-                    padding: '4px 10px',
-                    borderRadius: '4px',
+                    padding: '6px 12px',
+                    borderRadius: '6px',
                     border: 'none',
                     background: mapProvider === 'LEAFLET' ? 'var(--accent-cyan)' : 'transparent',
                     color: mapProvider === 'LEAFLET' ? '#0f172a' : 'var(--text-muted)',
-                    fontSize: '0.75rem',
-                    fontWeight: '700',
-                    cursor: 'pointer'
+                    fontSize: '0.78rem',
+                    fontWeight: '800',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px'
                   }}
                 >
-                  🗺️ OpenStreetMap
+                  <span>🗺️ Bản Đồ Số Trực Quan</span>
                 </button>
                 <button
                   type="button"
-                  onClick={() => setMapProvider('GOOGLE')}
+                  onClick={() => {
+                    setMapProvider('GOOGLE');
+                    setTimeout(() => mapInstanceRef.current?.invalidateSize(), 150);
+                  }}
                   style={{
-                    padding: '4px 10px',
-                    borderRadius: '4px',
+                    padding: '6px 12px',
+                    borderRadius: '6px',
                     border: 'none',
                     background: mapProvider === 'GOOGLE' ? 'var(--accent-cyan)' : 'transparent',
                     color: mapProvider === 'GOOGLE' ? '#0f172a' : 'var(--text-muted)',
-                    fontSize: '0.75rem',
-                    fontWeight: '700',
-                    cursor: 'pointer'
+                    fontSize: '0.78rem',
+                    fontWeight: '800',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px'
                   }}
                 >
-                  🌏 Google Maps Trực Tuyến
+                  <span>🧭 Điều Hướng Google Maps</span>
                 </button>
               </div>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              {mapProvider === 'GOOGLE' && (
-                <a
-                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                    selectedGoogleNpp ? `${selectedGoogleNpp.name} ${selectedGoogleNpp.address || selectedGoogleNpp.province}` : 'Sơn Nasun Việt Nam'
-                  )}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="btn btn-primary btn-xs"
-                  style={{ textDecoration: 'none', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px' }}
+            {/* Right Tools: Layer Switcher & Hide Button */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              {/* Tile layer selector */}
+              <div style={{ display: 'flex', gap: '4px', background: 'rgba(15,23,42,0.6)', padding: '2px', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
+                <button
+                  type="button"
+                  onClick={() => setMapTileType('VOYAGER')}
+                  title="Bản đồ đường phố tốc độ cao, rõ nét địa giới Việt Nam"
+                  style={{
+                    padding: '4px 8px',
+                    borderRadius: '4px',
+                    border: 'none',
+                    background: mapTileType === 'VOYAGER' ? 'rgba(6,182,212,0.25)' : 'transparent',
+                    color: mapTileType === 'VOYAGER' ? 'var(--accent-cyan)' : 'var(--text-muted)',
+                    fontSize: '0.72rem',
+                    fontWeight: '700',
+                    cursor: 'pointer'
+                  }}
                 >
-                  <ExternalLink size={12} />
-                  <span>Mở Ứng Dụng Google Maps</span>
-                </a>
-              )}
+                  Đường Phố
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMapTileType('SATELLITE')}
+                  title="Ảnh vệ tinh độ phân giải cao toàn cầu (Esri)"
+                  style={{
+                    padding: '4px 8px',
+                    borderRadius: '4px',
+                    border: 'none',
+                    background: mapTileType === 'SATELLITE' ? 'rgba(6,182,212,0.25)' : 'transparent',
+                    color: mapTileType === 'SATELLITE' ? 'var(--accent-cyan)' : 'var(--text-muted)',
+                    fontSize: '0.72rem',
+                    fontWeight: '700',
+                    cursor: 'pointer'
+                  }}
+                >
+                  🛰️ Vệ Tinh
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMapTileType('OSM')}
+                  title="Bản đồ OpenStreetMap chuẩn"
+                  style={{
+                    padding: '4px 8px',
+                    borderRadius: '4px',
+                    border: 'none',
+                    background: mapTileType === 'OSM' ? 'rgba(6,182,212,0.25)' : 'transparent',
+                    color: mapTileType === 'OSM' ? 'var(--accent-cyan)' : 'var(--text-muted)',
+                    fontSize: '0.72rem',
+                    fontWeight: '700',
+                    cursor: 'pointer'
+                  }}
+                >
+                  OSM
+                </button>
+              </div>
+
               <button 
                 className="btn btn-secondary btn-xs"
                 onClick={() => setShowMap(false)}
-                style={{ fontSize: '0.7rem' }}
+                style={{ fontSize: '0.72rem' }}
               >
                 Ẩn Bản Đồ
               </button>
             </div>
           </div>
 
-          {mapProvider === 'GOOGLE' ? (
-            <div>
-              {/* Quick NPP selector pills for Google Map */}
-              <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '8px', marginBottom: '8px' }}>
+          {/* GOOGLE MAPS NAVIGATION HUB */}
+          {mapProvider === 'GOOGLE' && (
+            <div style={{ marginBottom: '14px', background: 'rgba(15,23,42,0.7)', borderRadius: '8px', padding: '12px', border: '1px solid rgba(6,182,212,0.25)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
+                <span style={{ fontSize: '0.78rem', fontWeight: '800', color: 'var(--accent-cyan)', textTransform: 'uppercase' }}>
+                  🎯 Chọn Điểm Đến Để Mở Google Maps Turn-by-turn Navigation:
+                </span>
+                {selectedTripNpps.length > 0 && (
+                  <a
+                    href={multiStopMapsUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn btn-primary btn-xs"
+                    style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.72rem' }}
+                  >
+                    <Compass size={12} />
+                    <span>Mở Toàn Bộ Lộ Trình ({selectedTripNpps.length} Chặng) Trong Google Maps</span>
+                  </a>
+                )}
+              </div>
+
+              {/* Quick Destination Pills */}
+              <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '6px', marginBottom: '10px' }}>
                 <button
                   type="button"
                   className={`btn btn-xs ${!selectedGoogleNpp ? 'btn-primary' : 'btn-secondary'}`}
                   style={{ whiteSpace: 'nowrap', fontSize: '0.72rem' }}
                   onClick={() => setSelectedGoogleNpp(null)}
                 >
-                  🇻🇳 Toàn Bộ Điểm NPP
+                  🇻🇳 Toàn Bộ Điểm NPP ({filteredNpps.length})
                 </button>
-                {filteredNpps.map(n => (
+                {filteredNpps.map((n) => (
                   <button
                     key={n.id}
                     type="button"
@@ -939,51 +1077,104 @@ export default function FieldRouteMap({
                   </button>
                 ))}
               </div>
-              <div 
-                style={{ 
-                  height: '420px', 
-                  width: '100%', 
-                  borderRadius: '8px', 
-                  overflow: 'hidden', 
-                  border: '1px solid var(--border-color)',
-                  position: 'relative'
-                }}
-              >
-                <iframe
-                  title="Google Maps Live NPP Viewer"
-                  width="100%"
-                  height="100%"
-                  style={{ border: 0 }}
-                  loading="lazy"
-                  allowFullScreen
-                  referrerPolicy="no-referrer-when-downgrade"
-                  src={`https://maps.google.com/maps?q=${encodeURIComponent(
-                    selectedGoogleNpp
-                      ? `${selectedGoogleNpp.name}, ${selectedGoogleNpp.address || selectedGoogleNpp.province || ''}`
-                      : 'Sơn Nasun, Việt Nam'
-                  )}&t=&z=${selectedGoogleNpp ? 16 : 6}&ie=UTF8&iwloc=&output=embed`}
-                />
-              </div>
-            </div>
-          ) : (
-            <div 
-              id="leaflet-map-container" 
-              style={{ 
-                height: '420px', 
-                width: '100%', 
-                borderRadius: '8px', 
-                border: '1px solid var(--border-color)',
-                position: 'relative',
-                zIndex: 1
-              }}
-            >
-              {!isLScriptLoaded && (
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)' }}>
-                  Đang tải dữ liệu bản đồ Leaflet OpenStreetMap...
+
+              {/* Selected Destination Detail Banner */}
+              {selectedGoogleNpp ? (
+                <div style={{ background: 'rgba(6,182,212,0.06)', borderRadius: '8px', padding: '12px', border: '1px solid rgba(6,182,212,0.3)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+                  <div style={{ minWidth: '240px' }}>
+                    <div style={{ fontWeight: '800', color: '#fff', fontSize: '0.95rem', marginBottom: '2px' }}>
+                      📍 {selectedGoogleNpp.name}
+                    </div>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginBottom: '4px' }}>
+                      {selectedGoogleNpp.address} ({selectedGoogleNpp.province})
+                    </div>
+                    <div style={{ display: 'flex', gap: '12px', fontSize: '0.75rem', flexWrap: 'wrap' }}>
+                      <span style={{ color: '#fff' }}>Liên hệ: <strong>{selectedGoogleNpp.contactPerson}</strong></span>
+                      <a href={`tel:${selectedGoogleNpp.phone}`} style={{ color: 'var(--accent-cyan)', textDecoration: 'none', fontWeight: '700' }}>
+                        📞 {selectedGoogleNpp.phone}
+                      </a>
+                      {userLocation && selectedGoogleNpp.locationCoordinates && (() => {
+                        const coords = selectedGoogleNpp.locationCoordinates.split(',').map(Number);
+                        if (coords.length === 2 && !isNaN(coords[0]) && !isNaN(coords[1])) {
+                          const d = getDistanceKm(userLocation[0], userLocation[1], coords[0], coords[1]);
+                          return (
+                            <span style={{ color: '#10b981', fontWeight: '800' }}>
+                              🚗 Cách bạn: {d.toFixed(1)} km
+                            </span>
+                          );
+                        }
+                        return null;
+                      })()}
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    <a
+                      href={selectedGoogleNpp.googleMapsNavUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn btn-primary btn-sm"
+                      style={{ textDecoration: 'none', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem' }}
+                    >
+                      <Compass size={16} />
+                      <span>🚀 Mở Chỉ Đường Google Maps</span>
+                    </a>
+
+                    <a
+                      href={selectedGoogleNpp.googleMapsSearchUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn btn-secondary btn-sm"
+                      style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem' }}
+                    >
+                      <ExternalLink size={14} />
+                      <span>Xem Điểm Trên Google Maps</span>
+                    </a>
+
+                    {selectedGoogleNpp.locationCoordinates && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(selectedGoogleNpp.locationCoordinates);
+                          setCopiedCoord(true);
+                          setTimeout(() => setCopiedCoord(false), 2000);
+                        }}
+                        className="btn btn-secondary btn-sm"
+                        style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px' }}
+                      >
+                        <Copy size={13} />
+                        <span>{copiedCoord ? '✓ Đã Chép GPS' : 'Chép Tọa Độ'}</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div style={{ padding: '8px 12px', background: 'rgba(255,255,255,0.03)', borderRadius: '6px', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                  💡 <strong>Gợi ý:</strong> Bấm vào một Nhà Phân Phối ở trên hoặc bấm trực tiếp vào Marker trên bản đồ để kích hoạt chỉ đường Google Maps từng bước (Turn-by-turn navigation) tới điểm công tác.
                 </div>
               )}
             </div>
           )}
+
+          {/* INTERACTIVE LEAFLET MAP CONTAINER */}
+          <div 
+            id="leaflet-map-container" 
+            style={{ 
+              height: '440px', 
+              width: '100%', 
+              borderRadius: '8px', 
+              border: '1px solid var(--border-color)',
+              position: 'relative',
+              zIndex: 1,
+              backgroundColor: '#1e293b'
+            }}
+          >
+            {!isLScriptLoaded && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                Đang tải thư viện bản đồ số...
+              </div>
+            )}
+          </div>
         </div>
       )}
       

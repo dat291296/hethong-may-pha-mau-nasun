@@ -53,12 +53,13 @@ export const MACHINE_MODELS = [
 ];
 
 export const PRODUCT_CATEGORIES = [
-  'Máy Chiết Sơn',
-  'Máy Lắc Sơn',
-  'Máy Tính Bàn / Laptop',
-  'Máy In Tem QL700',
-  'Phụ kiện',
-  'Linh kiện'
+  'Máy chiết',
+  'Máy lắc',
+  'Case',
+  'AIO',
+  'QL700',
+  'Màn hình',
+  'Khác / Linh kiện'
 ];
 
 import { compressImage } from '../utils/imageCompressor.js';
@@ -136,18 +137,63 @@ export default function DeviceRepairProcessing({
     ? (user.name || user.full_name) 
     : (qcUsers && qcUsers.length > 0 ? qcUsers[0].name : 'Nguyễn Văn Hùng');
 
+  const getDeviceFromCombo = (assignedSet, category) => {
+    if (!assignedSet) return { model: '', serial: '' };
+    switch (category) {
+      case 'Máy chiết':
+      case 'Máy Chiết Sơn':
+        return {
+          model: assignedSet.dispenserModel || 'Satint A2',
+          serial: assignedSet.dispenserSerial || ''
+        };
+      case 'Máy lắc':
+      case 'Máy Lắc Sơn':
+        return {
+          model: assignedSet.mixerModel || 'Satint ST-50',
+          serial: assignedSet.mixerSerial || ''
+        };
+      case 'Case':
+        return {
+          model: assignedSet.pcType === 'Case' ? (assignedSet.pcOs || 'Case PC') : 'Case PC',
+          serial: assignedSet.pcType === 'Case' ? (assignedSet.pcSerial || '') : (assignedSet.pcSerial || '')
+        };
+      case 'AIO':
+        return {
+          model: assignedSet.pcType === 'AIO' ? (assignedSet.pcOs || 'AIO PC') : 'AIO PC',
+          serial: assignedSet.pcType === 'AIO' ? (assignedSet.pcSerial || '') : (assignedSet.pcSerial || '')
+        };
+      case 'QL700':
+      case 'Máy In Tem QL700':
+        return {
+          model: assignedSet.printerModel || 'QL700',
+          serial: assignedSet.printerSerial || ''
+        };
+      case 'Màn hình':
+        return {
+          model: 'Màn hình',
+          serial: ''
+        };
+      default:
+        return {
+          model: '',
+          serial: ''
+        };
+    }
+  };
+
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],
     technician: defaultTechnician,
     nppId: '',
     nppName: '',
-    productCategory: 'Máy Chiết Sơn',
+    productCategory: 'Máy chiết',
     machineModel: 'Satint A2',
     serialNumber: '',
     errorCategory: 'Lỗi phần cứng / Cụm chiết',
     errorDescription: '',
     photos: [],
     actionDirection: 'Sửa chữa',
+    exchangeType: 'Không xuất đổi',
     replacementCondition: 'Mới',
     processingStatus: 'Chưa xử lý',
     customerReturnStatus: 'Chưa gửi trả',
@@ -164,13 +210,14 @@ export default function DeviceRepairProcessing({
         technician: defaultTechnician,
         nppId: npps.length > 0 ? npps[0].id : '',
         nppName: npps.length > 0 ? npps[0].name : '',
-        productCategory: prefilledTicket.productCategory || 'Máy Chiết Sơn',
+        productCategory: prefilledTicket.productCategory || 'Máy chiết',
         machineModel: prefilledTicket.machineModel || 'Satint A2',
         serialNumber: prefilledTicket.serialNumber || '',
         errorCategory: prefilledTicket.errorCategory || 'Lỗi phần cứng',
         errorDescription: prefilledTicket.errorDescription || '',
         photos: [],
-        actionDirection: 'Sửa chữa',
+        actionDirection: prefilledTicket.actionDirection || 'Sửa chữa',
+        exchangeType: prefilledTicket.exchangeType || 'Không xuất đổi',
         replacementCondition: 'Mới',
         processingStatus: 'Chưa xử lý',
         customerReturnStatus: 'Chưa gửi trả',
@@ -198,13 +245,14 @@ export default function DeviceRepairProcessing({
       technician: defaultTechnician,
       nppId: '',
       nppName: '',
-      productCategory: 'Máy Chiết Sơn',
+      productCategory: 'Máy chiết',
       machineModel: 'Satint A2',
       serialNumber: '',
       errorCategory: 'Lỗi phần cứng',
       errorDescription: '',
       photos: [],
       actionDirection: 'Sửa chữa',
+      exchangeType: 'Không xuất đổi',
       replacementCondition: 'Mới',
       processingStatus: 'Chưa xử lý',
       customerReturnStatus: 'Chưa gửi trả',
@@ -224,7 +272,10 @@ export default function DeviceRepairProcessing({
     }
     setEditingTicket(ticket);
     setNppSearchTerm('');
-    setFormData({ ...ticket });
+    setFormData({
+      ...ticket,
+      exchangeType: ticket.exchangeType || (ticket.actionDirection === 'Xuất đổi' ? 'Xuất đổi máy mới 100%' : 'Không xuất đổi')
+    });
     setShowModal(true);
   };
 
@@ -244,28 +295,29 @@ export default function DeviceRepairProcessing({
     );
   }, [npps, nppSearchTerm]);
 
+  const handleCategoryChange = (newCat) => {
+    const assignedSet = systemSets.find(s => s.nppId === formData.nppId);
+    const { model, serial } = getDeviceFromCombo(assignedSet, newCat);
+    setFormData(prev => ({
+      ...prev,
+      productCategory: newCat,
+      machineModel: model !== undefined && model !== '' ? model : (newCat === 'Màn hình' ? 'Màn hình' : prev.machineModel),
+      serialNumber: serial !== undefined ? serial : prev.serialNumber
+    }));
+  };
+
   const handleSelectNpp = (selectedId) => {
     const targetNpp = npps.find(n => n.id === selectedId);
     const assignedSet = systemSets.find(s => s.nppId === selectedId);
-
-    let autoCategory = formData.productCategory;
-    let autoModel = formData.machineModel;
-    let autoSerial = formData.serialNumber;
-
-    // If NPP has an assigned combo set, auto populate from its dispenser by default
-    if (assignedSet) {
-      autoCategory = 'Máy Chiết Sơn';
-      autoModel = assignedSet.dispenserModel || 'Satint A2';
-      autoSerial = assignedSet.dispenserSerial || '';
-    }
+    const currentCat = formData.productCategory || 'Máy chiết';
+    const { model, serial } = getDeviceFromCombo(assignedSet, currentCat);
 
     setFormData(prev => ({
       ...prev,
       nppId: selectedId,
       nppName: targetNpp ? targetNpp.name : '',
-      productCategory: autoCategory,
-      machineModel: autoModel,
-      serialNumber: autoSerial
+      machineModel: model || prev.machineModel,
+      serialNumber: serial !== undefined ? serial : prev.serialNumber
     }));
   };
 
@@ -306,16 +358,20 @@ export default function DeviceRepairProcessing({
     // Sanitize input form data
     const sanitized = sanitizeFormData(formData);
 
-    if (!sanitized.errorDescription || !sanitized.serialNumber) {
-      alert('Vui lòng nhập Số Seri thiết bị và Diễn giải lỗi!');
+    const isSerialRequired = !['Màn hình', 'Khác / Linh kiện', 'Khác', 'Phụ kiện'].includes(sanitized.productCategory);
+
+    if (!sanitized.errorDescription || (isSerialRequired && !sanitized.serialNumber)) {
+      alert(isSerialRequired ? 'Vui lòng nhập Số Seri thiết bị và Diễn giải lỗi!' : 'Vui lòng nhập Diễn giải tình trạng lỗi!');
       return;
     }
 
-    // Format validation
-    const serialCheck = validateSerial(sanitized.serialNumber);
-    if (!serialCheck.valid) {
-      alert(serialCheck.error);
-      return;
+    // Format validation (chỉ kiểm tra nếu có nhập serial)
+    if (sanitized.serialNumber && sanitized.serialNumber.trim() && sanitized.serialNumber !== 'Không có seri') {
+      const serialCheck = validateSerial(sanitized.serialNumber);
+      if (!serialCheck.valid) {
+        alert(serialCheck.error);
+        return;
+      }
     }
 
     // Check monthly closing locks
@@ -901,12 +957,12 @@ export default function DeviceRepairProcessing({
                           {currentAssignedSet.dispenserSerial && (
                             <button
                               type="button"
-                              className={`btn btn-sm ${formData.productCategory === 'Máy Chiết Sơn' ? 'btn-primary' : 'btn-secondary'}`}
+                              className={`btn btn-sm ${formData.productCategory === 'Máy chiết' ? 'btn-primary' : 'btn-secondary'}`}
                               style={{ fontSize: '0.75rem' }}
                               onClick={() => {
                                 setFormData(prev => ({
                                   ...prev,
-                                  productCategory: 'Máy Chiết Sơn',
+                                  productCategory: 'Máy chiết',
                                   machineModel: currentAssignedSet.dispenserModel || 'Satint A2',
                                   serialNumber: currentAssignedSet.dispenserSerial || ''
                                 }));
@@ -918,12 +974,12 @@ export default function DeviceRepairProcessing({
                           {currentAssignedSet.mixerSerial && (
                             <button
                               type="button"
-                              className={`btn btn-sm ${formData.productCategory === 'Máy Lắc Sơn' ? 'btn-primary' : 'btn-secondary'}`}
+                              className={`btn btn-sm ${formData.productCategory === 'Máy lắc' ? 'btn-primary' : 'btn-secondary'}`}
                               style={{ fontSize: '0.75rem' }}
                               onClick={() => {
                                 setFormData(prev => ({
                                   ...prev,
-                                  productCategory: 'Máy Lắc Sơn',
+                                  productCategory: 'Máy lắc',
                                   machineModel: currentAssignedSet.mixerModel || 'Natos V1',
                                   serialNumber: currentAssignedSet.mixerSerial || ''
                                 }));
@@ -932,40 +988,56 @@ export default function DeviceRepairProcessing({
                               🌀 Lắc: {currentAssignedSet.mixerModel} ({currentAssignedSet.mixerSerial})
                             </button>
                           )}
-                          {currentAssignedSet.computerSerial && (
+                          {currentAssignedSet.pcSerial && (
                             <button
                               type="button"
-                              className={`btn btn-sm ${formData.productCategory === 'Máy Tính Bàn / Laptop' ? 'btn-primary' : 'btn-secondary'}`}
+                              className={`btn btn-sm ${(formData.productCategory === 'Case' || formData.productCategory === 'AIO') ? 'btn-primary' : 'btn-secondary'}`}
                               style={{ fontSize: '0.75rem' }}
                               onClick={() => {
+                                const isAio = currentAssignedSet.pcType === 'AIO';
                                 setFormData(prev => ({
                                   ...prev,
-                                  productCategory: 'Máy Tính Bàn / Laptop',
-                                  machineModel: currentAssignedSet.computerConfig || 'Máy Tính',
-                                  serialNumber: currentAssignedSet.computerSerial || ''
+                                  productCategory: isAio ? 'AIO' : 'Case',
+                                  machineModel: currentAssignedSet.pcOs || currentAssignedSet.pcType || 'Máy tính',
+                                  serialNumber: currentAssignedSet.pcSerial || ''
                                 }));
                               }}
                             >
-                              💻 Máy tính: {currentAssignedSet.computerConfig || currentAssignedSet.computerSerial}
+                              💻 {currentAssignedSet.pcType || 'Máy tính'}: {currentAssignedSet.pcOs} ({currentAssignedSet.pcSerial})
                             </button>
                           )}
                           {currentAssignedSet.printerSerial && (
                             <button
                               type="button"
-                              className={`btn btn-sm ${formData.productCategory === 'Máy In Tem QL700' ? 'btn-primary' : 'btn-secondary'}`}
+                              className={`btn btn-sm ${formData.productCategory === 'QL700' ? 'btn-primary' : 'btn-secondary'}`}
                               style={{ fontSize: '0.75rem' }}
                               onClick={() => {
                                 setFormData(prev => ({
                                   ...prev,
-                                  productCategory: 'Máy In Tem QL700',
-                                  machineModel: currentAssignedSet.printerModel || 'QL-700',
+                                  productCategory: 'QL700',
+                                  machineModel: currentAssignedSet.printerModel || 'QL700',
                                   serialNumber: currentAssignedSet.printerSerial || ''
                                 }));
                               }}
                             >
-                              🖨️ Máy in: {currentAssignedSet.printerModel} ({currentAssignedSet.printerSerial})
+                              🖨️ Máy in: {currentAssignedSet.printerModel || 'QL700'} ({currentAssignedSet.printerSerial})
                             </button>
                           )}
+                          <button
+                            type="button"
+                            className={`btn btn-sm ${formData.productCategory === 'Màn hình' ? 'btn-primary' : 'btn-secondary'}`}
+                            style={{ fontSize: '0.75rem' }}
+                            onClick={() => {
+                              setFormData(prev => ({
+                                ...prev,
+                                productCategory: 'Màn hình',
+                                machineModel: 'Màn hình hiển thị',
+                                serialNumber: ''
+                              }));
+                            }}
+                          >
+                            🖥️ Màn hình
+                          </button>
                         </div>
                       </div>
                     )}
@@ -975,23 +1047,36 @@ export default function DeviceRepairProcessing({
                   <div className="responsive-form-grid">
                     <div className="form-group">
                       <label className="form-label">📂 3. Phân Loại Thiết Bị *</label>
-                      <select className="form-select" required value={formData.productCategory} onChange={e => setFormData({ ...formData, productCategory: e.target.value })}>
-                        <option value="Máy Chiết Sơn">Máy Chiết Sơn</option>
-                        <option value="Máy Lắc Sơn">Máy Lắc Sơn</option>
-                        <option value="Máy Tính Bàn / Laptop">Máy Tính Bàn / Laptop</option>
-                        <option value="Máy In Tem QL700">Máy In Tem QL700</option>
+                      <select 
+                        className="form-select" 
+                        required 
+                        value={formData.productCategory} 
+                        onChange={e => handleCategoryChange(e.target.value)}
+                      >
+                        {PRODUCT_CATEGORIES.map(cat => (
+                          <option key={cat} value={cat}>{cat}</option>
+                        ))}
                       </select>
                     </div>
                     <div className="form-group">
-                      <label className="form-label">🏷️ 4. Số Seri Thiết Bị (Serial) *</label>
-                      <input type="text" className="form-input" required placeholder="Nhập số seri duy nhất..." value={formData.serialNumber} onChange={e => setFormData({ ...formData, serialNumber: e.target.value })} />
+                      <label className="form-label">
+                        🏷️ 4. Số Seri Thiết Bị {['Màn hình', 'Khác / Linh kiện'].includes(formData.productCategory) ? '(Không bắt buộc)' : '*'}
+                      </label>
+                      <input 
+                        type="text" 
+                        className="form-input" 
+                        required={!['Màn hình', 'Khác / Linh kiện'].includes(formData.productCategory)} 
+                        placeholder={['Màn hình', 'Khác / Linh kiện'].includes(formData.productCategory) ? "Có thể để trống hoặc ghi chú..." : "Nhập số seri duy nhất..."} 
+                        value={formData.serialNumber} 
+                        onChange={e => setFormData({ ...formData, serialNumber: e.target.value })} 
+                      />
                     </div>
                   </div>
 
                   <div className="responsive-form-grid">
                     <div className="form-group">
                       <label className="form-label">⚙️ Model Chi Tiết</label>
-                      <input type="text" className="form-input" placeholder="Ví dụ: COROB D200, Mixer Natos V1, QL-700..." value={formData.machineModel} onChange={e => setFormData({ ...formData, machineModel: e.target.value })} />
+                      <input type="text" className="form-input" placeholder="Ví dụ: Satint A2, Mixer AI88, QL-700..." value={formData.machineModel} onChange={e => setFormData({ ...formData, machineModel: e.target.value })} />
                     </div>
                     <div className="form-group">
                       <label className="form-label">📦 Trạng Thái Trả Khách</label>
@@ -1010,11 +1095,47 @@ export default function DeviceRepairProcessing({
                   <div className="responsive-form-grid">
                     <div className="form-group">
                       <label className="form-label">🛠️ Hướng Xử Lý Kỹ Thuật</label>
-                      <select className="form-select" value={formData.actionDirection} onChange={e => setFormData({ ...formData, actionDirection: e.target.value })}>
+                      <select 
+                        className="form-select" 
+                        value={formData.actionDirection} 
+                        onChange={e => {
+                          const val = e.target.value;
+                          setFormData(prev => ({
+                            ...prev,
+                            actionDirection: val,
+                            exchangeType: val === 'Xuất đổi' 
+                              ? (prev.exchangeType === 'Không xuất đổi' ? 'Xuất đổi máy mới 100%' : prev.exchangeType)
+                              : 'Không xuất đổi'
+                          }));
+                        }}
+                      >
                         <option value="Sửa chữa">🛠️ Sửa Chữa Tại Kho/Đại Lý</option>
                         <option value="Xuất đổi">🔄 Xuất Đổi Máy Khác</option>
                       </select>
                     </div>
+
+                    <div className="form-group">
+                      <label className="form-label">📦 Xuất Đổi Máy Mới Hoặc Cũ</label>
+                      <select 
+                        className="form-select" 
+                        value={formData.exchangeType || (formData.actionDirection === 'Xuất đổi' ? 'Xuất đổi máy mới 100%' : 'Không xuất đổi')} 
+                        onChange={e => {
+                          const val = e.target.value;
+                          setFormData(prev => ({
+                            ...prev,
+                            exchangeType: val,
+                            actionDirection: val !== 'Không xuất đổi' ? 'Xuất đổi' : prev.actionDirection
+                          }));
+                        }}
+                      >
+                        <option value="Không xuất đổi">⚪ Không Xuất Đổi (Giữ máy sửa)</option>
+                        <option value="Xuất đổi máy mới 100%">✨ Xuất Đổi Máy Mới 100%</option>
+                        <option value="Xuất đổi máy cũ (đã qua sử dụng)">🔄 Xuất Đổi Máy Cũ (Đã qua sử dụng)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="responsive-form-grid">
                     <div className="form-group">
                       <label className="form-label">⚡ Tình Trạng Sửa Chữa</label>
                       <select className="form-select" value={formData.processingStatus} onChange={e => setFormData({ ...formData, processingStatus: e.target.value })}>
