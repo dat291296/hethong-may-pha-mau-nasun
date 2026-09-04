@@ -45,10 +45,10 @@ export default function FieldRouteMap({
   // Leaflet & GPS states
   const [showMap, setShowMap] = useState(true);
   const [mapProvider, setMapProvider] = useState('LEAFLET'); // 'LEAFLET' | 'GOOGLE'
-  const [mapTileType, setMapTileType] = useState('VOYAGER'); // 'VOYAGER' | 'SATELLITE' | 'OSM'
+  const [mapTileType, setMapTileType] = useState('GOOGLE_STREET'); // 'GOOGLE_STREET' | 'GOOGLE_SATELLITE' | 'GOOGLE_TERRAIN' | 'VOYAGER'
   const [selectedGoogleNpp, setSelectedGoogleNpp] = useState(null);
   const [copiedCoord, setCopiedCoord] = useState(false);
-  const [isLScriptLoaded, setIsLScriptLoaded] = useState(false);
+  const [isLScriptLoaded, setIsLScriptLoaded] = useState(typeof window !== 'undefined' && !!window.L);
   const [userLocation, setUserLocation] = useState(null);
   const mapInstanceRef = useRef(null);
   const tileLayerRef = useRef(null);
@@ -331,26 +331,40 @@ export default function FieldRouteMap({
 
   // Tile layer configurations for reliable and high-resolution loading
   const TILE_CONFIGS = {
+    GOOGLE_STREET: {
+      name: 'Google Maps Chuẩn',
+      url: 'https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
+      options: {
+        subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+        maxZoom: 20,
+        attribution: '&copy; Google Maps'
+      }
+    },
+    GOOGLE_SATELLITE: {
+      name: 'Google Vệ Tinh',
+      url: 'https://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
+      options: {
+        subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+        maxZoom: 20,
+        attribution: '&copy; Google Maps Vệ Tinh'
+      }
+    },
+    GOOGLE_TERRAIN: {
+      name: 'Google Địa Hình',
+      url: 'https://{s}.google.com/vt/lyrs=p&x={x}&y={y}&z={z}',
+      options: {
+        subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+        maxZoom: 20,
+        attribution: '&copy; Google Maps Địa Hình'
+      }
+    },
     VOYAGER: {
+      name: 'CartoDB',
       url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
       options: {
         subdomains: 'abcd',
         maxZoom: 19,
-        attribution: '&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
-      }
-    },
-    SATELLITE: {
-      url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-      options: {
-        maxZoom: 19,
-        attribution: 'Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics'
-      }
-    },
-    OSM: {
-      url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-      options: {
-        maxZoom: 19,
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        attribution: '&copy; CARTO &copy; OSM'
       }
     }
   };
@@ -384,8 +398,8 @@ export default function FieldRouteMap({
     const map = window.L.map('leaflet-map-container', { zoomControl: true }).setView(center, initialZoom);
     mapInstanceRef.current = map;
 
-    // Apply active tile layer (CartoDB Voyager by default - high speed and never rate-limited)
-    const currentTileConfig = TILE_CONFIGS[mapTileType] || TILE_CONFIGS.VOYAGER;
+    // Apply active tile layer (Google Maps Street by default - 100% identical to Google Maps)
+    const currentTileConfig = TILE_CONFIGS[mapTileType] || TILE_CONFIGS.GOOGLE_STREET;
     const tileLayer = window.L.tileLayer(currentTileConfig.url, currentTileConfig.options).addTo(map);
     tileLayerRef.current = tileLayer;
 
@@ -973,54 +987,71 @@ export default function FieldRouteMap({
               <div style={{ display: 'flex', gap: '4px', background: 'rgba(15,23,42,0.6)', padding: '2px', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
                 <button
                   type="button"
-                  onClick={() => setMapTileType('VOYAGER')}
-                  title="Bản đồ đường phố tốc độ cao, rõ nét địa giới Việt Nam"
+                  onClick={() => setMapTileType('GOOGLE_STREET')}
+                  title="Bản đồ Google Maps chuẩn (Đường phố, giao thông, tỉnh thành)"
                   style={{
-                    padding: '4px 8px',
+                    padding: '4px 10px',
                     borderRadius: '4px',
                     border: 'none',
-                    background: mapTileType === 'VOYAGER' ? 'rgba(6,182,212,0.25)' : 'transparent',
+                    background: mapTileType === 'GOOGLE_STREET' ? 'rgba(6,182,212,0.3)' : 'transparent',
+                    color: mapTileType === 'GOOGLE_STREET' ? 'var(--accent-cyan)' : 'var(--text-muted)',
+                    fontSize: '0.72rem',
+                    fontWeight: '800',
+                    cursor: 'pointer'
+                  }}
+                >
+                  🗺️ Google Maps
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMapTileType('GOOGLE_SATELLITE')}
+                  title="Ảnh vệ tinh Google Maps độ nét cao kèm tên đường"
+                  style={{
+                    padding: '4px 10px',
+                    borderRadius: '4px',
+                    border: 'none',
+                    background: mapTileType === 'GOOGLE_SATELLITE' ? 'rgba(6,182,212,0.3)' : 'transparent',
+                    color: mapTileType === 'GOOGLE_SATELLITE' ? 'var(--accent-cyan)' : 'var(--text-muted)',
+                    fontSize: '0.72rem',
+                    fontWeight: '800',
+                    cursor: 'pointer'
+                  }}
+                >
+                  🛰️ Google Vệ Tinh
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMapTileType('GOOGLE_TERRAIN')}
+                  title="Bản đồ địa hình Google Maps"
+                  style={{
+                    padding: '4px 10px',
+                    borderRadius: '4px',
+                    border: 'none',
+                    background: mapTileType === 'GOOGLE_TERRAIN' ? 'rgba(6,182,212,0.3)' : 'transparent',
+                    color: mapTileType === 'GOOGLE_TERRAIN' ? 'var(--accent-cyan)' : 'var(--text-muted)',
+                    fontSize: '0.72rem',
+                    fontWeight: '800',
+                    cursor: 'pointer'
+                  }}
+                >
+                  🏔️ Địa Hình
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMapTileType('VOYAGER')}
+                  title="Bản đồ đường phố CartoDB tốc độ cao"
+                  style={{
+                    padding: '4px 10px',
+                    borderRadius: '4px',
+                    border: 'none',
+                    background: mapTileType === 'VOYAGER' ? 'rgba(6,182,212,0.3)' : 'transparent',
                     color: mapTileType === 'VOYAGER' ? 'var(--accent-cyan)' : 'var(--text-muted)',
                     fontSize: '0.72rem',
-                    fontWeight: '700',
+                    fontWeight: '800',
                     cursor: 'pointer'
                   }}
                 >
-                  Đường Phố
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMapTileType('SATELLITE')}
-                  title="Ảnh vệ tinh độ phân giải cao toàn cầu (Esri)"
-                  style={{
-                    padding: '4px 8px',
-                    borderRadius: '4px',
-                    border: 'none',
-                    background: mapTileType === 'SATELLITE' ? 'rgba(6,182,212,0.25)' : 'transparent',
-                    color: mapTileType === 'SATELLITE' ? 'var(--accent-cyan)' : 'var(--text-muted)',
-                    fontSize: '0.72rem',
-                    fontWeight: '700',
-                    cursor: 'pointer'
-                  }}
-                >
-                  🛰️ Vệ Tinh
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMapTileType('OSM')}
-                  title="Bản đồ OpenStreetMap chuẩn"
-                  style={{
-                    padding: '4px 8px',
-                    borderRadius: '4px',
-                    border: 'none',
-                    background: mapTileType === 'OSM' ? 'rgba(6,182,212,0.25)' : 'transparent',
-                    color: mapTileType === 'OSM' ? 'var(--accent-cyan)' : 'var(--text-muted)',
-                    fontSize: '0.72rem',
-                    fontWeight: '700',
-                    cursor: 'pointer'
-                  }}
-                >
-                  OSM
+                  CartoDB
                 </button>
               </div>
 
@@ -1166,7 +1197,7 @@ export default function FieldRouteMap({
               border: '1px solid var(--border-color)',
               position: 'relative',
               zIndex: 1,
-              backgroundColor: '#1e293b'
+              backgroundColor: '#f1f5f9'
             }}
           >
             {!isLScriptLoaded && (

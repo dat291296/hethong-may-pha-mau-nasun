@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { CalendarClock, CheckCircle2, AlertTriangle, ShieldAlert, Wrench, Search, Edit3, Trash2, BarChart2, PieChart as PieChartIcon } from 'lucide-react';
 import { 
   BarChart, 
