@@ -302,6 +302,12 @@ export default function Dashboard({
                                      set.computerStatus === 'Đã đổi trả máy mới' || 
                                      set.pcStatus === 'Đã đổi trả máy mới' || 
                                      set.isPcReplaced;
+                const isPcReplacedOld = pcObj?.status === 'Đổi trả máy cũ' || 
+                                        pcObj?.status === 'Đã đổi trả máy cũ' || 
+                                        set.computerStatus === 'Đổi trả máy cũ' || 
+                                        set.computerStatus === 'Đã đổi trả máy cũ' ||
+                                        set.pcStatus === 'Đổi trả máy cũ' || 
+                                        set.pcStatus === 'Đã đổi trả máy cũ';
                 const isPcNew = pcObj?.status === 'Mới 100%' || set.computerStatus === 'Mới 100%';
 
                 return (
@@ -325,6 +331,22 @@ export default function Dashboard({
                       </div>
                       {isPcReplaced && (
                         <span 
+                          className="badge badge-warning" 
+                          style={{ 
+                            fontSize: '0.68rem', 
+                            display: 'inline-flex', 
+                            alignItems: 'center', 
+                            gap: '4px', 
+                            marginTop: '4px',
+                            fontWeight: '700'
+                          }}
+                          title="Máy tính đã được đổi trả máy mới cho NPP"
+                        >
+                          🔄 Đã đổi trả máy mới
+                        </span>
+                      )}
+                      {isPcReplacedOld && (
+                        <span 
                           className="badge badge-purple" 
                           style={{ 
                             fontSize: '0.68rem', 
@@ -337,12 +359,12 @@ export default function Dashboard({
                             border: '1px solid rgba(168,85,247,0.4)',
                             fontWeight: '700'
                           }}
-                          title="Máy tính đã được đổi trả máy mới cho NPP"
+                          title="Máy tính đổi trả máy cũ"
                         >
-                          🔄 Đã đổi trả máy mới
+                          🔁 Đổi trả máy cũ
                         </span>
                       )}
-                      {!isPcReplaced && isPcNew && (
+                      {!isPcReplaced && !isPcReplacedOld && isPcNew && (
                         <span 
                           className="badge badge-success" 
                           style={{ fontSize: '0.68rem', display: 'inline-flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}
@@ -398,6 +420,12 @@ export default function Dashboard({
                                  set.computerStatus === 'Đã đổi trả máy mới' || 
                                  set.pcStatus === 'Đã đổi trả máy mới' || 
                                  set.isPcReplaced;
+            const isPcReplacedOld = pcObj?.status === 'Đổi trả máy cũ' || 
+                                    pcObj?.status === 'Đã đổi trả máy cũ' || 
+                                    set.computerStatus === 'Đổi trả máy cũ' || 
+                                    set.computerStatus === 'Đã đổi trả máy cũ' ||
+                                    set.pcStatus === 'Đổi trả máy cũ' || 
+                                    set.pcStatus === 'Đã đổi trả máy cũ';
 
             return (
               <div className="mobile-card" key={set.id || set.setCode}>
@@ -428,8 +456,13 @@ export default function Dashboard({
                       <div>{pcType} ({pcOs})</div>
                       <div style={{ fontSize: '0.75rem', color: 'var(--accent-cyan)', fontWeight: '600' }}>💻 {pcSpecs}</div>
                       {isPcReplaced && (
-                        <span className="badge badge-purple" style={{ fontSize: '0.65rem', display: 'inline-block', marginTop: '2px' }}>
+                        <span className="badge badge-warning" style={{ fontSize: '0.65rem', display: 'inline-block', marginTop: '2px', fontWeight: '700' }}>
                           🔄 Đã đổi trả máy mới
+                        </span>
+                      )}
+                      {isPcReplacedOld && (
+                        <span className="badge badge-purple" style={{ fontSize: '0.65rem', display: 'inline-block', marginTop: '2px', fontWeight: '700' }}>
+                          🔁 Đổi trả máy cũ
                         </span>
                       )}
                     </span>

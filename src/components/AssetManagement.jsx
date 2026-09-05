@@ -370,6 +370,8 @@ export default function AssetManagement({
         matchesStatus = !item.isAssigned && !item.setCode;
       } else if (statusFilter === 'DOI_TRA_MOI') {
         matchesStatus = item.status === 'Đã đổi trả máy mới';
+      } else if (statusFilter === 'DOI_TRA_CU') {
+        matchesStatus = item.status === 'Đổi trả máy cũ' || item.status === 'Đã đổi trả máy cũ';
       } else {
         matchesStatus = item.status === statusFilter;
       }
@@ -438,7 +440,12 @@ export default function AssetManagement({
           <option value="Mới 100%">Mới 100%</option>
           <option value="Đang chạy tốt">Đang chạy tốt</option>
           <option value="Cần bảo trì">Cần bảo trì</option>
-          {isComputer && <option value="DOI_TRA_MOI">🔄 Đã đổi trả máy mới</option>}
+          {isComputer && (
+            <>
+              <option value="DOI_TRA_MOI">🔄 Đã đổi trả máy mới</option>
+              <option value="DOI_TRA_CU">🔁 Đổi trả máy cũ</option>
+            </>
+          )}
         </select>
 
         <span style={{ fontSize: '0.85rem', fontWeight: '600' }}>Sắp xếp:</span>
@@ -903,6 +910,9 @@ export default function AssetManagement({
                           {(pcObj?.status === 'Đã đổi trả máy mới' || set.computerStatus === 'Đã đổi trả máy mới') && (
                             <span className="badge badge-warning" style={{ fontSize: '0.65rem' }}>🔄 Đã đổi trả máy mới</span>
                           )}
+                          {(pcObj?.status === 'Đổi trả máy cũ' || pcObj?.status === 'Đã đổi trả máy cũ' || set.computerStatus === 'Đổi trả máy cũ' || set.computerStatus === 'Đã đổi trả máy cũ') && (
+                            <span className="badge badge-purple" style={{ fontSize: '0.65rem' }}>🔁 Đổi trả máy cũ</span>
+                          )}
                         </div>
                       </td>
                       <td>
@@ -983,6 +993,9 @@ export default function AssetManagement({
                         {pcSpecsText}
                         {(pcObj?.status === 'Đã đổi trả máy mới' || set.computerStatus === 'Đã đổi trả máy mới') && (
                           <span className="badge badge-warning" style={{ fontSize: '0.65rem', marginLeft: '6px' }}>🔄 Đã đổi trả máy mới</span>
+                        )}
+                        {(pcObj?.status === 'Đổi trả máy cũ' || pcObj?.status === 'Đã đổi trả máy cũ' || set.computerStatus === 'Đổi trả máy cũ' || set.computerStatus === 'Đã đổi trả máy cũ') && (
+                          <span className="badge badge-purple" style={{ fontSize: '0.65rem', marginLeft: '6px' }}>🔁 Đổi trả máy cũ</span>
                         )}
                       </span>
                     </div>
@@ -1299,6 +1312,8 @@ export default function AssetManagement({
                     <td>
                       {item.status === 'Đã đổi trả máy mới' ? (
                         <span className="badge badge-warning" style={{ fontWeight: '700' }}>🔄 Đã đổi trả máy mới</span>
+                      ) : (item.status === 'Đổi trả máy cũ' || item.status === 'Đã đổi trả máy cũ') ? (
+                        <span className="badge badge-purple" style={{ fontWeight: '700' }}>🔁 Đổi trả máy cũ</span>
                       ) : item.status === 'Mới 100%' ? (
                         <span className="badge badge-success">{item.status}</span>
                       ) : (
@@ -1366,6 +1381,8 @@ export default function AssetManagement({
                   <div>
                     {item.status === 'Đã đổi trả máy mới' ? (
                       <span className="badge badge-warning">🔄 Đổi trả mới</span>
+                    ) : (item.status === 'Đổi trả máy cũ' || item.status === 'Đã đổi trả máy cũ') ? (
+                      <span className="badge badge-purple">🔁 Đổi trả cũ</span>
                     ) : (
                       <span className="badge badge-purple">{item.status || item.os}</span>
                     )}
@@ -1628,7 +1645,12 @@ export default function AssetManagement({
                   <select className="form-select" value={addFormData.status} onChange={e => setAddFormData({ ...addFormData, status: e.target.value })}>
                     <option value="Mới 100%">Mới 100%</option>
                     <option value="Đang chạy tốt">Đang chạy tốt</option>
-                    {addDeviceCategory === 'computer' && <option value="Đã đổi trả máy mới">🔄 Đã đổi trả máy mới</option>}
+                    {addDeviceCategory === 'computer' && (
+                      <>
+                        <option value="Đã đổi trả máy mới">🔄 Đã đổi trả máy mới</option>
+                        <option value="Đổi trả máy cũ">🔁 Đổi trả máy cũ</option>
+                      </>
+                    )}
                     <option value="Cần bảo trì">Cần bảo trì</option>
                     {addDeviceCategory === 'dispenser' && <option value="Hỏng đầu phun">Hỏng đầu phun</option>}
                     {addDeviceCategory === 'mixer' && <option value="Hỏng motor">Hỏng motor</option>}
@@ -1767,7 +1789,12 @@ export default function AssetManagement({
                       <select className="form-select" value={editFormData.status || 'Đang chạy tốt'} onChange={e => setEditFormData({ ...editFormData, status: e.target.value })}>
                         <option value="Mới 100%">Mới 100%</option>
                         <option value="Đang chạy tốt">Đang chạy tốt</option>
-                        {editingDevice.category === 'computer' && <option value="Đã đổi trả máy mới">🔄 Đã đổi trả máy mới</option>}
+                        {editingDevice.category === 'computer' && (
+                          <>
+                            <option value="Đã đổi trả máy mới">🔄 Đã đổi trả máy mới</option>
+                            <option value="Đổi trả máy cũ">🔁 Đổi trả máy cũ</option>
+                          </>
+                        )}
                         <option value="Cần bảo trì">Cần bảo trì</option>
                         {editingDevice.category === 'dispenser' && <option value="Hỏng đầu phun">Hỏng đầu phun</option>}
                         {editingDevice.category === 'mixer' && <option value="Hỏng motor">Hỏng motor</option>}
@@ -2095,7 +2122,7 @@ export default function AssetManagement({
                             <option value="">-- Chọn máy tính ({availComp.length} máy) --</option>
                             {availComp.map(c => (
                               <option key={c.id} value={c.id}>
-                                [{c.id}] {c.type} ({c.os || 'Win'} | {c.specs || 'N/A'}) {c.status === 'Đã đổi trả máy mới' ? '🔄 [Đã đổi trả máy mới]' : ''} {isDeviceFree(c) ? '🟢 (Tự do trong kho)' : `🟡 (Đang gán bộ ${c.setCode || c.set_code || ''})`}
+                                [{c.id}] {c.type} ({c.os || 'Win'} | {c.specs || 'N/A'}) {c.status === 'Đã đổi trả máy mới' ? '🔄 [Đã đổi trả máy mới]' : (c.status === 'Đổi trả máy cũ' || c.status === 'Đã đổi trả máy cũ') ? '🔁 [Đổi trả máy cũ]' : ''} {isDeviceFree(c) ? '🟢 (Tự do trong kho)' : `🟡 (Đang gán bộ ${c.setCode || c.set_code || ''})`}
                               </option>
                             ))}
                           </select>
