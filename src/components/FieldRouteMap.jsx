@@ -44,7 +44,7 @@ export default function FieldRouteMap({
 
   // Leaflet & GPS states
   const [showMap, setShowMap] = useState(true);
-  const [mapProvider, setMapProvider] = useState('GOOGLE_EMBED'); // 'GOOGLE_EMBED' | 'LEAFLET' | 'GOOGLE'
+
   const [mapTileType, setMapTileType] = useState('VOYAGER'); // 'VOYAGER' | 'ESRI_STREET' | 'ESRI_SATELLITE' | 'OSM_DE'
   const [selectedGoogleNpp, setSelectedGoogleNpp] = useState(null);
   const [copiedCoord, setCopiedCoord] = useState(false);
@@ -367,57 +367,7 @@ export default function FieldRouteMap({
     }
   };
 
-  // Generate Google Maps Embed URL for all NPP locations
-  // Uses the free /maps?output=embed format - no API key needed
-  const googleMapsEmbedUrl = useMemo(() => {
-    const validNpps = filteredNpps.filter(n => n.locationCoordinates);
-    
-    if (selectedGoogleNpp && selectedGoogleNpp.locationCoordinates) {
-      // Show specific NPP location centered on Google Maps
-      const coords = selectedGoogleNpp.locationCoordinates;
-      const q = encodeURIComponent(`${selectedGoogleNpp.name}, ${selectedGoogleNpp.address || selectedGoogleNpp.province}`);
-      return `https://maps.google.com/maps?q=${coords}&t=m&z=15&output=embed&hl=vi`;
-    }
-    
-    if (validNpps.length === 0) {
-      // Default: center of Vietnam
-      return `https://maps.google.com/maps?q=Vietnam&t=m&z=6&output=embed&hl=vi`;
-    }
-    
-    if (validNpps.length === 1) {
-      const coords = validNpps[0].locationCoordinates;
-      return `https://maps.google.com/maps?q=${coords}&t=m&z=14&output=embed&hl=vi`;
-    }
-    
-    // For multiple NPPs: calculate center point and appropriate zoom
-    const allLats = validNpps.map(n => parseFloat(n.locationCoordinates.split(',')[0]));
-    const allLngs = validNpps.map(n => parseFloat(n.locationCoordinates.split(',')[1]));
-    const centerLat = (Math.min(...allLats) + Math.max(...allLats)) / 2;
-    const centerLng = (Math.min(...allLngs) + Math.max(...allLngs)) / 2;
-    
-    // Calculate appropriate zoom based on geographic spread
-    const latSpread = Math.max(...allLats) - Math.min(...allLats);
-    const lngSpread = Math.max(...allLngs) - Math.min(...allLngs);
-    const maxSpread = Math.max(latSpread, lngSpread);
-    let zoom = 6;
-    if (maxSpread < 0.1) zoom = 14;
-    else if (maxSpread < 0.5) zoom = 12;
-    else if (maxSpread < 1) zoom = 10;
-    else if (maxSpread < 3) zoom = 8;
-    else if (maxSpread < 6) zoom = 7;
-    
-    return `https://maps.google.com/maps?q=${centerLat},${centerLng}&t=m&z=${zoom}&output=embed&hl=vi`;
-  }, [filteredNpps, selectedGoogleNpp]);
 
-  // Generate Google Maps URL with markers for opening in new tab
-  const googleMapsViewAllUrl = useMemo(() => {
-    const validNpps = filteredNpps.filter(n => n.locationCoordinates);
-    if (validNpps.length === 0) return 'https://maps.google.com/?q=Vietnam';
-    if (validNpps.length === 1) return `https://maps.google.com/?q=${validNpps[0].locationCoordinates}`;
-    
-    // Use Google Maps directions for multiple points
-    return `https://www.google.com/maps/dir/${validNpps.map(n => n.locationCoordinates).join('/')}`;
-  }, [filteredNpps]);
 
   // Leaflet Map Rendering and Markers synchronization
   useEffect(() => {
@@ -631,7 +581,7 @@ export default function FieldRouteMap({
         mapInstanceRef.current = null;
       }
     };
-  }, [filteredNpps, selectedTripNpps, showMap, userLocation, isLScriptLoaded, mapProvider, mapTileType, selectedGoogleNpp]);
+  }, [filteredNpps, selectedTripNpps, showMap, userLocation, isLScriptLoaded, mapTileType, selectedGoogleNpp]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -984,81 +934,18 @@ export default function FieldRouteMap({
         </div>
       )}
 
-      {/* 📍 INTERACTIVE MAP PANEL (LEAFLET MULTI-LAYER & GOOGLE MAPS NAVIGATION) */}
+      {/* 📍 INTERACTIVE MAP PANEL (LEAFLET) */}
       {showMap && (
         <div className="glass-panel" style={{ padding: '16px', position: 'relative' }}>
-          {/* Top Bar: Mode Switcher & Layer Selector */}
+          {/* Top Bar: Title & Layer Selector */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '10px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
               <span style={{ fontSize: '0.9rem', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--accent-cyan)' }}>
-                🗺️ Bản Đồ Tuyến Đường
+                🗺️ Bản Đồ Vị Trí Nhà Phân Phối
               </span>
-              {/* Provider Tabs */}
-              <div style={{ display: 'flex', gap: '4px', background: 'rgba(0,0,0,0.35)', padding: '3px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-                <button
-                  type="button"
-                  onClick={() => setMapProvider('GOOGLE_EMBED')}
-                  style={{
-                    padding: '6px 12px',
-                    borderRadius: '6px',
-                    border: 'none',
-                    background: mapProvider === 'GOOGLE_EMBED' ? 'var(--accent-cyan)' : 'transparent',
-                    color: mapProvider === 'GOOGLE_EMBED' ? '#0f172a' : 'var(--text-muted)',
-                    fontSize: '0.78rem',
-                    fontWeight: '800',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '5px'
-                  }}
-                >
-                  <span>🗺️ Google Maps</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMapProvider('LEAFLET');
-                    setTimeout(() => mapInstanceRef.current?.invalidateSize(), 150);
-                  }}
-                  style={{
-                    padding: '6px 12px',
-                    borderRadius: '6px',
-                    border: 'none',
-                    background: mapProvider === 'LEAFLET' ? 'var(--accent-cyan)' : 'transparent',
-                    color: mapProvider === 'LEAFLET' ? '#0f172a' : 'var(--text-muted)',
-                    fontSize: '0.78rem',
-                    fontWeight: '800',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '5px'
-                  }}
-                >
-                  <span>🗺️ Bản Đồ Số Trực Quan</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMapProvider('GOOGLE');
-                    setTimeout(() => mapInstanceRef.current?.invalidateSize(), 150);
-                  }}
-                  style={{
-                    padding: '6px 12px',
-                    borderRadius: '6px',
-                    border: 'none',
-                    background: mapProvider === 'GOOGLE' ? 'var(--accent-cyan)' : 'transparent',
-                    color: mapProvider === 'GOOGLE' ? '#0f172a' : 'var(--text-muted)',
-                    fontSize: '0.78rem',
-                    fontWeight: '800',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '5px'
-                  }}
-                >
-                  <span>🧭 Điều Hướng Google Maps</span>
-                </button>
-              </div>
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', background: 'rgba(6,182,212,0.1)', padding: '3px 8px', borderRadius: '4px', fontWeight: '700' }}>
+                📍 {filteredNpps.filter(n => n.locationCoordinates).length} điểm
+              </span>
             </div>
 
             {/* Right Tools: Layer Switcher & Hide Button */}
@@ -1145,238 +1032,7 @@ export default function FieldRouteMap({
             </div>
           </div>
 
-          {/* GOOGLE MAPS NAVIGATION HUB */}
-          {mapProvider === 'GOOGLE' && (
-            <div style={{ marginBottom: '14px', background: 'rgba(15,23,42,0.7)', borderRadius: '8px', padding: '12px', border: '1px solid rgba(6,182,212,0.25)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
-                <span style={{ fontSize: '0.78rem', fontWeight: '800', color: 'var(--accent-cyan)', textTransform: 'uppercase' }}>
-                  🎯 Chọn Điểm Đến Để Mở Google Maps Turn-by-turn Navigation:
-                </span>
-                {selectedTripNpps.length > 0 && (
-                  <a
-                    href={multiStopMapsUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="btn btn-primary btn-xs"
-                    style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.72rem' }}
-                  >
-                    <Compass size={12} />
-                    <span>Mở Toàn Bộ Lộ Trình ({selectedTripNpps.length} Chặng) Trong Google Maps</span>
-                  </a>
-                )}
-              </div>
-
-              {/* Quick Destination Pills */}
-              <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '6px', marginBottom: '10px' }}>
-                <button
-                  type="button"
-                  className={`btn btn-xs ${!selectedGoogleNpp ? 'btn-primary' : 'btn-secondary'}`}
-                  style={{ whiteSpace: 'nowrap', fontSize: '0.72rem' }}
-                  onClick={() => setSelectedGoogleNpp(null)}
-                >
-                  🇻🇳 Toàn Bộ Điểm NPP ({filteredNpps.length})
-                </button>
-                {filteredNpps.map((n) => (
-                  <button
-                    key={n.id}
-                    type="button"
-                    className={`btn btn-xs ${selectedGoogleNpp?.id === n.id ? 'btn-primary' : 'btn-secondary'}`}
-                    style={{ whiteSpace: 'nowrap', fontSize: '0.72rem' }}
-                    onClick={() => setSelectedGoogleNpp(n)}
-                  >
-                    📍 {n.name}
-                  </button>
-                ))}
-              </div>
-
-              {/* Selected Destination Detail Banner */}
-              {selectedGoogleNpp ? (
-                <div style={{ background: 'rgba(6,182,212,0.06)', borderRadius: '8px', padding: '12px', border: '1px solid rgba(6,182,212,0.3)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-                  <div style={{ minWidth: '240px' }}>
-                    <div style={{ fontWeight: '800', color: '#fff', fontSize: '0.95rem', marginBottom: '2px' }}>
-                      📍 {selectedGoogleNpp.name}
-                    </div>
-                    <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginBottom: '4px' }}>
-                      {selectedGoogleNpp.address} ({selectedGoogleNpp.province})
-                    </div>
-                    <div style={{ display: 'flex', gap: '12px', fontSize: '0.75rem', flexWrap: 'wrap' }}>
-                      <span style={{ color: '#fff' }}>Liên hệ: <strong>{selectedGoogleNpp.contactPerson}</strong></span>
-                      <a href={`tel:${selectedGoogleNpp.phone}`} style={{ color: 'var(--accent-cyan)', textDecoration: 'none', fontWeight: '700' }}>
-                        📞 {selectedGoogleNpp.phone}
-                      </a>
-                      {userLocation && selectedGoogleNpp.locationCoordinates && (() => {
-                        const coords = selectedGoogleNpp.locationCoordinates.split(',').map(Number);
-                        if (coords.length === 2 && !isNaN(coords[0]) && !isNaN(coords[1])) {
-                          const d = getDistanceKm(userLocation[0], userLocation[1], coords[0], coords[1]);
-                          return (
-                            <span style={{ color: '#10b981', fontWeight: '800' }}>
-                              🚗 Cách bạn: {d.toFixed(1)} km
-                            </span>
-                          );
-                        }
-                        return null;
-                      })()}
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                    <a
-                      href={selectedGoogleNpp.googleMapsNavUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="btn btn-primary btn-sm"
-                      style={{ textDecoration: 'none', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem' }}
-                    >
-                      <Compass size={16} />
-                      <span>🚀 Mở Chỉ Đường Google Maps</span>
-                    </a>
-
-                    <a
-                      href={selectedGoogleNpp.googleMapsSearchUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="btn btn-secondary btn-sm"
-                      style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem' }}
-                    >
-                      <ExternalLink size={14} />
-                      <span>Xem Điểm Trên Google Maps</span>
-                    </a>
-
-                    {selectedGoogleNpp.locationCoordinates && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          navigator.clipboard.writeText(selectedGoogleNpp.locationCoordinates);
-                          setCopiedCoord(true);
-                          setTimeout(() => setCopiedCoord(false), 2000);
-                        }}
-                        className="btn btn-secondary btn-sm"
-                        style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px' }}
-                      >
-                        <Copy size={13} />
-                        <span>{copiedCoord ? '✓ Đã Chép GPS' : 'Chép Tọa Độ'}</span>
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <div style={{ padding: '8px 12px', background: 'rgba(255,255,255,0.03)', borderRadius: '6px', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                  💡 <strong>Gợi ý:</strong> Bấm vào một Nhà Phân Phối ở trên hoặc bấm trực tiếp vào Marker trên bản đồ để kích hoạt chỉ đường Google Maps từng bước (Turn-by-turn navigation) tới điểm công tác.
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* GOOGLE MAPS EMBED VIEW */}
-          {mapProvider === 'GOOGLE_EMBED' && (
-            <div style={{ position: 'relative' }}>
-              {/* Google Maps Embed iFrame */}
-              <div style={{
-                width: '100%',
-                height: '500px',
-                borderRadius: '8px',
-                overflow: 'hidden',
-                border: '1px solid var(--border-color)',
-                position: 'relative',
-                backgroundColor: '#e8e8e8'
-              }}>
-                <iframe
-                  title="Google Maps - Bản đồ tuyến đường NPP"
-                  src={googleMapsEmbedUrl}
-                  width="100%"
-                  height="100%"
-                  style={{ border: 0, display: 'block' }}
-                  allowFullScreen
-                  loading="lazy"
-                  referrerPolicy="no-referrer-when-downgrade"
-                />
-              </div>
-              
-              {/* Quick Actions Bar Below Map */}
-              <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginTop: '10px',
-                padding: '10px 14px',
-                background: 'rgba(15,23,42,0.7)',
-                borderRadius: '8px',
-                border: '1px solid var(--border-color)',
-                flexWrap: 'wrap',
-                gap: '8px'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                    📍 Đang hiển thị: <strong style={{ color: '#fff' }}>{filteredNpps.filter(n => n.locationCoordinates).length} điểm NPP</strong>
-                  </span>
-                  {selectedGoogleNpp && (
-                    <span style={{ fontSize: '0.78rem', color: 'var(--accent-cyan)', fontWeight: '700' }}>
-                      → Đang xem: {selectedGoogleNpp.name}
-                    </span>
-                  )}
-                </div>
-                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                  {selectedGoogleNpp && (
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-xs"
-                      onClick={() => setSelectedGoogleNpp(null)}
-                      style={{ fontSize: '0.72rem' }}
-                    >
-                      Xem Toàn Bộ
-                    </button>
-                  )}
-                  <a
-                    href={selectedGoogleNpp ? selectedGoogleNpp.googleMapsNavUrl : googleMapsViewAllUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="btn btn-primary btn-xs"
-                    style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.72rem' }}
-                  >
-                    <ExternalLink size={12} />
-                    <span>Mở Trong Google Maps</span>
-                  </a>
-                </div>
-              </div>
-              
-              {/* NPP Quick Select Pills for Google Maps Embed */}
-              <div style={{
-                marginTop: '10px',
-                padding: '10px 14px',
-                background: 'rgba(15,23,42,0.7)',
-                borderRadius: '8px',
-                border: '1px solid var(--border-color)'
-              }}>
-                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '8px', fontWeight: '700', textTransform: 'uppercase' }}>
-                  🎯 Bấm chọn NPP để xem trên Google Maps:
-                </div>
-                <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '6px' }}>
-                  <button
-                    type="button"
-                    className={`btn btn-xs ${!selectedGoogleNpp ? 'btn-primary' : 'btn-secondary'}`}
-                    style={{ whiteSpace: 'nowrap', fontSize: '0.72rem' }}
-                    onClick={() => setSelectedGoogleNpp(null)}
-                  >
-                    🇻🇳 Tổng Quan ({filteredNpps.length})
-                  </button>
-                  {filteredNpps.filter(n => n.locationCoordinates).map((n) => (
-                    <button
-                      key={n.id}
-                      type="button"
-                      className={`btn btn-xs ${selectedGoogleNpp?.id === n.id ? 'btn-primary' : 'btn-secondary'}`}
-                      style={{ whiteSpace: 'nowrap', fontSize: '0.72rem' }}
-                      onClick={() => setSelectedGoogleNpp(n)}
-                    >
-                      📍 {n.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* INTERACTIVE LEAFLET MAP CONTAINER */}
-          {(mapProvider === 'LEAFLET' || mapProvider === 'GOOGLE') && (
           <div 
             id="leaflet-map-container" 
             style={{ 
@@ -1386,15 +1042,135 @@ export default function FieldRouteMap({
               border: '1px solid var(--border-color)',
               position: 'relative',
               zIndex: 1,
-              backgroundColor: '#e8e8e8'
+              backgroundColor: '#1e293b'
             }}
           >
             {!isLScriptLoaded && (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                ⏳ Đang tải thư viện bản đồ số Leaflet...
+                ⏳ Đang tải thư viện bản đồ...
               </div>
             )}
           </div>
+
+          {/* NPP Quick Select Pills & Actions Below Map */}
+          <div style={{
+            marginTop: '10px',
+            padding: '10px 14px',
+            background: 'rgba(15,23,42,0.7)',
+            borderRadius: '8px',
+            border: '1px solid var(--border-color)'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: '700', textTransform: 'uppercase' }}>
+                🎯 Bấm chọn NPP để xem trên bản đồ:
+              </div>
+              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                {selectedGoogleNpp && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-xs"
+                    onClick={() => setSelectedGoogleNpp(null)}
+                    style={{ fontSize: '0.72rem' }}
+                  >
+                    Xem Toàn Bộ
+                  </button>
+                )}
+                {selectedTripNpps.length > 0 && (
+                  <a
+                    href={multiStopMapsUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn btn-primary btn-xs"
+                    style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.72rem' }}
+                  >
+                    <Compass size={12} />
+                    <span>Mở Lộ Trình Google Maps ({selectedTripNpps.length} chặng)</span>
+                  </a>
+                )}
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '6px' }}>
+              <button
+                type="button"
+                className={`btn btn-xs ${!selectedGoogleNpp ? 'btn-primary' : 'btn-secondary'}`}
+                style={{ whiteSpace: 'nowrap', fontSize: '0.72rem' }}
+                onClick={() => setSelectedGoogleNpp(null)}
+              >
+                🇻🇳 Tổng Quan ({filteredNpps.length})
+              </button>
+              {filteredNpps.filter(n => n.locationCoordinates).map((n) => (
+                <button
+                  key={n.id}
+                  type="button"
+                  className={`btn btn-xs ${selectedGoogleNpp?.id === n.id ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ whiteSpace: 'nowrap', fontSize: '0.72rem' }}
+                  onClick={() => setSelectedGoogleNpp(n)}
+                >
+                  📍 {n.name}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Selected NPP Detail Banner */}
+          {selectedGoogleNpp && (
+            <div style={{ marginTop: '10px', background: 'rgba(6,182,212,0.06)', borderRadius: '8px', padding: '12px', border: '1px solid rgba(6,182,212,0.3)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+              <div style={{ minWidth: '240px' }}>
+                <div style={{ fontWeight: '800', color: '#fff', fontSize: '0.95rem', marginBottom: '2px' }}>
+                  📍 {selectedGoogleNpp.name}
+                </div>
+                <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginBottom: '4px' }}>
+                  {selectedGoogleNpp.address} ({selectedGoogleNpp.province})
+                </div>
+                <div style={{ display: 'flex', gap: '12px', fontSize: '0.75rem', flexWrap: 'wrap' }}>
+                  <span style={{ color: '#fff' }}>Liên hệ: <strong>{selectedGoogleNpp.contactPerson}</strong></span>
+                  <a href={`tel:${selectedGoogleNpp.phone}`} style={{ color: 'var(--accent-cyan)', textDecoration: 'none', fontWeight: '700' }}>
+                    📞 {selectedGoogleNpp.phone}
+                  </a>
+                  {userLocation && selectedGoogleNpp.locationCoordinates && (() => {
+                    const coords = selectedGoogleNpp.locationCoordinates.split(',').map(Number);
+                    if (coords.length === 2 && !isNaN(coords[0]) && !isNaN(coords[1])) {
+                      const d = getDistanceKm(userLocation[0], userLocation[1], coords[0], coords[1]);
+                      return (
+                        <span style={{ color: '#10b981', fontWeight: '800' }}>
+                          🚗 Cách bạn: {d.toFixed(1)} km
+                        </span>
+                      );
+                    }
+                    return null;
+                  })()}
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <a
+                  href={selectedGoogleNpp.googleMapsNavUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn btn-primary btn-sm"
+                  style={{ textDecoration: 'none', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem' }}
+                >
+                  <Compass size={16} />
+                  <span>🚀 Mở Chỉ Đường Google Maps</span>
+                </a>
+
+                {selectedGoogleNpp.locationCoordinates && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(selectedGoogleNpp.locationCoordinates);
+                      setCopiedCoord(true);
+                      setTimeout(() => setCopiedCoord(false), 2000);
+                    }}
+                    className="btn btn-secondary btn-sm"
+                    style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px' }}
+                  >
+                    <Copy size={13} />
+                    <span>{copiedCoord ? '✓ Đã Chép GPS' : 'Chép Tọa Độ'}</span>
+                  </button>
+                )}
+              </div>
+            </div>
           )}
         </div>
       )}
