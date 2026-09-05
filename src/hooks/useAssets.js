@@ -19,7 +19,18 @@ function getInitialAssets(key, fallback) {
     const raw = localStorage.getItem(`nasun_${key}`) || localStorage.getItem(`cached_${key}`);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        if (key === 'computers') {
+          return parsed.map(c => {
+            let cleanType = c.type;
+            if (!cleanType || cleanType === 'AIO' || String(cleanType).includes('Lắc') || cleanType !== 'Case') {
+              cleanType = 'All In One';
+            }
+            return { ...c, type: cleanType };
+          });
+        }
+        return parsed;
+      }
     }
   } catch (e) {
     console.warn(`Failed to parse ${key} from storage`, e);
@@ -480,9 +491,13 @@ function mapDbToMixer(row) {
   };
 }
 function mapDbToComputer(row) {
+  let cleanType = row.type;
+  if (!cleanType || cleanType === 'AIO' || String(cleanType).includes('Lắc') || cleanType !== 'Case') {
+    cleanType = 'All In One';
+  }
   return { 
     id: row.id, 
-    type: row.type, 
+    type: cleanType, 
     os: row.os, 
     specs: row.specs, 
     serial: row.serial || '—', 

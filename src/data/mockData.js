@@ -128,11 +128,11 @@ export const INITIAL_MIXERS = [
 ];
 
 export const INITIAL_COMPUTERS = [
-  { id: "PC-001", type: "AIO", os: "Windows 11 Pro", specs: "Core i5 / 16GB RAM / 512GB SSD", status: "Mới 100%", network: "Có mạng LAN", serial: "—", isAssigned: true, setCode: "SET-2024-001", stabilizer: { hasStabilizer: true, brand: "Lioa 2000VA", isSelfBought: true } },
+  { id: "PC-001", type: "All In One", os: "Windows 11 Pro", specs: "Core i5 / 16GB RAM / 512GB SSD", status: "Mới 100%", network: "Có mạng LAN", serial: "—", isAssigned: true, setCode: "SET-2024-001", stabilizer: { hasStabilizer: true, brand: "Lioa 2000VA", isSelfBought: true } },
   { id: "PC-002", type: "Case", os: "Windows 10 LTSC", specs: "Core i3 / 8GB RAM / 256GB SSD", status: "Đã đổi trả máy mới", network: "Có mạng Wifi", serial: "—", isAssigned: true, setCode: "SET-2024-002", stabilizer: { hasStabilizer: true, brand: "Standa 3000VA", isSelfBought: true } },
-  { id: "PC-003", type: "AIO", os: "Windows 10 Pro", specs: "Core i5 / 8GB RAM / 256GB SSD", status: "Đang chạy tốt", network: "Có mạng LAN", serial: "—", isAssigned: true, setCode: "SET-2024-003", stabilizer: { hasStabilizer: false, brand: null, isSelfBought: false } },
+  { id: "PC-003", type: "All In One", os: "Windows 10 Pro", specs: "Core i5 / 8GB RAM / 256GB SSD", status: "Đang chạy tốt", network: "Có mạng LAN", serial: "—", isAssigned: true, setCode: "SET-2024-003", stabilizer: { hasStabilizer: false, brand: null, isSelfBought: false } },
   { id: "PC-004", type: "Case", os: "Windows 7 SP1", specs: "Pentium Gold / 4GB RAM / 128GB SSD", status: "Cần nâng cấp", network: "Không có mạng", serial: "—", isAssigned: true, setCode: "SET-2024-004", stabilizer: { hasStabilizer: true, brand: "Lioa 1500VA", isSelfBought: true } },
-  { id: "PC-005", type: "AIO", os: "Windows 10 LTSC", specs: "Core i3 / 8GB RAM / 256GB SSD", status: "Đang chạy tốt", network: "Có mạng LAN", serial: "—", isAssigned: true, setCode: "SET-2023-005", stabilizer: { hasStabilizer: false, brand: null, isSelfBought: false } },
+  { id: "PC-005", type: "All In One", os: "Windows 10 LTSC", specs: "Core i3 / 8GB RAM / 256GB SSD", status: "Đang chạy tốt", network: "Có mạng LAN", serial: "—", isAssigned: true, setCode: "SET-2023-005", stabilizer: { hasStabilizer: false, brand: null, isSelfBought: false } },
   { id: "PC-006", type: "Case", os: "Windows 11 Pro", specs: "Core i5 / 16GB RAM / 512GB SSD", status: "Đã đổi trả máy mới", network: "Có mạng LAN", serial: "—", isAssigned: true, setCode: "SET-2024-006", stabilizer: { hasStabilizer: true, brand: "Robot 2000VA", isSelfBought: true } },
   { id: "PC-007", type: "Case", os: "Windows 10 Pro", specs: "Core i3 / 8GB RAM / 256GB SSD", status: "Mới 100%", network: "Không có mạng", serial: "—", isAssigned: false, setCode: null, stabilizer: { hasStabilizer: false, brand: null, isSelfBought: false } },
 ];
@@ -159,7 +159,7 @@ export const INITIAL_SYSTEM_SETS = [
     mixerSerial: "MIX-ST-1001",
     mixerModel: "Satint ST-50",
     pcSerial: "PC-AIO-2024-01",
-    pcType: "AIO",
+    pcType: "All In One",
     pcOs: "Windows 11 Pro",
     printerSerial: "QL700-SN-8801",
     printerModel: "QL700",
@@ -213,7 +213,7 @@ export const INITIAL_SYSTEM_SETS = [
     mixerSerial: "EVO-200-449",
     mixerModel: "Evoshake-200",
     pcSerial: "PC-AIO-2024-03",
-    pcType: "AIO",
+    pcType: "All In One",
     pcOs: "Windows 10 Pro",
     printerSerial: "QL700-SN-8803",
     printerModel: "QL700",
@@ -265,7 +265,7 @@ export const INITIAL_SYSTEM_SETS = [
     mixerSerial: "YSA-2A-332",
     mixerModel: "YSA-2A",
     pcSerial: "PC-AIO-2023-05",
-    pcType: "AIO",
+    pcType: "All In One",
     pcOs: "Windows 10 LTSC",
     printerSerial: "QL700-SN-8805",
     printerModel: "QL700",

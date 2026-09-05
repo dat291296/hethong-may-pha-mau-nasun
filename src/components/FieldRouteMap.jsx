@@ -27,7 +27,9 @@ import {
   CheckSquare,
   Square,
   Route,
-  Share2
+  Share2,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { getRobustUserLocation } from '../utils/gpsHelper.js';
 
@@ -42,6 +44,8 @@ export default function FieldRouteMap({
   const [provinceFilter, setProvinceFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [viewMode, setViewMode] = useState('GRID'); // 'GRID' | 'TRIP'
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10;
 
   // Selected Trip Route List (Array of NPP IDs)
   const [selectedTripNpps, setSelectedTripNpps] = useState([]);
@@ -103,6 +107,20 @@ export default function FieldRouteMap({
         }
       });
 
+      // Find latest machine installation date for this NPP
+      let latestInstallDate = null;
+      setsAtNpp.forEach((s) => {
+        const d = s.installedDate || s.createdAt || s.lastMaintenanceDate;
+        if (d) {
+          if (!latestInstallDate || new Date(d) > new Date(latestInstallDate)) {
+            latestInstallDate = d;
+          }
+        }
+      });
+      const sortDateValue = latestInstallDate 
+        ? new Date(latestInstallDate).getTime() 
+        : (npp.createdAt ? new Date(npp.createdAt).getTime() : 0);
+
       // Priority level for route planning
       let priority = 'OK'; // 'REPAIR' | 'DUE' | 'UPCOMING' | 'OK'
       if (activeRepairs.length > 0) {
@@ -128,6 +146,8 @@ export default function FieldRouteMap({
         activeRepairsCount: activeRepairs.length,
         minDiffDays,
         nextDueStr,
+        latestInstallDate,
+        sortDateValue,
         priority,
         googleMapsNavUrl,
         googleMapsSearchUrl
@@ -144,25 +164,45 @@ export default function FieldRouteMap({
     return Array.from(set);
   }, [npps]);
 
-  // Filtered NPP list
+  // Reset page to 1 when filters or search change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, provinceFilter, statusFilter]);
+
+  // Filtered NPP list - Sorted with newest installed NPPs first!
   const filteredNpps = useMemo(() => {
-    return enrichedNpps.filter((npp) => {
-      const matchesSearch =
-        npp.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        npp.address?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        npp.contactPerson?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        npp.phone?.includes(searchTerm);
+    return enrichedNpps
+      .filter((npp) => {
+        const matchesSearch =
+          npp.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          npp.address?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          npp.contactPerson?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          npp.phone?.includes(searchTerm);
 
-      const matchesProvince = provinceFilter === 'ALL' || npp.province === provinceFilter;
+        const matchesProvince = provinceFilter === 'ALL' || npp.province === provinceFilter;
 
-      let matchesStatus = true;
-      if (statusFilter === 'REPAIR') matchesStatus = npp.activeRepairsCount > 0;
-      if (statusFilter === 'DUE') matchesStatus = npp.minDiffDays <= 30;
-      if (statusFilter === 'OK') matchesStatus = npp.priority === 'OK';
+        let matchesStatus = true;
+        if (statusFilter === 'REPAIR') matchesStatus = npp.activeRepairsCount > 0;
+        if (statusFilter === 'DUE') matchesStatus = npp.minDiffDays <= 30;
+        if (statusFilter === 'OK') matchesStatus = npp.priority === 'OK';
 
-      return matchesSearch && matchesProvince && matchesStatus;
-    });
+        return matchesSearch && matchesProvince && matchesStatus;
+      })
+      .sort((a, b) => {
+        // Ưu tiên hiển thị nhà phân phối mới lắp gần nhất trên đầu
+        if (b.sortDateValue !== a.sortDateValue) {
+          return b.sortDateValue - a.sortDateValue;
+        }
+        return (a.name || '').localeCompare(b.name || '');
+      });
   }, [enrichedNpps, searchTerm, provinceFilter, statusFilter]);
+
+  // Pagination calculation (10 NPPs per page)
+  const totalPages = Math.ceil(filteredNpps.length / pageSize) || 1;
+  const paginatedNpps = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredNpps.slice(start, start + pageSize);
+  }, [filteredNpps, currentPage, pageSize]);
 
   // Add / Remove from Trip
   const toggleTripSelection = (nppId) => {
@@ -616,7 +656,7 @@ export default function FieldRouteMap({
           </div>
 
           <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-            Đang hiển thị: <strong style={{ color: '#fff' }}>{filteredNpps.length}</strong> / {npps.length} NPP
+            Đang hiển thị trang <strong style={{ color: 'var(--accent-cyan)' }}>{currentPage} / {totalPages}</strong> ({filteredNpps.length > 0 ? (currentPage - 1) * pageSize + 1 : 0} – {Math.min(currentPage * pageSize, filteredNpps.length)} trong tổng {filteredNpps.length} NPP mới lắp gần nhất)
             {selectedTripNpps.length > 0 && (
               <span style={{ marginLeft: '10px', color: 'var(--accent-cyan)', fontWeight: '700' }}>
                 • Đã chọn: {selectedTripNpps.length} NPP
@@ -861,7 +901,7 @@ export default function FieldRouteMap({
               <p style={{ margin: 0, fontSize: '1rem', fontWeight: '700' }}>Không tìm thấy Nhà Phân Phối nào phù hợp với bộ lọc!</p>
             </div>
           ) : (
-            filteredNpps.map((npp) => {
+            paginatedNpps.map((npp, index) => {
               const isSelected = selectedTripNpps.includes(npp.id);
               const nppCoords = npp.locationCoordinates?.split(',').map(Number);
               const nppDistance =
@@ -869,6 +909,7 @@ export default function FieldRouteMap({
                   ? getDistanceKm(userLocation[0], userLocation[1], nppCoords[0], nppCoords[1])
                   : null;
               const isCheckedIn = !!checkInLogs[npp.id];
+              const globalRank = (currentPage - 1) * pageSize + index + 1;
 
               return (
                 <div
@@ -896,9 +937,21 @@ export default function FieldRouteMap({
                   <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
                       <div style={{ flex: 1, paddingRight: '8px' }}>
-                        <span className="badge badge-purple" style={{ fontSize: '0.65rem', marginBottom: '4px', display: 'inline-block' }}>
-                          {npp.region} • {npp.province}
-                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginBottom: '4px' }}>
+                          <span className="badge badge-purple" style={{ fontSize: '0.65rem' }}>
+                            {npp.region} • {npp.province}
+                          </span>
+                          {npp.latestInstallDate && (
+                            <span className="badge badge-success" style={{ fontSize: '0.65rem', display: 'inline-flex', alignItems: 'center', gap: '3px', fontWeight: '700' }}>
+                              <Calendar size={11} /> Lắp: {npp.latestInstallDate}
+                            </span>
+                          )}
+                          {currentPage === 1 && index < 10 && npp.latestInstallDate && (
+                            <span className="badge badge-cyan" style={{ fontSize: '0.65rem', fontWeight: '800' }}>
+                              ⭐ Mới lắp #{globalRank}
+                            </span>
+                          )}
+                        </div>
                         <h3 style={{ fontSize: '1.05rem', fontWeight: '800', margin: 0, color: 'var(--text-main)' }}>
                           {npp.name}
                         </h3>
@@ -1052,6 +1105,77 @@ export default function FieldRouteMap({
               );
             })
           )}
+        </div>
+      )}
+
+      {/* Pagination Bar for Grid View */}
+      {viewMode === 'GRID' && totalPages > 1 && (
+        <div
+          className="glass-panel"
+          style={{
+            padding: '14px 20px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '12px',
+            background: 'rgba(15,23,42,0.85)',
+            border: '1px solid var(--border-color)'
+          }}
+        >
+          <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+            Hiển thị <strong style={{ color: 'var(--accent-cyan)' }}>{(currentPage - 1) * pageSize + 1} – {Math.min(currentPage * pageSize, filteredNpps.length)}</strong> trong <strong style={{ color: '#fff' }}>{filteredNpps.length}</strong> NPP (10 NPP mới lắp gần nhất / trang)
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => {
+                setCurrentPage((p) => Math.max(1, p - 1));
+                window.scrollTo({ top: 300, behavior: 'smooth' });
+              }}
+              disabled={currentPage === 1}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', opacity: currentPage === 1 ? 0.35 : 1 }}
+            >
+              <ChevronLeft size={16} />
+              <span>Trang trước</span>
+            </button>
+
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
+              <button
+                key={pageNum}
+                type="button"
+                className={`btn btn-sm ${currentPage === pageNum ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={() => {
+                  setCurrentPage(pageNum);
+                  window.scrollTo({ top: 300, behavior: 'smooth' });
+                }}
+                style={{
+                  minWidth: '34px',
+                  height: '34px',
+                  padding: '0 8px',
+                  fontWeight: currentPage === pageNum ? '800' : '500'
+                }}
+              >
+                {pageNum}
+              </button>
+            ))}
+
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => {
+                setCurrentPage((p) => Math.min(totalPages, p + 1));
+                window.scrollTo({ top: 300, behavior: 'smooth' });
+              }}
+              disabled={currentPage === totalPages}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', opacity: currentPage === totalPages ? 0.35 : 1 }}
+            >
+              <span>Trang sau</span>
+              <ChevronRight size={16} />
+            </button>
+          </div>
         </div>
       )}
 

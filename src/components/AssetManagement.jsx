@@ -139,7 +139,7 @@ export default function AssetManagement({
     model: '',
     serial: '',
     status: 'Mới 100%',
-    type: 'Lắc xoay khép kín',
+    type: 'All In One',
     os: 'Windows 11 Pro',
     specs: 'Core i5 / 16GB RAM / 512GB SSD',
     network: 'Có mạng LAN',
@@ -201,10 +201,10 @@ export default function AssetManagement({
     setAddDeviceCategory(category);
     setAddFormData({
       id: '',
-      model: '',
+      model: category === 'computer' ? 'All In One' : '',
       serial: '',
       status: 'Mới 100%',
-      type: 'Lắc xoay khép kín',
+      type: category === 'computer' ? 'All In One' : (category === 'mixer' ? 'Lắc xoay khép kín' : ''),
       os: 'Windows 11 Pro',
       specs: 'Core i5 / 16GB RAM / 512GB SSD',
       network: 'Có mạng LAN',
@@ -217,8 +217,13 @@ export default function AssetManagement({
 
   const handleOpenEditDevice = (category, data) => {
     setEditingDevice({ category, data });
+    const cleanType = category === 'computer' 
+      ? (data.type === 'Case' ? 'Case' : 'All In One')
+      : (data.type || '');
     setEditFormData({
       ...data,
+      type: cleanType,
+      model: category === 'computer' ? cleanType : (data.model || ''),
       id: data.id || '',
       isAssigned: data.isAssigned || !!data.setCode,
       setCode: data.setCode || ''
@@ -229,8 +234,13 @@ export default function AssetManagement({
     e.preventDefault();
     if (!editingDevice) return;
     const isAssigned = !!editFormData.isAssigned && !!editFormData.setCode;
+    const cleanType = editingDevice.category === 'computer'
+      ? (editFormData.type === 'Case' ? 'Case' : 'All In One')
+      : editFormData.type;
     const finalData = {
       ...editFormData,
+      type: cleanType,
+      model: editingDevice.category === 'computer' ? cleanType : editFormData.model,
       serial: editingDevice.category === 'computer' ? '—' : (editFormData.serial?.trim() || 'N/A'),
       isAssigned,
       setCode: isAssigned ? editFormData.setCode : null
@@ -273,12 +283,17 @@ export default function AssetManagement({
       alert('Vui lòng nhập Số Seri!');
       return;
     }
-    if (!addFormData.model && !addFormData.type) {
+    if (addDeviceCategory !== 'computer' && !addFormData.model && !addFormData.type) {
       alert('Vui lòng nhập Model / Hệ máy!');
       return;
     }
+    const cleanType = addDeviceCategory === 'computer'
+      ? (addFormData.type === 'Case' ? 'Case' : 'All In One')
+      : addFormData.type;
     const finalData = {
       ...addFormData,
+      type: cleanType,
+      model: addDeviceCategory === 'computer' ? cleanType : addFormData.model,
       serial: addDeviceCategory === 'computer' ? '—' : (addFormData.serial?.trim() || 'N/A')
     };
     onAddStockDevice(addDeviceCategory, finalData);
@@ -1278,7 +1293,7 @@ export default function AssetManagement({
                       {item.isNew && <span className="badge badge-success" style={{ fontSize: '0.65rem', marginLeft: '6px' }}>🆕 Mới</span>}
                       {item.isUpdated && <span className="badge badge-info" style={{ fontSize: '0.65rem', marginLeft: '6px' }}>✏️ Đã sửa</span>}
                     </td>
-                    <td style={{ fontWeight: '700' }}>{item.type}</td>
+                    <td style={{ fontWeight: '700' }}>{item.type === 'Case' ? 'Case' : 'All In One'}</td>
                     <td>{item.os}</td>
                     <td style={{ fontSize: '0.825rem', color: 'var(--accent-cyan)', fontWeight: '600' }}>{item.specs}</td>
                     <td>
@@ -1303,9 +1318,10 @@ export default function AssetManagement({
                         const info = getAssignedInfo(item);
                         return info.isAssigned ? (
                           <div>
-                            <span className="badge badge-success">🟢 Đã gán bộ</span>
-                            <div style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--accent-cyan)', marginTop: '2px' }}>{info.setCode}</div>
-                            <div style={{ fontSize: '0.725rem', color: 'var(--text-secondary)' }}>🏢 {info.nppName}</div>
+                            <span className="badge badge-success" style={{ fontWeight: '700' }}>🟢 {info.setCode}</span>
+                            <div style={{ fontSize: '0.75rem', marginTop: '2px', color: 'var(--text-muted)' }}>
+                              {info.nppName}
+                            </div>
                           </div>
                         ) : (
                           <span className="badge badge-neutral">⚪ Tự do trong kho</span>
@@ -1313,12 +1329,18 @@ export default function AssetManagement({
                       })()}
                     </td>
                     <td>
-                      <div style={{ display: 'flex', gap: '6px' }}>
-                        <button className="btn btn-secondary btn-sm" style={{ padding: '4px 8px' }} onClick={() => handleOpenEditDevice('computer', item)}>
+                      <div className="action-buttons">
+                        <button 
+                          className="btn btn-secondary btn-sm" 
+                          onClick={() => handleOpenEditDevice('computer', item)} 
+                          title="Sửa Máy Tính"
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                        >
                           <Edit3 size={14} color="var(--accent-cyan)" />
+                          <span>Sửa</span>
                         </button>
-                        <button className="btn btn-danger btn-sm" style={{ padding: '4px 8px' }} onClick={() => handleDeleteDevice('computer', item)}>
-                          <Trash2 size={14} />
+                        <button className="btn btn-secondary btn-sm" onClick={() => handleDeleteDevice('computer', item.id)} title="Xóa">
+                          <Trash2 size={14} color="var(--accent-red)" />
                         </button>
                       </div>
                     </td>
@@ -1335,7 +1357,7 @@ export default function AssetManagement({
                 <div className="mobile-card-header">
                   <div>
                     <span className="mobile-card-title">
-                      {item.type}
+                      {item.type === 'Case' ? 'Case' : 'All In One'}
                       {item.isNew && <span className="badge badge-success" style={{ fontSize: '0.65rem', marginLeft: '6px' }}>🆕 Mới</span>}
                       {item.isUpdated && <span className="badge badge-info" style={{ fontSize: '0.65rem', marginLeft: '6px' }}>✏️ Đã sửa</span>}
                     </span>
@@ -1546,28 +1568,28 @@ export default function AssetManagement({
                   />
                 </div>
 
-                {/* Model */}
-                <div className="form-group">
-                  <label className="form-label">
-                    {addDeviceCategory === 'dispenser' && 'Model Máy Chiết (Satint / Hero / Corob)'}
-                    {addDeviceCategory === 'mixer' && 'Model Máy Lắc'}
-                    {addDeviceCategory === 'computer' && 'Model / Hệ Máy Tính'}
-                    {addDeviceCategory === 'printer' && 'Model Máy In (thường là QL700)'}
-                  </label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    required
-                    placeholder={
-                      addDeviceCategory === 'dispenser' ? 'VD: Satint AM16, Hero 6-L, Corob D7...' :
-                      addDeviceCategory === 'mixer' ? 'VD: Satint ST-50, Evoshake-200, YSA-2A...' :
-                      addDeviceCategory === 'computer' ? 'VD: Dell OptiPlex 3080, Asus AIO P1600...' :
-                      'VD: Brother QL-700'
-                    }
-                    value={addFormData.model}
-                    onChange={e => setAddFormData({ ...addFormData, model: e.target.value })}
-                  />
-                </div>
+                {/* Model - Ẩn đối với Máy tính vì chỉ phân biệt All In One và Case */}
+                {addDeviceCategory !== 'computer' && (
+                  <div className="form-group">
+                    <label className="form-label">
+                      {addDeviceCategory === 'dispenser' && 'Model Máy Chiết (Satint / Hero / Corob)'}
+                      {addDeviceCategory === 'mixer' && 'Model Máy Lắc'}
+                      {addDeviceCategory === 'printer' && 'Model Máy In (thường là QL700)'}
+                    </label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      required
+                      placeholder={
+                        addDeviceCategory === 'dispenser' ? 'VD: Satint AM16, Hero 6-L, Corob D7...' :
+                        addDeviceCategory === 'mixer' ? 'VD: Satint ST-50, Evoshake-200, YSA-2A...' :
+                        'VD: Brother QL-700'
+                      }
+                      value={addFormData.model}
+                      onChange={e => setAddFormData({ ...addFormData, model: e.target.value })}
+                    />
+                  </div>
+                )}
 
                 {/* Serial - Ẩn hoàn toàn đối với Máy tính */}
                 {addDeviceCategory !== 'computer' && (
@@ -1633,10 +1655,14 @@ export default function AssetManagement({
                   <>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                       <div className="form-group">
-                        <label className="form-label">Loại Máy Tính</label>
-                        <select className="form-select" value={addFormData.type} onChange={e => setAddFormData({ ...addFormData, type: e.target.value })}>
-                          <option value="AIO">AIO (All in One)</option>
-                          <option value="Case">Case Để Bàn</option>
+                        <label className="form-label">Loại Máy Tính (Chỉ gồm 2 loại)</label>
+                        <select 
+                          className="form-select" 
+                          value={addFormData.type === 'Case' ? 'Case' : 'All In One'} 
+                          onChange={e => setAddFormData({ ...addFormData, type: e.target.value, model: e.target.value })}
+                        >
+                          <option value="All In One">All In One</option>
+                          <option value="Case">Case</option>
                         </select>
                       </div>
                       <div className="form-group">
@@ -1715,10 +1741,12 @@ export default function AssetManagement({
                       </div>
                     )}
 
-                    <div className="form-group" style={{ gridColumn: editingDevice.category === 'computer' ? 'span 2' : 'auto' }}>
-                      <label className="form-label">⚙️ Model / Hệ Máy *</label>
-                      <input type="text" className="form-input" required value={editFormData.model || editFormData.type || ''} onChange={e => setEditFormData({ ...editFormData, model: e.target.value })} />
-                    </div>
+                    {editingDevice.category !== 'computer' && (
+                      <div className="form-group">
+                        <label className="form-label">⚙️ Model / Hệ Máy *</label>
+                        <input type="text" className="form-input" required value={editFormData.model || editFormData.type || ''} onChange={e => setEditFormData({ ...editFormData, model: e.target.value })} />
+                      </div>
+                    )}
                   </div>
 
                   {/* ROW 2: MÃ QL & TÌNH TRẠNG KỸ THUẬT */}
@@ -1783,8 +1811,13 @@ export default function AssetManagement({
                       <div className="form-group">
                         <label className="form-label">Loại Máy Tính & OS</label>
                         <div style={{ display: 'flex', gap: '8px' }}>
-                          <select className="form-select" style={{ width: '110px' }} value={editFormData.type || 'AIO'} onChange={e => setEditFormData({ ...editFormData, type: e.target.value })}>
-                            <option value="AIO">AIO</option>
+                          <select 
+                            className="form-select" 
+                            style={{ width: '130px' }} 
+                            value={editFormData.type === 'Case' ? 'Case' : 'All In One'} 
+                            onChange={e => setEditFormData({ ...editFormData, type: e.target.value, model: e.target.value })}
+                          >
+                            <option value="All In One">All In One</option>
                             <option value="Case">Case</option>
                           </select>
                           <input type="text" className="form-input" style={{ flex: 1 }} placeholder="Hệ điều hành..." value={editFormData.os || ''} onChange={e => setEditFormData({ ...editFormData, os: e.target.value })} />
