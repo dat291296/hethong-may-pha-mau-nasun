@@ -252,40 +252,43 @@ export default function App() {
       const oldSetCode = oldDevice?.setCode;
       const newSetCode = updatedData.isAssigned ? updatedData.setCode : null;
 
-      if (oldSetCode !== newSetCode) {
-        if (oldSetCode) {
-          const oldSet = systemSets.find(s => s.setCode === oldSetCode);
-          if (oldSet) {
-            const updates = {};
-            if (category === 'dispenser') { updates.dispenserId = null; updates.dispenserSerial = null; updates.dispenserModel = null; }
-            if (category === 'mixer') { updates.mixerId = null; updates.mixerSerial = null; updates.mixerModel = null; }
-            if (category === 'computer') { updates.computerId = null; updates.computerSerial = null; updates.computerType = null; }
-            if (category === 'printer') { updates.printerId = null; updates.printerSerial = null; }
-            await updateSystemSet(oldSetCode, updates);
-          }
+      if (oldSetCode && oldSetCode !== newSetCode) {
+        const oldSet = systemSets.find(s => s.setCode === oldSetCode);
+        if (oldSet) {
+          const updates = {};
+          if (category === 'dispenser') { updates.dispenserId = null; updates.dispenserSerial = null; updates.dispenserModel = null; }
+          if (category === 'mixer') { updates.mixerId = null; updates.mixerSerial = null; updates.mixerModel = null; }
+          if (category === 'computer') { updates.computerId = null; updates.computerSerial = null; updates.computerType = null; updates.pcType = null; updates.pcOs = null; }
+          if (category === 'printer') { updates.printerId = null; updates.printerSerial = null; }
+          await updateSystemSet(oldSetCode, updates);
         }
-        if (newSetCode) {
-          const newSet = systemSets.find(s => s.setCode === newSetCode);
-          if (newSet) {
-            const updates = {};
-            if (category === 'dispenser') {
-              updates.dispenserId = updatedData.id;
-              updates.dispenserSerial = updatedData.serial;
-              updates.dispenserModel = updatedData.model;
-            } else if (category === 'mixer') {
-              updates.mixerId = updatedData.id;
-              updates.mixerSerial = updatedData.serial;
-              updates.mixerModel = updatedData.model;
-            } else if (category === 'computer') {
-              updates.computerId = updatedData.id;
-              updates.computerSerial = updatedData.serial;
-              updates.computerType = updatedData.type;
-            } else if (category === 'printer') {
-              updates.printerId = updatedData.id;
-              updates.printerSerial = updatedData.serial;
-            }
-            await updateSystemSet(newSetCode, updates);
+      }
+
+      if (newSetCode) {
+        const newSet = systemSets.find(s => s.setCode === newSetCode);
+        if (newSet) {
+          const updates = {};
+          if (category === 'dispenser') {
+            updates.dispenserId = updatedData.id;
+            updates.dispenserSerial = updatedData.serial;
+            updates.dispenserModel = updatedData.model;
+          } else if (category === 'mixer') {
+            updates.mixerId = updatedData.id;
+            updates.mixerSerial = updatedData.serial;
+            updates.mixerModel = updatedData.model;
+          } else if (category === 'computer') {
+            updates.computerId = updatedData.id;
+            updates.computerSerial = updatedData.serial || '—';
+            updates.computerType = updatedData.type;
+            updates.pcType = updatedData.type;
+            updates.pcOs = updatedData.os;
+            updates.pcSpecs = updatedData.specs;
+            updates.computerStatus = updatedData.status;
+          } else if (category === 'printer') {
+            updates.printerId = updatedData.id;
+            updates.printerSerial = updatedData.serial;
           }
+          await updateSystemSet(newSetCode, updates);
         }
       }
     } catch (err) {

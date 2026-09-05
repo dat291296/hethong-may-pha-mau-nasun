@@ -14,15 +14,42 @@ import { cacheOfflineData, getCachedOfflineData, enqueueOfflineAction } from '..
  * Dispensers, Mixers, Computers, Printers, System Sets.
  * Integrated with offline support, local persistence & action queuing.
  */
+function getInitialAssets(key, fallback) {
+  try {
+    const raw = localStorage.getItem(`nasun_${key}`) || localStorage.getItem(`cached_${key}`);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch (e) {
+    console.warn(`Failed to parse ${key} from storage`, e);
+  }
+  return fallback;
+}
+
+function persistAssetsLocal(key, data) {
+  try {
+    localStorage.setItem(`nasun_${key}`, JSON.stringify(data));
+  } catch (e) {
+    console.warn(`Failed to save nasun_${key} to localStorage`, e);
+  }
+  cacheOfflineData(key, data);
+}
+
+/**
+ * useAssets – unified hook for all physical equipment:
+ * Dispensers, Mixers, Computers, Printers, System Sets.
+ * Integrated with offline support, local persistence & action queuing.
+ */
 export function useAssets() {
-  const [dispensers,  setDispensers]  = useState(INITIAL_DISPENSERS);
-  const [mixers,      setMixers]      = useState(INITIAL_MIXERS);
-  const [computers,   setComputers]   = useState(INITIAL_COMPUTERS);
-  const [printers,    setPrinters]    = useState(INITIAL_PRINTERS);
-  const [systemSets,  setSystemSets]  = useState(INITIAL_SYSTEM_SETS);
+  const [dispensers,  setDispensers]  = useState(() => getInitialAssets('dispensers', INITIAL_DISPENSERS));
+  const [mixers,      setMixers]      = useState(() => getInitialAssets('mixers', INITIAL_MIXERS));
+  const [computers,   setComputers]   = useState(() => getInitialAssets('computers', INITIAL_COMPUTERS));
+  const [printers,    setPrinters]    = useState(() => getInitialAssets('printers', INITIAL_PRINTERS));
+  const [systemSets,  setSystemSets]  = useState(() => getInitialAssets('system_sets', INITIAL_SYSTEM_SETS));
   const [loading, setLoading] = useState(false);
 
-  // Hydrate from IndexedDB cache on mount
+  // Hydrate from IndexedDB cache on mount if available
   useEffect(() => {
     async function loadCached() {
       const [d, m, c, p, s] = await Promise.all([
@@ -32,11 +59,11 @@ export function useAssets() {
         getCachedOfflineData('printers', null),
         getCachedOfflineData('system_sets', null),
       ]);
-      if (d && d.length > 0) setDispensers(d);
-      if (m && m.length > 0) setMixers(m);
-      if (c && c.length > 0) setComputers(c);
-      if (p && p.length > 0) setPrinters(p);
-      if (s && s.length > 0) setSystemSets(s);
+      if (d && d.length > 0) { setDispensers(d); persistAssetsLocal('dispensers', d); }
+      if (m && m.length > 0) { setMixers(m); persistAssetsLocal('mixers', m); }
+      if (c && c.length > 0) { setComputers(c); persistAssetsLocal('computers', c); }
+      if (p && p.length > 0) { setPrinters(p); persistAssetsLocal('printers', p); }
+      if (s && s.length > 0) { setSystemSets(s); persistAssetsLocal('system_sets', s); }
     }
     loadCached();
   }, []);
@@ -229,7 +256,7 @@ export function useAssets() {
         );
         if (error) throw error;
       } catch (err) {
-        console.warn(`[Offline] Failed online deleteDevice for ${category}. Queueing.`, err);
+        console.warn(`[Offline] Failed online deleteDevice for ${category}. Queueing action.`, err);
         enqueueOfflineAction('DELETE_DEVICE', { id }, category);
       }
     } else if (isSupabaseConfigured && !navigator.onLine) {
@@ -238,20 +265,27 @@ export function useAssets() {
     }
   }, []);
 
-  // ── Import bulk devices ─────────────────────────────────────────────────────
+  // ── Batch Import Devices from Excel ────────────────────────────────────────
   const importDevices = useCallback(async (type, items) => {
     const tableMap = {
-      dispenser: { table: 'dispensers', setter: setDispensers, mapper: mapDbToDispenser, cacheKey: 'dispensers' },
-      mixer:     { table: 'mixers',     setter: setMixers,     mapper: mapDbToMixer,     cacheKey: 'mixers' },
-      computer:  { table: 'computers',  setter: setComputers,  mapper: mapDbToComputer,  cacheKey: 'computers' },
-      printer:   { table: 'printers',   setter: setPrinters,   mapper: mapDbToPrinter,   cacheKey: 'printers' },
+      dispensers: { table: 'dispensers', setter: setDispensers, mapper: mapDbToDispenser, cacheKey: 'dispensers' },
+      mixers:     { table: 'mixers',     setter: setMixers,     mapper: mapDbToMixer,     cacheKey: 'mixers' },
+      computers:  { table: 'computers',  setter: setComputers,  mapper: mapDbToComputer,  cacheKey: 'computers' },
+      printers:   { table: 'printers',   setter: setPrinters,   mapper: mapDbToPrinter,   cacheKey: 'printers' },
+      dispenser:  { table: 'dispensers', setter: setDispensers, mapper: mapDbToDispenser, cacheKey: 'dispensers' },
+      mixer:      { table: 'mixers',     setter: setMixers,     mapper: mapDbToMixer,     cacheKey: 'mixers' },
+      computer:   { table: 'computers',  setter: setComputers,  mapper: mapDbToComputer,  cacheKey: 'computers' },
+      printer:    { table: 'printers',   setter: setPrinters,   mapper: mapDbToPrinter,   cacheKey: 'printers' },
     };
     const cfg = tableMap[type];
     if (!cfg) throw new Error(`Unknown import type: ${type}`);
 
+    const nowIso = new Date().toISOString();
+    const markedItems = items.map(item => ({ ...item, createdAt: nowIso, isNew: true }));
+
     cfg.setter(prev => {
-      const updated = [...items, ...prev];
-      cacheOfflineData(cfg.cacheKey, updated);
+      const updated = [...markedItems, ...prev];
+      persistAssetsLocal(cfg.cacheKey, updated);
       return updated;
     });
 
@@ -282,7 +316,7 @@ export function useAssets() {
 
     setSystemSets(prev => {
       const updated = [appSetData, ...prev];
-      cacheOfflineData('system_sets', updated);
+      persistAssetsLocal('system_sets', updated);
       return updated;
     });
 
@@ -311,18 +345,22 @@ export function useAssets() {
 
     setSystemSets(prev => {
       const updated = prev.map(s => (s.setCode === oldSetCode || s.set_code === oldSetCode) ? { ...s, ...updates, setCode: newSetCode, set_code: newSetCode } : s);
-      cacheOfflineData('system_sets', updated);
+      persistAssetsLocal('system_sets', updated);
       return updated;
     });
 
     if (isCodeChanged) {
-      const syncDeviceSetCode = (setter) => {
-        setter(prev => prev.map(d => (d.setCode === oldSetCode || d.set_code === oldSetCode) ? { ...d, setCode: newSetCode, set_code: newSetCode } : d));
+      const syncDeviceSetCode = (setter, key) => {
+        setter(prev => {
+          const updated = prev.map(d => (d.setCode === oldSetCode || d.set_code === oldSetCode) ? { ...d, setCode: newSetCode, set_code: newSetCode } : d);
+          persistAssetsLocal(key, updated);
+          return updated;
+        });
       };
-      syncDeviceSetCode(setDispensers);
-      syncDeviceSetCode(setMixers);
-      syncDeviceSetCode(setComputers);
-      syncDeviceSetCode(setPrinters);
+      syncDeviceSetCode(setDispensers, 'dispensers');
+      syncDeviceSetCode(setMixers, 'mixers');
+      syncDeviceSetCode(setComputers, 'computers');
+      syncDeviceSetCode(setPrinters, 'printers');
     }
 
     const dbPayload = mapSystemSetToDb({ ...updates, set_code: newSetCode, setCode: newSetCode });
@@ -358,7 +396,7 @@ export function useAssets() {
     setSystemSets(prev => {
       setObj = prev.find(s => s.setCode === setCode);
       const filtered = prev.filter(s => s.setCode !== setCode);
-      cacheOfflineData('system_sets', filtered);
+      persistAssetsLocal('system_sets', filtered);
       return filtered;
     });
 
@@ -413,16 +451,66 @@ export function useAssets() {
 
 // ─── Field Mappers (DB → App format) ──────────────────────────────────────────
 function mapDbToDispenser(row) {
-  return { id: row.id, model: row.model, serial: row.serial, status: row.status, isAssigned: row.is_assigned, setCode: row.set_code };
+  return { 
+    id: row.id, 
+    model: row.model, 
+    serial: row.serial, 
+    status: row.status, 
+    isAssigned: row.is_assigned, 
+    setCode: row.set_code,
+    createdAt: row.created_at || row.createdAt,
+    updatedAt: row.updated_at || row.updatedAt,
+    isNew: row.isNew,
+    isUpdated: row.isUpdated
+  };
 }
 function mapDbToMixer(row) {
-  return { id: row.id, model: row.model, type: row.type, serial: row.serial, status: row.status, isAssigned: row.is_assigned, setCode: row.set_code };
+  return { 
+    id: row.id, 
+    model: row.model, 
+    type: row.type, 
+    serial: row.serial, 
+    status: row.status, 
+    isAssigned: row.is_assigned, 
+    setCode: row.set_code,
+    createdAt: row.created_at || row.createdAt,
+    updatedAt: row.updated_at || row.updatedAt,
+    isNew: row.isNew,
+    isUpdated: row.isUpdated
+  };
 }
 function mapDbToComputer(row) {
-  return { id: row.id, type: row.type, os: row.os, specs: row.specs, serial: row.serial, network: row.network, isAssigned: row.is_assigned, setCode: row.set_code, stabilizer: row.stabilizer || { hasStabilizer: false } };
+  return { 
+    id: row.id, 
+    type: row.type, 
+    os: row.os, 
+    specs: row.specs, 
+    serial: row.serial || '—', 
+    status: row.status || 'Mới 100%',
+    network: row.network, 
+    isAssigned: row.is_assigned, 
+    setCode: row.set_code, 
+    stabilizer: row.stabilizer || { hasStabilizer: false },
+    createdAt: row.created_at || row.createdAt,
+    updatedAt: row.updated_at || row.updatedAt,
+    isNew: row.isNew,
+    isUpdated: row.isUpdated
+  };
 }
 function mapDbToPrinter(row) {
-  return { id: row.id, model: row.model, serial: row.serial, connection: row.connection, status: row.status, isAssigned: row.is_assigned, setCode: row.set_code };
+  return { 
+    id: row.id, 
+    model: row.model, 
+    serial: row.serial, 
+    connection: row.connection, 
+    status: row.status, 
+    isAssigned: row.is_assigned, 
+    setCode: row.set_code,
+    createdAt: row.created_at || row.createdAt,
+    updatedAt: row.updated_at || row.updatedAt,
+    isNew: row.isNew,
+    isUpdated: row.isUpdated
+  };
 }
 function mapDbToSystemSet(row) {
   return {
@@ -459,6 +547,7 @@ function mapDeviceToDb(obj, category) {
     if (obj.os !== undefined) dbObj.os = obj.os;
     if (obj.specs !== undefined) dbObj.specs = obj.specs;
     if (obj.network !== undefined) dbObj.network = obj.network;
+    if (obj.status !== undefined) dbObj.status = obj.status;
     if (obj.stabilizer !== undefined) dbObj.stabilizer = obj.stabilizer;
   } else if (cat === 'dispenser' || cat === 'dispensers') {
     if (obj.model !== undefined) dbObj.model = obj.model;

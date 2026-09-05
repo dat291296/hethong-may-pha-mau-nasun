@@ -100,10 +100,12 @@ export default function AssetManagement({
   const [nppSearchTerm, setNppSearchTerm] = useState('');
   const [editNppSearchTerm, setEditNppSearchTerm] = useState('');
 
+  const [deviceSort, setDeviceSort] = useState('DEFAULT'); // 'DEFAULT' | 'NEWEST'
+
   // Reset pagination on tab or filter change
   useEffect(() => {
     setCurrentPage(1);
-  }, [activeSubTab, modelFilter, statusFilter, searchTerm]);
+  }, [activeSubTab, modelFilter, statusFilter, searchTerm, deviceSort]);
 
   // Helper to find assigned set & NPP info for any device item
   const getAssignedInfo = (item) => {
@@ -223,18 +225,24 @@ export default function AssetManagement({
     });
   };
 
-  const handleEditSubmit = (e) => {
+  const handleEditSubmit = async (e) => {
     e.preventDefault();
     if (!editingDevice) return;
     const isAssigned = !!editFormData.isAssigned && !!editFormData.setCode;
     const finalData = {
       ...editFormData,
-      serial: editFormData.serial?.trim() || (editingDevice.category === 'computer' ? 'Không seri' : editFormData.serial),
+      serial: editingDevice.category === 'computer' ? '—' : (editFormData.serial?.trim() || 'N/A'),
       isAssigned,
       setCode: isAssigned ? editFormData.setCode : null
     };
-    onEditDevice(editingDevice.category, finalData);
-    setEditingDevice(null);
+    try {
+      await onEditDevice(editingDevice.category, finalData);
+      alert('✅ Đã lưu thông tin chỉnh sửa thành công!');
+      setEditingDevice(null);
+    } catch (err) {
+      console.error('Lỗi khi lưu thiết bị:', err);
+      alert('⚠️ Có lỗi xảy ra khi lưu thiết bị!');
+    }
   };
 
   const handleDeleteDevice = (category, item) => {
@@ -249,11 +257,11 @@ export default function AssetManagement({
     const nppText = assignedSet?.nppName ? ` (Đã gán cho NPP: ${assignedSet.nppName})` : '';
 
     if (item.isAssigned || item.setCode) {
-      if (window.confirm(`⚠️ [CẢNH BÁO ADMIN]\n${catLabel} [${item.serial}] đang được gán trong bộ máy [${item.setCode}]${nppText}.\n\nBạn có chắc chắn muốn XÓA THIẾT BỊ NÀY khỏi hệ thống không?\n(Hệ thống sẽ tự động gỡ/giải phóng thiết bị khỏi bộ máy ${item.setCode}).`)) {
+      if (window.confirm(`⚠️ [CẢNH BÁO ADMIN]\n${catLabel} [${item.id || item.model}] đang được gán trong bộ máy [${item.setCode}]${nppText}.\n\nBạn có chắc chắn muốn XÓA THIẾT BỊ NÀY khỏi hệ thống không?\n(Hệ thống sẽ tự động gỡ/giải phóng thiết bị khỏi bộ máy ${item.setCode}).`)) {
         onDeleteDevice(category, item.id, item.setCode);
       }
     } else {
-      if (window.confirm(`Bạn có chắc chắn muốn xóa ${catLabel} Seri [${item.serial}] khỏi kho?`)) {
+      if (window.confirm(`Bạn có chắc chắn muốn xóa ${catLabel} [${item.id || item.model}] khỏi kho?`)) {
         onDeleteDevice(category, item.id, null);
       }
     }
@@ -271,9 +279,10 @@ export default function AssetManagement({
     }
     const finalData = {
       ...addFormData,
-      serial: addFormData.serial?.trim() || (addDeviceCategory === 'computer' ? 'Không seri' : 'N/A')
+      serial: addDeviceCategory === 'computer' ? '—' : (addFormData.serial?.trim() || 'N/A')
     };
     onAddStockDevice(addDeviceCategory, finalData);
+    alert('✅ Đã thêm thiết bị vào kho thành công!');
     setShowAddDeviceModal(false);
   };
 
@@ -301,6 +310,7 @@ export default function AssetManagement({
     e.preventDefault();
     if (!editingSet) return;
     onEditSet(editingSet.setCode, editSetFormData);
+    alert('✅ Đã lưu thông tin bộ máy thành công!');
     setEditingSet(null);
   };
 
@@ -332,21 +342,113 @@ export default function AssetManagement({
 
   const filterDevice = (list) => {
     return [...list].filter(item => {
-      const matchesStatus = statusFilter === 'ALL' || item.status === statusFilter;
+      let matchesStatus = true;
+      if (statusFilter === 'ALL') {
+        matchesStatus = true;
+      } else if (statusFilter === 'NEW') {
+        matchesStatus = !!item.isNew || item.status === 'Mới 100%';
+      } else if (statusFilter === 'UPDATED') {
+        matchesStatus = !!item.isUpdated || !!item.updatedAt;
+      } else if (statusFilter === 'ASSIGNED') {
+        matchesStatus = !!item.isAssigned || !!item.setCode;
+      } else if (statusFilter === 'FREE') {
+        matchesStatus = !item.isAssigned && !item.setCode;
+      } else if (statusFilter === 'DOI_TRA_MOI') {
+        matchesStatus = item.status === 'Đã đổi trả máy mới';
+      } else {
+        matchesStatus = item.status === statusFilter;
+      }
+
       const matchesSearch = !searchTerm || (
         (item.id && item.id.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (item.model && item.model.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (item.serial && item.serial.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (item.serial && item.serial !== '—' && item.serial.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (item.type && item.type.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (item.specs && item.specs.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (item.os && item.os.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (item.setCode && item.setCode.toLowerCase().includes(searchTerm.toLowerCase()))
       );
       return matchesStatus && matchesSearch;
     });
   };
 
-  const sortedDispensers = filterDevice(dispensers).sort((a, b) => naturalSortCode(a, b, 'id'));
-  const sortedMixers = filterDevice(mixers).sort((a, b) => naturalSortCode(a, b, 'id'));
-  const sortedComputers = filterDevice(computers).sort((a, b) => naturalSortCode(a, b, 'id'));
-  const sortedPrinters = filterDevice(printers).sort((a, b) => naturalSortCode(a, b, 'id'));
+  const sortDeviceList = (list) => {
+    if (deviceSort === 'NEWEST') {
+      return [...list].sort((a, b) => {
+        const timeA = new Date(a.updatedAt || a.createdAt || 0).getTime();
+        const timeB = new Date(b.updatedAt || b.createdAt || 0).getTime();
+        if (timeB !== timeA) return timeB - timeA;
+        return naturalSortCode(a, b, 'id');
+      });
+    }
+    return [...list].sort((a, b) => naturalSortCode(a, b, 'id'));
+  };
+
+  const sortedDispensers = sortDeviceList(filterDevice(dispensers));
+  const sortedMixers = sortDeviceList(filterDevice(mixers));
+  const sortedComputers = sortDeviceList(filterDevice(computers));
+  const sortedPrinters = sortDeviceList(filterDevice(printers));
+
+  const renderDeviceFilterBar = (categoryName, totalCount, isComputer = false) => {
+    const newCount = (isComputer ? computers : (categoryName === 'Máy Chiết' ? dispensers : (categoryName === 'Máy Lắc' ? mixers : printers))).filter(i => i.isNew || i.status === 'Mới 100%').length;
+    const updatedCount = (isComputer ? computers : (categoryName === 'Máy Chiết' ? dispensers : (categoryName === 'Máy Lắc' ? mixers : printers))).filter(i => i.isUpdated || i.updatedAt).length;
+
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
+        <div style={{ position: 'relative', width: '260px' }}>
+          <input
+            type="text"
+            placeholder={`Tìm ${categoryName} (Mã, hệ máy...)...`}
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            className="form-input"
+            style={{ height: '36px', fontSize: '0.825rem', paddingLeft: '32px' }}
+          />
+          <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', opacity: 0.6 }}>🔍</span>
+        </div>
+
+        <Filter size={16} color="var(--accent-cyan)" />
+        <span style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--accent-cyan)' }}>Lọc Danh Mục:</span>
+        <select 
+          className="form-select" 
+          value={statusFilter} 
+          onChange={e => setStatusFilter(e.target.value)} 
+          style={{ height: '36px', fontSize: '0.825rem', minWidth: '180px' }}
+        >
+          <option value="ALL">Tất Cả Danh Mục ({totalCount})</option>
+          <option value="NEW">🆕 Mới thêm ({newCount})</option>
+          <option value="UPDATED">✏️ Mới chỉnh sửa ({updatedCount})</option>
+          <option value="ASSIGNED">🟢 Đã gán bộ máy</option>
+          <option value="FREE">⚪ Tự do trong kho</option>
+          <option value="Mới 100%">Mới 100%</option>
+          <option value="Đang chạy tốt">Đang chạy tốt</option>
+          <option value="Cần bảo trì">Cần bảo trì</option>
+          {isComputer && <option value="DOI_TRA_MOI">🔄 Đã đổi trả máy mới</option>}
+        </select>
+
+        <span style={{ fontSize: '0.85rem', fontWeight: '600' }}>Sắp xếp:</span>
+        <select 
+          className="form-select" 
+          value={deviceSort} 
+          onChange={e => setDeviceSort(e.target.value)} 
+          style={{ height: '36px', fontSize: '0.825rem' }}
+        >
+          <option value="DEFAULT">Mã quản lý (A-Z)</option>
+          <option value="NEWEST">Mới cập nhật / thêm gần đây</option>
+        </select>
+
+        {(searchTerm || statusFilter !== 'ALL' || deviceSort !== 'DEFAULT') && (
+          <button 
+            className="btn btn-secondary btn-sm"
+            style={{ color: '#ef4444', borderColor: 'rgba(239, 68, 68, 0.4)', height: '36px' }}
+            onClick={() => { setSearchTerm(''); setStatusFilter('ALL'); setDeviceSort('DEFAULT'); }}
+          >
+            ✕ Xóa bộ lọc
+          </button>
+        )}
+      </div>
+    );
+  };
 
   const getPaginatedList = (list) => {
     const start = (currentPage - 1) * pageSize;
@@ -781,7 +883,12 @@ export default function AssetManagement({
                       </td>
                       <td>
                         <div style={{ fontWeight: '600' }}>{pcSpecsText}</div>
-                        <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>Seri: {pcSerialText}</div>
+                        <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
+                          <span>💻 {set.computerId || pcObj?.id || 'Máy Tính'}</span>
+                          {(pcObj?.status === 'Đã đổi trả máy mới' || set.computerStatus === 'Đã đổi trả máy mới') && (
+                            <span className="badge badge-warning" style={{ fontSize: '0.65rem' }}>🔄 Đã đổi trả máy mới</span>
+                          )}
+                        </div>
                       </td>
                       <td>
                         <div style={{ fontWeight: '600' }}>{printerModelText}</div>
@@ -857,7 +964,12 @@ export default function AssetManagement({
                     </div>
                     <div className="mobile-card-row">
                       <span className="mobile-card-label">Máy Tính:</span>
-                      <span className="mobile-card-value">{pcSpecsText} (Seri: {pcSerialText})</span>
+                      <span className="mobile-card-value">
+                        {pcSpecsText}
+                        {(pcObj?.status === 'Đã đổi trả máy mới' || set.computerStatus === 'Đã đổi trả máy mới') && (
+                          <span className="badge badge-warning" style={{ fontSize: '0.65rem', marginLeft: '6px' }}>🔄 Đã đổi trả máy mới</span>
+                        )}
+                      </span>
                     </div>
                     <div className="mobile-card-row">
                       <span className="mobile-card-label">Máy In:</span>
@@ -895,7 +1007,10 @@ export default function AssetManagement({
       {/* VIEW 2: RAW DISPENSERS STOCK */}
       {activeSubTab === 'dispensers' && (
         <div className="glass-panel" style={{ padding: '20px' }}>
-          <h3 style={{ fontSize: '1rem', fontWeight: '800', marginBottom: '14px' }}>Danh Mục Máy Chiết (Kho & Đã Cấp Phát)</h3>
+          <div style={{ marginBottom: '14px' }}>
+            <h3 style={{ fontSize: '1rem', fontWeight: '800', marginBottom: '10px' }}>Danh Mục Máy Chiết (Kho & Đã Cấp Phát)</h3>
+            {renderDeviceFilterBar('Máy Chiết', dispensers.length, false)}
+          </div>
           {/* Desktop View Table */}
           <div className="desktop-only data-table-container">
             <table className="data-table">
@@ -913,7 +1028,11 @@ export default function AssetManagement({
               <tbody>
                 {getPaginatedList(sortedDispensers).map(item => (
                   <tr key={item.id}>
-                    <td>{item.id}</td>
+                    <td>
+                      <span style={{ fontWeight: '700' }}>{item.id}</span>
+                      {item.isNew && <span className="badge badge-success" style={{ fontSize: '0.65rem', marginLeft: '6px' }}>🆕 Mới</span>}
+                      {item.isUpdated && <span className="badge badge-info" style={{ fontSize: '0.65rem', marginLeft: '6px' }}>✏️ Đã sửa</span>}
+                    </td>
                     <td style={{ fontWeight: '700' }}>{item.model}</td>
                     <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent-cyan)' }}>{item.serial}</td>
                     <td>
@@ -959,7 +1078,11 @@ export default function AssetManagement({
               <div className="mobile-card" key={item.id}>
                 <div className="mobile-card-header">
                   <div>
-                    <span className="mobile-card-title">{item.model}</span>
+                    <span className="mobile-card-title">
+                      {item.model}
+                      {item.isNew && <span className="badge badge-success" style={{ fontSize: '0.65rem', marginLeft: '6px' }}>🆕 Mới</span>}
+                      {item.isUpdated && <span className="badge badge-info" style={{ fontSize: '0.65rem', marginLeft: '6px' }}>✏️ Đã sửa</span>}
+                    </span>
                     <div className="mobile-card-subtitle">Seri: {item.serial}</div>
                   </div>
                   <div>
@@ -1006,7 +1129,10 @@ export default function AssetManagement({
       {/* VIEW 3: RAW MIXERS STOCK */}
       {activeSubTab === 'mixers' && (
         <div className="glass-panel" style={{ padding: '20px' }}>
-          <h3 style={{ fontSize: '1rem', fontWeight: '800', marginBottom: '14px' }}>Danh Mục Máy Lắc (Kho & Đã Cấp Phát)</h3>
+          <div style={{ marginBottom: '14px' }}>
+            <h3 style={{ fontSize: '1rem', fontWeight: '800', marginBottom: '10px' }}>Danh Mục Máy Lắc (Kho & Đã Cấp Phát)</h3>
+            {renderDeviceFilterBar('Máy Lắc', mixers.length, false)}
+          </div>
           {/* Desktop View Table */}
           <div className="desktop-only data-table-container">
             <table className="data-table">
@@ -1024,7 +1150,11 @@ export default function AssetManagement({
               <tbody>
                 {getPaginatedList(sortedMixers).map(item => (
                   <tr key={item.id}>
-                    <td>{item.id}</td>
+                    <td>
+                      <span style={{ fontWeight: '700' }}>{item.id}</span>
+                      {item.isNew && <span className="badge badge-success" style={{ fontSize: '0.65rem', marginLeft: '6px' }}>🆕 Mới</span>}
+                      {item.isUpdated && <span className="badge badge-info" style={{ fontSize: '0.65rem', marginLeft: '6px' }}>✏️ Đã sửa</span>}
+                    </td>
                     <td style={{ fontWeight: '700' }}>{item.model}</td>
                     <td>{item.type}</td>
                     <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent-cyan)' }}>{item.serial}</td>
@@ -1065,7 +1195,11 @@ export default function AssetManagement({
               <div className="mobile-card" key={item.id}>
                 <div className="mobile-card-header">
                   <div>
-                    <span className="mobile-card-title">{item.model}</span>
+                    <span className="mobile-card-title">
+                      {item.model}
+                      {item.isNew && <span className="badge badge-success" style={{ fontSize: '0.65rem', marginLeft: '6px' }}>🆕 Mới</span>}
+                      {item.isUpdated && <span className="badge badge-info" style={{ fontSize: '0.65rem', marginLeft: '6px' }}>✏️ Đã sửa</span>}
+                    </span>
                     <div className="mobile-card-subtitle">Seri: {item.serial}</div>
                   </div>
                   <div>
@@ -1113,9 +1247,12 @@ export default function AssetManagement({
       {/* VIEW 4: RAW COMPUTERS STOCK */}
       {activeSubTab === 'computers' && (
         <div className="glass-panel" style={{ padding: '20px' }}>
-          <div style={{ marginBottom: '12px' }}>
-            <h3 style={{ fontSize: '1rem', fontWeight: '800' }}>Danh Mục Máy Tính (Case & AIO)</h3>
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>*Lưu ý: Ổn áp do NPP tự mua nên trong kho máy tính không có ổn áp sẵn.</span>
+          <div style={{ marginBottom: '14px' }}>
+            <h3 style={{ fontSize: '1rem', fontWeight: '800', marginBottom: '4px' }}>Danh Mục Máy Tính (Case & AIO)</h3>
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '10px' }}>
+              *Lưu ý: Đã bỏ quản lý số seri máy tính. Ổn áp do NPP tự trang bị.
+            </span>
+            {renderDeviceFilterBar('Máy Tính', computers.length, true)}
           </div>
           {/* Desktop View Table */}
           <div className="desktop-only data-table-container">
@@ -1125,8 +1262,8 @@ export default function AssetManagement({
                   <th>Mã QL</th>
                   <th>Loại Máy</th>
                   <th>Hệ Điều Hành</th>
-                  <th>Cấu Hình</th>
-                  <th>Số Seri</th>
+                  <th>Cấu Hình (Chi Tiết)</th>
+                  <th>Tình Trạng Kỹ Thuật</th>
                   <th>Kết Nối Mạng</th>
                   <th>Ổn Áp (NPP Trang Bị)</th>
                   <th>Tình Trạng Cấp Phát & NPP</th>
@@ -1136,11 +1273,23 @@ export default function AssetManagement({
               <tbody>
                 {getPaginatedList(sortedComputers).map(item => (
                   <tr key={item.id}>
-                    <td>{item.id}</td>
+                    <td>
+                      <span style={{ fontWeight: '700' }}>{item.id}</span>
+                      {item.isNew && <span className="badge badge-success" style={{ fontSize: '0.65rem', marginLeft: '6px' }}>🆕 Mới</span>}
+                      {item.isUpdated && <span className="badge badge-info" style={{ fontSize: '0.65rem', marginLeft: '6px' }}>✏️ Đã sửa</span>}
+                    </td>
                     <td style={{ fontWeight: '700' }}>{item.type}</td>
                     <td>{item.os}</td>
-                    <td style={{ fontSize: '0.8rem' }}>{item.specs}</td>
-                    <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent-cyan)' }}>{item.serial}</td>
+                    <td style={{ fontSize: '0.825rem', color: 'var(--accent-cyan)', fontWeight: '600' }}>{item.specs}</td>
+                    <td>
+                      {item.status === 'Đã đổi trả máy mới' ? (
+                        <span className="badge badge-warning" style={{ fontWeight: '700' }}>🔄 Đã đổi trả máy mới</span>
+                      ) : item.status === 'Mới 100%' ? (
+                        <span className="badge badge-success">{item.status}</span>
+                      ) : (
+                        <span className="badge badge-info">{item.status || 'Đang chạy tốt'}</span>
+                      )}
+                    </td>
                     <td>{item.network}</td>
                     <td>
                       {item.stabilizer?.hasStabilizer ? (
@@ -1185,11 +1334,19 @@ export default function AssetManagement({
               <div className="mobile-card" key={item.id}>
                 <div className="mobile-card-header">
                   <div>
-                    <span className="mobile-card-title">{item.type}</span>
-                    <div className="mobile-card-subtitle">Seri: {item.serial}</div>
+                    <span className="mobile-card-title">
+                      {item.type}
+                      {item.isNew && <span className="badge badge-success" style={{ fontSize: '0.65rem', marginLeft: '6px' }}>🆕 Mới</span>}
+                      {item.isUpdated && <span className="badge badge-info" style={{ fontSize: '0.65rem', marginLeft: '6px' }}>✏️ Đã sửa</span>}
+                    </span>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--accent-purple)' }}>HĐH: {item.os}</div>
                   </div>
                   <div>
-                    <span className="badge badge-purple">{item.os}</span>
+                    {item.status === 'Đã đổi trả máy mới' ? (
+                      <span className="badge badge-warning">🔄 Đổi trả mới</span>
+                    ) : (
+                      <span className="badge badge-purple">{item.status || item.os}</span>
+                    )}
                   </div>
                 </div>
                 <div className="mobile-card-body">
@@ -1199,10 +1356,10 @@ export default function AssetManagement({
                   </div>
                   <div className="mobile-card-row">
                     <span className="mobile-card-label">Cấu hình:</span>
-                    <span className="mobile-card-value" style={{ fontSize: '0.8rem' }}>{item.specs}</span>
+                    <span className="mobile-card-value" style={{ fontSize: '0.8rem', color: 'var(--accent-cyan)' }}>{item.specs}</span>
                   </div>
                   <div className="mobile-card-row">
-                    <span className="mobile-card-label">Trạng thái cấp phát:</span>
+                    <span className="mobile-card-label">Tình trạng cấp phát:</span>
                     <span className="mobile-card-value">
                       {(() => {
                         const info = getAssignedInfo(item);
@@ -1243,7 +1400,10 @@ export default function AssetManagement({
       {/* VIEW 5: RAW PRINTERS STOCK */}
       {activeSubTab === 'printers' && (
         <div className="glass-panel" style={{ padding: '20px' }}>
-          <h3 style={{ fontSize: '1rem', fontWeight: '800', marginBottom: '14px' }}>Danh Mục Máy In (Model Chuẩn: QL700)</h3>
+          <div style={{ marginBottom: '14px' }}>
+            <h3 style={{ fontSize: '1rem', fontWeight: '800', marginBottom: '10px' }}>Danh Mục Máy In (Model Chuẩn: QL700)</h3>
+            {renderDeviceFilterBar('Máy In', printers.length, false)}
+          </div>
           {/* Desktop View Table */}
           <div className="desktop-only data-table-container">
             <table className="data-table">
@@ -1261,7 +1421,11 @@ export default function AssetManagement({
               <tbody>
                 {getPaginatedList(sortedPrinters).map(item => (
                   <tr key={item.id}>
-                    <td>{item.id}</td>
+                    <td>
+                      <span style={{ fontWeight: '700' }}>{item.id}</span>
+                      {item.isNew && <span className="badge badge-success" style={{ fontSize: '0.65rem', marginLeft: '6px' }}>🆕 Mới</span>}
+                      {item.isUpdated && <span className="badge badge-info" style={{ fontSize: '0.65rem', marginLeft: '6px' }}>✏️ Đã sửa</span>}
+                    </td>
                     <td style={{ fontWeight: '700' }}>{item.model}</td>
                     <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent-cyan)' }}>{item.serial}</td>
                     <td>{item.connection}</td>
@@ -1302,7 +1466,11 @@ export default function AssetManagement({
               <div className="mobile-card" key={item.id}>
                 <div className="mobile-card-header">
                   <div>
-                    <span className="mobile-card-title">{item.model}</span>
+                    <span className="mobile-card-title">
+                      {item.model}
+                      {item.isNew && <span className="badge badge-success" style={{ fontSize: '0.65rem', marginLeft: '6px' }}>🆕 Mới</span>}
+                      {item.isUpdated && <span className="badge badge-info" style={{ fontSize: '0.65rem', marginLeft: '6px' }}>✏️ Đã sửa</span>}
+                    </span>
                     <div className="mobile-card-subtitle">Seri: {item.serial}</div>
                   </div>
                   <div>
@@ -1401,34 +1569,36 @@ export default function AssetManagement({
                   />
                 </div>
 
-                {/* Serial */}
-                <div className="form-group">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                    <label className="form-label" style={{ marginBottom: 0 }}>
-                      Số Seri (Serial Number) {addDeviceCategory !== 'computer' ? '*' : '(Không bắt buộc)'}
-                    </label>
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-sm"
-                      style={{ padding: '2px 10px', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'var(--accent-cyan)', border: '1px solid var(--accent-cyan)' }}
-                      onClick={() => {
-                        setScanTargetField('add');
-                        setShowScanSerialModal(true);
-                      }}
-                    >
-                      <Camera size={14} />
-                      <span>📷 Quét Mã Vạch</span>
-                    </button>
+                {/* Serial - Ẩn hoàn toàn đối với Máy tính */}
+                {addDeviceCategory !== 'computer' && (
+                  <div className="form-group">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                      <label className="form-label" style={{ marginBottom: 0 }}>
+                        Số Seri (Serial Number) *
+                      </label>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        style={{ padding: '2px 10px', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'var(--accent-cyan)', border: '1px solid var(--accent-cyan)' }}
+                        onClick={() => {
+                          setScanTargetField('add');
+                          setShowScanSerialModal(true);
+                        }}
+                      >
+                        <Camera size={14} />
+                        <span>📷 Quét Mã Vạch</span>
+                      </button>
+                    </div>
+                    <input
+                      type="text"
+                      className="form-input"
+                      required
+                      placeholder="Nhập seri hoặc bấm Quét mã vạch"
+                      value={addFormData.serial}
+                      onChange={e => setAddFormData({ ...addFormData, serial: e.target.value })}
+                    />
                   </div>
-                  <input
-                    type="text"
-                    className="form-input"
-                    required={addDeviceCategory !== 'computer'}
-                    placeholder={addDeviceCategory === 'computer' ? 'Tùy chọn (Bấm Quét mã vạch hoặc để trống)' : 'Nhập seri hoặc bấm Quét mã vạch'}
-                    value={addFormData.serial}
-                    onChange={e => setAddFormData({ ...addFormData, serial: e.target.value })}
-                  />
-                </div>
+                )}
 
                 {/* Status */}
                 <div className="form-group">
@@ -1436,6 +1606,7 @@ export default function AssetManagement({
                   <select className="form-select" value={addFormData.status} onChange={e => setAddFormData({ ...addFormData, status: e.target.value })}>
                     <option value="Mới 100%">Mới 100%</option>
                     <option value="Đang chạy tốt">Đang chạy tốt</option>
+                    {addDeviceCategory === 'computer' && <option value="Đã đổi trả máy mới">🔄 Đã đổi trả máy mới</option>}
                     <option value="Cần bảo trì">Cần bảo trì</option>
                     {addDeviceCategory === 'dispenser' && <option value="Hỏng đầu phun">Hỏng đầu phun</option>}
                     {addDeviceCategory === 'mixer' && <option value="Hỏng motor">Hỏng motor</option>}
@@ -1504,7 +1675,9 @@ export default function AssetManagement({
           <div className="modal-overlay">
             <div className="modal-content" style={{ maxWidth: '580px' }}>
               <div className="modal-header">
-                <h3 style={{ fontWeight: '800' }}>Chỉnh Sửa Thông Tin Thiết Bị [{editFormData.serial || 'Không seri'}]</h3>
+                <h3 style={{ fontWeight: '800' }}>
+                  Chỉnh Sửa Thông Tin {editingDevice.category === 'computer' ? `Máy Tính [Mã: ${editFormData.id}]` : `Thiết Bị [${editFormData.serial || 'Không seri'}]`}
+                </h3>
                 <button className="btn btn-secondary btn-sm" onClick={() => setEditingDevice(null)}>✕</button>
               </div>
               <form onSubmit={handleEditSubmit}>
@@ -1512,35 +1685,37 @@ export default function AssetManagement({
                   
                   {/* ROW 1: SERIAL NUMBER & MODEL - TOP OF FORM */}
                   <div className="responsive-form-grid">
-                    <div className="form-group">
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                        <label className="form-label" style={{ marginBottom: 0 }}>
-                          🏷️ Số Seri (Serial) {editingDevice.category !== 'computer' ? '*' : ''}
-                        </label>
-                        <button
-                          type="button"
-                          className="btn btn-secondary btn-sm"
-                          style={{ padding: '2px 8px', fontSize: '0.725rem', display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'var(--accent-cyan)', border: '1px solid var(--accent-cyan)' }}
-                          onClick={() => {
-                            setScanTargetField('edit');
-                            setShowScanSerialModal(true);
-                          }}
-                        >
-                          <Camera size={12} />
-                          <span>📷 Quét Mã</span>
-                        </button>
+                    {editingDevice.category !== 'computer' && (
+                      <div className="form-group">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                          <label className="form-label" style={{ marginBottom: 0 }}>
+                            🏷️ Số Seri (Serial) *
+                          </label>
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-sm"
+                            style={{ padding: '2px 8px', fontSize: '0.725rem', display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'var(--accent-cyan)', border: '1px solid var(--accent-cyan)' }}
+                            onClick={() => {
+                              setScanTargetField('edit');
+                              setShowScanSerialModal(true);
+                            }}
+                          >
+                            <Camera size={12} />
+                            <span>📷 Quét Mã</span>
+                          </button>
+                        </div>
+                        <input
+                          type="text"
+                          className="form-input"
+                          required
+                          placeholder="Nhập seri hoặc bấm Quét mã"
+                          value={editFormData.serial || ''}
+                          onChange={e => setEditFormData({ ...editFormData, serial: e.target.value })}
+                        />
                       </div>
-                      <input
-                        type="text"
-                        className="form-input"
-                        required={editingDevice.category !== 'computer'}
-                        placeholder={editingDevice.category === 'computer' ? 'Tùy chọn' : 'Nhập seri hoặc bấm Quét mã'}
-                        value={editFormData.serial || ''}
-                        onChange={e => setEditFormData({ ...editFormData, serial: e.target.value })}
-                      />
-                    </div>
+                    )}
 
-                    <div className="form-group">
+                    <div className="form-group" style={{ gridColumn: editingDevice.category === 'computer' ? 'span 2' : 'auto' }}>
                       <label className="form-label">⚙️ Model / Hệ Máy *</label>
                       <input type="text" className="form-input" required value={editFormData.model || editFormData.type || ''} onChange={e => setEditFormData({ ...editFormData, model: e.target.value })} />
                     </div>
@@ -1564,6 +1739,7 @@ export default function AssetManagement({
                       <select className="form-select" value={editFormData.status || 'Đang chạy tốt'} onChange={e => setEditFormData({ ...editFormData, status: e.target.value })}>
                         <option value="Mới 100%">Mới 100%</option>
                         <option value="Đang chạy tốt">Đang chạy tốt</option>
+                        {editingDevice.category === 'computer' && <option value="Đã đổi trả máy mới">🔄 Đã đổi trả máy mới</option>}
                         <option value="Cần bảo trì">Cần bảo trì</option>
                         {editingDevice.category === 'dispenser' && <option value="Hỏng đầu phun">Hỏng đầu phun</option>}
                         {editingDevice.category === 'mixer' && <option value="Hỏng motor">Hỏng motor</option>}
@@ -1886,7 +2062,7 @@ export default function AssetManagement({
                             <option value="">-- Chọn máy tính ({availComp.length} máy) --</option>
                             {availComp.map(c => (
                               <option key={c.id} value={c.id}>
-                                [{c.id}] {c.type} ({c.os || 'Win'} | {c.specs || 'N/A'}) — Seri: {c.serial || 'Không seri'} {isDeviceFree(c) ? '🟢 (Tự do trong kho)' : `🟡 (Đang gán bộ ${c.setCode || c.set_code || ''})`}
+                                [{c.id}] {c.type} ({c.os || 'Win'} | {c.specs || 'N/A'}) {c.status === 'Đã đổi trả máy mới' ? '🔄 [Đã đổi trả máy mới]' : ''} {isDeviceFree(c) ? '🟢 (Tự do trong kho)' : `🟡 (Đang gán bộ ${c.setCode || c.set_code || ''})`}
                               </option>
                             ))}
                           </select>

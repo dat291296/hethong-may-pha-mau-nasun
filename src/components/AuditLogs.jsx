@@ -58,7 +58,7 @@ export default function AuditLogs({ auditLogs, onEditLog, onDeleteLog }) {
       (log.reason    || '').toLowerCase().includes(q) ||
       (log.id        || '').toLowerCase().includes(q);
     return matchesType && matchesSeverity && matchesSearch;
-  });
+  }).sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
 
   // ── Severity config ───────────────────────────────────────────────────────
   const getSeverityBadge = (log) => {

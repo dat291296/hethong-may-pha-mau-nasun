@@ -5,17 +5,51 @@ import { cacheOfflineData, getCachedOfflineData, enqueueOfflineAction } from '..
 
 const LOCAL_STORAGE_KEY = 'nasun_audit_logs';
 
+function sanitizeAndRenumberAuditLogs(logs) {
+  if (!Array.isArray(logs) || logs.length === 0) return INITIAL_AUDIT_LOGS;
+
+  // 1. Remove legacy sample audits 001 to 004
+  const legacyTimestamps = ['2025-08-15 10:00', '2025-08-01 14:30', '2025-02-10 16:00', '2026-05-20 09:15'];
+  const filtered = logs.filter(log => {
+    if (legacyTimestamps.includes(log.timestamp)) return false;
+    if (log.setCode === 'SET-2024-001' && log.reason?.includes('NPP độc quyền Hà Nội')) return false;
+    if (log.setCode === 'SET-2024-002' && log.reason?.includes('đại lý Cầu Giấy')) return false;
+    if (log.setCode === 'SET-2023-005' && log.reason?.includes('NPP ngưng hợp tác')) return false;
+    if (log.setCode === 'SET-2024-004' && log.reason?.includes('vệ sinh cụm pít-tông')) return false;
+    return true;
+  });
+
+  const baseLogs = filtered.length > 0 ? filtered : INITIAL_AUDIT_LOGS;
+
+  // 2. Sort by timestamp descending (hiển thị audit gần nhất trên đầu)
+  baseLogs.sort((a, b) => {
+    const timeA = a.timestamp || '';
+    const timeB = b.timestamp || '';
+    return timeB.localeCompare(timeA);
+  });
+
+  // 3. Renumber from AUDIT-001 sequentially to the end
+  return baseLogs.map((log, index) => ({
+    ...log,
+    id: `AUDIT-${String(index + 1).padStart(3, '0')}`
+  }));
+}
+
 function getInitialAuditLogs() {
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return parsed;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const cleaned = sanitizeAndRenumberAuditLogs(parsed);
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(cleaned));
+        return cleaned;
+      }
     }
   } catch (e) {
     console.warn('Failed to parse audit logs from localStorage', e);
   }
-  return INITIAL_AUDIT_LOGS;
+  return sanitizeAndRenumberAuditLogs(INITIAL_AUDIT_LOGS);
 }
 
 function persistAuditLogs(logs) {
@@ -35,13 +69,15 @@ export function useAuditLogs() {
   useEffect(() => {
     async function loadCached() {
       const stored = getInitialAuditLogs();
-      if (stored && stored.length > 0 && localStorage.getItem(LOCAL_STORAGE_KEY)) {
+      if (stored && stored.length > 0) {
+        setAuditLogs(stored);
         return;
       }
       const cached = await getCachedOfflineData('audit_logs', null);
       if (cached && cached.length > 0) {
-        setAuditLogs(cached);
-        persistAuditLogs(cached);
+        const cleaned = sanitizeAndRenumberAuditLogs(cached);
+        setAuditLogs(cleaned);
+        persistAuditLogs(cleaned);
       } else {
         persistAuditLogs(INITIAL_AUDIT_LOGS);
       }
@@ -58,12 +94,15 @@ export function useAuditLogs() {
     );
     if (error) {
       const cached = await getCachedOfflineData('audit_logs', null);
-      if (cached && cached.length > 0) setAuditLogs(cached);
+      if (cached && cached.length > 0) {
+        const cleaned = sanitizeAndRenumberAuditLogs(cached);
+        setAuditLogs(cleaned);
+      }
     } else if (data && data.length > 0) {
-      // Only overwrite if database actually has rows
       const mapped = data.map(mapDbToAudit);
-      setAuditLogs(mapped);
-      persistAuditLogs(mapped);
+      const cleaned = sanitizeAndRenumberAuditLogs(mapped);
+      setAuditLogs(cleaned);
+      persistAuditLogs(cleaned);
     }
     setLoading(false);
   }, []);
@@ -83,20 +122,28 @@ export function useAuditLogs() {
   }, [fetchAuditLogs]);
 
   const addAuditLog = useCallback(async (logData) => {
-    const tempId = logData.id || `AUDIT-${Date.now()}`;
-    const localLog = {
-      ...logData,
-      id: tempId,
-      timestamp: logData.timestamp || new Date().toISOString().replace('T', ' ').substring(0, 16)
-    };
-    const dbPayload = mapAuditToDb(localLog);
+    const timestamp = logData.timestamp || new Date().toISOString().replace('T', ' ').substring(0, 16);
+    let finalLog = null;
 
-    // Update local state immediately
+    // Update local state immediately, sort nearest on top, and renumber
     setAuditLogs(prev => {
-      const updated = [localLog, ...prev];
-      persistAuditLogs(updated);
-      return updated;
+      const newLog = {
+        ...logData,
+        id: 'TEMP',
+        timestamp
+      };
+      const combined = [newLog, ...prev];
+      combined.sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
+      const renumbered = combined.map((item, idx) => ({
+        ...item,
+        id: `AUDIT-${String(idx + 1).padStart(3, '0')}`
+      }));
+      finalLog = renumbered[0];
+      persistAuditLogs(renumbered);
+      return renumbered;
     });
+
+    const dbPayload = mapAuditToDb(finalLog || { ...logData, timestamp, id: `AUDIT-${Date.now()}` });
 
     if (isSupabaseConfigured && navigator.onLine) {
       try {

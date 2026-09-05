@@ -36,6 +36,13 @@ function openDb() {
  * Store data into the cache store
  */
 export async function setCache(key, data) {
+  // Always write synchronously to localStorage as primary reliable fallback
+  try {
+    localStorage.setItem(`cached_${key}`, JSON.stringify(data));
+  } catch (err) {
+    console.warn('[offlineDb] localStorage quota or write error', err);
+  }
+
   try {
     const db = await openDb();
     return new Promise((resolve, reject) => {
@@ -47,11 +54,7 @@ export async function setCache(key, data) {
       request.onerror = () => reject(request.error);
     });
   } catch (e) {
-    console.error('[offlineDb] Error writing cache', e);
-    // Fallback to localStorage on error
-    try {
-      localStorage.setItem(`cached_${key}`, JSON.stringify(data));
-    } catch (err) {}
+    console.error('[offlineDb] Error writing IndexedDB cache', e);
     return false;
   }
 }

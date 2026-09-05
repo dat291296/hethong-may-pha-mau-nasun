@@ -280,7 +280,7 @@ export default function Dashboard({
                 <th>Khu Vực</th>
                 <th>Máy Chiết</th>
                 <th>Máy Lắc</th>
-                <th>Máy Tính (OS)</th>
+                <th>Máy Tính & Cấu Hình</th>
                 <th>Máy In</th>
                 <th>Ổn Áp (NPP)</th>
                 <th>Bảo Trì Tiếp Theo</th>
@@ -288,82 +288,152 @@ export default function Dashboard({
               </tr>
             </thead>
             <tbody>
-              {paginatedAllocatedSets.map((set) => (
-                <tr key={set.id}>
-                  <td style={{ fontWeight: '700', color: 'var(--accent-cyan)' }}>{set.setCode}</td>
-                  <td style={{ fontWeight: '600' }}>{set.nppName || 'Kho Tổng'}</td>
-                  <td>{set.region}</td>
-                  <td>
-                    <div style={{ fontSize: '0.85rem', fontWeight: '600' }}>{set.dispenserModel}</div>
-                    <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{set.dispenserSerial}</div>
-                  </td>
-                  <td>
-                    <div style={{ fontSize: '0.85rem' }}>{set.mixerModel}</div>
-                    <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{set.mixerSerial}</div>
-                  </td>
-                  <td>
-                    <div style={{ fontSize: '0.85rem' }}>{set.pcType} ({set.pcOs})</div>
-                    <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{set.pcSerial}</div>
-                  </td>
-                  <td>
-                    <div style={{ fontSize: '0.85rem' }}>{set.printerModel}</div>
-                    <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{set.printerSerial}</div>
-                  </td>
-                  <td>
-                    {set.stabilizer?.includes('Chưa') || set.stabilizer?.includes('Không') ? (
-                      <span className="badge badge-danger">⚠️ {set.stabilizer}</span>
-                    ) : (
-                      <span className="badge badge-success">✓ {set.stabilizer}</span>
-                    )}
-                  </td>
-                  <td>
-                    {set.nextMaintenanceDue ? (
-                      <div style={{ fontSize: '0.825rem', fontWeight: '600' }}>{set.nextMaintenanceDue}</div>
-                    ) : (
-                      <span style={{ color: 'var(--text-muted)', fontSize: '0.775rem' }}>Chưa có</span>
-                    )}
-                  </td>
-                  <td>
-                    {set.status === 'DA_LAP_DAT' && <span className="badge badge-success">🟢 Đã Lắp Đặt</span>}
-                    {set.status === 'TRONG_KHO' && <span className="badge badge-info">🔵 Trong Kho</span>}
-                    {set.status === 'DA_THU_HOI' && <span className="badge badge-danger">🔴 Đã Thu Hồi</span>}
-                    {set.status === 'BAO_THUONG_BAO_TRI' && <span className="badge badge-warning">🟡 Đang Bảo Trì</span>}
-                  </td>
-                </tr>
-              ))}
+              {paginatedAllocatedSets.map((set) => {
+                const pcObj = computers?.find(c => 
+                  (set.computerId && c.id === set.computerId) || 
+                  (set.setCode && c.setCode === set.setCode) ||
+                  (set.pcSerial && c.serial && c.serial !== '—' && c.serial === set.pcSerial)
+                );
+                const pcSpecs = pcObj?.specs || set.pcSpecs || 'Core i5 / 16GB RAM / 512GB SSD';
+                const pcType = set.pcType || pcObj?.type || 'AIO';
+                const pcOs = set.pcOs || pcObj?.os || 'Windows 11 Pro';
+                const isPcReplaced = pcObj?.status === 'Đã đổi trả máy mới' || 
+                                     pcObj?.status === 'Đổi trả mới' || 
+                                     set.computerStatus === 'Đã đổi trả máy mới' || 
+                                     set.pcStatus === 'Đã đổi trả máy mới' || 
+                                     set.isPcReplaced;
+                const isPcNew = pcObj?.status === 'Mới 100%' || set.computerStatus === 'Mới 100%';
+
+                return (
+                  <tr key={set.id || set.setCode}>
+                    <td style={{ fontWeight: '700', color: 'var(--accent-cyan)' }}>{set.setCode}</td>
+                    <td style={{ fontWeight: '600' }}>{set.nppName || 'Kho Tổng'}</td>
+                    <td>{set.region}</td>
+                    <td>
+                      <div style={{ fontSize: '0.85rem', fontWeight: '600' }}>{set.dispenserModel}</div>
+                      <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{set.dispenserSerial}</div>
+                    </td>
+                    <td>
+                      <div style={{ fontSize: '0.85rem' }}>{set.mixerModel}</div>
+                      <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{set.mixerSerial}</div>
+                    </td>
+                    <td>
+                      <div style={{ fontSize: '0.85rem', fontWeight: '700' }}>{pcType} ({pcOs})</div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--accent-cyan)', fontWeight: '600', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <HardDrive size={13} />
+                        <span>{pcSpecs}</span>
+                      </div>
+                      {isPcReplaced && (
+                        <span 
+                          className="badge badge-purple" 
+                          style={{ 
+                            fontSize: '0.68rem', 
+                            display: 'inline-flex', 
+                            alignItems: 'center', 
+                            gap: '4px', 
+                            marginTop: '4px',
+                            background: 'rgba(168,85,247,0.18)',
+                            color: '#c084fc',
+                            border: '1px solid rgba(168,85,247,0.4)',
+                            fontWeight: '700'
+                          }}
+                          title="Máy tính đã được đổi trả máy mới cho NPP"
+                        >
+                          🔄 Đã đổi trả máy mới
+                        </span>
+                      )}
+                      {!isPcReplaced && isPcNew && (
+                        <span 
+                          className="badge badge-success" 
+                          style={{ fontSize: '0.68rem', display: 'inline-flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}
+                        >
+                          ✨ Máy mới 100%
+                        </span>
+                      )}
+                    </td>
+                    <td>
+                      <div style={{ fontSize: '0.85rem' }}>{set.printerModel}</div>
+                      <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{set.printerSerial}</div>
+                    </td>
+                    <td>
+                      {set.stabilizer?.includes('Chưa') || set.stabilizer?.includes('Không') ? (
+                        <span className="badge badge-danger">⚠️ {set.stabilizer}</span>
+                      ) : (
+                        <span className="badge badge-success">✓ {set.stabilizer}</span>
+                      )}
+                    </td>
+                    <td>
+                      {set.nextMaintenanceDue ? (
+                        <div style={{ fontSize: '0.825rem', fontWeight: '600' }}>{set.nextMaintenanceDue}</div>
+                      ) : (
+                        <span style={{ color: 'var(--text-muted)', fontSize: '0.775rem' }}>Chưa có</span>
+                      )}
+                    </td>
+                    <td>
+                      {set.status === 'DA_LAP_DAT' && <span className="badge badge-success">🟢 Đã Lắp Đặt</span>}
+                      {set.status === 'TRONG_KHO' && <span className="badge badge-info">🔵 Trong Kho</span>}
+                      {set.status === 'DA_THU_HOI' && <span className="badge badge-danger">🔴 Đã Thu Hồi</span>}
+                      {set.status === 'BAO_THUONG_BAO_TRI' && <span className="badge badge-warning">🟡 Đang Bảo Trì</span>}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
 
         {/* Mobile View Cards */}
         <div className="mobile-only mobile-card-list">
-          {paginatedAllocatedSets.map((set) => (
-            <div className="mobile-card" key={set.id}>
-              <div className="mobile-card-header">
-                <div>
-                  <span className="mobile-card-title" style={{ color: 'var(--accent-cyan)' }}>{set.setCode}</span>
-                  <div className="mobile-card-subtitle">{set.nppName || 'Kho Tổng'} ({set.region})</div>
+          {paginatedAllocatedSets.map((set) => {
+            const pcObj = computers?.find(c => 
+              (set.computerId && c.id === set.computerId) || 
+              (set.setCode && c.setCode === set.setCode) ||
+              (set.pcSerial && c.serial && c.serial !== '—' && c.serial === set.pcSerial)
+            );
+            const pcSpecs = pcObj?.specs || set.pcSpecs || 'Core i5 / 16GB RAM / 512GB SSD';
+            const pcType = set.pcType || pcObj?.type || 'AIO';
+            const pcOs = set.pcOs || pcObj?.os || 'Windows 11 Pro';
+            const isPcReplaced = pcObj?.status === 'Đã đổi trả máy mới' || 
+                                 pcObj?.status === 'Đổi trả mới' || 
+                                 set.computerStatus === 'Đã đổi trả máy mới' || 
+                                 set.pcStatus === 'Đã đổi trả máy mới' || 
+                                 set.isPcReplaced;
+
+            return (
+              <div className="mobile-card" key={set.id || set.setCode}>
+                <div className="mobile-card-header">
+                  <div>
+                    <span className="mobile-card-title" style={{ color: 'var(--accent-cyan)' }}>{set.setCode}</span>
+                    <div className="mobile-card-subtitle">{set.nppName || 'Kho Tổng'} ({set.region})</div>
+                  </div>
+                  <div>
+                    {set.status === 'DA_LAP_DAT' && <span className="badge badge-success">🟢 Đã Lắp</span>}
+                    {set.status === 'TRONG_KHO' && <span className="badge badge-info">🔵 Kho</span>}
+                    {set.status === 'DA_THU_HOI' && <span className="badge badge-danger">🔴 Thu Hồi</span>}
+                    {set.status === 'BAO_THUONG_BAO_TRI' && <span className="badge badge-warning">🟡 Bảo Trì</span>}
+                  </div>
                 </div>
-                <div>
-                  {set.status === 'DA_LAP_DAT' && <span className="badge badge-success">🟢 Đã Lắp</span>}
-                  {set.status === 'TRONG_KHO' && <span className="badge badge-info">🔵 Kho</span>}
-                  {set.status === 'DA_THU_HOI' && <span className="badge badge-danger">🔴 Thu Hồi</span>}
-                  {set.status === 'BAO_THUONG_BAO_TRI' && <span className="badge badge-warning">🟡 Bảo Trì</span>}
-                </div>
-              </div>
-              <div className="mobile-card-body">
-                <div className="mobile-card-row">
-                  <span className="mobile-card-label">Máy Chiết:</span>
-                  <span className="mobile-card-value">{set.dispenserModel} ({set.dispenserSerial})</span>
-                </div>
-                <div className="mobile-card-row">
-                  <span className="mobile-card-label">Máy Lắc:</span>
-                  <span className="mobile-card-value">{set.mixerModel} ({set.mixerSerial})</span>
-                </div>
-                <div className="mobile-card-row">
-                  <span className="mobile-card-label">Máy Tính (OS):</span>
-                  <span className="mobile-card-value">{set.pcType} ({set.pcOs})</span>
-                </div>
+                <div className="mobile-card-body">
+                  <div className="mobile-card-row">
+                    <span className="mobile-card-label">Máy Chiết:</span>
+                    <span className="mobile-card-value">{set.dispenserModel} ({set.dispenserSerial})</span>
+                  </div>
+                  <div className="mobile-card-row">
+                    <span className="mobile-card-label">Máy Lắc:</span>
+                    <span className="mobile-card-value">{set.mixerModel} ({set.mixerSerial})</span>
+                  </div>
+                  <div className="mobile-card-row">
+                    <span className="mobile-card-label">Máy Tính:</span>
+                    <span className="mobile-card-value">
+                      <div>{pcType} ({pcOs})</div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--accent-cyan)', fontWeight: '600' }}>💻 {pcSpecs}</div>
+                      {isPcReplaced && (
+                        <span className="badge badge-purple" style={{ fontSize: '0.65rem', display: 'inline-block', marginTop: '2px' }}>
+                          🔄 Đã đổi trả máy mới
+                        </span>
+                      )}
+                    </span>
+                  </div>
                 <div className="mobile-card-row">
                   <span className="mobile-card-label">Máy In:</span>
                   <span className="mobile-card-value">{set.printerModel} ({set.printerSerial})</span>
@@ -384,7 +454,8 @@ export default function Dashboard({
                 </div>
               </div>
             </div>
-          ))}
+          );
+        })}
         </div>
 
         {/* Pagination Bar */}
