@@ -171,7 +171,7 @@ export function useAssets() {
     // Update local state immediately for instant feedback
     cfg.setter(prev => {
       const updated = [localDevice, ...prev];
-      cacheOfflineData(cfg.cacheKey, updated);
+      persistAssetsLocal(cfg.cacheKey, updated);
       return updated;
     });
 
@@ -211,7 +211,7 @@ export function useAssets() {
     const singularCat = cfg ? cfg.singular : category;
 
     const dbUpdates = mapDeviceToDb({ ...updates, id }, singularCat);
-    const appUpdates = { ...updates };
+    const appUpdates = { ...updates, id, isUpdated: true, updatedAt: new Date().toISOString() };
 
     if ('is_assigned' in updates) appUpdates.isAssigned = updates.is_assigned;
     if ('set_code' in updates) appUpdates.setCode = updates.set_code;
@@ -219,7 +219,7 @@ export function useAssets() {
     if (cfg) {
       cfg.setter(prev => {
         const updated = prev.map(d => d.id === id ? { ...d, ...appUpdates } : d);
-        cacheOfflineData(cfg.cacheKey, updated);
+        persistAssetsLocal(cfg.cacheKey, updated);
         return updated;
       });
     }
@@ -244,17 +244,22 @@ export function useAssets() {
   // ── Generic delete device ──────────────────────────────────────────────────
   const deleteDevice = useCallback(async (category, id) => {
     const tableMap = {
-      dispensers: { setter: setDispensers, cacheKey: 'dispensers' },
-      mixers:     { setter: setMixers,     cacheKey: 'mixers' },
-      computers:  { setter: setComputers,  cacheKey: 'computers' },
-      printers:   { setter: setPrinters,   cacheKey: 'printers' },
+      dispensers: { setter: setDispensers, cacheKey: 'dispensers', table: 'dispensers' },
+      mixers:     { setter: setMixers,     cacheKey: 'mixers',     table: 'mixers' },
+      computers:  { setter: setComputers,  cacheKey: 'computers',  table: 'computers' },
+      printers:   { setter: setPrinters,   cacheKey: 'printers',   table: 'printers' },
+      dispenser:  { setter: setDispensers, cacheKey: 'dispensers', table: 'dispensers' },
+      mixer:      { setter: setMixers,     cacheKey: 'mixers',     table: 'mixers' },
+      computer:   { setter: setComputers,  cacheKey: 'computers',  table: 'computers' },
+      printer:    { setter: setPrinters,   cacheKey: 'printers',   table: 'printers' },
     };
 
     const cfg = tableMap[category];
+    const targetTable = cfg ? cfg.table : category;
     if (cfg) {
       cfg.setter(prev => {
         const updated = prev.filter(d => d.id !== id);
-        cacheOfflineData(cfg.cacheKey, updated);
+        persistAssetsLocal(cfg.cacheKey, updated);
         return updated;
       });
     }
@@ -262,17 +267,17 @@ export function useAssets() {
     if (isSupabaseConfigured && navigator.onLine) {
       try {
         const { error } = await safeQuery(
-          sb => sb.from(category).delete().eq('id', id),
-          `deleteDevice:${category}`
+          sb => sb.from(targetTable).delete().eq('id', id),
+          `deleteDevice:${targetTable}`
         );
         if (error) throw error;
       } catch (err) {
-        console.warn(`[Offline] Failed online deleteDevice for ${category}. Queueing action.`, err);
-        enqueueOfflineAction('DELETE_DEVICE', { id }, category);
+        console.warn(`[Offline] Failed online deleteDevice for ${targetTable}. Queueing action.`, err);
+        enqueueOfflineAction('DELETE_DEVICE', { id }, targetTable);
       }
     } else if (isSupabaseConfigured && !navigator.onLine) {
-      console.log(`[Offline] Network down. Enqueueing deleteDevice for ${category}.`);
-      enqueueOfflineAction('DELETE_DEVICE', { id }, category);
+      console.log(`[Offline] Network down. Enqueueing deleteDevice for ${targetTable}.`);
+      enqueueOfflineAction('DELETE_DEVICE', { id }, targetTable);
     }
   }, []);
 

@@ -590,6 +590,8 @@ export default function App() {
               mixers={mixers}
               computers={computers}
               printers={printers}
+              repairTickets={repairTickets}
+              auditLogs={auditLogs}
               maintenanceAlerts={maintenanceAlerts}
               unstabilizedAlerts={unstabilizedAlerts}
               setActiveTab={setActiveTab}

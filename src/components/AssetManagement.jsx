@@ -1354,8 +1354,14 @@ export default function AssetManagement({
                           <Edit3 size={14} color="var(--accent-cyan)" />
                           <span>Sửa</span>
                         </button>
-                        <button className="btn btn-secondary btn-sm" onClick={() => handleDeleteDevice('computer', item.id)} title="Xóa">
+                        <button 
+                          className="btn btn-secondary btn-sm" 
+                          onClick={() => handleDeleteDevice('computer', item)} 
+                          title="Xóa Máy Tính"
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'var(--accent-red)', border: '1px solid rgba(239,68,68,0.3)' }}
+                        >
                           <Trash2 size={14} color="var(--accent-red)" />
+                          <span>Xóa</span>
                         </button>
                       </div>
                     </td>
