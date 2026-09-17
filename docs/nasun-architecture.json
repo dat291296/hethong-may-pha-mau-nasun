@@ -1,0 +1,472 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "He Thong May Pha Mau Nasun - So Do Kien Truc He Thong",
+    "quality_profile": "showcase",
+    "viewBox": [
+      1320,
+      640
+    ],
+    "views": [
+      {
+        "id": "delivery-path",
+        "label": "Truy cap va Phan phoi Edge",
+        "focus": [
+          "tech_clients",
+          "desktop_client",
+          "cloudflare_edge",
+          "react_app"
+        ],
+        "note": "Ky thuat vien truy cap Web/PWA hoac Desktop Agent qua ha tang Cloudflare Pages Edge."
+      },
+      {
+        "id": "business-modules",
+        "label": "Nghiep vu ky thuat cot loi",
+        "focus": [
+          "react_app",
+          "module_asset",
+          "module_repair",
+          "module_field"
+        ],
+        "note": "Xu ly kho may, ghep bo thiet bi, phieu sua chua va lich bao tri tuyen duong."
+      },
+      {
+        "id": "storage-and-cloud",
+        "label": "Luu tru 3 tang va Supabase",
+        "focus": [
+          "react_app",
+          "local_cache",
+          "offline_db",
+          "supabase_cloud",
+          "audit_storage"
+        ],
+        "note": "Dong bo da tang tu LocalStorage, IndexedDB ngoai tuyen den co so du lieu Supabase PostgreSQL."
+      }
+    ],
+    "repository": {
+      "url": "https://github.com/dat291296/hethong-may-pha-mau-nasun",
+      "revision": "8ecb4b62a3a9192f137ccf79b04b40c3182be11f"
+    }
+  },
+  "components": [
+    {
+      "id": "tech_clients",
+      "type": "external",
+      "label": "Ky Thuat va NPP",
+      "sublabel": "Mobile PWA / Web",
+      "pos": [
+        40,
+        290
+      ],
+      "size": [
+        140,
+        64
+      ]
+    },
+    {
+      "id": "desktop_client",
+      "type": "frontend",
+      "label": "Nasun Desktop",
+      "sublabel": "Electron and Agent",
+      "brand": "node-js",
+      "pos": [
+        40,
+        130
+      ],
+      "size": [
+        140,
+        64
+      ],
+      "sources": [
+        {
+          "path": "tools/npp-agent/agent_app.cjs",
+          "line": 1,
+          "end_line": 30,
+          "label": "Client Agent Engine"
+        }
+      ]
+    },
+    {
+      "id": "cloudflare_edge",
+      "type": "cloud",
+      "label": "Cloudflare Edge",
+      "sublabel": "CDN and HTTPS Cache",
+      "brand": "cloudflare",
+      "pos": [
+        240,
+        290
+      ],
+      "size": [
+        145,
+        64
+      ],
+      "sources": [
+        {
+          "path": "wrangler.jsonc",
+          "line": 1,
+          "end_line": 16,
+          "label": "Cloudflare Pages Deployment"
+        }
+      ]
+    },
+    {
+      "id": "react_app",
+      "type": "frontend",
+      "label": "Nasun Core SPA",
+      "sublabel": "React 19 and Vite",
+      "brand": "react",
+      "pos": [
+        445,
+        290
+      ],
+      "size": [
+        145,
+        64
+      ],
+      "sources": [
+        {
+          "path": "src/App.jsx",
+          "line": 1,
+          "end_line": 60,
+          "label": "Vite/React Application Root"
+        }
+      ]
+    },
+    {
+      "id": "local_cache",
+      "type": "database",
+      "label": "LocalStorage",
+      "sublabel": "Session and Audit",
+      "pos": [
+        445,
+        130
+      ],
+      "size": [
+        145,
+        64
+      ],
+      "sources": [
+        {
+          "path": "src/hooks/useAuditLogs.js",
+          "line": 1,
+          "end_line": 30,
+          "label": "LocalStorage Audit Buffer"
+        }
+      ]
+    },
+    {
+      "id": "offline_db",
+      "type": "database",
+      "label": "IndexedDB Store",
+      "sublabel": "Offline-First Sync",
+      "pos": [
+        445,
+        450
+      ],
+      "size": [
+        145,
+        64
+      ],
+      "sources": [
+        {
+          "path": "src/lib/offlineDb.js",
+          "line": 1,
+          "end_line": 40,
+          "label": "IndexedDB Offline Database"
+        }
+      ]
+    },
+    {
+      "id": "module_asset",
+      "type": "backend",
+      "label": "Kho va Bo May",
+      "sublabel": "Ghep bo, cap phat",
+      "pos": [
+        660,
+        130
+      ],
+      "size": [
+        155,
+        64
+      ],
+      "sources": [
+        {
+          "path": "src/components/AssetManagement.jsx",
+          "line": 1,
+          "end_line": 50,
+          "label": "Quan ly tai san va kho may"
+        }
+      ]
+    },
+    {
+      "id": "module_repair",
+      "type": "backend",
+      "label": "Xu Ly Sua Chua",
+      "sublabel": "Auto Seri and Doi May",
+      "pos": [
+        660,
+        290
+      ],
+      "size": [
+        155,
+        64
+      ],
+      "sources": [
+        {
+          "path": "src/components/DeviceRepairProcessing.jsx",
+          "line": 1,
+          "end_line": 50,
+          "label": "Xu ly sua chua may"
+        }
+      ]
+    },
+    {
+      "id": "module_field",
+      "type": "backend",
+      "label": "Bao Tri va Tuyen",
+      "sublabel": "Lich 1 nam and TSP",
+      "pos": [
+        660,
+        450
+      ],
+      "size": [
+        155,
+        64
+      ],
+      "sources": [
+        {
+          "path": "src/components/FieldRouteMap.jsx",
+          "line": 1,
+          "end_line": 50,
+          "label": "Ban do tuyen and TSP Router"
+        }
+      ]
+    },
+    {
+      "id": "supabase_cloud",
+      "type": "database",
+      "label": "Supabase Cloud",
+      "sublabel": "PostgreSQL and Auth",
+      "brand": "supabase",
+      "pos": [
+        890,
+        290
+      ],
+      "size": [
+        160,
+        64
+      ],
+      "sources": [
+        {
+          "path": "src/lib/supabase.js",
+          "line": 1,
+          "end_line": 30,
+          "label": "Supabase JS Client SDK"
+        }
+      ]
+    },
+    {
+      "id": "field_maps",
+      "type": "external",
+      "label": "Dich Vu Ban Do",
+      "sublabel": "OSM, Carto, Maps",
+      "pos": [
+        890,
+        450
+      ],
+      "size": [
+        160,
+        64
+      ]
+    },
+    {
+      "id": "audit_storage",
+      "type": "database",
+      "label": "PostgreSQL DB",
+      "sublabel": "npps, sets, repairs",
+      "brand": "postgresql",
+      "pos": [
+        1120,
+        290
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "supabase/schema.sql",
+          "line": 20,
+          "end_line": 35,
+          "label": "PostgreSQL Schema Tables"
+        }
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "security-group",
+      "label": "Client Device Execution Sandbox (Browser / PWA / Electron)",
+      "wraps": [
+        "react_app",
+        "local_cache",
+        "offline_db"
+      ],
+      "pad": 16
+    },
+    {
+      "kind": "security-group",
+      "label": "Nasun Core Domain Services and Modules",
+      "wraps": [
+        "module_asset",
+        "module_repair",
+        "module_field"
+      ],
+      "pad": 16
+    },
+    {
+      "kind": "region",
+      "label": "Supabase Cloud Infrastructure and Durable State",
+      "wraps": [
+        "supabase_cloud",
+        "audit_storage"
+      ],
+      "pad": 16
+    }
+  ],
+  "connections": [
+    {
+      "id": "tech-to-edge",
+      "from": "tech_clients",
+      "to": "cloudflare_edge",
+      "label": "HTTPS",
+      "variant": "emphasis"
+    },
+    {
+      "id": "desktop-to-edge",
+      "from": "desktop_client",
+      "to": "cloudflare_edge",
+      "label": "HTTP/WSS",
+      "fromSide": "right",
+      "toSide": "top"
+    },
+    {
+      "id": "edge-to-app",
+      "from": "cloudflare_edge",
+      "to": "react_app",
+      "label": "bundle load",
+      "variant": "emphasis"
+    },
+    {
+      "id": "app-to-cache",
+      "from": "react_app",
+      "to": "local_cache",
+      "label": "read/write",
+      "fromSide": "top",
+      "toSide": "bottom",
+      "labelDx": 35
+    },
+    {
+      "id": "app-to-offline",
+      "from": "react_app",
+      "to": "offline_db",
+      "label": "offline sync",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelDy": 28
+    },
+    {
+      "id": "app-to-repair",
+      "from": "react_app",
+      "to": "module_repair",
+      "label": "phieu sua",
+      "variant": "emphasis",
+      "labelDy": 16
+    },
+    {
+      "id": "app-to-asset",
+      "from": "react_app",
+      "to": "module_asset",
+      "label": "kho va bo may",
+      "fromSide": "right",
+      "toSide": "left",
+      "labelDy": -36
+    },
+    {
+      "id": "app-to-field",
+      "from": "react_app",
+      "to": "module_field",
+      "label": "bao tri va TSP",
+      "fromSide": "right",
+      "toSide": "left",
+      "labelDy": 36
+    },
+    {
+      "id": "repair-to-cloud",
+      "from": "module_repair",
+      "to": "supabase_cloud",
+      "label": "REST and RLS",
+      "variant": "emphasis"
+    },
+    {
+      "id": "asset-to-cloud",
+      "from": "module_asset",
+      "to": "supabase_cloud",
+      "label": "sync set",
+      "fromSide": "right",
+      "toSide": "top"
+    },
+    {
+      "id": "field-to-cloud",
+      "from": "module_field",
+      "to": "supabase_cloud",
+      "label": "sync route",
+      "fromSide": "top",
+      "toSide": "bottom",
+      "labelDx": 40
+    },
+    {
+      "id": "field-to-maps",
+      "from": "module_field",
+      "to": "field_maps",
+      "label": "tiles and GPS",
+      "variant": "dashed"
+    },
+    {
+      "id": "cloud-to-db",
+      "from": "supabase_cloud",
+      "to": "audit_storage",
+      "label": "SQL primary",
+      "variant": "emphasis"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Kien Truc Da Nen Tang (Multi-Platform)",
+      "items": [
+        "Ho tro Web PWA tren mobile, trinh duyet PC va Electron Desktop Agent",
+        "Dong goi toi uu qua Vite, phan phoi CDN toan cau qua Cloudflare Pages Edge"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Dong Bo 3 Tang va Ngoai Tuyen (Offline-First)",
+      "items": [
+        "Tang 1: LocalStorage luu session dang nhap va bo dem audit logs tuc thi",
+        "Tang 2: IndexedDB duy tri co so du lieu ngoai tuyen khi mat song tren hien truong",
+        "Tang 3: Supabase Cloud PostgreSQL tu dong dong bo 2 chieu qua REST va RLS"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "Nghiep Vu Ky Thuat Chuyen Sau",
+      "items": [
+        "Tu dong truy xuat thiet bi, so seri va ho tro doi may moi/cu tuc thi",
+        "Lap ke hoach bao tri 1 nam va toi uu lo trinh di chuyen qua thuat toan TSP",
+        "Ban do ky thuat thuc dia ket hop OpenStreetMap, CartoDB va Google Maps"
+      ]
+    }
+  ]
+}
