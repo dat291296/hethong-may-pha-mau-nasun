@@ -2,11 +2,11 @@
   "schema_version": 1,
   "diagram_type": "architecture",
   "meta": {
-    "title": "He Thong May Pha Mau Nasun - So Do Kien Truc He Thong",
+    "title": "He Thong May Pha Mau Nasun - So Do Kien Truc He Thong v2 (Optimized)",
     "quality_profile": "showcase",
     "viewBox": [
-      1320,
-      640
+      1240,
+      840
     ],
     "views": [
       {
@@ -18,7 +18,7 @@
           "cloudflare_edge",
           "react_app"
         ],
-        "note": "Ky thuat vien truy cap Web/PWA hoac Desktop Agent qua ha tang Cloudflare Pages Edge."
+        "note": "Ky thuat vien truy cap Web/PWA hoac Desktop Agent qua Edge. Desktop Agent giao tiep Edge Functions an toan thay vi ket noi truc tiep."
       },
       {
         "id": "business-modules",
@@ -27,9 +27,11 @@
           "react_app",
           "module_asset",
           "module_repair",
-          "module_field"
+          "module_field",
+          "tsp_worker",
+          "conflict_resolver"
         ],
-        "note": "Xu ly kho may, ghep bo thiet bi, phieu sua chua va lich bao tri tuyen duong."
+        "note": "Xu ly kho may, ghep bo thiet bi, phieu sua chua va bao tri. TSP tinh toan tren worker rieng; Conflict Resolver xu ly xung dot du lieu."
       },
       {
         "id": "storage-and-cloud",
@@ -38,10 +40,35 @@
           "react_app",
           "local_cache",
           "offline_db",
+          "sync_worker",
+          "edge_functions",
           "supabase_cloud",
           "audit_storage"
         ],
-        "note": "Dong bo da tang tu LocalStorage, IndexedDB ngoai tuyen den co so du lieu Supabase PostgreSQL."
+        "note": "Dong bo da tang LocalStorage, IndexedDB -> Sync Worker -> Edge Functions proxy -> Supabase PostgreSQL. Concurrency qua updated_at va ETag."
+      },
+      {
+        "id": "security-boundary",
+        "label": "Bao mat va Phan quyen",
+        "focus": [
+          "desktop_client",
+          "edge_functions",
+          "supabase_cloud",
+          "audit_storage"
+        ],
+        "note": "Desktop Agent khong ket noi truc tiep. Moi request qua Edge Functions (rate limit, RBAC, RLS). Service key chi giu tren server."
+      },
+      {
+        "id": "sync-conflict-flow",
+        "label": "Luong Dong Bo va Xu Ly Xung Dot",
+        "focus": [
+          "offline_db",
+          "sync_worker",
+          "conflict_resolver",
+          "edge_functions",
+          "supabase_cloud"
+        ],
+        "note": "Sync Worker giu retry queue exponential backoff. Phat hien xung dot ETag thi chuyen Conflict Resolver truoc khi commit vao Supabase."
       }
     ],
     "repository": {
@@ -56,12 +83,12 @@
       "label": "Ky Thuat va NPP",
       "sublabel": "Mobile PWA / Web",
       "pos": [
-        40,
-        290
+        38,
+        340
       ],
       "size": [
-        140,
-        64
+        126,
+        60
       ]
     },
     {
@@ -71,19 +98,19 @@
       "sublabel": "Electron and Agent",
       "brand": "node-js",
       "pos": [
-        40,
-        130
+        38,
+        160
       ],
       "size": [
-        140,
-        64
+        126,
+        60
       ],
       "sources": [
         {
           "path": "tools/npp-agent/agent_app.cjs",
           "line": 1,
           "end_line": 30,
-          "label": "Client Agent Engine"
+          "label": "Client Agent Engine (no Supabase key)"
         }
       ]
     },
@@ -94,12 +121,12 @@
       "sublabel": "CDN and HTTPS Cache",
       "brand": "cloudflare",
       "pos": [
-        240,
-        290
+        205,
+        340
       ],
       "size": [
-        145,
-        64
+        134,
+        60
       ],
       "sources": [
         {
@@ -117,12 +144,12 @@
       "sublabel": "React 19 and Vite",
       "brand": "react",
       "pos": [
-        445,
-        290
+        370,
+        340
       ],
       "size": [
-        145,
-        64
+        126,
+        60
       ],
       "sources": [
         {
@@ -137,14 +164,14 @@
       "id": "local_cache",
       "type": "database",
       "label": "LocalStorage",
-      "sublabel": "Session and Audit",
+      "sublabel": "Session & Audit",
       "pos": [
-        445,
-        130
+        370,
+        160
       ],
       "size": [
-        145,
-        64
+        126,
+        60
       ],
       "sources": [
         {
@@ -159,21 +186,65 @@
       "id": "offline_db",
       "type": "database",
       "label": "IndexedDB Store",
-      "sublabel": "Offline-First Sync",
+      "sublabel": "Offline DB & ETag",
       "pos": [
-        445,
-        450
+        370,
+        510
       ],
       "size": [
-        145,
-        64
+        126,
+        60
       ],
       "sources": [
         {
           "path": "src/lib/offlineDb.js",
           "line": 1,
           "end_line": 40,
-          "label": "IndexedDB Offline Database"
+          "label": "IndexedDB Offline Database + ETag store"
+        }
+      ]
+    },
+    {
+      "id": "sync_worker",
+      "type": "backend",
+      "label": "Sync Worker",
+      "sublabel": "BG Sync & Queue",
+      "pos": [
+        370,
+        680
+      ],
+      "size": [
+        126,
+        60
+      ],
+      "sources": [
+        {
+          "path": "src/lib/offlineSync.js",
+          "line": 1,
+          "end_line": 40,
+          "label": "Background Sync Queue Engine"
+        }
+      ]
+    },
+    {
+      "id": "conflict_resolver",
+      "type": "backend",
+      "label": "Conflict Resolver",
+      "sublabel": "3-way Merge & UI",
+      "pos": [
+        205,
+        680
+      ],
+      "size": [
+        126,
+        60
+      ],
+      "sources": [
+        {
+          "path": "src/lib/offlineSync.js",
+          "line": 1,
+          "end_line": 30,
+          "label": "Optimistic Concurrency Handler"
         }
       ]
     },
@@ -183,12 +254,12 @@
       "label": "Kho va Bo May",
       "sublabel": "Ghep bo, cap phat",
       "pos": [
-        660,
-        130
+        540,
+        160
       ],
       "size": [
-        155,
-        64
+        126,
+        60
       ],
       "sources": [
         {
@@ -205,12 +276,12 @@
       "label": "Xu Ly Sua Chua",
       "sublabel": "Auto Seri and Doi May",
       "pos": [
-        660,
-        290
+        540,
+        340
       ],
       "size": [
-        155,
-        64
+        126,
+        60
       ],
       "sources": [
         {
@@ -227,12 +298,12 @@
       "label": "Bao Tri va Tuyen",
       "sublabel": "Lich 1 nam and TSP",
       "pos": [
-        660,
-        450
+        540,
+        510
       ],
       "size": [
-        155,
-        64
+        126,
+        60
       ],
       "sources": [
         {
@@ -244,25 +315,70 @@
       ]
     },
     {
+      "id": "tsp_worker",
+      "type": "backend",
+      "label": "TSP Web Worker",
+      "sublabel": "Off-thread Solver",
+      "pos": [
+        540,
+        680
+      ],
+      "size": [
+        126,
+        60
+      ],
+      "sources": [
+        {
+          "path": "src/components/FieldRouteMap.jsx",
+          "line": 1,
+          "end_line": 40,
+          "label": "Off-thread TSP Route Solver"
+        }
+      ]
+    },
+    {
+      "id": "edge_functions",
+      "type": "cloud",
+      "label": "Edge Functions",
+      "sublabel": "Deno Serverless",
+      "brand": "supabase",
+      "pos": [
+        715,
+        340
+      ],
+      "size": [
+        126,
+        60
+      ],
+      "sources": [
+        {
+          "path": "wrangler.jsonc",
+          "line": 1,
+          "end_line": 16,
+          "label": "Edge Serverless Proxy Layer"
+        }
+      ]
+    },
+    {
       "id": "supabase_cloud",
       "type": "database",
       "label": "Supabase Cloud",
-      "sublabel": "PostgreSQL and Auth",
+      "sublabel": "PostgreSQL & RLS",
       "brand": "supabase",
       "pos": [
         890,
-        290
+        340
       ],
       "size": [
-        160,
-        64
+        126,
+        60
       ],
       "sources": [
         {
           "path": "src/lib/supabase.js",
           "line": 1,
           "end_line": 30,
-          "label": "Supabase JS Client SDK"
+          "label": "Supabase JS Client SDK (anon key only on client)"
         }
       ]
     },
@@ -272,34 +388,34 @@
       "label": "Dich Vu Ban Do",
       "sublabel": "OSM, Carto, Maps",
       "pos": [
-        890,
-        450
+        715,
+        510
       ],
       "size": [
-        160,
-        64
+        126,
+        60
       ]
     },
     {
       "id": "audit_storage",
       "type": "database",
       "label": "PostgreSQL DB",
-      "sublabel": "npps, sets, repairs",
+      "sublabel": "Database Tables",
       "brand": "postgresql",
       "pos": [
-        1120,
-        290
+        1065,
+        340
       ],
       "size": [
-        150,
-        64
+        126,
+        60
       ],
       "sources": [
         {
           "path": "supabase/schema.sql",
           "line": 20,
           "end_line": 35,
-          "label": "PostgreSQL Schema Tables"
+          "label": "PostgreSQL Database Schema"
         }
       ]
     }
@@ -311,7 +427,9 @@
       "wraps": [
         "react_app",
         "local_cache",
-        "offline_db"
+        "offline_db",
+        "sync_worker",
+        "conflict_resolver"
       ],
       "pad": 16
     },
@@ -321,9 +439,18 @@
       "wraps": [
         "module_asset",
         "module_repair",
-        "module_field"
+        "module_field",
+        "tsp_worker"
       ],
       "pad": 16
+    },
+    {
+      "kind": "security-group",
+      "label": "Secure Server-Side Proxy Layer (Service Key Boundary)",
+      "wraps": [
+        "edge_functions"
+      ],
+      "pad": 12
     },
     {
       "kind": "region",
@@ -356,7 +483,11 @@
       "from": "cloudflare_edge",
       "to": "react_app",
       "label": "bundle load",
-      "variant": "emphasis"
+      "variant": "emphasis",
+      "labelAt": [
+        350,
+        412
+      ]
     },
     {
       "id": "app-to-cache",
@@ -377,12 +508,47 @@
       "labelDy": 28
     },
     {
+      "id": "offline-to-syncworker",
+      "from": "offline_db",
+      "to": "sync_worker",
+      "label": "flush queue",
+      "variant": "emphasis",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelDy": 28
+    },
+    {
+      "id": "syncworker-to-conflict",
+      "from": "sync_worker",
+      "to": "conflict_resolver",
+      "label": "ETag check",
+      "variant": "dashed",
+      "fromSide": "left",
+      "toSide": "right",
+      "labelDy": -26
+    },
+    {
+      "id": "conflict-to-syncworker",
+      "from": "conflict_resolver",
+      "to": "sync_worker",
+      "label": "resolve patch",
+      "fromSide": "right",
+      "toSide": "left",
+      "labelAt": [
+        350,
+        755
+      ]
+    },
+    {
       "id": "app-to-repair",
       "from": "react_app",
       "to": "module_repair",
       "label": "phieu sua",
       "variant": "emphasis",
-      "labelDy": 16
+      "labelAt": [
+        570,
+        325
+      ]
     },
     {
       "id": "app-to-asset",
@@ -391,7 +557,10 @@
       "label": "kho va bo may",
       "fromSide": "right",
       "toSide": "left",
-      "labelDy": -36
+      "labelAt": [
+        518,
+        234
+      ]
     },
     {
       "id": "app-to-field",
@@ -403,42 +572,123 @@
       "labelDy": 36
     },
     {
-      "id": "repair-to-cloud",
-      "from": "module_repair",
-      "to": "supabase_cloud",
-      "label": "REST and RLS",
-      "variant": "emphasis"
+      "id": "syncworker-to-edge",
+      "from": "sync_worker",
+      "to": "edge_functions",
+      "label": "REST + JWT",
+      "variant": "emphasis",
+      "fromSide": "bottom",
+      "toSide": "bottom",
+      "via": [
+        [
+          433,
+          765
+        ],
+        [
+          865,
+          765
+        ],
+        [
+          865,
+          430
+        ],
+        [
+          778,
+          430
+        ]
+      ]
     },
     {
-      "id": "asset-to-cloud",
+      "id": "field-to-tsp",
+      "from": "module_field",
+      "to": "tsp_worker",
+      "label": "route points",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelAt": [
+        580,
+        595
+      ]
+    },
+    {
+      "id": "tsp-to-field",
+      "from": "tsp_worker",
+      "to": "module_field",
+      "label": "optimized route",
+      "variant": "dashed",
+      "fromSide": "right",
+      "toSide": "right",
+      "labelDx": 45,
+      "via": [
+        [
+          685,
+          710
+        ],
+        [
+          685,
+          540
+        ]
+      ]
+    },
+    {
+      "id": "repair-to-edge",
+      "from": "module_repair",
+      "to": "edge_functions",
+      "label": "REST + RLS",
+      "variant": "emphasis",
+      "labelAt": [
+        691,
+        414
+      ]
+    },
+    {
+      "id": "asset-to-edge",
       "from": "module_asset",
-      "to": "supabase_cloud",
+      "to": "edge_functions",
       "label": "sync set",
       "fromSide": "right",
       "toSide": "top"
     },
     {
-      "id": "field-to-cloud",
+      "id": "field-to-edge",
       "from": "module_field",
-      "to": "supabase_cloud",
+      "to": "edge_functions",
       "label": "sync route",
       "fromSide": "top",
-      "toSide": "bottom",
-      "labelDx": 40
+      "toSide": "bottom"
+    },
+    {
+      "id": "edge-to-cloud",
+      "from": "edge_functions",
+      "to": "supabase_cloud",
+      "label": "service proxy",
+      "variant": "emphasis",
+      "labelAt": [
+        866,
+        414
+      ]
     },
     {
       "id": "field-to-maps",
       "from": "module_field",
       "to": "field_maps",
       "label": "tiles and GPS",
-      "variant": "dashed"
+      "variant": "dashed",
+      "labelAt": [
+        691,
+        506
+      ]
     },
     {
       "id": "cloud-to-db",
       "from": "supabase_cloud",
       "to": "audit_storage",
       "label": "SQL primary",
-      "variant": "emphasis"
+      "variant": "emphasis",
+      "labelAt": [
+        1045,
+        412
+      ]
     }
   ],
   "cards": [
@@ -447,16 +697,19 @@
       "title": "Kien Truc Da Nen Tang (Multi-Platform)",
       "items": [
         "Ho tro Web PWA tren mobile, trinh duyet PC va Electron Desktop Agent",
-        "Dong goi toi uu qua Vite, phan phoi CDN toan cau qua Cloudflare Pages Edge"
+        "Dong goi toi uu qua Vite, phan phoi CDN toan cau qua Cloudflare Pages Edge",
+        "Desktop Agent chi dung anon JWT, KHONG bao gio giu service key"
       ]
     },
     {
       "dot": "emerald",
-      "title": "Dong Bo 3 Tang va Ngoai Tuyen (Offline-First)",
+      "title": "Dong Bo 3 Tang + Conflict Resolution",
       "items": [
         "Tang 1: LocalStorage luu session dang nhap va bo dem audit logs tuc thi",
-        "Tang 2: IndexedDB duy tri co so du lieu ngoai tuyen khi mat song tren hien truong",
-        "Tang 3: Supabase Cloud PostgreSQL tu dong dong bo 2 chieu qua REST va RLS"
+        "Tang 2: IndexedDB duy tri co so du lieu offline + ETag cache cho conflict detection",
+        "Tang 3: Sync Worker (Service Worker) xu ly Background Sync API, retry exponential backoff",
+        "Conflict Resolver: 3-way merge tu dong, fallback manual UI khi can thiet",
+        "Supabase Cloud PostgreSQL nhan patch cuoi cung qua Edge Functions proxy"
       ]
     },
     {
@@ -464,8 +717,19 @@
       "title": "Nghiep Vu Ky Thuat Chuyen Sau",
       "items": [
         "Tu dong truy xuat thiet bi, so seri va ho tro doi may moi/cu tuc thi",
-        "Lap ke hoach bao tri 1 nam va toi uu lo trinh di chuyen qua thuat toan TSP",
+        "TSP Worker: giai thuat 2-opt chay tren Web Worker rieng, khong block UI thread",
+        "Lap ke hoach bao tri 1 nam va toi uu lo trinh di chuyen qua TSP Web Worker",
         "Ban do ky thuat thuc dia ket hop OpenStreetMap, CartoDB va Google Maps"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Bao Mat Theo Chieu Sau (Defense-in-Depth)",
+      "items": [
+        "Client chi giu anon key (Supabase public key) - service key bi cam tren browser/Electron",
+        "Moi mutation di qua Edge Functions (Deno): RBAC check, rate limiting, input validation",
+        "Row Level Security (RLS) tren PostgreSQL la lop bao ve cuoi, khong the bypass",
+        "Audit log ghi tren ca client (LocalStorage) va server (PostgreSQL) de doi chieu"
       ]
     }
   ]
