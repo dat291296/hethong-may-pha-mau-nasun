@@ -79,7 +79,7 @@ export default function FieldRouteMap({
   };
 
   // Reference date for maintenance calculations
-  const today = new Date('2026-07-26');
+  const today = new Date();
 
   // Map each NPP to its machine status, maintenance status, and repair tickets
   const enrichedNpps = useMemo(() => {

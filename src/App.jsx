@@ -90,12 +90,12 @@ export default function App() {
   const { npps, addNpp, editNpp, deleteNpp, importNpps } = useNpps();
   const {
     dispensers, setDispensers, mixers, setMixers, computers, setComputers, printers, setPrinters, systemSets, setSystemSets,
-    addStockDevice, editDevice, deleteDevice, deleteSystemSet, assembleSet, updateSystemSet, importDevices
+    addStockDevice, editDevice, deleteDevice, deleteSystemSet, assembleSet, updateSystemSet, importDevices, importSystemSets
   } = useAssets();
-  const { repairTickets, addTicket, editTicket, deleteTicket } = useRepairs();
-  const { auditLogs, addAuditLog, editAuditLog, deleteAuditLog } = useAuditLogs();
+  const { repairTickets, addTicket, editTicket, deleteTicket, importTickets } = useRepairs();
+  const { auditLogs, addAuditLog, editAuditLog, deleteAuditLog, importAuditLogs } = useAuditLogs();
   const { lockedMonths, lockMonth, unlockMonth, isDateLocked, loading: lockLoading, error: lockError } = useLockedMonths();
-  const { tintingLogs, setTintingLogs } = useTintingLogs();
+  const { tintingLogs, setTintingLogs, importLogs } = useTintingLogs();
   const { formulaVersions } = useFormulaVersions();
 
   // Excel Import Modal state
@@ -130,7 +130,7 @@ export default function App() {
   };
 
   // Calculate alerts
-  const today = new Date('2026-07-26');
+  const today = new Date();
   const maintenanceAlerts = systemSets.filter(s => {
     if (!s.nextMaintenanceDue || s.status !== 'DA_LAP_DAT') return false;
     const dueDate = new Date(s.nextMaintenanceDue);
@@ -527,6 +527,18 @@ export default function App() {
     }
     if (importedPackage.printers && Array.isArray(importedPackage.printers)) {
       await importDevices('printers', importedPackage.printers);
+    }
+    if (importedPackage.systemSets && Array.isArray(importedPackage.systemSets)) {
+      await importSystemSets(importedPackage.systemSets);
+    }
+    if (importedPackage.repairTickets && Array.isArray(importedPackage.repairTickets)) {
+      await importTickets(importedPackage.repairTickets);
+    }
+    if (importedPackage.tintingLogs && Array.isArray(importedPackage.tintingLogs)) {
+      await importLogs(importedPackage.tintingLogs);
+    }
+    if (importedPackage.auditLogs && Array.isArray(importedPackage.auditLogs)) {
+      await importAuditLogs(importedPackage.auditLogs);
     }
   };
 

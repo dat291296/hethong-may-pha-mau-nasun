@@ -108,6 +108,11 @@ export default function DataBackupSyncModal({
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      alert('Tệp sao lưu vượt quá giới hạn 10 MB. Vui lòng chia nhỏ hoặc dùng bản sao lưu khác.');
+      e.target.value = '';
+      return;
+    }
 
     const reader = new FileReader();
     reader.onload = (evt) => {
@@ -117,7 +122,7 @@ export default function DataBackupSyncModal({
   };
 
   // Perform Import & Merge Data
-  const handleExecuteImport = () => {
+  const handleExecuteImport = async () => {
     if (!importJsonText.trim()) {
       alert('Vui lòng chọn tệp JSON hoặc dán chuỗi dữ liệu sao lưu.');
       return;
@@ -132,9 +137,7 @@ export default function DataBackupSyncModal({
         return;
       }
 
-      if (onImportData) {
-        onImportData(importedData);
-      }
+      if (onImportData) await onImportData(importedData);
 
       alert('Đã nhập dữ liệu từ tệp sao lưu thành công!');
       setImportJsonText('');

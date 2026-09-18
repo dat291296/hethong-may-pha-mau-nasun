@@ -186,7 +186,7 @@ export function useNpps() {
       if (navigator.onLine) {
         try {
           const { error: err } = await safeQuery(
-            (sb) => sb.from('distributors').insert(mapped),
+            (sb) => sb.from('distributors').upsert(mapped, { onConflict: 'id' }),
             'importNpps'
           );
           if (err) throw err;

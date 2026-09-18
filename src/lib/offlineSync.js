@@ -94,8 +94,23 @@ export async function syncOfflineQueue(onStatusChange) {
           error = assembleErr;
           break;
         case 'UPDATE_SYSTEM_SET':
-          const { error: updateSetErr } = await supabase.from('system_sets').update(item.payload).eq('set_code', item.payload.set_code || item.payload.setCode);
-          error = updateSetErr;
+          {
+            const targetSetCode = item.payload.targetSetCode || item.payload.set_code || item.payload.setCode;
+            const updatePayload = item.payload.data || item.payload.dbPayload || item.payload;
+            if (!targetSetCode || !updatePayload || typeof updatePayload !== 'object') {
+              throw new Error('Invalid UPDATE_SYSTEM_SET queue payload');
+            }
+            const { error: updateSetErr } = await supabase.from('system_sets').update(updatePayload).eq('set_code', targetSetCode);
+            error = updateSetErr;
+          }
+          break;
+        case 'DELETE_SYSTEM_SET':
+          {
+            const setCode = item.payload.set_code || item.payload.setCode;
+            if (!setCode) throw new Error('Invalid DELETE_SYSTEM_SET queue payload');
+            const { error: deleteSetErr } = await supabase.from('system_sets').delete().eq('set_code', setCode);
+            error = deleteSetErr;
+          }
           break;
         case 'ADD_REPAIR':
           const { error: addRepErr } = await supabase.from('repair_tickets').insert(item.payload);
@@ -118,7 +133,7 @@ export async function syncOfflineQueue(onStatusChange) {
           error = auditErr;
           break;
         default:
-          console.warn(`[OfflineSync] Unknown action type: ${item.action}`);
+          throw new Error(`Unknown offline action type: ${item.action}`);
       }
 
       if (error) {

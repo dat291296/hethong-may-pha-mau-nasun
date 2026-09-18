@@ -74,11 +74,32 @@ export function useTintingLogs() {
     return localLog;
   }, []);
 
+  const importLogs = useCallback(async (items) => {
+    const dbItems = items.map(mapLogToDb).filter(item => item.id && item.timestamp && item.color_code);
+    if (dbItems.length !== items.length) throw new Error('Every imported tinting log must include an ID, timestamp, and color code');
+
+    setTintingLogs(prev => {
+      const merged = new Map(prev.map(item => [item.id, item]));
+      dbItems.map(mapDbToLog).forEach(item => merged.set(item.id, item));
+      const updated = Array.from(merged.values());
+      cacheOfflineData('tinting_logs', updated);
+      return updated;
+    });
+
+    if (!isSupabaseConfigured || !navigator.onLine) return;
+    const { error } = await supabase
+      .from('tinting_logs')
+      .upsert(dbItems, { onConflict: 'id' });
+    if (error) throw error;
+    await fetchLogs();
+  }, [fetchLogs]);
+
   return {
     tintingLogs,
     setTintingLogs,
     loading,
     addLog,
+    importLogs,
     refetch: fetchLogs
   };
 }

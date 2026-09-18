@@ -310,7 +310,7 @@ export function useAssets() {
       if (navigator.onLine) {
         try {
           const { error } = await safeQuery(
-            sb => sb.from(cfg.table).insert(dbItems),
+            sb => sb.from(cfg.table).upsert(dbItems, { onConflict: 'id' }),
             `importDevices:${type}`
           );
           if (error) throw error;
@@ -321,6 +321,35 @@ export function useAssets() {
       } else {
         dbItems.forEach(item => enqueueOfflineAction('ADD_DEVICE', item, cfg.table));
       }
+    }
+  }, [fetchAssets]);
+
+  const importSystemSets = useCallback(async (items) => {
+    const dbItems = items.map(mapSystemSetToDb).filter(item => item.set_code);
+    if (dbItems.length !== items.length) throw new Error('Every imported system set must include a set code');
+
+    setSystemSets(prev => {
+      const merged = new Map(prev.map(item => [item.setCode || item.set_code, item]));
+      dbItems.map(mapDbToSystemSet).forEach(item => merged.set(item.setCode, item));
+      const updated = Array.from(merged.values());
+      persistAssetsLocal('system_sets', updated);
+      return updated;
+    });
+
+    if (!isSupabaseConfigured) return;
+    if (!navigator.onLine) {
+      dbItems.forEach(item => enqueueOfflineAction('ASSEMBLE_SET', item));
+      return;
+    }
+    try {
+      const { error } = await safeQuery(
+        sb => sb.from('system_sets').upsert(dbItems, { onConflict: 'set_code' }),
+        'importSystemSets'
+      );
+      if (error) throw error;
+      await fetchAssets();
+    } catch (err) {
+      dbItems.forEach(item => enqueueOfflineAction('ASSEMBLE_SET', item));
     }
   }, [fetchAssets]);
 
@@ -398,11 +427,11 @@ export function useAssets() {
         await fetchAssets();
       } catch (err) {
         console.warn('[Offline] Failed online updateSystemSet. Queueing action.', err);
-        enqueueOfflineAction('UPDATE_SYSTEM_SET', { oldSetCode, newSetCode, dbPayload });
+        enqueueOfflineAction('UPDATE_SYSTEM_SET', { targetSetCode: oldSetCode, data: dbPayload });
       }
     } else if (isSupabaseConfigured && !navigator.onLine) {
       console.log('[Offline] Network down. Enqueueing updateSystemSet.');
-      enqueueOfflineAction('UPDATE_SYSTEM_SET', { oldSetCode, newSetCode, dbPayload });
+      enqueueOfflineAction('UPDATE_SYSTEM_SET', { targetSetCode: oldSetCode, data: dbPayload });
     }
   }, [fetchAssets]);
 
@@ -459,6 +488,7 @@ export function useAssets() {
     deleteDevice,
     deleteSystemSet,
     importDevices,
+    importSystemSets,
     assembleSet,
     updateSystemSet,
     refetch: fetchAssets,

@@ -157,6 +157,35 @@ export function useRepairs() {
     }
   }, []);
 
+  const importTickets = useCallback(async (items) => {
+    const dbItems = items.map(mapRepairToDb).filter(item => item.id && item.ticket_code);
+    if (dbItems.length !== items.length) throw new Error('Every imported repair ticket must include an ID and ticket code');
+
+    setRepairTickets(prev => {
+      const merged = new Map(prev.map(item => [item.id, item]));
+      dbItems.map(mapDbToRepair).forEach(item => merged.set(item.id, item));
+      const updated = Array.from(merged.values());
+      cacheOfflineData('repair_tickets', updated);
+      return updated;
+    });
+
+    if (!isSupabaseConfigured) return;
+    if (!navigator.onLine) {
+      dbItems.forEach(item => enqueueOfflineAction('ADD_REPAIR', item));
+      return;
+    }
+    try {
+      const { error } = await safeQuery(
+        sb => sb.from('repair_tickets').upsert(dbItems, { onConflict: 'id' }),
+        'importRepairTickets'
+      );
+      if (error) throw error;
+      await fetchRepairs();
+    } catch (err) {
+      dbItems.forEach(item => enqueueOfflineAction('ADD_REPAIR', item));
+    }
+  }, [fetchRepairs]);
+
   return {
     repairTickets,
     setRepairTickets,
@@ -164,6 +193,7 @@ export function useRepairs() {
     addTicket,
     editTicket,
     deleteTicket,
+    importTickets,
     refetch: fetchRepairs
   };
 }

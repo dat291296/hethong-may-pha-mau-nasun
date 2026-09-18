@@ -227,6 +227,27 @@ export function useAuditLogs() {
     }
   }, []);
 
+  const importAuditLogs = useCallback(async (items) => {
+    const dbItems = items.map(mapAuditToDb).filter(item => item.id && item.type);
+    if (dbItems.length !== items.length) throw new Error('Every imported audit log must include an ID and type');
+
+    setAuditLogs(prev => {
+      const merged = new Map(prev.map(item => [item.id, item]));
+      items.forEach(item => merged.set(item.id, item));
+      const updated = sanitizeAndRenumberAuditLogs(Array.from(merged.values()));
+      persistAuditLogs(updated);
+      return updated;
+    });
+
+    if (!isSupabaseConfigured || !navigator.onLine) return;
+    const { error } = await safeQuery(
+      sb => sb.from('audit_logs').upsert(dbItems, { onConflict: 'id', ignoreDuplicates: true }),
+      'importAuditLogs'
+    );
+    if (error) throw error;
+    await fetchAuditLogs();
+  }, [fetchAuditLogs]);
+
   return {
     auditLogs,
     setAuditLogs,
@@ -234,6 +255,7 @@ export function useAuditLogs() {
     addAuditLog,
     editAuditLog,
     deleteAuditLog,
+    importAuditLogs,
     refetch: fetchAuditLogs
   };
 }
@@ -266,6 +288,10 @@ function mapAuditToDb(log) {
     notes:       log.notes || '',
     severity:    log.severity || 'INFO',
   };
+  if (log.timestamp) {
+    const parsedTimestamp = new Date(log.timestamp);
+    if (!Number.isNaN(parsedTimestamp.getTime())) payload.timestamp = parsedTimestamp.toISOString();
+  }
   if (log.id) {
     payload.id = log.id;
   }
