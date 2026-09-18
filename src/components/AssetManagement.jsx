@@ -17,8 +17,17 @@ import {
   Trash2,
   X,
   FileSpreadsheet,
-  Camera
+  Camera,
+  Image as ImageIcon,
+  Eye,
+  ChevronLeft,
+  ChevronRight,
+  ZoomIn,
+  ZoomOut,
+  ExternalLink,
+  Upload
 } from 'lucide-react';
+import { compressImage } from '../utils/imageCompressor.js';
 import QrScannerModal from './QrScannerModal';
 import {
   INITIAL_DISPENSERS,
@@ -125,6 +134,12 @@ export default function AssetManagement({
   const [editingSet, setEditingSet] = useState(null);
   const [editSetFormData, setEditSetFormData] = useState({});
 
+  // Fullscreen Photo Lightbox State
+  const [selectedPhotoViewer, setSelectedPhotoViewer] = useState(null); // { isOpen: true, photos: [], activeIndex: 0, title: '' }
+
+  // Set Details & Full Photo Gallery Modal State
+  const [selectedSetDetails, setSelectedSetDetails] = useState(null);
+
   // Device Edit Modal state
   const [editingDevice, setEditingDevice] = useState(null); // { category: 'dispenser'|'mixer'|'computer'|'printer', data }
   const [editFormData, setEditFormData] = useState({});
@@ -134,7 +149,106 @@ export default function AssetManagement({
   const [addDeviceCategory, setAddDeviceCategory] = useState('dispenser');
 
   // Auto scroll lock & reset position when any modal opens
-  useModalScrollLock(showAssembleModal || !!editingSet || !!editingDevice || showAddDeviceModal);
+  useModalScrollLock(showAssembleModal || !!editingSet || !!editingDevice || showAddDeviceModal || !!selectedPhotoViewer || !!selectedSetDetails);
+
+  // Keyboard navigation for Lightbox Photo Viewer
+  useEffect(() => {
+    if (!selectedPhotoViewer || !selectedPhotoViewer.isOpen) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setSelectedPhotoViewer(null);
+      } else if (e.key === 'ArrowLeft' && selectedPhotoViewer.photos.length > 1) {
+        setSelectedPhotoViewer(prev => ({
+          ...prev,
+          activeIndex: (prev.activeIndex - 1 + prev.photos.length) % prev.photos.length
+        }));
+      } else if (e.key === 'ArrowRight' && selectedPhotoViewer.photos.length > 1) {
+        setSelectedPhotoViewer(prev => ({
+          ...prev,
+          activeIndex: (prev.activeIndex + 1) % prev.photos.length
+        }));
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedPhotoViewer]);
+
+  // Helper to get all photos for a system set (combines direct installation photos with NPP photos fallback)
+  const getSetPhotos = (set) => {
+    if (!set) return [];
+    const directPhotos = Array.isArray(set.installationPhotos) ? set.installationPhotos : 
+                         (Array.isArray(set.installation_photos) ? set.installation_photos : []);
+    if (directPhotos.length > 0) return directPhotos;
+    // Fallback: Check associated NPP's photos
+    const targetNpp = npps.find(n => n.id === set.nppId);
+    if (targetNpp && Array.isArray(targetNpp.photos) && targetNpp.photos.length > 0) {
+      return targetNpp.photos;
+    }
+    return [];
+  };
+
+  // Photo handlers for editing a set
+  const handleUploadEditSetPhotos = async (e) => {
+    const files = Array.from(e.target.files || []);
+    for (const file of files) {
+      try {
+        const compressed = await compressImage(file);
+        setEditSetFormData(prev => ({
+          ...prev,
+          installationPhotos: [...(prev.installationPhotos || []), compressed]
+        }));
+      } catch (err) {
+        console.error('Lỗi nén ảnh:', err);
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setEditSetFormData(prev => ({
+            ...prev,
+            installationPhotos: [...(prev.installationPhotos || []), reader.result]
+          }));
+        };
+        reader.readAsDataURL(file);
+      }
+    }
+  };
+
+  const handleRemoveEditSetPhoto = (index) => {
+    setEditSetFormData(prev => ({
+      ...prev,
+      installationPhotos: (prev.installationPhotos || []).filter((_, i) => i !== index)
+    }));
+  };
+
+  // Photo handlers for assembling a new combo set
+  const handleUploadNewSetPhotos = async (e) => {
+    const files = Array.from(e.target.files || []);
+    for (const file of files) {
+      try {
+        const compressed = await compressImage(file);
+        setNewSetData(prev => ({
+          ...prev,
+          installationPhotos: [...(prev.installationPhotos || []), compressed]
+        }));
+      } catch (err) {
+        console.error('Lỗi nén ảnh:', err);
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setNewSetData(prev => ({
+            ...prev,
+            installationPhotos: [...(prev.installationPhotos || []), reader.result]
+          }));
+        };
+        reader.readAsDataURL(file);
+      }
+    }
+  };
+
+  const handleRemoveNewSetPhoto = (index) => {
+    setNewSetData(prev => ({
+      ...prev,
+      installationPhotos: (prev.installationPhotos || []).filter((_, i) => i !== index)
+    }));
+  };
+
   const [addFormData, setAddFormData] = useState({
     model: '',
     serial: '',
@@ -159,7 +273,8 @@ export default function AssetManagement({
     region: '',
     province: '',
     salesperson: '',
-    technician: user?.name || user?.full_name || ''
+    technician: user?.name || user?.full_name || '',
+    installationPhotos: []
   });
 
   const handleOpenAssembleModal = () => {
@@ -177,7 +292,8 @@ export default function AssetManagement({
       region: '',
       province: '',
       salesperson: '',
-      technician: defaultTech
+      technician: defaultTech,
+      installationPhotos: []
     });
     setShowAssembleModal(true);
   };
@@ -193,7 +309,7 @@ export default function AssetManagement({
     setNewSetData({
       dispenserId: '', mixerId: '', computerId: '', printerId: '',
       nppId: '', nppName: '', region: '', province: '', salesperson: '',
-      technician: ''
+      technician: '', installationPhotos: []
     });
   };
 
@@ -317,7 +433,8 @@ export default function AssetManagement({
       salesperson: set.salesperson || targetNpp?.salesperson || '',
       notes: set.notes || '',
       lastMaintenanceDate: set.lastMaintenanceDate || '',
-      nextMaintenanceDue: set.nextMaintenanceDue || ''
+      nextMaintenanceDue: set.nextMaintenanceDue || '',
+      installationPhotos: set.installationPhotos || set.installation_photos || []
     });
   };
 
@@ -870,6 +987,7 @@ export default function AssetManagement({
               <thead>
                 <tr>
                   <th>Mã Bộ Máy</th>
+                  <th style={{ minWidth: '130px' }}>Ảnh Hiện Trường</th>
                   <th>Nhà Phân Phối</th>
                   <th>Máy Chiết (Seri)</th>
                   <th>Máy Lắc (Seri)</th>
@@ -890,10 +1008,80 @@ export default function AssetManagement({
                   const prnObj = (printers || []).find(p => (set.printerId && p.id === set.printerId) || (set.printerSerial && p.serial === set.printerSerial));
                   const printerModelText = prnObj?.model || set.printerModel || 'QL700';
                   const printerSerialText = set.printerSerial || prnObj?.serial || 'N/A';
+                  const photos = getSetPhotos(set);
+                  const isDirect = (set.installationPhotos && set.installationPhotos.length > 0) || (set.installation_photos && set.installation_photos.length > 0);
 
                   return (
                     <tr key={set.id || set.setCode}>
                       <td style={{ fontWeight: '700', color: 'var(--accent-cyan)' }}>{set.setCode}</td>
+                      <td>
+                        {photos.length === 0 ? (
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-sm"
+                            style={{ fontSize: '0.72rem', padding: '3px 8px', display: 'inline-flex', alignItems: 'center', gap: '4px', opacity: 0.8 }}
+                            onClick={() => handleOpenEditSet(set)}
+                            title="Bấm để tải thêm ảnh cho bộ máy"
+                          >
+                            <Camera size={13} />
+                            <span>+ Thêm ảnh</span>
+                          </button>
+                        ) : (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                              {photos.slice(0, 2).map((imgUrl, imgIdx) => (
+                                <div
+                                  key={imgIdx}
+                                  onClick={() => setSelectedPhotoViewer({
+                                    isOpen: true,
+                                    photos: photos,
+                                    activeIndex: imgIdx,
+                                    title: `Ảnh ${imgIdx + 1}/${photos.length} - Bộ Máy [${set.setCode}] (${set.nppName || 'Kho Tổng'})`
+                                  })}
+                                  style={{
+                                    width: '42px',
+                                    height: '42px',
+                                    borderRadius: '6px',
+                                    overflow: 'hidden',
+                                    cursor: 'pointer',
+                                    border: '1.5px solid var(--border-color)',
+                                    position: 'relative',
+                                    boxShadow: '0 2px 4px rgba(0,0,0,0.25)',
+                                    flexShrink: 0
+                                  }}
+                                  title="Bấm để phóng to xem đầy đủ ảnh"
+                                >
+                                  <img
+                                    src={imgUrl}
+                                    alt={`Ảnh ${set.setCode}`}
+                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                    loading="lazy"
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                            {photos.length > 2 && (
+                              <button
+                                type="button"
+                                onClick={() => setSelectedPhotoViewer({
+                                  isOpen: true,
+                                  photos: photos,
+                                  activeIndex: 0,
+                                  title: `Bộ Máy [${set.setCode}] (${set.nppName || 'Kho Tổng'})`
+                                })}
+                                className="badge badge-info"
+                                style={{ cursor: 'pointer', fontSize: '0.7rem', padding: '3px 6px', border: 'none' }}
+                                title="Xem tất cả ảnh"
+                              >
+                                +{photos.length - 2}
+                              </button>
+                            )}
+                            {!isDirect && (
+                              <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }} title="Ảnh liên kết từ NPP">🏢</span>
+                            )}
+                          </div>
+                        )}
+                      </td>
                       <td style={{ fontWeight: '600' }}>{set.nppName || 'Kho Tổng Trung Tâm'}</td>
                       <td>
                         <div style={{ fontWeight: '600' }}>{set.dispenserModel}</div>
@@ -938,10 +1126,18 @@ export default function AssetManagement({
                       </td>
                       <td>
                         <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
-                          <button className="btn btn-secondary btn-sm" style={{ padding: '4px 8px' }} onClick={() => handleOpenEditSet(set)}>
+                          <button 
+                            className="btn btn-secondary btn-sm" 
+                            style={{ padding: '4px 8px' }} 
+                            onClick={() => setSelectedSetDetails(set)}
+                            title="Xem chi tiết bộ máy & thư viện ảnh đầy đủ"
+                          >
+                            <Eye size={14} color="var(--accent-blue)" />
+                          </button>
+                          <button className="btn btn-secondary btn-sm" style={{ padding: '4px 8px' }} onClick={() => handleOpenEditSet(set)} title="Chỉnh sửa bộ máy">
                             <Edit3 size={14} color="var(--accent-cyan)" />
                           </button>
-                          <button className="btn btn-danger btn-sm" style={{ padding: '4px 8px' }} onClick={() => handleDeleteSet(set.setCode)}>
+                          <button className="btn btn-danger btn-sm" style={{ padding: '4px 8px' }} onClick={() => handleDeleteSet(set.setCode)} title="Xóa bộ máy">
                             <Trash2 size={14} />
                           </button>
                         </div>
@@ -963,6 +1159,7 @@ export default function AssetManagement({
               const prnObj = (printers || []).find(p => (set.printerId && p.id === set.printerId) || (set.printerSerial && p.serial === set.printerSerial));
               const printerModelText = prnObj?.model || set.printerModel || 'QL700';
               const printerSerialText = set.printerSerial || prnObj?.serial || 'N/A';
+              const photos = getSetPhotos(set);
 
               return (
                 <div className="mobile-card" key={set.id || set.setCode}>
@@ -1011,8 +1208,60 @@ export default function AssetManagement({
                       <span className="mobile-card-label">Ổn Áp:</span>
                       <span className="mobile-card-value">{set.stabilizer}</span>
                     </div>
+
+                    {/* Attached Photos Strip on Mobile Card */}
+                    {photos.length > 0 && (
+                      <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px dashed var(--border-color)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                          <span style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <ImageIcon size={13} color="var(--accent-cyan)" />
+                            <span>Ảnh Hiện Trường ({photos.length})</span>
+                          </span>
+                          <button
+                            type="button"
+                            style={{ background: 'none', border: 'none', color: 'var(--accent-cyan)', fontSize: '0.725rem', cursor: 'pointer', padding: 0 }}
+                            onClick={() => setSelectedPhotoViewer({
+                              isOpen: true,
+                              photos: photos,
+                              activeIndex: 0,
+                              title: `Bộ Máy [${set.setCode}]`
+                            })}
+                          >
+                            Phóng to tất cả ↗
+                          </button>
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
+                          {photos.map((url, idx) => (
+                            <img
+                              key={idx}
+                              src={url}
+                              alt={`Ảnh hiện trường ${idx + 1}`}
+                              onClick={() => setSelectedPhotoViewer({
+                                isOpen: true,
+                                photos: photos,
+                                activeIndex: idx,
+                                title: `Ảnh ${idx + 1}/${photos.length} - [${set.setCode}]`
+                              })}
+                              style={{
+                                width: '60px',
+                                height: '60px',
+                                borderRadius: '6px',
+                                objectFit: 'cover',
+                                border: '1px solid var(--border-color)',
+                                flexShrink: 0,
+                                cursor: 'pointer'
+                              }}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                   <div className="mobile-card-actions">
+                    <button className="btn btn-secondary btn-sm" onClick={() => setSelectedSetDetails(set)}>
+                      <Eye size={14} color="var(--accent-blue)" />
+                      <span>Chi tiết & Ảnh</span>
+                    </button>
                     <button className="btn btn-secondary btn-sm" onClick={() => handleOpenEditSet(set)}>
                       <Edit3 size={14} color="var(--accent-cyan)" />
                       <span>Sửa</span>
@@ -2154,6 +2403,62 @@ export default function AssetManagement({
                             ))}
                           </select>
                         </div>
+
+                        {/* Attached Photos in Assemble Modal */}
+                        <div className="form-group" style={{ marginTop: '14px', paddingTop: '12px', borderTop: '1px solid var(--border-color)' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                            <label className="form-label" style={{ marginBottom: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <Camera size={16} color="var(--accent-cyan)" />
+                              <span>Ảnh Lắp Đặt / Hiện Trường ({newSetData.installationPhotos?.length || 0})</span>
+                            </label>
+                            <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer', fontSize: '0.75rem', padding: '3px 8px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                              <PlusCircle size={13} color="var(--accent-cyan)" />
+                              <span>Chọn ảnh</span>
+                              <input type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={handleUploadNewSetPhotos} />
+                            </label>
+                          </div>
+                          {newSetData.installationPhotos && newSetData.installationPhotos.length > 0 && (
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(75px, 1fr))', gap: '8px', marginTop: '6px' }}>
+                              {newSetData.installationPhotos.map((url, idx) => (
+                                <div key={idx} style={{ position: 'relative', width: '100%', height: '65px', borderRadius: '6px', overflow: 'hidden', border: '1px solid var(--border-color)' }}>
+                                  <img
+                                    src={url}
+                                    alt={`Ảnh ${idx + 1}`}
+                                    style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'pointer' }}
+                                    onClick={() => setSelectedPhotoViewer({
+                                      isOpen: true,
+                                      photos: newSetData.installationPhotos,
+                                      activeIndex: idx,
+                                      title: `Ảnh lắp đặt ${idx + 1}`
+                                    })}
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveNewSetPhoto(idx)}
+                                    style={{
+                                      position: 'absolute',
+                                      top: '2px',
+                                      right: '2px',
+                                      background: 'rgba(239, 68, 68, 0.9)',
+                                      color: '#fff',
+                                      border: 'none',
+                                      borderRadius: '50%',
+                                      width: '18px',
+                                      height: '18px',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      fontSize: '10px',
+                                      cursor: 'pointer'
+                                    }}
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       </>
                     );
                   })()}
@@ -2334,12 +2639,443 @@ export default function AssetManagement({
                       value={editSetFormData.notes} 
                       onChange={e => setEditSetFormData({ ...editSetFormData, notes: e.target.value })} 
                     />
-                  </div>                </div>
+                  </div>
+
+                  {/* Attached Photos in Edit Modal */}
+                  <div className="form-group" style={{ marginTop: '14px', paddingTop: '12px', borderTop: '1px solid var(--border-color)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                      <label className="form-label" style={{ marginBottom: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Camera size={16} color="var(--accent-cyan)" />
+                        <span style={{ fontWeight: '700' }}>Hình Ảnh Hiện Trường Lắp Đặt ({editSetFormData.installationPhotos?.length || 0})</span>
+                      </label>
+                      <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer', fontSize: '0.75rem', padding: '4px 10px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                        <PlusCircle size={14} color="var(--accent-cyan)" />
+                        <span>Tải thêm ảnh</span>
+                        <input type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={handleUploadEditSetPhotos} />
+                      </label>
+                    </div>
+                    {editSetFormData.installationPhotos && editSetFormData.installationPhotos.length > 0 ? (
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(85px, 1fr))', gap: '8px', marginTop: '6px' }}>
+                        {editSetFormData.installationPhotos.map((url, idx) => (
+                          <div key={idx} style={{ position: 'relative', width: '100%', height: '75px', borderRadius: '6px', overflow: 'hidden', border: '1px solid var(--border-color)' }}>
+                            <img
+                              src={url}
+                              alt={`Ảnh ${idx + 1}`}
+                              style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'pointer' }}
+                              onClick={() => setSelectedPhotoViewer({
+                                isOpen: true,
+                                photos: editSetFormData.installationPhotos,
+                                activeIndex: idx,
+                                title: `Ảnh ${idx + 1} - Bộ [${editSetFormData.setCode}]`
+                              })}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveEditSetPhoto(idx)}
+                              style={{
+                                position: 'absolute',
+                                top: '3px',
+                                right: '3px',
+                                background: 'rgba(239, 68, 68, 0.9)',
+                                color: '#fff',
+                                border: 'none',
+                                borderRadius: '50%',
+                                width: '20px',
+                                height: '20px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '11px',
+                                cursor: 'pointer',
+                                boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
+                              }}
+                              title="Xóa ảnh này"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div style={{ padding: '14px', background: 'rgba(255,255,255,0.02)', border: '1px dashed var(--border-color)', borderRadius: '8px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                        Chưa có ảnh hiện trường nào cho bộ máy này.
+                      </div>
+                    )}
+                  </div>
+                </div>
                 <div className="modal-footer">
                   <button type="button" className="btn btn-secondary" onClick={() => setEditingSet(null)}>Hủy Bỏ</button>
                   <button type="submit" className="btn btn-primary">Lưu Thay Đổi</button>
                 </div>
               </form>
+            </div>
+          </div>
+        </SafePortal>
+      )}
+
+      {/* FULLSCREEN PHOTO VIEWER / LIGHTBOX MODAL */}
+      {selectedPhotoViewer && selectedPhotoViewer.isOpen && (
+        <SafePortal>
+          <div 
+            className="modal-overlay" 
+            style={{ 
+              backgroundColor: 'rgba(0, 0, 0, 0.93)', 
+              backdropFilter: 'blur(8px)',
+              zIndex: 99999,
+              padding: '12px',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'center',
+              alignItems: 'center'
+            }}
+            onClick={() => setSelectedPhotoViewer(null)}
+          >
+            <div 
+              style={{ 
+                maxWidth: '92vw', 
+                maxHeight: '94vh', 
+                display: 'flex', 
+                flexDirection: 'column', 
+                position: 'relative',
+                width: '100%',
+                alignItems: 'center'
+              }}
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Lightbox Top Header */}
+              <div style={{
+                width: '100%',
+                maxWidth: '960px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                color: '#fff',
+                padding: '10px 16px',
+                background: 'rgba(15, 23, 42, 0.88)',
+                borderRadius: '12px 12px 0 0',
+                borderBottom: '1px solid rgba(255,255,255,0.1)'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <span style={{ fontWeight: '700', fontSize: '0.925rem' }}>
+                    📸 {selectedPhotoViewer.title || 'Xem Ảnh Đầy Đủ'}
+                  </span>
+                  {selectedPhotoViewer.photos.length > 1 && (
+                    <span className="badge badge-info" style={{ fontSize: '0.75rem' }}>
+                      {selectedPhotoViewer.activeIndex + 1} / {selectedPhotoViewer.photos.length}
+                    </span>
+                  )}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <a
+                    href={selectedPhotoViewer.photos[selectedPhotoViewer.activeIndex]}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="btn btn-secondary btn-sm"
+                    style={{ padding: '4px 10px', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                    title="Mở ảnh gốc trong tab mới"
+                  >
+                    <ExternalLink size={14} />
+                    <span>Xem ảnh gốc</span>
+                  </a>
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    style={{ padding: '4px 8px', borderRadius: '50%', width: '32px', height: '32px' }}
+                    onClick={() => setSelectedPhotoViewer(null)}
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+
+              {/* Main Image Viewport with Nav Arrows */}
+              <div style={{
+                position: 'relative',
+                width: '100%',
+                maxWidth: '960px',
+                height: '65vh',
+                minHeight: '360px',
+                background: '#090d16',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                overflow: 'hidden',
+                borderLeft: '1px solid rgba(255,255,255,0.1)',
+                borderRight: '1px solid rgba(255,255,255,0.1)'
+              }}>
+                {selectedPhotoViewer.photos.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPhotoViewer(prev => ({
+                      ...prev,
+                      activeIndex: (prev.activeIndex - 1 + prev.photos.length) % prev.photos.length
+                    }))}
+                    style={{
+                      position: 'absolute',
+                      left: '12px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'rgba(0,0,0,0.65)',
+                      color: '#fff',
+                      border: '1px solid rgba(255,255,255,0.3)',
+                      borderRadius: '50%',
+                      width: '42px',
+                      height: '42px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      zIndex: 10,
+                      transition: 'background 0.2s'
+                    }}
+                    title="Ảnh trước (Phím mũi tên trái)"
+                  >
+                    <ChevronLeft size={24} />
+                  </button>
+                )}
+
+                <img
+                  src={selectedPhotoViewer.photos[selectedPhotoViewer.activeIndex]}
+                  alt="Ảnh chi tiết"
+                  style={{
+                    maxWidth: '100%',
+                    maxHeight: '100%',
+                    objectFit: 'contain',
+                    userSelect: 'none',
+                    boxShadow: '0 4px 24px rgba(0,0,0,0.6)'
+                  }}
+                />
+
+                {selectedPhotoViewer.photos.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPhotoViewer(prev => ({
+                      ...prev,
+                      activeIndex: (prev.activeIndex + 1) % prev.photos.length
+                    }))}
+                    style={{
+                      position: 'absolute',
+                      right: '12px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'rgba(0,0,0,0.65)',
+                      color: '#fff',
+                      border: '1px solid rgba(255,255,255,0.3)',
+                      borderRadius: '50%',
+                      width: '42px',
+                      height: '42px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      zIndex: 10,
+                      transition: 'background 0.2s'
+                    }}
+                    title="Ảnh tiếp theo (Phím mũi tên phải)"
+                  >
+                    <ChevronRight size={24} />
+                  </button>
+                )}
+              </div>
+
+              {/* Bottom Thumbnail Strip */}
+              {selectedPhotoViewer.photos.length > 1 && (
+                <div style={{
+                  width: '100%',
+                  maxWidth: '960px',
+                  background: 'rgba(15, 23, 42, 0.92)',
+                  padding: '10px 14px',
+                  display: 'flex',
+                  gap: '8px',
+                  overflowX: 'auto',
+                  justifyContent: 'center',
+                  borderRadius: '0 0 12px 12px',
+                  borderTop: '1px solid rgba(255,255,255,0.1)'
+                }}>
+                  {selectedPhotoViewer.photos.map((pUrl, pIdx) => (
+                    <div
+                      key={pIdx}
+                      onClick={() => setSelectedPhotoViewer(prev => ({ ...prev, activeIndex: pIdx }))}
+                      style={{
+                        width: '56px',
+                        height: '56px',
+                        borderRadius: '6px',
+                        overflow: 'hidden',
+                        cursor: 'pointer',
+                        border: pIdx === selectedPhotoViewer.activeIndex ? '2px solid var(--accent-cyan)' : '1px solid rgba(255,255,255,0.2)',
+                        opacity: pIdx === selectedPhotoViewer.activeIndex ? 1 : 0.5,
+                        transition: 'all 0.15s ease',
+                        flexShrink: 0
+                      }}
+                    >
+                      <img src={pUrl} alt={`Thumbnail ${pIdx + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </SafePortal>
+      )}
+
+      {/* COMBO SET DETAIL & FULL PHOTO GALLERY MODAL */}
+      {selectedSetDetails && (
+        <SafePortal>
+          <div className="modal-overlay">
+            <div className="modal-content" style={{ maxWidth: '820px', width: '95%' }}>
+              <div className="modal-header">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <Camera size={22} color="var(--accent-cyan)" />
+                  <div>
+                    <h3 style={{ fontWeight: '800', margin: 0 }}>
+                      Chi Tiết & Thư Viện Ảnh Bộ Máy [{selectedSetDetails.setCode}]
+                    </h3>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                      🏢 {selectedSetDetails.nppName || 'Kho Tổng Trung Tâm'} ({selectedSetDetails.province || selectedSetDetails.region || 'Toàn Quốc'})
+                    </div>
+                  </div>
+                </div>
+                <button className="btn btn-secondary btn-sm" onClick={() => setSelectedSetDetails(null)}>✕</button>
+              </div>
+
+              <div className="modal-body" style={{ maxHeight: '78vh', overflowY: 'auto' }}>
+                {/* Machine Info Cards (4 devices) */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '10px', marginBottom: '16px' }}>
+                  <div style={{ background: 'var(--bg-main)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '10px' }}>
+                    <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)', fontWeight: '700' }}>MÁY CHIẾT</div>
+                    <div style={{ fontWeight: '700', fontSize: '0.875rem', marginTop: '2px' }}>{selectedSetDetails.dispenserModel || 'N/A'}</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--accent-cyan)', fontFamily: 'var(--font-mono)' }}>Seri: {selectedSetDetails.dispenserSerial || 'N/A'}</div>
+                  </div>
+                  <div style={{ background: 'var(--bg-main)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '10px' }}>
+                    <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)', fontWeight: '700' }}>MÁY LẮC</div>
+                    <div style={{ fontWeight: '700', fontSize: '0.875rem', marginTop: '2px' }}>{selectedSetDetails.mixerModel || 'N/A'}</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--accent-cyan)', fontFamily: 'var(--font-mono)' }}>Seri: {selectedSetDetails.mixerSerial || 'N/A'}</div>
+                  </div>
+                  <div style={{ background: 'var(--bg-main)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '10px' }}>
+                    <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)', fontWeight: '700' }}>MÁY TÍNH</div>
+                    <div style={{ fontWeight: '700', fontSize: '0.875rem', marginTop: '2px' }}>{selectedSetDetails.computerType || selectedSetDetails.pcType || 'All In One'}</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--accent-cyan)', fontFamily: 'var(--font-mono)' }}>Seri: {selectedSetDetails.computerSerial || selectedSetDetails.pcSerial || 'N/A'}</div>
+                  </div>
+                  <div style={{ background: 'var(--bg-main)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '10px' }}>
+                    <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)', fontWeight: '700' }}>MÁY IN</div>
+                    <div style={{ fontWeight: '700', fontSize: '0.875rem', marginTop: '2px' }}>{selectedSetDetails.printerModel || 'QL700'}</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--accent-cyan)', fontFamily: 'var(--font-mono)' }}>Seri: {selectedSetDetails.printerSerial || 'N/A'}</div>
+                  </div>
+                </div>
+
+                {/* Additional details bar */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '10px', background: 'rgba(255,255,255,0.02)', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-color)', marginBottom: '18px', fontSize: '0.825rem' }}>
+                  <div><strong>Trạng thái:</strong> {selectedSetDetails.status === 'DA_LAP_DAT' ? '🟢 Đã Lắp Đặt' : (selectedSetDetails.status === 'TRONG_KHO' ? '⚪ Trong Kho' : selectedSetDetails.status)}</div>
+                  <div><strong>Ổn áp:</strong> {selectedSetDetails.stabilizer || 'N/A'}</div>
+                  <div><strong>Kỹ thuật viên:</strong> {selectedSetDetails.technician || 'Chưa phân công'}</div>
+                  <div><strong>Kinh doanh:</strong> {selectedSetDetails.salesperson || 'N/A'}</div>
+                  <div><strong>Ngày lắp đặt:</strong> {selectedSetDetails.installDate || selectedSetDetails.installedDate || 'Chưa ghi nhận'}</div>
+                  <div><strong>Hạn bảo trì:</strong> {selectedSetDetails.nextMaintenanceDue || 'Chưa ghi nhận'}</div>
+                </div>
+
+                {/* Full Photos Gallery */}
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                    <h4 style={{ margin: 0, fontWeight: '800', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Camera size={18} color="var(--accent-cyan)" />
+                      <span>Thư Viện Ảnh Hiện Trường Lắp Đặt ({getSetPhotos(selectedSetDetails).length} ảnh)</span>
+                    </h4>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      style={{ fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                      onClick={() => {
+                        const set = selectedSetDetails;
+                        setSelectedSetDetails(null);
+                        handleOpenEditSet(set);
+                      }}
+                    >
+                      <Upload size={14} />
+                      <span>Quản lý / Tải thêm ảnh</span>
+                    </button>
+                  </div>
+
+                  {getSetPhotos(selectedSetDetails).length > 0 ? (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '14px' }}>
+                      {getSetPhotos(selectedSetDetails).map((url, idx) => (
+                        <div
+                          key={idx}
+                          onClick={() => setSelectedPhotoViewer({
+                            isOpen: true,
+                            photos: getSetPhotos(selectedSetDetails),
+                            activeIndex: idx,
+                            title: `Ảnh ${idx + 1}/${getSetPhotos(selectedSetDetails).length} - [${selectedSetDetails.setCode}]`
+                          })}
+                          style={{
+                            height: '130px',
+                            borderRadius: '8px',
+                            overflow: 'hidden',
+                            position: 'relative',
+                            cursor: 'pointer',
+                            border: '1.5px solid var(--border-color)',
+                            boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                            transition: 'transform 0.2s ease, border-color 0.2s ease'
+                          }}
+                          title="Bấm để phóng to xem đầy đủ ảnh"
+                        >
+                          <img
+                            src={url}
+                            alt={`Ảnh hiện trường ${idx + 1}`}
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            loading="lazy"
+                          />
+                          <div style={{
+                            position: 'absolute',
+                            bottom: 0,
+                            left: 0,
+                            right: 0,
+                            background: 'linear-gradient(transparent, rgba(0,0,0,0.85))',
+                            color: '#fff',
+                            fontSize: '0.7rem',
+                            padding: '6px 8px',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center'
+                          }}>
+                            <span>Ảnh #{idx + 1}</span>
+                            <ZoomIn size={12} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ padding: '32px', textAlign: 'center', background: 'rgba(255,255,255,0.02)', border: '1px dashed var(--border-color)', borderRadius: '8px', color: 'var(--text-muted)' }}>
+                      <Camera size={36} style={{ opacity: 0.4, marginBottom: '8px' }} />
+                      <div>Bộ máy này hiện chưa có ảnh hiện trường lắp đặt.</div>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        style={{ marginTop: '12px', fontSize: '0.75rem' }}
+                        onClick={() => {
+                          const set = selectedSetDetails;
+                          setSelectedSetDetails(null);
+                          handleOpenEditSet(set);
+                        }}
+                      >
+                        + Tải lên ảnh ngay
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="modal-footer">
+                <button className="btn btn-secondary" onClick={() => setSelectedSetDetails(null)}>Đóng</button>
+                <button 
+                  className="btn btn-primary" 
+                  onClick={() => {
+                    const set = selectedSetDetails;
+                    setSelectedSetDetails(null);
+                    handleOpenEditSet(set);
+                  }}
+                >
+                  Chỉnh Sửa Bộ Máy
+                </button>
+              </div>
             </div>
           </div>
         </SafePortal>

@@ -373,7 +373,7 @@ export default function App() {
       tinting_software: 'ColorExpert 3',
       software_version: 'Standard Stock',
       agent_status: 'Offline',
-      installation_photos: []
+      installation_photos: newCombo.installationPhotos || newCombo.installation_photos || []
     };
 
     try {

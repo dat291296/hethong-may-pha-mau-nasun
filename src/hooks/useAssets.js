@@ -534,13 +534,14 @@ function mapDbToPrinter(row) {
 }
 function mapDbToSystemSet(row) {
   return {
-    setCode: row.set_code, nppId: row.npp_id, nppName: row.npp_name, region: row.region, province: row.province,
-    status: row.status, dispenserId: row.dispenser_id, dispenserModel: row.dispenser_model, dispenserSerial: row.dispenser_serial,
-    mixerId: row.mixer_id, mixerModel: row.mixer_model, mixerSerial: row.mixer_serial,
-    computerId: row.computer_id, computerType: row.computer_type, computerSerial: row.computer_serial, pcType: row.computer_type, pcSerial: row.computer_serial,
-    printerId: row.printer_id, printerSerial: row.printer_serial, printerModel: 'QL700',
-    installDate: row.install_date, lastMaintenanceDate: row.last_maintenance_date, nextMaintenanceDue: row.next_maintenance_due,
-    technician: row.technician, salesperson: row.salesperson || row.sales_person || '', notes: row.notes,
+    setCode: row.set_code || row.setCode, nppId: row.npp_id || row.nppId, nppName: row.npp_name || row.nppName, region: row.region, province: row.province,
+    status: row.status, dispenserId: row.dispenser_id || row.dispenserId, dispenserModel: row.dispenser_model || row.dispenserModel, dispenserSerial: row.dispenser_serial || row.dispenserSerial,
+    mixerId: row.mixer_id || row.mixerId, mixerModel: row.mixer_model || row.mixerModel, mixerSerial: row.mixer_serial || row.mixerSerial,
+    computerId: row.computer_id || row.computerId, computerType: row.computer_type || row.computerType, computerSerial: row.computer_serial || row.computerSerial, pcType: row.computer_type || row.pcType, pcSerial: row.computer_serial || row.pcSerial,
+    printerId: row.printer_id || row.printerId, printerSerial: row.printer_serial || row.printerSerial, printerModel: 'QL700',
+    installDate: row.install_date || row.installDate || row.installedDate, lastMaintenanceDate: row.last_maintenance_date || row.lastMaintenanceDate, nextMaintenanceDue: row.next_maintenance_due || row.nextMaintenanceDue,
+    technician: row.technician, salesperson: row.salesperson || row.sales_person || '', stabilizer: row.stabilizer || '', notes: row.notes || '',
+    installationPhotos: row.installation_photos || row.installationPhotos || [],
   };
 }
 
