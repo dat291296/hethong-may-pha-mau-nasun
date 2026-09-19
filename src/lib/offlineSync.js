@@ -132,6 +132,19 @@ export async function syncOfflineQueue(onStatusChange) {
           const { error: auditErr } = await supabase.from('audit_logs').insert(item.payload);
           error = auditErr;
           break;
+        case 'UPDATE_AUDIT_LOG':
+          {
+            const { id, ...auditUpdate } = item.payload;
+            const { error: updateAuditErr } = await supabase.from('audit_logs').update(auditUpdate).eq('id', id);
+            error = updateAuditErr;
+          }
+          break;
+        case 'DELETE_AUDIT_LOG':
+          {
+            const { error: deleteAuditErr } = await supabase.from('audit_logs').delete().eq('id', item.payload.id);
+            error = deleteAuditErr;
+          }
+          break;
         default:
           throw new Error(`Unknown offline action type: ${item.action}`);
       }

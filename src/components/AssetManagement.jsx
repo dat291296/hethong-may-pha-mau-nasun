@@ -438,17 +438,27 @@ export default function AssetManagement({
     });
   };
 
-  const handleEditSetSubmit = (e) => {
+  const handleEditSetSubmit = async (e) => {
     e.preventDefault();
     if (!editingSet) return;
-    onEditSet(editingSet.setCode, editSetFormData);
-    alert('✅ Đã lưu thông tin bộ máy thành công!');
-    setEditingSet(null);
+    try {
+      await onEditSet(editingSet.setCode, editSetFormData);
+      alert('✅ Đã lưu thông tin bộ máy thành công!');
+      setEditingSet(null);
+    } catch (err) {
+      console.error('Lỗi khi lưu bộ máy:', err);
+      alert('⚠️ Không thể lưu bộ máy. Dữ liệu vẫn được giữ để đồng bộ lại.');
+    }
   };
 
-  const handleDeleteSet = (setCode) => {
+  const handleDeleteSet = async (setCode) => {
     if (window.confirm(`Bạn có chắc chắn muốn xóa bộ máy [${setCode}] không? Các thiết bị liên kết sẽ tự động được giải phóng và đưa lại về kho lẻ.`)) {
-      onDeleteSet(setCode);
+      try {
+        await onDeleteSet(setCode);
+      } catch (err) {
+        console.error('Lỗi khi xóa bộ máy:', err);
+        alert('⚠️ Không thể xóa bộ máy. Dữ liệu vẫn được giữ để đồng bộ lại.');
+      }
     }
   };
 

@@ -7,7 +7,7 @@ import {
   INITIAL_PRINTERS,
   INITIAL_SYSTEM_SETS,
 } from '../data/mockData.js';
-import { cacheOfflineData, getCachedOfflineData, enqueueOfflineAction } from '../lib/offlineSync.js';
+import { cacheOfflineData, getCachedOfflineData, enqueueOfflineAction, getOfflineQueue } from '../lib/offlineSync.js';
 
 /**
  * useAssets – unified hook for all physical equipment:
@@ -47,6 +47,10 @@ function persistAssetsLocal(key, data) {
   cacheOfflineData(key, data);
 }
 
+function isPendingAssetAction(item) {
+  return ['ADD_DEVICE', 'EDIT_DEVICE', 'DELETE_DEVICE', 'ASSEMBLE_SET', 'UPDATE_SYSTEM_SET', 'DELETE_SYSTEM_SET'].includes(item.action);
+}
+
 /**
  * useAssets – unified hook for all physical equipment:
  * Dispensers, Mixers, Computers, Printers, System Sets.
@@ -82,6 +86,11 @@ export function useAssets() {
   // ── Fetch all asset tables ────────────────────────────────────────────────
   const fetchAssets = useCallback(async () => {
     if (!isSupabaseConfigured) return;
+    const pendingQueue = await getOfflineQueue();
+    if (pendingQueue.some(isPendingAssetAction)) {
+      console.info('[useAssets] Keeping local asset cache while changes are waiting to sync.');
+      return;
+    }
     setLoading(true);
     const [dRes, mRes, cRes, pRes, sRes] = await Promise.all([
       safeQuery(sb => sb.from('dispensers').select('*'), 'fetchDispensers'),
@@ -389,7 +398,7 @@ export function useAssets() {
     const isCodeChanged = newSetCode !== oldSetCode;
 
     setSystemSets(prev => {
-      const updated = prev.map(s => (s.setCode === oldSetCode || s.set_code === oldSetCode) ? { ...s, ...updates, setCode: newSetCode, set_code: newSetCode } : s);
+      const updated = prev.map(s => (s.setCode === oldSetCode || s.set_code === oldSetCode) ? { ...s, ...updates, setCode: newSetCode, set_code: newSetCode, isUpdated: true } : s);
       persistAssetsLocal('system_sets', updated);
       return updated;
     });
@@ -439,25 +448,19 @@ export function useAssets() {
   const deleteSystemSet = useCallback(async (setCode) => {
     let setObj = null;
     setSystemSets(prev => {
-      setObj = prev.find(s => s.setCode === setCode);
-      const filtered = prev.filter(s => s.setCode !== setCode);
+      setObj = prev.find(s => (s.setCode || s.set_code) === setCode);
+      const filtered = prev.filter(s => (s.setCode || s.set_code) !== setCode);
       persistAssetsLocal('system_sets', filtered);
       return filtered;
     });
 
     if (setObj) {
-      if (setObj.dispenserId) {
-        editDevice('dispensers', setObj.dispenserId, { is_assigned: false, set_code: null });
-      }
-      if (setObj.mixerId) {
-        editDevice('mixers', setObj.mixerId, { is_assigned: false, set_code: null });
-      }
-      if (setObj.computerId) {
-        editDevice('computers', setObj.computerId, { is_assigned: false, set_code: null });
-      }
-      if (setObj.printerId) {
-        editDevice('printers', setObj.printerId, { is_assigned: false, set_code: null });
-      }
+      await Promise.all([
+        setObj.dispenserId && editDevice('dispensers', setObj.dispenserId, { is_assigned: false, set_code: null }),
+        setObj.mixerId && editDevice('mixers', setObj.mixerId, { is_assigned: false, set_code: null }),
+        setObj.computerId && editDevice('computers', setObj.computerId, { is_assigned: false, set_code: null }),
+        setObj.printerId && editDevice('printers', setObj.printerId, { is_assigned: false, set_code: null })
+      ].filter(Boolean));
     }
 
     if (isSupabaseConfigured && navigator.onLine) {

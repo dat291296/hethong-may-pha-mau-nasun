@@ -225,7 +225,16 @@ export default function TechHandbook({ onSelectErrorForRepair }) {
   };
 
   // Field Tips State
-  const [fieldTips, setFieldTips] = useState(FIELD_TIPS_DATA);
+  const [fieldTips, setFieldTips] = useState(() => {
+    try {
+      const saved = localStorage.getItem('tech_handbook_field_tips');
+      const parsed = saved ? JSON.parse(saved) : null;
+      return Array.isArray(parsed) ? parsed : FIELD_TIPS_DATA;
+    } catch (err) {
+      console.warn('Error loading field tips from storage:', err);
+      return FIELD_TIPS_DATA;
+    }
+  });
   const [showAddTipModal, setShowAddTipModal] = useState(false);
   const [newTip, setNewTip] = useState({
     title: '',
@@ -236,6 +245,14 @@ export default function TechHandbook({ onSelectErrorForRepair }) {
 
   // Expandable SOPs state
   const [expandedSopId, setExpandedSopId] = useState('SOP-01');
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('tech_handbook_field_tips', JSON.stringify(fieldTips));
+    } catch (err) {
+      console.warn('Error saving field tips to storage:', err);
+    }
+  }, [fieldTips]);
 
 
 

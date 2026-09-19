@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase, isSupabaseConfigured, safeQuery } from '../lib/supabase.js';
 import { INITIAL_NPPS } from '../data/mockData.js';
-import { cacheOfflineData, getCachedOfflineData, enqueueOfflineAction } from '../lib/offlineSync.js';
+import { cacheOfflineData, getCachedOfflineData, enqueueOfflineAction, getOfflineQueue } from '../lib/offlineSync.js';
 
 /**
  * useNpps – NPP (Nhà Phân Phối) data hook.
@@ -28,6 +28,11 @@ export function useNpps() {
     if (!isSupabaseConfigured) {
       const cached = await getCachedOfflineData('npps', null);
       if (cached && cached.length > 0) persistNpps(cached, setNpps);
+      return;
+    }
+    const pendingQueue = await getOfflineQueue();
+    if (pendingQueue.some(item => ['ADD_NPP', 'EDIT_NPP', 'DELETE_NPP'].includes(item.action))) {
+      console.info('[useNpps] Keeping local NPP cache while changes are waiting to sync.');
       return;
     }
     setLoading(true);
@@ -108,7 +113,7 @@ export function useNpps() {
   const editNpp = useCallback(async (id, updates) => {
     // Update local state immediately
     setNpps(prev => {
-      const updated = prev.map(n => n.id === id ? { ...n, ...updates } : n);
+      const updated = prev.map(n => n.id === id ? { ...n, ...updates, isUpdated: true } : n);
       persistNpps(updated, setNpps, false);
       return updated;
     });

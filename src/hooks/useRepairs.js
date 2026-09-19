@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase, isSupabaseConfigured, safeQuery } from '../lib/supabase.js';
 import { INITIAL_REPAIR_TICKETS } from '../data/mockData.js';
-import { cacheOfflineData, getCachedOfflineData, enqueueOfflineAction } from '../lib/offlineSync.js';
+import { cacheOfflineData, getCachedOfflineData, enqueueOfflineAction, getOfflineQueue } from '../lib/offlineSync.js';
 
 export function filterRepairTicketsById(tickets, idToRemove) {
   return tickets.filter(ticket => String(ticket.id) !== String(idToRemove));
@@ -52,6 +52,11 @@ export function useRepairs() {
 
   const fetchRepairs = useCallback(async () => {
     if (!isSupabaseConfigured) return;
+    const pendingQueue = await getOfflineQueue();
+    if (pendingQueue.some(item => ['ADD_REPAIR', 'EDIT_REPAIR', 'DELETE_REPAIR'].includes(item.action))) {
+      console.info('[useRepairs] Keeping local repair cache while changes are waiting to sync.');
+      return;
+    }
     setLoading(true);
     const { data, error } = await safeQuery(
       sb => sb.from('repair_tickets').select('*').order('date', { ascending: false }),
