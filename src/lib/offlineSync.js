@@ -78,12 +78,16 @@ export async function syncOfflineQueue(onStatusChange) {
           error = editNppErr;
           break;
         case 'ADD_DEVICE':
-          const { error: addDevErr } = await supabase.from(item.category).insert(item.payload);
+          const { error: addDevErr } = await supabase.from(item.category).insert(normalizeDevicePayload(item.payload));
           error = addDevErr;
           break;
         case 'EDIT_DEVICE':
-          const { error: editDevErr } = await supabase.from(item.category).update(item.payload).eq('id', item.payload.id);
-          error = editDevErr;
+          {
+            const devicePayload = normalizeDevicePayload(item.payload);
+            const { id, ...deviceUpdates } = devicePayload;
+            const { error: editDevErr } = await supabase.from(item.category).update(deviceUpdates).eq('id', id);
+            error = editDevErr;
+          }
           break;
         case 'DELETE_DEVICE':
           const { error: delDevErr } = await supabase.from(item.category).delete().eq('id', item.payload.id);
@@ -181,4 +185,11 @@ export function cacheOfflineData(key, data) {
  */
 export async function getCachedOfflineData(key, fallback = []) {
   return await getCache(key, fallback);
+}
+
+function normalizeDevicePayload(payload) {
+  const { isAssigned, setCode, createdAt, updatedAt, isNew, isUpdated, sourceId, ...dbPayload } = payload || {};
+  if (isAssigned !== undefined) dbPayload.is_assigned = Boolean(isAssigned);
+  if (setCode !== undefined) dbPayload.set_code = setCode || null;
+  return dbPayload;
 }

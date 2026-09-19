@@ -316,7 +316,7 @@ export function useAssets() {
     });
 
     if (isSupabaseConfigured) {
-      const dbItems = items.map(mapDeviceToDb);
+      const dbItems = items.map(item => mapDeviceToDb(item, cfg.table));
       if (navigator.onLine) {
         try {
           const { error } = await safeQuery(
