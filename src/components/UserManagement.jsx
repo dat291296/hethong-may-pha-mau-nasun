@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase.js';
 import { useAuth } from '../context/AuthContext.jsx';
-import { UserCheck, ShieldAlert, Trash2, Key, RefreshCw, Award, Lock, Unlock, Calendar } from 'lucide-react';
+import { UserCheck, ShieldAlert, Trash2, Key, RefreshCw, Award, Lock, Unlock, Calendar, ExternalLink } from 'lucide-react';
 
 const MOCK_PROFILES = [
   { id: 'dev-admin', email: 'dat291219962.hust@gmail.com', full_name: 'Nguyễn Tiến Đạt (Admin)', role: 'admin', managed_region: 'Toàn Quốc', created_at: '2026-07-28' },
   { id: 'dev-qc', email: 'qc@dev.local', full_name: 'Trần Minh Hoàng (QC)', role: 'qc', managed_region: 'Miền Bắc', created_at: '2026-07-30' },
   { id: 'dev-viewer', email: 'viewer@dev.local', full_name: 'Đại Lý Sơn Nasun Hải Phòng', role: 'viewer', managed_region: 'Miền Bắc', created_at: '2026-07-31' }
 ];
+
+const keycloakAccountUrl = import.meta.env.VITE_KEYCLOAK_ACCOUNT_URL;
 
 export default function UserManagement({
   lockedMonths = [],
@@ -192,6 +194,17 @@ export default function UserManagement({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      {keycloakAccountUrl && (
+        <div className="glass-panel" style={{ padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap', borderColor: 'rgba(6, 182, 212, 0.3)' }}>
+          <div>
+            <div style={{ color: 'var(--accent-cyan)', fontWeight: 800, fontSize: '0.9rem' }}>Tài khoản đăng nhập được quản lý bởi Keycloak</div>
+            <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '3px' }}>Đổi mật khẩu, cập nhật hồ sơ hoặc thiết lập xác thực hai lớp trong cổng tài khoản.</div>
+          </div>
+          <a href={keycloakAccountUrl} target="_blank" rel="noreferrer" className="btn btn-secondary" style={{ whiteSpace: 'nowrap' }}>
+            <Key size={16} /> Quản lý tài khoản <ExternalLink size={14} />
+          </a>
+        </div>
+      )}
       
       {/* Administrative sub-tabs */}
       <div style={{ display: 'flex', gap: '10px', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px', flexWrap: 'wrap' }}>
