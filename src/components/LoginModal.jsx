@@ -165,7 +165,6 @@ export default function LoginModal() {
           <div className="auth-heading">
             <div className="auth-heading-icon"><ShieldCheck size={23} /></div>
             <div>
-              <p className="auth-eyebrow">KHU VỰC BẢO MẬT</p>
               <h2>{mode === 'login' ? 'Đăng nhập hệ thống' : mode === 'signup' ? 'Tạo tài khoản mới' : 'Khôi phục mật khẩu'}</h2>
             </div>
           </div>

@@ -217,10 +217,6 @@ export default function Sidebar({ activeTab, setActiveTab, maintenanceCount, pen
 
       {/* Navigation Links */}
       <nav style={{ padding: '16px 12px', flex: 1, overflowY: 'auto' }}>
-        <div style={{ fontSize: '0.7rem', fontWeight: '700', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', padding: '0 12px 10px 12px' }}>
-          Quản Lý Hệ Thống
-        </div>
-
         {/* Dashboard Standalone Item */}
         <button
           onClick={() => {
