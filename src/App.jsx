@@ -37,9 +37,23 @@ import { useFormulaVersions } from './hooks/useFormulaVersions.js';
 
 export default function App() {
   const { user, isDevMode } = useAuth();
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState(() => {
+    try {
+      return window.localStorage.getItem('nasun_active_tab') || 'dashboard';
+    } catch {
+      return 'dashboard';
+    }
+  });
   const [globalSearch, setGlobalSearch] = useState('');
   const [qcUsers, setQcUsers] = useState([]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('nasun_active_tab', activeTab);
+    } catch (err) {
+      console.warn('[App] Failed to save active tab:', err);
+    }
+  }, [activeTab]);
 
   useEffect(() => {
     async function loadQcProfiles() {
@@ -245,9 +259,11 @@ export default function App() {
     try {
       const pluralCat = category === 'computer' ? 'computers' : category === 'dispenser' ? 'dispensers' : category === 'mixer' ? 'mixers' : 'printers';
       const deviceList = category === 'dispenser' ? dispensers : category === 'mixer' ? mixers : category === 'computer' ? computers : printers;
-      const oldDevice = deviceList.find(d => d.id === updatedData.id);
+      const sourceId = updatedData.sourceId || updatedData.id;
+      const { sourceId: ignoredSourceId, ...deviceUpdates } = updatedData;
+      const oldDevice = deviceList.find(d => d.id === sourceId);
 
-      await editDevice(pluralCat, updatedData.id, updatedData);
+      await editDevice(pluralCat, sourceId, deviceUpdates);
 
       const oldSetCode = oldDevice?.setCode;
       const newSetCode = updatedData.isAssigned ? updatedData.setCode : null;

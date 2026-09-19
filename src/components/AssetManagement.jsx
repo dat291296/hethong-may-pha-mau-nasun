@@ -97,7 +97,21 @@ export default function AssetManagement({
     loadQcProfiles();
   }, [user]);
 
-  const [activeSubTab, setActiveSubTab] = useState('comboSets'); // comboSets | dispensers | mixers | computers | printers
+  const [activeSubTab, setActiveSubTab] = useState(() => {
+    try {
+      return localStorage.getItem('nasun_assets_subtab') || 'comboSets';
+    } catch {
+      return 'comboSets';
+    }
+  }); // comboSets | dispensers | mixers | computers | printers
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('nasun_assets_subtab', activeSubTab);
+    } catch (err) {
+      console.warn('[AssetManagement] Failed to save active sub-tab:', err);
+    }
+  }, [activeSubTab]);
   const [searchTerm, setSearchTerm] = useState('');
   const [modelFilter, setModelFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
@@ -338,6 +352,7 @@ export default function AssetManagement({
       : (data.type || '');
     setEditFormData({
       ...data,
+      sourceId: data.id || '',
       type: cleanType,
       model: category === 'computer' ? cleanType : (data.model || ''),
       id: data.id || '',
@@ -1316,7 +1331,6 @@ export default function AssetManagement({
                     <td>
                       <span style={{ fontWeight: '700' }}>{item.id}</span>
                       {item.isNew && <span className="badge badge-success" style={{ fontSize: '0.65rem', marginLeft: '6px' }}>🆕 Mới</span>}
-                      {item.isUpdated && <span className="badge badge-info" style={{ fontSize: '0.65rem', marginLeft: '6px' }}>✏️ Đã sửa</span>}
                     </td>
                     <td style={{ fontWeight: '700' }}>{item.model}</td>
                     <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent-cyan)' }}>{item.serial}</td>
@@ -1366,7 +1380,6 @@ export default function AssetManagement({
                     <span className="mobile-card-title">
                       {item.model}
                       {item.isNew && <span className="badge badge-success" style={{ fontSize: '0.65rem', marginLeft: '6px' }}>🆕 Mới</span>}
-                      {item.isUpdated && <span className="badge badge-info" style={{ fontSize: '0.65rem', marginLeft: '6px' }}>✏️ Đã sửa</span>}
                     </span>
                     <div className="mobile-card-subtitle">Seri: {item.serial}</div>
                   </div>
@@ -1438,7 +1451,6 @@ export default function AssetManagement({
                     <td>
                       <span style={{ fontWeight: '700' }}>{item.id}</span>
                       {item.isNew && <span className="badge badge-success" style={{ fontSize: '0.65rem', marginLeft: '6px' }}>🆕 Mới</span>}
-                      {item.isUpdated && <span className="badge badge-info" style={{ fontSize: '0.65rem', marginLeft: '6px' }}>✏️ Đã sửa</span>}
                     </td>
                     <td style={{ fontWeight: '700' }}>{item.model}</td>
                     <td>{item.type}</td>
@@ -1483,7 +1495,6 @@ export default function AssetManagement({
                     <span className="mobile-card-title">
                       {item.model}
                       {item.isNew && <span className="badge badge-success" style={{ fontSize: '0.65rem', marginLeft: '6px' }}>🆕 Mới</span>}
-                      {item.isUpdated && <span className="badge badge-info" style={{ fontSize: '0.65rem', marginLeft: '6px' }}>✏️ Đã sửa</span>}
                     </span>
                     <div className="mobile-card-subtitle">Seri: {item.serial}</div>
                   </div>
@@ -1561,7 +1572,6 @@ export default function AssetManagement({
                     <td>
                       <span style={{ fontWeight: '700' }}>{item.id}</span>
                       {item.isNew && <span className="badge badge-success" style={{ fontSize: '0.65rem', marginLeft: '6px' }}>🆕 Mới</span>}
-                      {item.isUpdated && <span className="badge badge-info" style={{ fontSize: '0.65rem', marginLeft: '6px' }}>✏️ Đã sửa</span>}
                     </td>
                     <td style={{ fontWeight: '700' }}>{item.type === 'Case' ? 'Case' : 'All In One'}</td>
                     <td>{item.os}</td>
@@ -1637,7 +1647,6 @@ export default function AssetManagement({
                     <span className="mobile-card-title">
                       {item.type === 'Case' ? 'Case' : 'All In One'}
                       {item.isNew && <span className="badge badge-success" style={{ fontSize: '0.65rem', marginLeft: '6px' }}>🆕 Mới</span>}
-                      {item.isUpdated && <span className="badge badge-info" style={{ fontSize: '0.65rem', marginLeft: '6px' }}>✏️ Đã sửa</span>}
                     </span>
                     <div style={{ fontSize: '0.75rem', color: 'var(--accent-purple)' }}>HĐH: {item.os}</div>
                   </div>
@@ -1726,7 +1735,6 @@ export default function AssetManagement({
                     <td>
                       <span style={{ fontWeight: '700' }}>{item.id}</span>
                       {item.isNew && <span className="badge badge-success" style={{ fontSize: '0.65rem', marginLeft: '6px' }}>🆕 Mới</span>}
-                      {item.isUpdated && <span className="badge badge-info" style={{ fontSize: '0.65rem', marginLeft: '6px' }}>✏️ Đã sửa</span>}
                     </td>
                     <td style={{ fontWeight: '700' }}>{item.model}</td>
                     <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent-cyan)' }}>{item.serial}</td>
@@ -1771,7 +1779,6 @@ export default function AssetManagement({
                     <span className="mobile-card-title">
                       {item.model}
                       {item.isNew && <span className="badge badge-success" style={{ fontSize: '0.65rem', marginLeft: '6px' }}>🆕 Mới</span>}
-                      {item.isUpdated && <span className="badge badge-info" style={{ fontSize: '0.65rem', marginLeft: '6px' }}>✏️ Đã sửa</span>}
                     </span>
                     <div className="mobile-card-subtitle">Seri: {item.serial}</div>
                   </div>
@@ -2043,7 +2050,8 @@ export default function AssetManagement({
                         className="form-input"
                         required
                         value={editFormData.id || ''}
-                        onChange={e => setEditFormData({ ...editFormData, id: e.target.value })}
+                        readOnly
+                        aria-readonly="true"
                       />
                     </div>
 

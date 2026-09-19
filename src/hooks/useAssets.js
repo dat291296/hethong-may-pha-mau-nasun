@@ -219,7 +219,7 @@ export function useAssets() {
     const targetTable = cfg ? cfg.table : category;
     const singularCat = cfg ? cfg.singular : category;
 
-    const dbUpdates = mapDeviceToDb({ ...updates, id }, singularCat);
+    const { id: _ignoredId, ...dbUpdates } = mapDeviceToDb({ ...updates, id }, singularCat);
     const appUpdates = { ...updates, id, isUpdated: true, updatedAt: new Date().toISOString() };
 
     if ('is_assigned' in updates) appUpdates.isAssigned = updates.is_assigned;
@@ -235,18 +235,19 @@ export function useAssets() {
 
     if (isSupabaseConfigured && navigator.onLine) {
       try {
-        const { error } = await safeQuery(
-          sb => sb.from(targetTable).update(dbUpdates).eq('id', id),
+        const { data, error } = await safeQuery(
+          sb => sb.from(targetTable).update(dbUpdates).eq('id', id).select('id'),
           `editDevice:${targetTable}`
         );
         if (error) throw error;
+        if (!data || data.length === 0) throw new Error('Không có quyền cập nhật hoặc thiết bị không tồn tại trên Supabase');
       } catch (err) {
         console.warn(`[Offline] Failed online editDevice for ${targetTable}. Queueing action.`, err);
-        enqueueOfflineAction('EDIT_DEVICE', dbUpdates, targetTable);
+        await enqueueOfflineAction('EDIT_DEVICE', { id, ...dbUpdates }, targetTable);
       }
     } else if (isSupabaseConfigured && !navigator.onLine) {
       console.log(`[Offline] Network down. Enqueueing editDevice for ${targetTable}.`);
-      enqueueOfflineAction('EDIT_DEVICE', dbUpdates, targetTable);
+      await enqueueOfflineAction('EDIT_DEVICE', { id, ...dbUpdates }, targetTable);
     }
   }, []);
 
