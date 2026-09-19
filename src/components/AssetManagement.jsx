@@ -36,6 +36,7 @@ import {
   INITIAL_PRINTERS
 } from '../data/mockData';
 import { useModalScrollLock } from '../hooks/useModalScrollLock.js';
+import { exportExcel } from '../utils/excelExport.js';
 
 export default function AssetManagement({
   systemSets,
@@ -55,6 +56,16 @@ export default function AssetManagement({
   onDeleteSet
 }) {
   const { user } = useAuth();
+  const exportCurrentInventory = () => {
+    const config = {
+      dispensers: { rows: dispensers, name: 'Kho_May_Chiet', columns: [{ key: 'id', label: 'Mã QL' }, { key: 'model', label: 'Model' }, { key: 'serial', label: 'Số Seri' }, { key: 'status', label: 'Tình Trạng' }, { key: 'setCode', label: 'Mã Bộ Máy' }] },
+      mixers: { rows: mixers, name: 'Kho_May_Lac', columns: [{ key: 'id', label: 'Mã QL' }, { key: 'model', label: 'Model' }, { key: 'type', label: 'Loại Máy Lắc' }, { key: 'serial', label: 'Số Seri' }, { key: 'status', label: 'Tình Trạng' }, { key: 'setCode', label: 'Mã Bộ Máy' }] },
+      computers: { rows: computers, name: 'Kho_May_Tinh', columns: [{ key: 'id', label: 'Mã QL' }, { key: 'type', label: 'Loại Máy' }, { key: 'os', label: 'Hệ Điều Hành' }, { key: 'specs', label: 'Cấu Hình' }, { key: 'network', label: 'Kết Nối Mạng' }, { key: 'status', label: 'Tình Trạng' }, { key: 'setCode', label: 'Mã Bộ Máy' }] },
+      printers: { rows: printers, name: 'Kho_May_In', columns: [{ key: 'id', label: 'Mã QL' }, { key: 'model', label: 'Model' }, { key: 'serial', label: 'Số Seri' }, { key: 'connection', label: 'Kết Nối' }, { key: 'status', label: 'Tình Trạng' }, { key: 'setCode', label: 'Mã Bộ Máy' }] },
+      comboSets: { rows: systemSets, name: 'Bo_May_Pha_Mau', columns: [{ key: 'setCode', label: 'Mã Bộ Máy' }, { key: 'nppName', label: 'Nhà Phân Phối' }, { key: 'region', label: 'Khu Vực' }, { key: 'status', label: 'Trạng Thái' }, { key: 'dispenserModel', label: 'Máy Chiết' }, { key: 'dispenserSerial', label: 'Seri Máy Chiết' }, { key: 'mixerModel', label: 'Máy Lắc' }, { key: 'mixerSerial', label: 'Seri Máy Lắc' }, { key: 'computerType', label: 'Máy Tính' }, { key: 'printerSerial', label: 'Seri Máy In' }] }
+    }[activeSubTab];
+    exportExcel(config.rows, config.columns, config.name, 'Data');
+  };
   const [qcUsers, setQcUsers] = useState([]);
 
   // Fetch QC and Admin user profiles for technician selection
@@ -912,6 +923,7 @@ export default function AssetManagement({
         <div style={{ display: 'flex', gap: '10px' }}>
           {activeSubTab !== 'comboSets' && (
             <>
+              <button className="btn btn-secondary btn-sm" onClick={exportCurrentInventory}><FileSpreadsheet size={16} /><span>📤 Xuất Excel</span></button>
               <button className="btn btn-secondary btn-sm" style={{ borderColor: 'rgba(16,185,129,0.4)', color: 'var(--accent-emerald)' }}
                 onClick={() => {
                   const typeMap = { dispensers: 'dispenser', mixers: 'mixer', computers: 'computer', printers: 'printer' };
@@ -929,10 +941,7 @@ export default function AssetManagement({
           )}
 
           {activeSubTab === 'comboSets' && (
-            <button className="btn btn-primary" onClick={handleOpenAssembleModal}>
-              <PlusCircle size={18} />
-              <span>+ Ghép Bộ Thiết Bị Mới (Combo)</span>
-            </button>
+            <><button className="btn btn-secondary btn-sm" onClick={exportCurrentInventory}><FileSpreadsheet size={16} /><span>📤 Xuất Bộ Máy</span></button><button className="btn btn-primary" onClick={handleOpenAssembleModal}><PlusCircle size={18} /><span>+ Ghép Bộ Thiết Bị Mới (Combo)</span></button></>
           )}
         </div>
       </div>
