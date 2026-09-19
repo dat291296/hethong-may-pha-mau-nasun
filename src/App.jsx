@@ -258,7 +258,7 @@ export default function App() {
           const updates = {};
           if (category === 'dispenser') { updates.dispenserId = null; updates.dispenserSerial = null; updates.dispenserModel = null; }
           if (category === 'mixer') { updates.mixerId = null; updates.mixerSerial = null; updates.mixerModel = null; }
-          if (category === 'computer') { updates.computerId = null; updates.computerSerial = null; updates.computerType = null; updates.pcType = null; updates.pcOs = null; }
+          if (category === 'computer') { updates.computerId = null; updates.computerType = null; updates.pcType = null; updates.pcOs = null; }
           if (category === 'printer') { updates.printerId = null; updates.printerSerial = null; }
           await updateSystemSet(oldSetCode, updates);
         }
@@ -278,7 +278,6 @@ export default function App() {
             updates.mixerModel = updatedData.model;
           } else if (category === 'computer') {
             updates.computerId = updatedData.id;
-            updates.computerSerial = updatedData.serial || '—';
             updates.computerType = updatedData.type;
             updates.pcType = updatedData.type;
             updates.pcOs = updatedData.os;
@@ -312,7 +311,7 @@ export default function App() {
           } else if (category === 'mixer' && targetSet.mixerId === deviceId) {
             updates.mixerId = null; updates.mixerSerial = null; updates.mixerModel = null;
           } else if (category === 'computer' && targetSet.computerId === deviceId) {
-            updates.computerId = null; updates.computerSerial = null; updates.computerType = null;
+            updates.computerId = null; updates.computerType = null;
           } else if (category === 'printer' && targetSet.printerId === deviceId) {
             updates.printerId = null; updates.printerSerial = null;
           }
@@ -357,7 +356,6 @@ export default function App() {
       mixer_serial: mix?.serial || 'N/A',
       mixer_model: mix?.model || 'N/A',
       computer_id: pc?.id || null,
-      computer_serial: pc?.serial || 'N/A',
       computer_type: pc?.type || 'N/A',
       printer_id: prn?.id || null,
       printer_serial: prn?.serial || 'N/A',

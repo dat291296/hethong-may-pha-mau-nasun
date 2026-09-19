@@ -302,7 +302,9 @@ export default function DeviceRepairProcessing({
       ...prev,
       productCategory: newCat,
       machineModel: model !== undefined && model !== '' ? model : (newCat === 'Màn hình' ? 'Màn hình' : prev.machineModel),
-      serialNumber: serial !== undefined ? serial : prev.serialNumber
+      serialNumber: serial !== undefined ? serial : prev.serialNumber,
+      actionDirection: ['Máy chiết', 'Máy lắc'].includes(newCat) ? 'Sửa chữa' : prev.actionDirection,
+      exchangeType: ['Máy chiết', 'Máy lắc'].includes(newCat) ? 'Không xuất đổi' : prev.exchangeType
     }));
   };
 
@@ -356,7 +358,12 @@ export default function DeviceRepairProcessing({
     e.preventDefault();
     
     // Sanitize input form data
-    const sanitized = sanitizeFormData(formData);
+    const sanitized = sanitizeFormData({
+      ...formData,
+      ...(['Máy chiết', 'Máy lắc'].includes(formData.productCategory)
+        ? { actionDirection: 'Sửa chữa', exchangeType: 'Không xuất đổi' }
+        : {})
+    });
 
     const isSerialRequired = !['Màn hình', 'Khác / Linh kiện', 'Khác', 'Phụ kiện'].includes(sanitized.productCategory);
 
@@ -1092,12 +1099,19 @@ export default function DeviceRepairProcessing({
                     <textarea className="form-input" rows={2} required placeholder="Mô tả chi tiết sự cố kỹ thuật..." value={formData.errorDescription} onChange={e => setFormData({ ...formData, errorDescription: e.target.value })} />
                   </div>
 
+                  {['Máy chiết', 'Máy lắc'].includes(formData.productCategory) && (
+                    <div className="auth-alert auth-alert-success" role="status">
+                      Máy chiết và máy lắc chỉ sửa chữa tại đại lý, không áp dụng đổi trả máy.
+                    </div>
+                  )}
+
                   <div className="responsive-form-grid">
                     <div className="form-group">
                       <label className="form-label">🛠️ Hướng Xử Lý Kỹ Thuật</label>
                       <select 
                         className="form-select" 
                         value={formData.actionDirection} 
+                        disabled={['Máy chiết', 'Máy lắc'].includes(formData.productCategory)}
                         onChange={e => {
                           const val = e.target.value;
                           setFormData(prev => ({
@@ -1109,7 +1123,7 @@ export default function DeviceRepairProcessing({
                           }));
                         }}
                       >
-                        <option value="Sửa chữa">🛠️ Sửa Chữa Tại Kho/Đại Lý</option>
+                        <option value="Sửa chữa">🛠️ Sửa Chữa Tại Đại Lý</option>
                         <option value="Xuất đổi">🔄 Xuất Đổi Máy Khác</option>
                       </select>
                     </div>
@@ -1119,6 +1133,7 @@ export default function DeviceRepairProcessing({
                       <select 
                         className="form-select" 
                         value={formData.exchangeType || (formData.actionDirection === 'Xuất đổi' ? 'Xuất đổi máy mới 100%' : 'Không xuất đổi')} 
+                        disabled={['Máy chiết', 'Máy lắc'].includes(formData.productCategory)}
                         onChange={e => {
                           const val = e.target.value;
                           setFormData(prev => ({

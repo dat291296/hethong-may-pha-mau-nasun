@@ -162,7 +162,7 @@ export function useAuditLogs() {
       enqueueOfflineAction('ADD_AUDIT_LOG', dbPayload);
     }
 
-    return localLog;
+    return finalLog || { ...logData, timestamp };
   }, [fetchAuditLogs]);
 
   const editAuditLog = useCallback(async (id, updates) => {

@@ -8,7 +8,7 @@ import { cacheOfflineData, getCachedOfflineData, enqueueOfflineAction } from '..
  * Uses Supabase when configured, falls back to mock data locally, with offline caching & queuing.
  */
 export function useNpps() {
-  const [npps, setNpps] = useState(INITIAL_NPPS);
+  const [npps, setNpps] = useState(() => readNppsFromLocalStorage());
   const [loading, setLoading] = useState(false);
   const [error, setError]   = useState(null);
 
@@ -17,7 +17,7 @@ export function useNpps() {
     async function loadCached() {
       const cached = await getCachedOfflineData('npps', null);
       if (cached && cached.length > 0) {
-        setNpps(cached);
+        persistNpps(cached, setNpps);
       }
     }
     loadCached();
@@ -27,7 +27,7 @@ export function useNpps() {
   const fetchNpps = useCallback(async () => {
     if (!isSupabaseConfigured) {
       const cached = await getCachedOfflineData('npps', null);
-      if (cached && cached.length > 0) setNpps(cached);
+      if (cached && cached.length > 0) persistNpps(cached, setNpps);
       return;
     }
     setLoading(true);
@@ -44,16 +44,14 @@ export function useNpps() {
     else if (data) { 
       const mapped = data.map(mapDbToNpp);
       if (mapped.length > 0) {
-        setNpps(mapped); 
-        cacheOfflineData('npps', mapped);
+        persistNpps(mapped, setNpps);
       } else {
         // If DB table is empty but we have local cached additions, don't wipe local cache
         const cached = await getCachedOfflineData('npps', null);
         if (cached && cached.length > 0) {
-          setNpps(cached);
+          persistNpps(cached, setNpps);
         } else {
-          setNpps([]);
-          cacheOfflineData('npps', []);
+          persistNpps([], setNpps);
         }
       }
     }
@@ -83,7 +81,7 @@ export function useNpps() {
     // Update local state instantly for latency compensation / offline availability
     setNpps(prev => {
       const updated = [localNpp, ...prev];
-      cacheOfflineData('npps', updated);
+      persistNpps(updated, setNpps, false);
       return updated;
     });
 
@@ -111,7 +109,7 @@ export function useNpps() {
     // Update local state immediately
     setNpps(prev => {
       const updated = prev.map(n => n.id === id ? { ...n, ...updates } : n);
-      cacheOfflineData('npps', updated);
+      persistNpps(updated, setNpps, false);
       return updated;
     });
 
@@ -153,7 +151,7 @@ export function useNpps() {
     // Update local state immediately
     setNpps(prev => {
       const updated = prev.filter(n => n.id !== id);
-      cacheOfflineData('npps', updated);
+      persistNpps(updated, setNpps, false);
       return updated;
     });
 
@@ -177,7 +175,7 @@ export function useNpps() {
   const importNpps = useCallback(async (newNpps) => {
     setNpps(prev => {
       const updated = [...newNpps, ...prev];
-      cacheOfflineData('npps', updated);
+      persistNpps(updated, setNpps, false);
       return updated;
     });
 
@@ -201,6 +199,30 @@ export function useNpps() {
   }, [fetchNpps]);
 
   return { npps, setNpps, loading, error, addNpp, editNpp, deleteNpp, importNpps, refetch: fetchNpps };
+}
+
+function readNppsFromLocalStorage() {
+  if (typeof window === 'undefined') return INITIAL_NPPS;
+  try {
+    const raw = window.localStorage.getItem('nasun_npps');
+    const parsed = raw ? JSON.parse(raw) : null;
+    return Array.isArray(parsed) ? parsed : INITIAL_NPPS;
+  } catch (err) {
+    console.warn('[useNpps] Failed to read local NPP cache:', err);
+    return INITIAL_NPPS;
+  }
+}
+
+function persistNpps(nextNpps, setNpps, shouldSetState = true) {
+  if (shouldSetState) setNpps(nextNpps);
+  cacheOfflineData('npps', nextNpps);
+  try {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('nasun_npps', JSON.stringify(nextNpps));
+    }
+  } catch (err) {
+    console.warn('[useNpps] Failed to save local NPP cache:', err);
+  }
 }
 
 // ─── Field Mappers ─────────────────────────────────────────────────────────────

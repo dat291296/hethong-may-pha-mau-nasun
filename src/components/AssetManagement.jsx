@@ -1001,9 +1001,8 @@ export default function AssetManagement({
               </thead>
               <tbody>
                 {getPaginatedList(filteredSets).map(set => {
-                  const pcObj = (computers || []).find(c => (set.computerId && c.id === set.computerId) || (set.computerSerial && c.serial === set.computerSerial));
+                  const pcObj = (computers || []).find(c => set.computerId && c.id === set.computerId);
                   const pcSpecsText = pcObj?.specs || set.pcSpecs || (set.pcType ? `${set.pcType} (${set.pcOs || ''})` : set.computerType || 'Core i5 / 16GB / 512GB SSD');
-                  const pcSerialText = set.computerSerial || set.pcSerial || pcObj?.serial || 'N/A';
 
                   const prnObj = (printers || []).find(p => (set.printerId && p.id === set.printerId) || (set.printerSerial && p.serial === set.printerSerial));
                   const printerModelText = prnObj?.model || set.printerModel || 'QL700';
@@ -1152,9 +1151,8 @@ export default function AssetManagement({
           {/* Mobile View Cards */}
           <div className="mobile-only mobile-card-list">
             {getPaginatedList(filteredSets).map(set => {
-              const pcObj = (computers || []).find(c => (set.computerId && c.id === set.computerId) || (set.computerSerial && c.serial === set.computerSerial));
+                  const pcObj = (computers || []).find(c => set.computerId && c.id === set.computerId);
               const pcSpecsText = pcObj?.specs || set.pcSpecs || (set.pcType ? `${set.pcType} (${set.pcOs || ''})` : set.computerType || 'Core i5 / 16GB / 512GB SSD');
-              const pcSerialText = set.computerSerial || set.pcSerial || pcObj?.serial || 'N/A';
 
               const prnObj = (printers || []).find(p => (set.printerId && p.id === set.printerId) || (set.printerSerial && p.serial === set.printerSerial));
               const printerModelText = prnObj?.model || set.printerModel || 'QL700';
@@ -2953,7 +2951,6 @@ export default function AssetManagement({
                   <div style={{ background: 'var(--bg-main)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '10px' }}>
                     <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)', fontWeight: '700' }}>MÁY TÍNH</div>
                     <div style={{ fontWeight: '700', fontSize: '0.875rem', marginTop: '2px' }}>{selectedSetDetails.computerType || selectedSetDetails.pcType || 'All In One'}</div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--accent-cyan)', fontFamily: 'var(--font-mono)' }}>Seri: {selectedSetDetails.computerSerial || selectedSetDetails.pcSerial || 'N/A'}</div>
                   </div>
                   <div style={{ background: 'var(--bg-main)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '10px' }}>
                     <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)', fontWeight: '700' }}>MÁY IN</div>

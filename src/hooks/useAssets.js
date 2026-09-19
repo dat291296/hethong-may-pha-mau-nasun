@@ -567,7 +567,7 @@ function mapDbToSystemSet(row) {
     setCode: row.set_code || row.setCode, nppId: row.npp_id || row.nppId, nppName: row.npp_name || row.nppName, region: row.region, province: row.province,
     status: row.status, dispenserId: row.dispenser_id || row.dispenserId, dispenserModel: row.dispenser_model || row.dispenserModel, dispenserSerial: row.dispenser_serial || row.dispenserSerial,
     mixerId: row.mixer_id || row.mixerId, mixerModel: row.mixer_model || row.mixerModel, mixerSerial: row.mixer_serial || row.mixerSerial,
-    computerId: row.computer_id || row.computerId, computerType: row.computer_type || row.computerType, computerSerial: row.computer_serial || row.computerSerial, pcType: row.computer_type || row.pcType, pcSerial: row.computer_serial || row.pcSerial,
+    computerId: row.computer_id || row.computerId, computerType: row.computer_type || row.computerType, pcType: row.computer_type || row.pcType,
     printerId: row.printer_id || row.printerId, printerSerial: row.printer_serial || row.printerSerial, printerModel: 'QL700',
     installDate: row.install_date || row.installDate || row.installedDate, lastMaintenanceDate: row.last_maintenance_date || row.lastMaintenanceDate, nextMaintenanceDue: row.next_maintenance_due || row.nextMaintenanceDue,
     technician: row.technician, salesperson: row.salesperson || row.sales_person || '', stabilizer: row.stabilizer || '', notes: row.notes || '',
@@ -692,7 +692,6 @@ function mapSystemSetToDb(obj) {
 
   if ('computerId' in obj || 'computer_id' in obj) dbObj.computer_id = obj.computerId ?? obj.computer_id ?? null;
   if ('computerType' in obj || 'computer_type' in obj || 'pcType' in obj) dbObj.computer_type = obj.computerType ?? obj.computer_type ?? obj.pcType ?? '';
-  if ('computerSerial' in obj || 'computer_serial' in obj || 'pcSerial' in obj) dbObj.computer_serial = obj.computerSerial ?? obj.computer_serial ?? obj.pcSerial ?? '';
 
   if ('printerId' in obj || 'printer_id' in obj) dbObj.printer_id = obj.printerId ?? obj.printer_id ?? null;
   if ('printerSerial' in obj || 'printer_serial' in obj) dbObj.printer_serial = obj.printerSerial ?? obj.printer_serial ?? '';
