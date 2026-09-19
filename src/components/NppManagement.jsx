@@ -26,6 +26,7 @@ import { getRobustUserLocation, fetchIpLocation } from '../utils/gpsHelper.js';
 import GpsPermissionModal from './GpsPermissionModal.jsx';
 import SafePortal from './SafePortal.jsx';
 import { useModalScrollLock } from '../hooks/useModalScrollLock.js';
+import { exportExcel } from '../utils/excelExport.js';
 
 export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, onDeleteNpp, onOpenImportModal }) {
   const { user } = useAuth();
@@ -38,6 +39,11 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(12);
+  const exportNpps = () => exportExcel(npps, [
+    { key: 'id', label: 'Mã NPP' }, { key: 'name', label: 'Tên Nhà Phân Phối' }, { key: 'phone', label: 'Số Điện Thoại' },
+    { key: 'brand', label: 'Hãng' }, { key: 'contactPerson', label: 'Người Liên Hệ' }, { key: 'region', label: 'Khu Vực' },
+    { key: 'province', label: 'Tỉnh Thành' }, { key: 'address', label: 'Địa Chỉ' }, { key: 'status', label: 'Trạng Thái' }
+  ], 'Nha_Phan_Phoi', 'NPP');
 
   // Reset pagination on filter change
   useEffect(() => {
@@ -323,6 +329,7 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
             <FileSpreadsheet size={18} color="var(--accent-emerald)" />
             <span>📥 Import Từ Excel</span>
           </button>
+          <button className="btn btn-secondary" onClick={exportNpps}>📤 Xuất Excel</button>
           <button className="btn btn-primary" onClick={handleOpenAdd}>
             <PlusCircle size={18} />
             <span>Thêm Nhà Phân Phối Mới</span>

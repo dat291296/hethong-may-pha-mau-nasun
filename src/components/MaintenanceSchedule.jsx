@@ -20,6 +20,7 @@ export default function MaintenanceSchedule({ systemSets, onCompleteMaintenance,
   const [selectedSet, setSelectedSet] = useState(null);
   const [techNotes, setTechNotes] = useState('');
   const [maintDate, setMaintDate] = useState(new Date().toISOString().split('T')[0]);
+  const [searchTerm, setSearchTerm] = useState('');
 
   // Edit maintenance states
   const [editingMaint, setEditingMaint] = useState(null);
@@ -74,8 +75,8 @@ export default function MaintenanceSchedule({ systemSets, onCompleteMaintenance,
       }
 
       return { ...set, dueDays: diffDays, statusType };
-    });
-  }, [systemSets]);
+    }).filter(set => `${set.setCode} ${set.nppName} ${set.region} ${set.dispenserModel} ${set.dispenserSerial}`.toLowerCase().includes(searchTerm.toLowerCase()));
+  }, [systemSets, searchTerm]);
 
   // Monthly stats for 12 months chart
   const monthlyStats = useMemo(() => {
@@ -255,6 +256,7 @@ export default function MaintenanceSchedule({ systemSets, onCompleteMaintenance,
 
       {/* Filter Tabs */}
       <div className="glass-panel" style={{ padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+        <input className="form-input" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Tìm mã bộ, NPP, khu vực, máy chiết..." style={{ maxWidth: '300px' }} />
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <button 
             className={`btn ${filter === 'ALL' ? 'btn-primary' : 'btn-secondary'} btn-sm`}
