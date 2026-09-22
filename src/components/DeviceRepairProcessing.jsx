@@ -22,7 +22,8 @@ import {
   PackageCheck,
   BarChart2,
   PieChart as PieChartIcon,
-  Calendar
+  Calendar,
+  FileSpreadsheet
 } from 'lucide-react';
 import { 
   BarChart, 
