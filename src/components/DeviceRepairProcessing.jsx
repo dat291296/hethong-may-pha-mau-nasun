@@ -65,6 +65,7 @@ export const PRODUCT_CATEGORIES = [
 import { compressImage } from '../utils/imageCompressor.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useModalScrollLock } from '../hooks/useModalScrollLock.js';
+import { exportExcel } from '../utils/excelExport.js';
 
 export default function DeviceRepairProcessing({
   repairTickets = [],
@@ -77,6 +78,7 @@ export default function DeviceRepairProcessing({
   onPrintTicket,
   prefilledTicket,
   onClearPrefill,
+  onOpenImportModal,
   isDateLocked = () => false
 }) {
   const { user } = useAuth();
@@ -259,6 +261,16 @@ export default function DeviceRepairProcessing({
       notes: ''
     });
     setShowModal(true);
+  };
+
+  const exportRepairs = () => {
+    exportExcel(repairTickets, [
+      { key: 'ticketCode', label: 'Mã Phiếu' }, { key: 'date', label: 'Ngày (YYYY-MM-DD)' },
+      { key: 'nppName', label: 'Nhà Phân Phối' }, { key: 'productCategory', label: 'Loại Thiết Bị' },
+      { key: 'machineModel', label: 'Model' }, { key: 'serialNumber', label: 'Số Seri' },
+      { key: 'errorDescription', label: 'Diễn Giải Lỗi' }, { key: 'technician', label: 'Kỹ Thuật Viên' },
+      { key: 'processingStatus', label: 'Trạng Thái Xử Lý' }, { key: 'notes', label: 'Ghi Chú' }
+    ], 'Phieu_Sua_Chua', 'PhieuSuaChua');
   };
 
   const handleOpenEdit = (ticket) => {
@@ -605,10 +617,14 @@ export default function DeviceRepairProcessing({
             </button>
           </div>
 
-          <button className="btn btn-primary" onClick={handleOpenAdd}>
-            <PlusCircle size={18} />
-            <span>+ Tạo Phiếu Xử Lý Máy Mới</span>
-          </button>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <button className="btn btn-secondary btn-sm" onClick={() => onOpenImportModal?.()}><FileSpreadsheet size={16} /><span>📥 Nhập Excel</span></button>
+            <button className="btn btn-secondary btn-sm" onClick={exportRepairs}><FileSpreadsheet size={16} /><span>📤 Xuất Excel</span></button>
+            <button className="btn btn-primary" onClick={handleOpenAdd}>
+              <PlusCircle size={18} />
+              <span>+ Tạo Phiếu Xử Lý Máy Mới</span>
+            </button>
+          </div>
         </div>
 
         {/* Warning Banner for Locked Month */}

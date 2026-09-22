@@ -1,23 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
-import Dashboard from './components/Dashboard';
-import NppManagement from './components/NppManagement';
-import AssetManagement from './components/AssetManagement';
 import WorkflowModal from './components/WorkflowModal';
-import MaintenanceSchedule from './components/MaintenanceSchedule';
-import RemoteFormulaUpdates from './components/RemoteFormulaUpdates';
-import TintingAnalytics from './components/TintingAnalytics';
-import SerialLookup from './components/SerialLookup';
-import AuditLogs from './components/AuditLogs';
 import HandoverPrintModal from './components/HandoverPrintModal';
 import MobileBottomNav from './components/MobileBottomNav';
-import DeviceRepairProcessing from './components/DeviceRepairProcessing';
-import ExcelImportModal from './components/ExcelImportModal';
 import LoginModal from './components/LoginModal';
-import UserManagement from './components/UserManagement';
-import TechHandbook from './components/TechHandbook';
-import FieldRouteMap from './components/FieldRouteMap';
 import { useAuth } from './context/AuthContext';
 import { supabase, isSupabaseConfigured } from './lib/supabase';
 
@@ -34,6 +21,19 @@ import { useLockedMonths } from './hooks/useLockedMonths.js';
 import { useTintingLogs } from './hooks/useTintingLogs.js';
 import { useFormulaVersions } from './hooks/useFormulaVersions.js';
 
+const Dashboard = lazy(() => import('./components/Dashboard'));
+const NppManagement = lazy(() => import('./components/NppManagement'));
+const AssetManagement = lazy(() => import('./components/AssetManagement'));
+const MaintenanceSchedule = lazy(() => import('./components/MaintenanceSchedule'));
+const RemoteFormulaUpdates = lazy(() => import('./components/RemoteFormulaUpdates'));
+const TintingAnalytics = lazy(() => import('./components/TintingAnalytics'));
+const SerialLookup = lazy(() => import('./components/SerialLookup'));
+const AuditLogs = lazy(() => import('./components/AuditLogs'));
+const DeviceRepairProcessing = lazy(() => import('./components/DeviceRepairProcessing'));
+const ExcelImportModal = lazy(() => import('./components/ExcelImportModal'));
+const UserManagement = lazy(() => import('./components/UserManagement'));
+const TechHandbook = lazy(() => import('./components/TechHandbook'));
+const FieldRouteMap = lazy(() => import('./components/FieldRouteMap'));
 
 export default function App() {
   const { user, isDevMode } = useAuth();
@@ -607,6 +607,7 @@ export default function App() {
 
         {/* Dynamic View Content */}
         <main key={activeTab} className="page-transition" style={{ flex: 1, padding: '28px', overflowY: 'auto' }}>
+          <Suspense fallback={<div className="glass-panel" style={{ padding: '28px', color: 'var(--text-muted)' }}>Đang tải màn hình...</div>}>
           
           {activeTab === 'dashboard' && (
             <Dashboard
@@ -665,6 +666,7 @@ export default function App() {
               onDeleteTicket={handleDeleteTicket}
               prefilledTicket={prefilledRepairData}
               onClearPrefill={() => setPrefilledRepairData(null)}
+              onOpenImportModal={() => openImportModal('repair')}
               isDateLocked={isDateLocked}
             />
           )}
@@ -777,6 +779,8 @@ export default function App() {
             />
           )}
 
+          </Suspense>
+
         </main>
       </div>
 
@@ -814,6 +818,7 @@ export default function App() {
 
       {/* Excel Import Modal */}
       {showImportModal && (
+        <Suspense fallback={null}>
         <ExcelImportModal
           importType={importModalType}
           existingNpps={npps}
@@ -882,8 +887,35 @@ export default function App() {
               notes: `Tổng ${newItems.length} Máy In QL700 mới vào kho`
             });
           }}
+          onImportRepairs={async (newItems) => {
+            const normalizedItems = newItems.map((item) => {
+              const previousTicket = repairTickets.find(entry => entry.ticketCode?.trim().toLowerCase() === item.ticketCode?.trim().toLowerCase());
+              const npp = npps.find(entry => entry.name?.trim().toLowerCase() === item.nppName?.trim().toLowerCase());
+              return { ...item, id: previousTicket?.id || item.id, nppId: npp?.id || previousTicket?.nppId || '' };
+            });
+            await importTickets(normalizedItems);
+            await addAuditLog({ type: 'IMPORT EXCEL – SỬA CHỮA', setCode: '—', nppId: '—', nppName: `Đã import ${normalizedItems.length} phiếu sửa chữa`, serialList: normalizedItems.map(item => item.ticketCode).join(', '), technician: 'Hệ thống – Import Excel', reason: 'Nhập phiếu sửa chữa từ Excel', notes: 'Dữ liệu được gộp theo mã phiếu, không xóa dữ liệu đang có' });
+          }}
+          onImportSystemSets={async (newItems) => {
+            const normalizedItems = newItems.map((item) => {
+              const npp = npps.find(entry => entry.name?.trim().toLowerCase() === item.nppName?.trim().toLowerCase());
+              const dispenser = dispensers.find(entry => entry.serial?.trim().toLowerCase() === item.dispenserSerial?.trim().toLowerCase());
+              const mixer = mixers.find(entry => entry.serial?.trim().toLowerCase() === item.mixerSerial?.trim().toLowerCase());
+              const printer = printers.find(entry => entry.serial?.trim().toLowerCase() === item.printerSerial?.trim().toLowerCase());
+              return {
+                ...item,
+                nppId: npp?.id || null,
+                dispenserId: dispenser?.id || null,
+                mixerId: mixer?.id || null,
+                printerId: printer?.id || null
+              };
+            });
+            await importSystemSets(normalizedItems);
+            await addAuditLog({ type: 'IMPORT EXCEL – BỘ MÁY', setCode: '—', nppId: '—', nppName: `Đã import ${normalizedItems.length} bộ máy`, serialList: normalizedItems.map(item => item.setCode).join(', '), technician: 'Hệ thống – Import Excel', reason: 'Nhập bộ máy từ Excel', notes: 'Dữ liệu được gộp theo mã bộ máy, không xóa dữ liệu đang có' });
+          }}
           onClose={() => setShowImportModal(false)}
         />
+        </Suspense>
       )}
 
     </div>

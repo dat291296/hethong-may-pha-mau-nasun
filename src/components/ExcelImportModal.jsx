@@ -94,6 +94,32 @@ const IMPORT_CONFIGS = {
       ['QL700', 'QL700-002', 'Bluetooth', 'Đang chạy tốt'],
     ],
   },
+  repair: {
+    label: 'Phiếu Xử Lý Sửa Chữa', icon: '🛠️',
+    columns: [
+      { key: 'ticketCode', label: 'Mã Phiếu', required: true }, { key: 'date', label: 'Ngày (YYYY-MM-DD)', required: true },
+      { key: 'nppName', label: 'Nhà Phân Phối', required: true }, { key: 'productCategory', label: 'Loại Thiết Bị', required: true },
+      { key: 'machineModel', label: 'Model', required: false }, { key: 'serialNumber', label: 'Số Seri', required: false },
+      { key: 'errorDescription', label: 'Diễn Giải Lỗi', required: true }, { key: 'technician', label: 'Kỹ Thuật Viên', required: false },
+      { key: 'processingStatus', label: 'Trạng Thái Xử Lý', required: false }, { key: 'notes', label: 'Ghi Chú', required: false }
+    ],
+    sampleRows: [['TICK-2026-001', '2026-09-22', 'NPP Demo', 'Máy chiết', 'Satint A2', 'ST-A2-001', 'Mô tả lỗi', 'KTV Nasun', 'Chưa xử lý', '']]
+  },
+  systemSet: {
+    label: 'Bộ Máy Pha Màu', icon: '🧩',
+    columns: [
+      { key: 'setCode', label: 'Mã Bộ Máy', required: true }, { key: 'nppName', label: 'Nhà Phân Phối', required: true },
+      { key: 'region', label: 'Khu Vực', required: false }, { key: 'province', label: 'Tỉnh / Thành Phố', required: false },
+      { key: 'status', label: 'Trạng Thái', required: false }, { key: 'dispenserModel', label: 'Máy Chiết', required: false },
+      { key: 'dispenserSerial', label: 'Seri Máy Chiết', required: false }, { key: 'mixerModel', label: 'Máy Lắc', required: false },
+      { key: 'mixerSerial', label: 'Seri Máy Lắc', required: false }, { key: 'computerType', label: 'Máy Tính', required: false },
+      { key: 'printerSerial', label: 'Seri Máy In', required: false }, { key: 'installDate', label: 'Ngày Lắp Đặt (YYYY-MM-DD)', required: false },
+      { key: 'lastMaintenanceDate', label: 'Bảo Trì Gần Nhất (YYYY-MM-DD)', required: false }, { key: 'nextMaintenanceDue', label: 'Bảo Trì Kế Tiếp (YYYY-MM-DD)', required: false },
+      { key: 'technician', label: 'Kỹ Thuật Viên', required: false }, { key: 'salesperson', label: 'Nhân Viên Kinh Doanh', required: false },
+      { key: 'stabilizer', label: 'Ổn Áp', required: false }, { key: 'notes', label: 'Ghi Chú', required: false }
+    ],
+    sampleRows: [['SET-2026-001', 'NPP Demo', 'Miền Bắc', 'Hà Nội', 'Đang hoạt động', 'Satint A2', 'ST-A2-001', 'AI88', 'MIX-AI88-001', 'All In One', 'QL700-001', '2026-09-22', '', '2027-03-22', 'KTV Nasun', '', 'Lioa', '']]
+  },
 };
 
 // Region mapping shortcodes
@@ -139,6 +165,8 @@ export default function ExcelImportModal({
   onImportMixers,
   onImportComputers,
   onImportPrinters,
+  onImportRepairs,
+  onImportSystemSets,
   onClose
 }) {
   const [importType, setImportType] = useState(defaultImportType);
@@ -215,7 +243,7 @@ export default function ExcelImportModal({
               issues.push(phoneCheck.error);
             }
           }
-          if (importType !== 'npp' && obj.serial) {
+          if (['dispenser', 'mixer', 'computer', 'printer'].includes(importType) && obj.serial) {
             const serialCheck = validateSerial(obj.serial);
             if (!serialCheck.valid) {
               issues.push(serialCheck.error);
@@ -229,7 +257,7 @@ export default function ExcelImportModal({
           }
 
           // Duplicate check
-          if (importType !== 'npp' && obj.serial) {
+          if (['dispenser', 'mixer', 'computer', 'printer'].includes(importType) && obj.serial) {
             if (existingSerials.has(obj.serial.toLowerCase())) {
               issues.push(`Số Seri "${obj.serial}" đã tồn tại trong hệ thống`);
             }
@@ -380,6 +408,30 @@ export default function ExcelImportModal({
         setCode: null
       }));
       onImportPrinters(newItems);
+    }
+
+    if (importType === 'repair') {
+      const newItems = rowsToImport.map((row, i) => ({
+        id: row.ticketCode || `TICK-IMP-${timestamp + i}`, ticketCode: row.ticketCode || `TICK-IMP-${timestamp + i}`,
+        date: row.date, nppName: row.nppName, nppId: '', productCategory: row.productCategory, machineModel: row.machineModel || '',
+        serialNumber: row.serialNumber || '', errorDescription: row.errorDescription, technician: row.technician || '',
+        processingStatus: row.processingStatus || 'Chưa xử lý', errorCategory: '', actionDirection: 'Sửa chữa',
+        replacementCondition: 'N/A', customerReturnStatus: 'Chưa gửi trả', notes: row.notes || '', photos: []
+      }));
+      await onImportRepairs(newItems);
+    }
+
+    if (importType === 'systemSet') {
+      const newItems = rowsToImport.map((row) => ({
+        setCode: row.setCode, nppName: row.nppName, region: row.region || '', province: row.province || '',
+        status: row.status || 'Đang hoạt động', dispenserModel: row.dispenserModel || '', dispenserSerial: row.dispenserSerial || '',
+        mixerModel: row.mixerModel || '', mixerSerial: row.mixerSerial || '', computerType: row.computerType || '',
+        printerSerial: row.printerSerial || '', installDate: row.installDate || null,
+        lastMaintenanceDate: row.lastMaintenanceDate || null, nextMaintenanceDue: row.nextMaintenanceDue || null,
+        technician: row.technician || '', salesperson: row.salesperson || '', stabilizer: row.stabilizer || '', notes: row.notes || '',
+        installationPhotos: []
+      }));
+      await onImportSystemSets(newItems);
     }
 
     setImporting(false);

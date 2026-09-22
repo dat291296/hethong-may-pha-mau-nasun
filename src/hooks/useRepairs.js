@@ -287,6 +287,7 @@ function mapDbToRepair(row) {
 
 function mapRepairToDb(r) {
   return {
+    ...(r.id ? { id: r.id } : {}),
     ticket_code:            r.ticketCode,
     date:                   r.date,
     technician:             r.technician,
