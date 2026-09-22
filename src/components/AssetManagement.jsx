@@ -682,6 +682,31 @@ export default function AssetManagement({
   const stockComputers = React.useMemo(() => (computers || []).filter(c => !c.isAssigned && !c.setCode), [computers]);
   const stockPrinters = React.useMemo(() => (printers || []).filter(p => !p.isAssigned && !p.setCode), [printers]);
   const stockSets = React.useMemo(() => (systemSets || []).filter(s => s.status === 'TRONG_KHO'), [systemSets]);
+  const stockBundleSummary = React.useMemo(() => {
+    const completeFromLooseDevices = Math.min(
+      stockDispensers.length,
+      stockMixers.length,
+      stockComputers.length,
+      stockPrinters.length
+    );
+    return {
+      completeFromLooseDevices,
+      totalReadySets: completeFromLooseDevices + stockSets.length,
+      loose: {
+        dispensers: stockDispensers.slice(completeFromLooseDevices),
+        mixers: stockMixers.slice(completeFromLooseDevices),
+        computers: stockComputers.slice(completeFromLooseDevices),
+        printers: stockPrinters.slice(completeFromLooseDevices)
+      }
+    };
+  }, [stockDispensers, stockMixers, stockComputers, stockPrinters, stockSets]);
+
+  const looseInventoryGroups = React.useMemo(() => [
+    { key: 'dispensers', label: 'Máy chiết lẻ', icon: '🖨️', color: '#ec4899', items: stockBundleSummary.loose.dispensers, getName: item => `${item.model || 'Máy chiết'} · ${item.serial || item.id}` },
+    { key: 'mixers', label: 'Máy lắc lẻ', icon: '🔄', color: '#38bdf8', items: stockBundleSummary.loose.mixers, getName: item => `${item.model || item.type || 'Máy lắc'} · ${item.serial || item.id}` },
+    { key: 'computers', label: 'Máy tính lẻ', icon: '💻', color: '#a855f7', items: stockBundleSummary.loose.computers, getName: item => `${item.type || 'Máy tính'} · ${item.id}` },
+    { key: 'printers', label: 'Máy in lẻ', icon: '🖨️', color: '#10b981', items: stockBundleSummary.loose.printers, getName: item => `${item.model || 'QL700'} · ${item.serial || item.id}` }
+  ], [stockBundleSummary]);
 
   // Breakdown by model/type for stock items
   const dispenserStockBreakdown = React.useMemo(() => {
@@ -731,12 +756,12 @@ export default function AssetManagement({
               <span>📦 Thống Kê Tồn Kho Thiết Bị Hiện Tại (Sẵn Sàng Cấp Phát)</span>
             </h3>
             <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '4px 0 0 0' }}>
-              Bao gồm các thiết bị lẻ lưu kho chưa ghép vào bộ máy và các bộ máy hoàn chỉnh đang nằm trong kho tổng
+              Thiết bị tự do được quy đổi theo công thức: 1 máy chiết + 1 máy lắc + 1 máy tính + 1 máy in = 1 bộ máy
             </p>
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
             <span className="badge badge-info" style={{ fontSize: '0.75rem', padding: '4px 10px' }}>
-              ● Tổng: {stockDispensers.length + stockMixers.length + stockComputers.length + stockPrinters.length} thiết bị lẻ + {stockSets.length} bộ máy kho
+              ● Sẵn sàng: {stockBundleSummary.totalReadySets} bộ máy · Lẻ: {looseInventoryGroups.reduce((total, group) => total + group.items.length, 0)} thiết bị
             </span>
           </div>
         </div>
@@ -856,20 +881,18 @@ export default function AssetManagement({
           <div 
             className="glass-panel glass-panel-hover" 
             style={{ padding: '14px', cursor: 'pointer', borderTop: '3px solid #f59e0b', background: activeSubTab === 'comboSets' ? 'rgba(245,158,11,0.12)' : 'rgba(15,23,42,0.6)' }}
-            onClick={() => { setActiveSubTab('comboSets'); setStatusFilter('TRONG_KHO'); }}
+            onClick={() => { setActiveSubTab('comboSets'); setStatusFilter('ALL'); }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
               <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700', textTransform: 'uppercase' }}>Bộ Máy Trong Kho</span>
               <Layers size={18} color="#f59e0b" />
             </div>
             <div style={{ fontSize: '1.6rem', fontWeight: '900', color: '#f59e0b', lineHeight: 1 }}>
-              {stockSets.length} <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 'normal' }}>bộ máy</span>
+              {stockBundleSummary.totalReadySets} <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 'normal' }}>bộ máy</span>
             </div>
             <div style={{ marginTop: '10px', fontSize: '0.75rem', color: 'var(--text-main)', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '8px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'var(--text-muted)' }}>• Tình trạng:</span>
-                <span className="badge badge-info" style={{ fontSize: '0.7rem' }}>Sẵn sàng lắp mới</span>
-              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: 'var(--text-muted)' }}>• Tự quy đổi:</span><strong>{stockBundleSummary.completeFromLooseDevices} bộ</strong></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '3px' }}><span style={{ color: 'var(--text-muted)' }}>• Đã ghép trong kho:</span><strong>{stockSets.length} bộ</strong></div>
             </div>
           </div>
 
@@ -884,7 +907,7 @@ export default function AssetManagement({
             onClick={() => setActiveSubTab('comboSets')}
           >
             <Layers size={16} />
-            <span>Bộ Máy Pha Màu ({systemSets.length})</span>
+            <span>Bộ Máy Pha Màu ({stockBundleSummary.totalReadySets})</span>
           </button>
 
           <button 
@@ -949,6 +972,26 @@ export default function AssetManagement({
       {/* VIEW 1: COMBO SETS MANAGEMENT */}
       {activeSubTab === 'comboSets' && (
         <div className="glass-panel" style={{ padding: '20px' }}>
+          <div style={{ padding: '14px', marginBottom: '16px', border: '1px solid rgba(245,158,11,0.35)', borderRadius: '10px', background: 'rgba(245,158,11,0.08)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+              <div>
+                <div style={{ fontWeight: '800', color: '#f59e0b' }}>📦 Bộ máy tự do trong kho: {stockBundleSummary.completeFromLooseDevices} bộ</div>
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '4px' }}>Tính tự động từ thiết bị chưa ghép NPP; không tự tạo hoặc thay đổi dữ liệu bộ máy.</div>
+              </div>
+              <span className="badge badge-info">Đã ghép sẵn trong kho: {stockSets.length} bộ</span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '10px', marginTop: '12px' }}>
+              {looseInventoryGroups.map(group => (
+                <div key={group.key} style={{ padding: '10px', borderRadius: '8px', background: 'rgba(15,23,42,0.55)', borderLeft: `3px solid ${group.color}` }}>
+                  <div style={{ fontSize: '0.78rem', fontWeight: '800', color: group.color }}>{group.icon} {group.label}: {group.items.length}</div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '6px', lineHeight: 1.5 }}>
+                    {group.items.length === 0 ? 'Không có thiết bị lẻ' : group.items.slice(0, 4).map(item => <div key={item.id}>• {group.getName(item)}</div>)}
+                    {group.items.length > 4 && <div>+ {group.items.length - 4} thiết bị khác</div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
           
           {/* Filters Bar & Search Input */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px', flexWrap: 'wrap' }}>
