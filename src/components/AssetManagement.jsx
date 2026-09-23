@@ -1125,6 +1125,9 @@ export default function AssetManagement({
               <tbody>
                 {getPaginatedList(filteredSets).map(set => {
                   const missingFields = getSystemSetMissingFields(set);
+                  const missingDispenserInfo = missingFields.filter(field => field.toLowerCase().includes('máy chiết'));
+                  const missingMixerInfo = missingFields.filter(field => field.toLowerCase().includes('máy lắc'));
+                  const missingPrinterInfo = missingFields.filter(field => field.toLowerCase().includes('máy in'));
                   const pcObj = (computers || []).find(c => set.computerId && c.id === set.computerId);
                   const pcSpecsText = pcObj?.specs || set.pcSpecs || (set.pcType ? `${set.pcType} (${set.pcOs || ''})` : set.computerType || 'Core i5 / 16GB / 512GB SSD');
 
@@ -1208,11 +1211,19 @@ export default function AssetManagement({
                       <td style={{ fontWeight: '600' }}>{set.nppName || 'Kho Tổng Trung Tâm'}</td>
                       <td>
                         <div style={{ fontWeight: '600' }}>{set.dispenserModel}</div>
-                        <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{set.dispenserSerial}</div>
+                        {missingDispenserInfo.length > 0 ? (
+                          <span className="badge badge-danger" style={{ marginTop: '4px', fontSize: '0.68rem' }} title={missingDispenserInfo.join(', ')}>⚠️ {missingDispenserInfo.join(', ')}</span>
+                        ) : (
+                          <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{set.dispenserSerial}</div>
+                        )}
                       </td>
                       <td>
                         <div>{set.mixerModel}</div>
-                        <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{set.mixerSerial}</div>
+                        {missingMixerInfo.length > 0 ? (
+                          <span className="badge badge-danger" style={{ marginTop: '4px', fontSize: '0.68rem' }} title={missingMixerInfo.join(', ')}>⚠️ {missingMixerInfo.join(', ')}</span>
+                        ) : (
+                          <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{set.mixerSerial}</div>
+                        )}
                       </td>
                       <td>
                         <div style={{ fontWeight: '600' }}>{pcSpecsText}</div>
@@ -1228,7 +1239,11 @@ export default function AssetManagement({
                       </td>
                       <td>
                         <div style={{ fontWeight: '600' }}>{printerModelText}</div>
-                        <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>Seri: {printerSerialText}</div>
+                        {missingPrinterInfo.length > 0 ? (
+                          <span className="badge badge-danger" style={{ marginTop: '4px', fontSize: '0.68rem' }} title={missingPrinterInfo.join(', ')}>⚠️ {missingPrinterInfo.join(', ')}</span>
+                        ) : (
+                          <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>Seri: {printerSerialText}</div>
+                        )}
                       </td>
                       <td>
                         <div style={{ fontSize: '0.8rem', fontWeight: '600' }}>🛠️ {set.technician || 'Chưa gán KTV'}</div>
@@ -1281,6 +1296,9 @@ export default function AssetManagement({
           <div className="mobile-only mobile-card-list">
             {getPaginatedList(filteredSets).map(set => {
               const missingFields = getSystemSetMissingFields(set);
+              const missingDispenserInfo = missingFields.filter(field => field.toLowerCase().includes('máy chiết'));
+              const missingMixerInfo = missingFields.filter(field => field.toLowerCase().includes('máy lắc'));
+              const missingPrinterInfo = missingFields.filter(field => field.toLowerCase().includes('máy in'));
                   const pcObj = (computers || []).find(c => set.computerId && c.id === set.computerId);
               const pcSpecsText = pcObj?.specs || set.pcSpecs || (set.pcType ? `${set.pcType} (${set.pcOs || ''})` : set.computerType || 'Core i5 / 16GB / 512GB SSD');
 
@@ -1306,11 +1324,11 @@ export default function AssetManagement({
                   <div className="mobile-card-body">
                     <div className="mobile-card-row">
                       <span className="mobile-card-label">Máy Chiết:</span>
-                      <span className="mobile-card-value">{set.dispenserModel} ({set.dispenserSerial})</span>
+                      <span className="mobile-card-value">{set.dispenserModel} {missingDispenserInfo.length > 0 ? <span className="badge badge-danger">⚠️ {missingDispenserInfo.join(', ')}</span> : `(${set.dispenserSerial})`}</span>
                     </div>
                     <div className="mobile-card-row">
                       <span className="mobile-card-label">Máy Lắc:</span>
-                      <span className="mobile-card-value">{set.mixerModel} ({set.mixerSerial})</span>
+                      <span className="mobile-card-value">{set.mixerModel} {missingMixerInfo.length > 0 ? <span className="badge badge-danger">⚠️ {missingMixerInfo.join(', ')}</span> : `(${set.mixerSerial})`}</span>
                     </div>
                     <div className="mobile-card-row">
                       <span className="mobile-card-label">Máy Tính:</span>
@@ -1326,7 +1344,7 @@ export default function AssetManagement({
                     </div>
                     <div className="mobile-card-row">
                       <span className="mobile-card-label">Máy In:</span>
-                      <span className="mobile-card-value">{printerModelText} (Seri: {printerSerialText})</span>
+                      <span className="mobile-card-value">{printerModelText} {missingPrinterInfo.length > 0 ? <span className="badge badge-danger">⚠️ {missingPrinterInfo.join(', ')}</span> : `(Seri: ${printerSerialText})`}</span>
                     </div>
                     <div className="mobile-card-row">
                       <span className="mobile-card-label">Cán bộ phụ trách:</span>
