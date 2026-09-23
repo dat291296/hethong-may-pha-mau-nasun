@@ -76,6 +76,7 @@ export function useAuditLogs() {
   // Hydrate cache from IndexedDB on mount if localStorage is empty
   useEffect(() => {
     async function loadCached() {
+      if (navigator.onLine) return;
       const stored = getInitialAuditLogs();
       if (stored && stored.length > 0) {
         setAuditLogs(stored);

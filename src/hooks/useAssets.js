@@ -88,6 +88,7 @@ export function useAssets() {
   useEffect(() => {
     async function loadCached() {
       try {
+        if (navigator.onLine) return;
         const [d, m, c, p, s] = await Promise.all([
           getCachedOfflineData('dispensers', null),
           getCachedOfflineData('mixers', null),

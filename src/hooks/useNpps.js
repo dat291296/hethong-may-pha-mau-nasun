@@ -15,6 +15,7 @@ export function useNpps() {
   // Hydrate cache from IndexedDB on mount
   useEffect(() => {
     async function loadCached() {
+      if (navigator.onLine) return;
       const cached = await getCachedOfflineData('npps', null);
       if (cached && cached.length > 0) {
         persistNpps(cached, setNpps);
@@ -48,17 +49,8 @@ export function useNpps() {
     }
     else if (data) { 
       const mapped = data.map(mapDbToNpp);
-      if (mapped.length > 0) {
-        persistNpps(mapped, setNpps);
-      } else {
-        // If DB table is empty but we have local cached additions, don't wipe local cache
-        const cached = await getCachedOfflineData('npps', null);
-        if (cached && cached.length > 0) {
-          persistNpps(cached, setNpps);
-        } else {
-          persistNpps([], setNpps);
-        }
-      }
+      // Supabase is authoritative while online, including an empty table.
+      persistNpps(mapped, setNpps);
     }
     setLoading(false);
   }, []);

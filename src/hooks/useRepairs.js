@@ -42,6 +42,7 @@ export function useRepairs() {
   // Hydrate cache from IndexedDB on mount
   useEffect(() => {
     async function loadCached() {
+      if (navigator.onLine) return;
       const cached = await getCachedOfflineData('repair_tickets', null);
       if (cached && Array.isArray(cached) && cached.length > 0) {
         setRepairTickets(cached);
@@ -65,13 +66,12 @@ export function useRepairs() {
     if (error) {
       const cached = await getCachedOfflineData('repair_tickets', null);
       if (cached) setRepairTickets(cached);
-    } else if (data && data.length > 0) {
+    } else if (Array.isArray(data)) {
       const mapped = data.map(mapDbToRepair);
-      setRepairTickets(mapped);
-      cacheOfflineData('repair_tickets', mapped);
+      persistRepairTickets(mapped);
     }
     setLoading(false);
-  }, []);
+  }, [persistRepairTickets]);
 
   useEffect(() => {
     fetchRepairs();

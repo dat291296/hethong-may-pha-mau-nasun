@@ -16,6 +16,7 @@ export function useLockedMonths() {
   // Load cache on mount
   useEffect(() => {
     async function loadCached() {
+      if (navigator.onLine) return;
       const cached = await getCachedOfflineData('locked_months', null);
       if (cached && cached.length > 0) {
         setLockedMonths(cached);

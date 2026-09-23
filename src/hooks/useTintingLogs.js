@@ -10,6 +10,7 @@ export function useTintingLogs() {
   // Hydrate cache from IndexedDB on mount
   useEffect(() => {
     async function loadCached() {
+      if (navigator.onLine) return;
       const cached = await getCachedOfflineData('tinting_logs', null);
       if (cached && cached.length > 0) {
         setTintingLogs(cached);
@@ -28,7 +29,7 @@ export function useTintingLogs() {
     if (error) {
       const cached = await getCachedOfflineData('tinting_logs', null);
       if (cached) setTintingLogs(cached);
-    } else if (data && data.length > 0) {
+    } else if (Array.isArray(data)) {
       const mapped = data.map(mapDbToLog);
       setTintingLogs(mapped);
       cacheOfflineData('tinting_logs', mapped);
