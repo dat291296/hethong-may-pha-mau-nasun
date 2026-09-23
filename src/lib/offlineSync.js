@@ -33,12 +33,30 @@ async function insertDeviceWithSchemaFallback(table, payload) {
   if (table === 'computers') delete compatiblePayload.serial;
   while (true) {
     const { error } = await supabase.from(table).upsert(compatiblePayload, { onConflict: 'id' });
-    if (!error) return null;
+    if (!error) return { error: null, deferredLink: null };
     const match = String(error.message || '').match(/Could not find the '([^']+)' column/i);
     const missingColumn = match?.[1];
-    if (!missingColumn || !(missingColumn in compatiblePayload)) return error;
-    console.warn(`[OfflineSync] ${table}.${missingColumn} is absent; retrying without it.`);
-    delete compatiblePayload[missingColumn];
+    if (missingColumn && missingColumn in compatiblePayload) {
+      console.warn(`[OfflineSync] ${table}.${missingColumn} is absent; retrying without it.`);
+      delete compatiblePayload[missingColumn];
+      continue;
+    }
+
+    const isSetCodeForeignKeyError = error.code === '23503' &&
+      String(error.message || '').includes(`${table}_set_code_fkey`);
+    if (isSetCodeForeignKeyError && compatiblePayload.set_code) {
+      const deferredLink = {
+        table,
+        id: compatiblePayload.id,
+        set_code: compatiblePayload.set_code,
+        is_assigned: compatiblePayload.is_assigned
+      };
+      const stockPayload = { ...compatiblePayload, set_code: null, is_assigned: false };
+      const stockResult = await supabase.from(table).upsert(stockPayload, { onConflict: 'id' });
+      if (!stockResult.error) return { error: null, deferredLink };
+      return { error: stockResult.error, deferredLink: null };
+    }
+    return { error, deferredLink: null };
   }
 }
 
@@ -112,6 +130,7 @@ async function processOfflineQueue(onStatusChange) {
   if (onStatusChange) onStatusChange('syncing', queue.length);
 
   let successCount = 0;
+  const deferredDeviceLinks = [];
 
   for (const item of queue) {
     try {
@@ -128,7 +147,13 @@ async function processOfflineQueue(onStatusChange) {
           error = editNppErr;
           break;
         case 'ADD_DEVICE':
-          error = await insertDeviceWithSchemaFallback(item.category, item.payload);
+          {
+            const result = await insertDeviceWithSchemaFallback(item.category, item.payload);
+            error = result.error;
+            if (result.deferredLink) {
+              deferredDeviceLinks.push({ queueItem: item, ...result.deferredLink });
+            }
+          }
           break;
         case 'EDIT_DEVICE':
           {
@@ -142,7 +167,7 @@ async function processOfflineQueue(onStatusChange) {
           error = delDevErr;
           break;
         case 'ASSEMBLE_SET':
-          const { error: assembleErr } = await supabase.from('system_sets').insert(item.payload);
+          const { error: assembleErr } = await supabase.from('system_sets').upsert(item.payload, { onConflict: 'set_code' });
           error = assembleErr;
           break;
         case 'UPDATE_SYSTEM_SET':
@@ -205,15 +230,32 @@ async function processOfflineQueue(onStatusChange) {
         throw new Error(error.message);
       }
 
-      // Success, remove from queue
-      await dequeueOfflineAction(item.id);
-      successCount++;
+      // A device whose system set is not created yet stays queued until the
+      // second pass links it after ASSEMBLE_SET actions have completed.
+      if (!deferredDeviceLinks.some(link => link.queueItem.id === item.id)) {
+        await dequeueOfflineAction(item.id);
+        successCount++;
+      }
       
     } catch (err) {
       console.error(`[OfflineSync] Failed to sync action ${item.id}:`, err);
       if (onStatusChange) onStatusChange('error', queue.length - successCount, err.message);
       return false;
     }
+  }
+
+  for (const link of deferredDeviceLinks) {
+    const linkError = await updateDeviceWithSchemaFallback(link.table, link.id, {
+      set_code: link.set_code,
+      is_assigned: link.is_assigned !== false
+    });
+    if (linkError) {
+      console.error(`[OfflineSync] Failed to link ${link.table}.${link.id} to ${link.set_code}:`, linkError);
+      if (onStatusChange) onStatusChange('error', deferredDeviceLinks.length, linkError.message);
+      return false;
+    }
+    await dequeueOfflineAction(link.queueItem.id);
+    successCount++;
   }
 
   console.log(`[OfflineSync] Sync complete! Successfully synced ${successCount} actions.`);
