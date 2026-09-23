@@ -42,7 +42,7 @@ const IMPORT_CONFIGS = {
     icon: '🖨️',
     columns: [
       { key: 'model',  label: 'Hệ Máy / Model (Satint A2, Hero, Corob F1...)', required: true  },
-      { key: 'serial', label: 'Số Seri (Serial Number – Duy nhất)',            required: true  },
+      { key: 'serial', label: 'Số Seri (Serial Number – Duy nhất, tùy chọn)', required: false },
       { key: 'status', label: 'Tình Trạng Kỹ Thuật (Mới 100% / Đang chạy tốt / Cần bảo trì / Hỏng đầu phun)', required: false },
     ],
     sampleRows: [
@@ -57,7 +57,7 @@ const IMPORT_CONFIGS = {
     columns: [
       { key: 'model',  label: 'Hệ Máy / Model (AI88, Evoshake-200, KMC-300...)', required: true  },
       { key: 'type',   label: 'Loại Lắc (Lắc xoay khép kín / Lắc rung đứng)', required: true  },
-      { key: 'serial', label: 'Số Seri',       required: true  },
+      { key: 'serial', label: 'Số Seri (tùy chọn)', required: false },
       { key: 'status', label: 'Tình Trạng Kỹ Thuật', required: false },
     ],
     sampleRows: [
@@ -72,7 +72,7 @@ const IMPORT_CONFIGS = {
       { key: 'type',    label: 'Loại Máy (AIO / Case)',           required: true  },
       { key: 'os',      label: 'Hệ Điều Hành (Windows 10 / 11...)', required: true  },
       { key: 'specs',   label: 'Cấu Hình (CPU / RAM / SSD)',      required: false },
-      { key: 'serial',  label: 'Số Seri',                         required: true  },
+      { key: 'serial',  label: 'Số Seri (không bắt buộc)',        required: false },
       { key: 'network', label: 'Kết Nối Mạng (Có mạng LAN / Wifi / Không có mạng)', required: false },
     ],
     sampleRows: [
@@ -85,7 +85,7 @@ const IMPORT_CONFIGS = {
     icon: '🖨️',
     columns: [
       { key: 'model',      label: 'Model Máy In (QL700)',          required: true  },
-      { key: 'serial',     label: 'Số Seri',                       required: true  },
+      { key: 'serial',     label: 'Số Seri (tùy chọn)',            required: false },
       { key: 'connection', label: 'Cổng Kết Nối (USB / LAN / Bluetooth)', required: false },
       { key: 'status',     label: 'Tình Trạng',                    required: false },
     ],
@@ -361,7 +361,7 @@ export default function ExcelImportModal({
       const newItems = rowsToImport.map((row, i) => ({
         id: `DISP-IMP-${String(timestamp + i).slice(-5)}`,
         model: row.model,
-        serial: row.serial,
+        serial: row.serial || 'N/A',
         status: row.status || 'Đang chạy tốt',
         isAssigned: false,
         setCode: null
@@ -374,7 +374,7 @@ export default function ExcelImportModal({
         id: `MIX-IMP-${String(timestamp + i).slice(-5)}`,
         model: row.model,
         type: row.type || 'Lắc xoay khép kín',
-        serial: row.serial,
+        serial: row.serial || 'N/A',
         status: row.status || 'Đang chạy tốt',
         isAssigned: false,
         setCode: null
@@ -388,7 +388,7 @@ export default function ExcelImportModal({
         type: row.type || 'Case',
         os: row.os,
         specs: row.specs || 'Core i3 / 8GB RAM / 256GB SSD',
-        serial: row.serial,
+        serial: row.serial || '—',
         network: row.network || 'Có mạng LAN',
         isAssigned: false,
         setCode: null,
@@ -401,7 +401,7 @@ export default function ExcelImportModal({
       const newItems = rowsToImport.map((row, i) => ({
         id: `PRN-IMP-${String(timestamp + i).slice(-5)}`,
         model: row.model || 'QL700',
-        serial: row.serial,
+        serial: row.serial || 'N/A',
         connection: row.connection || 'USB',
         status: row.status || 'Đang chạy tốt',
         isAssigned: false,

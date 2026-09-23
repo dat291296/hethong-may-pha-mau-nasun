@@ -302,6 +302,26 @@ export default function AssetManagement({
     installationPhotos: []
   });
 
+  const isMissingSerial = (device) => {
+    const value = String(device?.serial || '').trim().toUpperCase();
+    return !value || value === 'N/A' || value === '—' || value === '-';
+  };
+
+  const generateNextWarehouseId = (category) => {
+    const source = {
+      dispenser: dispensers,
+      mixer: mixers,
+      computer: computers,
+      printer: printers
+    }[category] || [];
+    const usedIds = new Set(source.map(item => String(item.id || '').trim()));
+    for (let number = 0; number <= 999; number += 1) {
+      const candidate = String(number).padStart(3, '0');
+      if (!usedIds.has(candidate)) return candidate;
+    }
+    return '';
+  };
+
   const handleOpenAssembleModal = () => {
     const defaultTech = (user && (user.role === 'qc' || user.role === 'admin')) ? (user.name || user.full_name) : (qcUsers[0]?.name || '');
     const autoCode = generateNextSetCode(systemSets);
@@ -329,6 +349,15 @@ export default function AssetManagement({
       alert('Vui lòng chọn đủ 4 thiết bị: 1 Máy Chiết + 1 Máy Lắc + 1 Máy Tính + 1 Máy In QL700!');
       return;
     }
+    const selectedDevices = [
+      { label: 'Máy chiết', device: dispensers.find(item => item.id === newSetData.dispenserId) },
+      { label: 'Máy lắc', device: mixers.find(item => item.id === newSetData.mixerId) },
+      { label: 'Máy in', device: printers.find(item => item.id === newSetData.printerId) }
+    ];
+    const missingSerialDevices = selectedDevices.filter(item => isMissingSerial(item.device));
+    if (missingSerialDevices.length > 0 && !window.confirm(`⚠️ CẢNH BÁO SERI\n\n${missingSerialDevices.map(item => `• ${item.label}`).join('\n')} chưa có số seri. Khi ghép xong, thiết bị sẽ được đánh dấu nổi bật trong danh mục đã cấp phát.\n\nBạn vẫn muốn ghép bộ máy?`)) {
+      return;
+    }
     onAssembleSet(newSetData);
     setShowAssembleModal(false);
     setNewSetData({
@@ -341,7 +370,7 @@ export default function AssetManagement({
   const handleOpenAddDevice = (category) => {
     setAddDeviceCategory(category);
     setAddFormData({
-      id: '',
+      id: generateNextWarehouseId(category),
       model: category === 'computer' ? 'All In One' : '',
       serial: '',
       status: 'Mới 100%',
@@ -421,8 +450,8 @@ export default function AssetManagement({
 
   const handleAddDeviceSubmit = (e) => {
     e.preventDefault();
-    if (addDeviceCategory !== 'computer' && !addFormData.serial) {
-      alert('Vui lòng nhập Số Seri!');
+    if (!addFormData.id) {
+      alert('Đã dùng hết mã tự động từ 000 đến 999. Vui lòng liên hệ quản trị để kiểm tra kho.');
       return;
     }
     if (addDeviceCategory !== 'computer' && !addFormData.model && !addFormData.type) {
@@ -492,6 +521,14 @@ export default function AssetManagement({
     const valA = String(a?.[key] || a?.id || a?.setCode || '');
     const valB = String(b?.[key] || b?.id || b?.setCode || '');
     return valA.localeCompare(valB, undefined, { numeric: true, sensitivity: 'base' });
+  };
+
+  const renderIssuedSerial = (item) => {
+    const shouldWarn = getAssignedInfo(item).isAssigned && isMissingSerial(item);
+    if (!shouldWarn) {
+      return <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent-cyan)' }}>{item.serial || 'N/A'}</span>;
+    }
+    return <span className="badge badge-danger" title="Thiết bị đã cấp phát nhưng chưa có số seri" style={{ fontSize: '0.72rem' }}>⚠️ Chưa có seri</span>;
   };
 
   const filteredSets = [...systemSets]
@@ -956,7 +993,7 @@ export default function AssetManagement({
                 <FileSpreadsheet size={16} />
                 <span>📥 Import Từ Excel</span>
               </button>
-              <button className="btn btn-secondary btn-sm" onClick={() => { setAddDeviceCategory(activeSubTab.slice(0, -1)); setShowAddDeviceModal(true); }}>
+              <button className="btn btn-secondary btn-sm" onClick={() => handleOpenAddDevice(activeSubTab.slice(0, -1))}>
                 <PlusCircle size={16} />
                 <span>Thêm Thiết Bị Lẻ Vào Kho</span>
               </button>
@@ -1385,7 +1422,7 @@ export default function AssetManagement({
                       {item.isNew && <span className="badge badge-success" style={{ fontSize: '0.65rem', marginLeft: '6px' }}>🆕 Mới</span>}
                     </td>
                     <td style={{ fontWeight: '700' }}>{item.model}</td>
-                    <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent-cyan)' }}>{item.serial}</td>
+                    <td>{renderIssuedSerial(item)}</td>
                     <td>
                       {item.status === 'Mới 100%' && <span className="badge badge-success">{item.status}</span>}
                       {item.status === 'Đang chạy tốt' && <span className="badge badge-info">{item.status}</span>}
@@ -1433,7 +1470,7 @@ export default function AssetManagement({
                       {item.model}
                       {item.isNew && <span className="badge badge-success" style={{ fontSize: '0.65rem', marginLeft: '6px' }}>🆕 Mới</span>}
                     </span>
-                    <div className="mobile-card-subtitle">Seri: {item.serial}</div>
+                    <div className="mobile-card-subtitle">Seri: {renderIssuedSerial(item)}</div>
                   </div>
                   <div>
                     {item.status === 'Mới 100%' && <span className="badge badge-success">{item.status}</span>}
@@ -1506,7 +1543,7 @@ export default function AssetManagement({
                     </td>
                     <td style={{ fontWeight: '700' }}>{item.model}</td>
                     <td>{item.type}</td>
-                    <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent-cyan)' }}>{item.serial}</td>
+                    <td>{renderIssuedSerial(item)}</td>
                     <td><span className="badge badge-info">{item.status}</span></td>
                     <td>
                       {(() => {
@@ -1548,7 +1585,7 @@ export default function AssetManagement({
                       {item.model}
                       {item.isNew && <span className="badge badge-success" style={{ fontSize: '0.65rem', marginLeft: '6px' }}>🆕 Mới</span>}
                     </span>
-                    <div className="mobile-card-subtitle">Seri: {item.serial}</div>
+                    <div className="mobile-card-subtitle">Seri: {renderIssuedSerial(item)}</div>
                   </div>
                   <div>
                     <span className="badge badge-info">{item.status}</span>
@@ -1789,7 +1826,7 @@ export default function AssetManagement({
                       {item.isNew && <span className="badge badge-success" style={{ fontSize: '0.65rem', marginLeft: '6px' }}>🆕 Mới</span>}
                     </td>
                     <td style={{ fontWeight: '700' }}>{item.model}</td>
-                    <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent-cyan)' }}>{item.serial}</td>
+                    <td>{renderIssuedSerial(item)}</td>
                     <td>{item.connection}</td>
                     <td><span className="badge badge-info">{item.status}</span></td>
                     <td>
@@ -1832,7 +1869,7 @@ export default function AssetManagement({
                       {item.model}
                       {item.isNew && <span className="badge badge-success" style={{ fontSize: '0.65rem', marginLeft: '6px' }}>🆕 Mới</span>}
                     </span>
-                    <div className="mobile-card-subtitle">Seri: {item.serial}</div>
+                    <div className="mobile-card-subtitle">Seri: {renderIssuedSerial(item)}</div>
                   </div>
                   <div>
                     <span className="badge badge-info">{item.status}</span>
@@ -1892,18 +1929,22 @@ export default function AssetManagement({
             </div>
             <form onSubmit={handleAddDeviceSubmit}>
               <div className="modal-body">
+                <div style={{ padding: '12px', marginBottom: '14px', borderRadius: '8px', background: 'rgba(56,189,248,0.10)', border: '1px solid rgba(56,189,248,0.35)', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                  💡 Gợi ý nhập kho: chọn model và tình trạng thiết bị. Mã QL được hệ thống tự đánh số từ 000–999. Số seri là tùy chọn; thiết bị thiếu seri sẽ được cảnh báo khi ghép bộ (trừ máy tính).
+                </div>
 
                 {/* Mã QL (ID) */}
                 <div className="form-group">
                   <label className="form-label">
-                    Mã Quản Lý (Mã QL) <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>(Tùy chọn - Tự động tạo nếu để trống)</span>
+                    Mã Quản Lý (Mã QL) <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>(Tự động 000–999)</span>
                   </label>
                   <input
                     type="text"
                     className="form-input"
-                    placeholder={`VD: ${addDeviceCategory.toUpperCase().slice(0, 4)}-009`}
+                    placeholder="Tự động tạo"
                     value={addFormData.id || ''}
-                    onChange={e => setAddFormData({ ...addFormData, id: e.target.value })}
+                    readOnly
+                    aria-readonly="true"
                   />
                 </div>
 
@@ -1935,7 +1976,7 @@ export default function AssetManagement({
                   <div className="form-group">
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
                       <label className="form-label" style={{ marginBottom: 0 }}>
-                        Số Seri (Serial Number) *
+                        Số Seri (Serial Number) <span style={{ color: 'var(--text-muted)', fontWeight: '400' }}>(Tùy chọn)</span>
                       </label>
                       <button
                         type="button"
@@ -1953,8 +1994,7 @@ export default function AssetManagement({
                     <input
                       type="text"
                       className="form-input"
-                      required
-                      placeholder="Nhập seri hoặc bấm Quét mã vạch"
+                      placeholder="Có thể để trống hoặc bấm Quét mã vạch"
                       value={addFormData.serial}
                       onChange={e => setAddFormData({ ...addFormData, serial: e.target.value })}
                     />
@@ -2059,7 +2099,7 @@ export default function AssetManagement({
                       <div className="form-group">
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
                           <label className="form-label" style={{ marginBottom: 0 }}>
-                            🏷️ Số Seri (Serial) *
+                            🏷️ Số Seri (Serial) <span style={{ color: 'var(--text-muted)', fontWeight: '400' }}>(Tùy chọn)</span>
                           </label>
                           <button
                             type="button"
@@ -2077,8 +2117,7 @@ export default function AssetManagement({
                         <input
                           type="text"
                           className="form-input"
-                          required
-                          placeholder="Nhập seri hoặc bấm Quét mã"
+                          placeholder="Có thể để trống hoặc bấm Quét mã"
                           value={editFormData.serial || ''}
                           onChange={e => setEditFormData({ ...editFormData, serial: e.target.value })}
                         />
@@ -2403,7 +2442,7 @@ export default function AssetManagement({
                             <option value="">-- Chọn máy chiết ({availDisp.length} máy) --</option>
                             {availDisp.map(d => (
                               <option key={d.id} value={d.id}>
-                                [{d.id}] {d.model} — Seri: {d.serial} {isDeviceFree(d) ? '🟢 (Tự do trong kho)' : `🟡 (Đang gán bộ ${d.setCode || d.set_code || ''})`}
+                                [{d.id}] {d.model} — Seri: {isMissingSerial(d) ? '⚠️ CHƯA CÓ' : d.serial} {isDeviceFree(d) ? '🟢 (Tự do trong kho)' : `🟡 (Đang gán bộ ${d.setCode || d.set_code || ''})`}
                               </option>
                             ))}
                           </select>
@@ -2424,7 +2463,7 @@ export default function AssetManagement({
                             <option value="">-- Chọn máy lắc ({availMix.length} máy) --</option>
                             {availMix.map(m => (
                               <option key={m.id} value={m.id}>
-                                [{m.id}] {m.model} ({m.type || 'Lắc xoay'}) — Seri: {m.serial} {isDeviceFree(m) ? '🟢 (Tự do trong kho)' : `🟡 (Đang gán bộ ${m.setCode || m.set_code || ''})`}
+                                [{m.id}] {m.model} ({m.type || 'Lắc xoay'}) — Seri: {isMissingSerial(m) ? '⚠️ CHƯA CÓ' : m.serial} {isDeviceFree(m) ? '🟢 (Tự do trong kho)' : `🟡 (Đang gán bộ ${m.setCode || m.set_code || ''})`}
                               </option>
                             ))}
                           </select>
@@ -2466,7 +2505,7 @@ export default function AssetManagement({
                             <option value="">-- Chọn máy in QL700 ({availPrn.length} máy) --</option>
                             {availPrn.map(p => (
                               <option key={p.id} value={p.id}>
-                                [{p.id}] {p.model} — Seri: {p.serial} {isDeviceFree(p) ? '🟢 (Tự do trong kho)' : `🟡 (Đang gán bộ ${p.setCode || p.set_code || ''})`}
+                                [{p.id}] {p.model} — Seri: {isMissingSerial(p) ? '⚠️ CHƯA CÓ' : p.serial} {isDeviceFree(p) ? '🟢 (Tự do trong kho)' : `🟡 (Đang gán bộ ${p.setCode || p.set_code || ''})`}
                               </option>
                             ))}
                           </select>
