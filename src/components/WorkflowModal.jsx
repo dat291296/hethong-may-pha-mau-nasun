@@ -69,7 +69,7 @@ export default function WorkflowModal({
     setPhotos(prev => prev.filter((_, i) => i !== index));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
     if (isDateLocked(handoverDate)) {
@@ -86,7 +86,7 @@ export default function WorkflowModal({
       dateObj.setFullYear(dateObj.getFullYear() + 1);
       const nextDue = dateObj.toISOString().split('T')[0];
 
-      onSubmitInstall({
+      await onSubmitInstall({
         setCode: selectedSetCode,
         nppId: targetNppId,
         technician,
@@ -101,7 +101,7 @@ export default function WorkflowModal({
         alert('Vui lòng chọn Bộ máy cần thu hồi và nhập Lý do thu hồi!');
         return;
       }
-      onSubmitWithdraw({
+      await onSubmitWithdraw({
         setCode: selectedSetCode,
         reason,
         deviceCondition,
@@ -116,7 +116,7 @@ export default function WorkflowModal({
         alert('Vui lòng chọn Bộ máy và Nhà Phân Phối đích!');
         return;
       }
-      onSubmitTransfer({
+      await onSubmitTransfer({
         setCode: selectedSetCode,
         newNppId: targetNppId,
         reason,

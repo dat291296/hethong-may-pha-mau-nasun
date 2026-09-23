@@ -247,7 +247,7 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
     setShowAddModal(false);
   };
 
-  const handleEditSubmit = (e) => {
+  const handleEditSubmit = async (e) => {
     e.preventDefault();
     if (!editingNpp) return;
 
@@ -264,13 +264,16 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
       ? `https://maps.google.com/?q=${encodeURIComponent(formData.locationCoordinates)}`
       : '';
 
-    onEditNpp({
-      ...editingNpp,
-      ...formData,
-      googleMapsUrl: mapsUrl
-    });
-
-    setEditingNpp(null);
+    try {
+      await onEditNpp({
+        ...editingNpp,
+        ...formData,
+        googleMapsUrl: mapsUrl
+      });
+      setEditingNpp(null);
+    } catch (err) {
+      console.error('[NppManagement] Update failed:', err);
+    }
   };
 
   const handleDelete = (npp) => {

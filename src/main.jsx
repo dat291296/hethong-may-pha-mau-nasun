@@ -18,21 +18,17 @@ createRoot(document.getElementById('root')).render(
 // Register Service Worker with update check & error recovery
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js')
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (refreshing) return;
+      refreshing = true;
+      window.location.reload();
+    });
+
+    navigator.serviceWorker.register('/sw.js?v=2.9', { updateViaCache: 'none' })
       .then(reg => {
         console.log('[SW] Registered successfully:', reg.scope);
-        // Check for SW updates
-        reg.onupdatefound = () => {
-          const installingWorker = reg.installing;
-          if (installingWorker) {
-            installingWorker.onstatechange = () => {
-              if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                console.log('[SW] New version available! Reloading...');
-                window.location.reload();
-              }
-            };
-          }
-        };
+        return reg.update();
       })
       .catch(err => console.error('[SW] Registration failed:', err));
   });

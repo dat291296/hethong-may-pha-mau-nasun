@@ -167,6 +167,22 @@ export function useAssets() {
     if (cacheHydrated) fetchAssets();
   }, [cacheHydrated, fetchAssets]);
 
+  // Refresh authoritative data when a phone returns to the app or reconnects.
+  useEffect(() => {
+    if (!cacheHydrated) return;
+    const refreshWhenActive = () => {
+      if (document.visibilityState === 'visible' && navigator.onLine) fetchAssets();
+    };
+    window.addEventListener('focus', refreshWhenActive);
+    window.addEventListener('online', refreshWhenActive);
+    document.addEventListener('visibilitychange', refreshWhenActive);
+    return () => {
+      window.removeEventListener('focus', refreshWhenActive);
+      window.removeEventListener('online', refreshWhenActive);
+      document.removeEventListener('visibilitychange', refreshWhenActive);
+    };
+  }, [cacheHydrated, fetchAssets]);
+
   // ── Realtime subscriptions for all asset tables ───────────────────────────
   useEffect(() => {
     if (!cacheHydrated || !isSupabaseConfigured || !supabase) return;
@@ -258,6 +274,7 @@ export function useAssets() {
         );
         if (error) throw error;
         if (!data || data.length === 0) throw createPersistenceError('Không có quyền cập nhật hoặc thiết bị không tồn tại trên Supabase');
+        await fetchAssets();
       } catch (err) {
         console.warn(`[Offline] Failed online editDevice for ${targetTable}. Queueing action.`, err);
         if (!canRetryOffline(err)) {

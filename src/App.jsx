@@ -35,6 +35,14 @@ const UserManagement = lazy(() => import('./components/UserManagement'));
 const TechHandbook = lazy(() => import('./components/TechHandbook'));
 const FieldRouteMap = lazy(() => import('./components/FieldRouteMap'));
 
+function normalizeWarehouseRegion(region) {
+  const value = String(region || '').toLowerCase();
+  if (value.includes('bắc') || value === 'mb') return 'Miền Bắc';
+  if (value.includes('trung') || value === 'mt') return 'Miền Trung';
+  if (value.includes('nam') || value === 'mn') return 'Miền Nam';
+  return 'Miền Bắc';
+}
+
 export default function App() {
   const { user, isDevMode } = useAuth();
   const [activeTab, setActiveTab] = useState(() => {
@@ -239,16 +247,17 @@ export default function App() {
 
       if (!wasInactive && isNowInactive) {
         const assignedSets = systemSets.filter(set => String(set.nppId || set.npp_id || '') === String(updatedNpp.id));
+        const warehouseRegion = normalizeWarehouseRegion(updatedNpp.region);
         for (const set of assignedSets) {
           const setCode = set.setCode || set.set_code;
           const recallNote = `Tự động thu hồi về kho ngày ${new Date().toISOString().split('T')[0]} do NPP ${updatedNpp.name} ngưng hợp tác.`;
           await updateSystemSet(setCode, {
             nppId: null,
             npp_id: null,
-            nppName: 'Kho Tổng Trung Tâm',
-            npp_name: 'Kho Tổng Trung Tâm',
-            region: 'Kho Tổng',
-            province: '',
+            nppName: 'Tự do trong kho',
+            npp_name: 'Tự do trong kho',
+            region: warehouseRegion,
+            province: updatedNpp.province || set.province || '',
             status: 'TRONG_KHO',
             agentStatus: 'Offline',
             agent_status: 'Offline',
@@ -265,13 +274,14 @@ export default function App() {
             serialList: assignedSets.map(set => set.setCode || set.set_code).join(', '),
             technician: user?.name || user?.full_name || 'Hệ thống',
             reason: 'Nhà phân phối chuyển trạng thái Đã ngưng hợp tác',
-            notes: `Đã chuyển ${assignedSets.length} bộ máy về Kho Tổng Trung Tâm; thiết bị trong bộ được giữ nguyên.`
+            notes: `Đã thu hồi ${assignedSets.length} bộ máy về kho tự do ${warehouseRegion}; thiết bị trong bộ được giữ nguyên.`
           });
         }
       }
     } catch (err) {
       console.error(err);
       alert('Lỗi sửa NPP: ' + err.message);
+      throw err;
     }
   };
 
@@ -344,6 +354,7 @@ export default function App() {
     } catch (err) {
       console.error(err);
       alert('Lỗi sửa thiết bị: ' + err.message);
+      throw err;
     }
   };
 
@@ -479,19 +490,20 @@ export default function App() {
     const targetSet = systemSets.find(s => s.setCode === data.setCode);
     const targetNpp = npps.find(npp => String(npp.id) === String(targetSet?.nppId || targetSet?.npp_id || ''));
     const isDistributorClosure = String(data.reason || '').toLowerCase().includes('ngưng hợp tác');
+    const warehouseRegion = normalizeWarehouseRegion(targetNpp?.region || targetSet?.region);
 
     try {
       if (isDistributorClosure && targetNpp) {
         await handleEditNpp({ ...targetNpp, status: 'Đã ngưng hợp tác' });
       } else {
         await updateSystemSet(data.setCode, {
-          status: 'TRONG_KHO',
           nppId: null,
           npp_id: null,
-          nppName: 'Kho Tổng Trung Tâm',
-          npp_name: 'Kho Tổng Trung Tâm',
-          region: 'Kho Tổng',
-          province: '',
+          nppName: 'Tự do trong kho',
+          npp_name: 'Tự do trong kho',
+          region: warehouseRegion,
+          province: targetNpp?.province || targetSet?.province || '',
+          status: 'TRONG_KHO',
           agentStatus: 'Offline',
           agent_status: 'Offline'
         });
@@ -510,6 +522,7 @@ export default function App() {
     } catch (err) {
       console.error(err);
       alert('Lỗi thu hồi máy: ' + err.message);
+      throw err;
     }
   };
 
