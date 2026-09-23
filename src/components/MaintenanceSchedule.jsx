@@ -14,6 +14,7 @@ import {
   Legend 
 } from 'recharts';
 import { formatDateVN } from '../utils/dateUtils.js';
+import { getSystemSetMissingFields } from '../utils/systemSetValidation.js';
 
 export default function MaintenanceSchedule({ systemSets, onCompleteMaintenance, onUpdateSystemSet, onDeleteSystemSet }) {
   const [filter, setFilter] = useState('ALL'); // ALL | DUE_SOON | OVERDUE | OK
@@ -60,8 +61,9 @@ export default function MaintenanceSchedule({ systemSets, onCompleteMaintenance,
 
   const processedSets = useMemo(() => {
     return systemSets.map(set => {
+      const missingFields = getSystemSetMissingFields(set);
       if (!set.nextMaintenanceDue) {
-        return { ...set, dueDays: 999, statusType: 'NO_DATE' };
+        return { ...set, dueDays: 999, statusType: 'NO_DATE', missingFields };
       }
       const dueDate = new Date(set.nextMaintenanceDue);
       const diffTime = dueDate - today;
@@ -74,7 +76,7 @@ export default function MaintenanceSchedule({ systemSets, onCompleteMaintenance,
         statusType = 'DUE_SOON'; // Warning: within 1 month (30 days)
       }
 
-      return { ...set, dueDays: diffDays, statusType };
+      return { ...set, dueDays: diffDays, statusType, missingFields };
     }).filter(set => `${set.setCode} ${set.nppName} ${set.region} ${set.dispenserModel} ${set.dispenserSerial}`.toLowerCase().includes(searchTerm.toLowerCase()));
   }, [systemSets, searchTerm]);
 
@@ -186,6 +188,12 @@ export default function MaintenanceSchedule({ systemSets, onCompleteMaintenance,
           </div>
         </div>
       </div>
+
+      {processedSets.filter(set => set.missingFields.length > 0).length > 0 && (
+        <div style={{ padding: '14px 16px', borderRadius: '10px', border: '1px solid rgba(239,68,68,0.45)', background: 'rgba(239,68,68,0.10)', fontSize: '0.82rem', color: '#fecaca' }}>
+          <strong>⚠️ Nhắc việc cho kỹ thuật viên:</strong> Có {processedSets.filter(set => set.missingFields.length > 0).length} bộ máy thiếu thông tin. Khi đến NPP bảo dưỡng, kiểm tra và bổ sung các mục được cảnh báo trước khi hoàn tất lịch bảo trì.
+        </div>
+      )}
 
       {/* CHARTS & KPI SECTION */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
@@ -301,6 +309,7 @@ export default function MaintenanceSchedule({ systemSets, onCompleteMaintenance,
                 <th>Lần Bảo Trì Gần Nhất</th>
                 <th>Hạn Bảo Trì Tiếp Theo</th>
                 <th>Trạng Thái Cảnh Báo</th>
+                <th>Cần Bổ Sung Khi Đến NPP</th>
                 <th>Thao Tác</th>
               </tr>
             </thead>
@@ -326,6 +335,9 @@ export default function MaintenanceSchedule({ systemSets, onCompleteMaintenance,
                     {set.statusType === 'OK' && (
                       <span className="badge badge-success">✓ Còn {set.dueDays} Ngày</span>
                     )}
+                  </td>
+                  <td>
+                    {set.missingFields.length > 0 ? <span className="badge badge-danger" title={set.missingFields.join(', ')}>⚠️ {set.missingFields.join(', ')}</span> : <span className="badge badge-success">✓ Đủ dữ liệu</span>}
                   </td>
                   <td>
                     <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
@@ -380,6 +392,10 @@ export default function MaintenanceSchedule({ systemSets, onCompleteMaintenance,
                 <div className="mobile-card-row">
                   <span className="mobile-card-label">Hạn Tiếp Theo:</span>
                   <span className="mobile-card-value" style={{ fontWeight: '700' }}>{formatDateVN(set.nextMaintenanceDue)}</span>
+                </div>
+                <div className="mobile-card-row">
+                  <span className="mobile-card-label">Cần bổ sung:</span>
+                  <span className="mobile-card-value">{set.missingFields.length > 0 ? <span className="badge badge-danger">⚠️ {set.missingFields.join(', ')}</span> : <span className="badge badge-success">✓ Đủ dữ liệu</span>}</span>
                 </div>
               </div>
               <div className="mobile-card-actions">
@@ -454,6 +470,13 @@ export default function MaintenanceSchedule({ systemSets, onCompleteMaintenance,
                   <div><strong>Nhà Phân Phối:</strong> {selectedSet.nppName}</div>
                   <div><strong>Máy Chiết:</strong> {selectedSet.dispenserModel} ({selectedSet.dispenserSerial})</div>
                 </div>
+
+                {getSystemSetMissingFields(selectedSet).length > 0 && (
+                  <div style={{ padding: '12px', borderRadius: '8px', marginBottom: '16px', background: 'rgba(239,68,68,0.10)', border: '1px solid rgba(239,68,68,0.45)', color: '#fecaca', fontSize: '0.82rem' }}>
+                    <strong>⚠️ Việc cần hoàn tất tại NPP:</strong><br />
+                    {getSystemSetMissingFields(selectedSet).map(field => <div key={field}>• Bổ sung {field}</div>)}
+                  </div>
+                )}
 
                 <div className="form-group">
                   <label className="form-label">Ngày Thao Tác Bảo Trì *</label>

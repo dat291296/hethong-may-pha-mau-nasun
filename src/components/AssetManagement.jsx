@@ -37,6 +37,7 @@ import {
 } from '../data/mockData';
 import { useModalScrollLock } from '../hooks/useModalScrollLock.js';
 import { exportExcel } from '../utils/excelExport.js';
+import { getSystemSetMissingFields } from '../utils/systemSetValidation.js';
 
 export default function AssetManagement({
   systemSets,
@@ -744,6 +745,7 @@ export default function AssetManagement({
     { key: 'computers', label: 'Máy tính lẻ', icon: '💻', color: '#a855f7', items: stockBundleSummary.loose.computers, getName: item => `${item.type || 'Máy tính'} · ${item.id}` },
     { key: 'printers', label: 'Máy in lẻ', icon: '🖨️', color: '#10b981', items: stockBundleSummary.loose.printers, getName: item => `${item.model || 'QL700'} · ${item.serial || item.id}` }
   ], [stockBundleSummary]);
+  const incompleteSystemSets = React.useMemo(() => (systemSets || []).filter(set => getSystemSetMissingFields(set).length > 0), [systemSets]);
 
   // Breakdown by model/type for stock items
   const dispenserStockBreakdown = React.useMemo(() => {
@@ -1029,6 +1031,12 @@ export default function AssetManagement({
               ))}
             </div>
           </div>
+          {incompleteSystemSets.length > 0 && (
+            <div style={{ padding: '12px 14px', marginBottom: '16px', border: '1px solid rgba(239,68,68,0.45)', borderRadius: '10px', background: 'rgba(239,68,68,0.10)', color: '#fecaca', fontSize: '0.8rem' }}>
+              <strong>⚠️ {incompleteSystemSets.length} bộ máy thiếu dữ liệu cần bổ sung khi đi NPP/bảo dưỡng.</strong>
+              <span style={{ marginLeft: '6px', color: 'var(--text-secondary)' }}>Cảnh báo áp dụng cho mọi trạng thái bộ máy.</span>
+            </div>
+          )}
           
           {/* Filters Bar & Search Input */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px', flexWrap: 'wrap' }}>
@@ -1110,11 +1118,13 @@ export default function AssetManagement({
                   <th>Cán Bộ Phụ Trách</th>
                   <th>Ổn Áp (Ghi Nhận)</th>
                   <th>Trạng Thái</th>
+                  <th>Thiếu Thông Tin</th>
                   <th>Thao Tác</th>
                 </tr>
               </thead>
               <tbody>
                 {getPaginatedList(filteredSets).map(set => {
+                  const missingFields = getSystemSetMissingFields(set);
                   const pcObj = (computers || []).find(c => set.computerId && c.id === set.computerId);
                   const pcSpecsText = pcObj?.specs || set.pcSpecs || (set.pcType ? `${set.pcType} (${set.pcOs || ''})` : set.computerType || 'Core i5 / 16GB / 512GB SSD');
 
@@ -1238,6 +1248,11 @@ export default function AssetManagement({
                         {set.status === 'BAO_THUONG_BAO_TRI' && <span className="badge badge-warning">● Bảo Trì</span>}
                       </td>
                       <td>
+                        {missingFields.length > 0 ? (
+                          <span className="badge badge-danger" title={missingFields.join(', ')}>⚠️ {missingFields.length} mục thiếu</span>
+                        ) : <span className="badge badge-success">✓ Đủ dữ liệu</span>}
+                      </td>
+                      <td>
                         <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
                           <button 
                             className="btn btn-secondary btn-sm" 
@@ -1265,6 +1280,7 @@ export default function AssetManagement({
           {/* Mobile View Cards */}
           <div className="mobile-only mobile-card-list">
             {getPaginatedList(filteredSets).map(set => {
+              const missingFields = getSystemSetMissingFields(set);
                   const pcObj = (computers || []).find(c => set.computerId && c.id === set.computerId);
               const pcSpecsText = pcObj?.specs || set.pcSpecs || (set.pcType ? `${set.pcType} (${set.pcOs || ''})` : set.computerType || 'Core i5 / 16GB / 512GB SSD');
 
@@ -1319,6 +1335,10 @@ export default function AssetManagement({
                     <div className="mobile-card-row">
                       <span className="mobile-card-label">Ổn Áp:</span>
                       <span className="mobile-card-value">{set.stabilizer}</span>
+                    </div>
+                    <div className="mobile-card-row">
+                      <span className="mobile-card-label">Dữ liệu cần bổ sung:</span>
+                      <span className="mobile-card-value">{missingFields.length > 0 ? <span className="badge badge-danger">⚠️ {missingFields.join(', ')}</span> : <span className="badge badge-success">✓ Đủ dữ liệu</span>}</span>
                     </div>
 
                     {/* Attached Photos Strip on Mobile Card */}
