@@ -4,6 +4,25 @@ import { supabase, isSupabaseConfigured } from '../lib/supabase.js';
 
 // ─── Auth Context ─────────────────────────────────────────────────────────────
 const AuthContext = createContext(null);
+const OFFLINE_USER_KEY = 'nasun_offline_user';
+
+function getOfflineUser(authUser) {
+  try {
+    const cached = JSON.parse(localStorage.getItem(OFFLINE_USER_KEY) || 'null');
+    return cached?.id === authUser?.id ? cached : null;
+  } catch {
+    return null;
+  }
+}
+
+function persistOfflineUser(user) {
+  try {
+    if (user) localStorage.setItem(OFFLINE_USER_KEY, JSON.stringify(user));
+    else localStorage.removeItem(OFFLINE_USER_KEY);
+  } catch (error) {
+    console.warn('[Auth] Could not persist offline user profile:', error.message);
+  }
+}
 
 // Default dev user (used when Supabase not configured)
 const DEV_USERS = {
@@ -63,10 +82,27 @@ export function AuthProvider({ children }) {
         const currentIsVerified = currentUrlParams.get('verified') === 'true';
 
         if (session && !currentIsVerified) {
-          loadUserProfile(session.user);
+          if (!navigator.onLine) {
+            const cachedUser = getOfflineUser(session.user);
+            const fallbackUser = cachedUser || {
+              id: session.user.id,
+              email: session.user.email,
+              name: session.user.email,
+              role: ROLES.VIEWER,
+              managedRegion: 'Miền Bắc'
+            };
+            setUser(fallbackUser);
+            setRole(fallbackUser.role || ROLES.VIEWER);
+            setLoading(false);
+          } else {
+            loadUserProfile(session.user);
+          }
         } else {
           setLoading(false);
         }
+      }).catch(error => {
+        console.warn('[Auth] Session restore failed:', error.message);
+        setLoading(false);
       });
 
       const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -75,7 +111,21 @@ export function AuthProvider({ children }) {
           const currentIsVerified = currentUrlParams.get('verified') === 'true';
 
           if (session && !currentIsVerified) {
-            await loadUserProfile(session.user);
+            if (!navigator.onLine) {
+              const cachedUser = getOfflineUser(session.user);
+              const fallbackUser = cachedUser || {
+                id: session.user.id,
+                email: session.user.email,
+                name: session.user.email,
+                role: ROLES.VIEWER,
+                managedRegion: 'Miền Bắc'
+              };
+              setUser(fallbackUser);
+              setRole(fallbackUser.role || ROLES.VIEWER);
+              setLoading(false);
+            } else {
+              await loadUserProfile(session.user);
+            }
           } else {
             setUser(null);
             setRole(ROLES.VIEWER);
@@ -126,26 +176,30 @@ export function AuthProvider({ children }) {
         throw error;
       }
 
-      setUser({
+      const resolvedUser = {
         id: authUser.id,
         email: authUser.email,
         name: profile?.full_name || authUser.email,
         role: finalRole,
         avatarUrl: profile?.avatar_url || null,
         managedRegion: finalRegion,
-      });
+      };
+      setUser(resolvedUser);
+      persistOfflineUser(resolvedUser);
       setRole(finalRole);
     } catch (err) {
       console.error('[Auth] Failed to load user profile:', err.message);
       const isSpecificAdmin = authUser.email?.toLowerCase() === 'dat291219962.hust@gmail.com';
-      setUser({ 
+      const fallbackUser = getOfflineUser(authUser) || {
         id: authUser.id, 
         email: authUser.email, 
         name: authUser.email, 
         role: isSpecificAdmin ? ROLES.ADMIN : ROLES.VIEWER,
         managedRegion: isSpecificAdmin ? 'Toàn Quốc' : 'Miền Bắc'
-      });
-      setRole(isSpecificAdmin ? ROLES.ADMIN : ROLES.VIEWER);
+      };
+      setUser(fallbackUser);
+      persistOfflineUser(fallbackUser);
+      setRole(fallbackUser.role || (isSpecificAdmin ? ROLES.ADMIN : ROLES.VIEWER));
     } finally {
       setLoading(false);
     }
@@ -199,6 +253,7 @@ export function AuthProvider({ children }) {
     }
     setUser(null);
     setRole(ROLES.VIEWER);
+    persistOfflineUser(null);
   }, []);
 
   const value = {
