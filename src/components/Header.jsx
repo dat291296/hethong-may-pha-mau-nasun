@@ -150,7 +150,7 @@ export default function Header({
           ) : (
             <div className="connection-status-badge online">
               <Wifi size={12} />
-              <span>Đã Đồng Bộ (Online)</span>
+              <span>Đang Online</span>
             </div>
           )}
         </div>

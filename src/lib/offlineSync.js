@@ -28,6 +28,20 @@ async function updateDeviceWithSchemaFallback(table, id, updates) {
   }
 }
 
+async function insertDeviceWithSchemaFallback(table, payload) {
+  const compatiblePayload = normalizeDevicePayload(payload);
+  if (table === 'computers') delete compatiblePayload.serial;
+  while (true) {
+    const { error } = await supabase.from(table).upsert(compatiblePayload, { onConflict: 'id' });
+    if (!error) return null;
+    const match = String(error.message || '').match(/Could not find the '([^']+)' column/i);
+    const missingColumn = match?.[1];
+    if (!missingColumn || !(missingColumn in compatiblePayload)) return error;
+    console.warn(`[OfflineSync] ${table}.${missingColumn} is absent; retrying without it.`);
+    delete compatiblePayload[missingColumn];
+  }
+}
+
 /**
  * Push an action to the offline queue
  */
@@ -114,8 +128,7 @@ async function processOfflineQueue(onStatusChange) {
           error = editNppErr;
           break;
         case 'ADD_DEVICE':
-          const { error: addDevErr } = await supabase.from(item.category).insert(normalizeDevicePayload(item.payload));
-          error = addDevErr;
+          error = await insertDeviceWithSchemaFallback(item.category, item.payload);
           break;
         case 'EDIT_DEVICE':
           {

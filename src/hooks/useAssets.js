@@ -67,6 +67,23 @@ function getMissingSchemaColumn(error) {
   return match?.[1] || null;
 }
 
+async function writeWithSchemaFallback(table, payload, mode = 'insert') {
+  const compatiblePayload = { ...payload };
+  while (true) {
+    const result = await safeQuery(
+      sb => mode === 'upsert'
+        ? sb.from(table).upsert(compatiblePayload, { onConflict: 'id' })
+        : sb.from(table).insert(compatiblePayload),
+      `${mode}Device:${table}`
+    );
+    if (!result.error) return;
+    const missingColumn = getMissingSchemaColumn(result.error);
+    if (!missingColumn || !(missingColumn in compatiblePayload)) throw result.error;
+    console.warn(`[Assets] ${table}.${missingColumn} is absent; retrying without it.`);
+    delete compatiblePayload[missingColumn];
+  }
+}
+
 /**
  * useAssets – unified hook for all physical equipment:
  * Dispensers, Mixers, Computers, Printers, System Sets.
@@ -237,11 +254,7 @@ export function useAssets() {
 
     if (isSupabaseConfigured && navigator.onLine) {
       try {
-        const { error } = await safeQuery(
-          sb => sb.from(cfg.table).insert(dbPayload),
-          `addStockDevice:${category}`
-        );
-        if (error) throw error;
+        await writeWithSchemaFallback(cfg.table, dbPayload);
         await fetchAssets();
       } catch (err) {
         console.warn(`[Offline] Failed online addStockDevice for ${category}. Queueing action.`, err);
@@ -391,11 +404,9 @@ export function useAssets() {
       const dbItems = items.map(item => mapDeviceToDb(item, cfg.table));
       if (navigator.onLine) {
         try {
-          const { error } = await safeQuery(
-            sb => sb.from(cfg.table).upsert(dbItems, { onConflict: 'id' }),
-            `importDevices:${type}`
-          );
-          if (error) throw error;
+          for (const item of dbItems) {
+            await writeWithSchemaFallback(cfg.table, item, 'upsert');
+          }
           await fetchAssets();
         } catch (err) {
           dbItems.forEach(item => enqueueOfflineAction('ADD_DEVICE', item, cfg.table));
@@ -715,7 +726,6 @@ function mapDeviceToDb(obj, category) {
 function sanitizeDeviceForDb(category, data, tempId) {
   const base = {
     id: data.id || tempId,
-    serial: data.serial || 'N/A',
     status: data.status || 'Mới 100%',
     is_assigned: Boolean(data.isAssigned || data.is_assigned),
     set_code: data.setCode || data.set_code || null
@@ -724,6 +734,7 @@ function sanitizeDeviceForDb(category, data, tempId) {
   if (category === 'dispenser') {
     return {
       ...base,
+      serial: data.serial || 'N/A',
       model: data.model || 'Satint'
     };
   }
@@ -731,6 +742,7 @@ function sanitizeDeviceForDb(category, data, tempId) {
   if (category === 'mixer') {
     return {
       ...base,
+      serial: data.serial || 'N/A',
       model: data.model || 'Satint ST-50',
       type: data.type || 'Lắc xoay khép kín'
     };
@@ -749,6 +761,7 @@ function sanitizeDeviceForDb(category, data, tempId) {
   if (category === 'printer') {
     return {
       ...base,
+      serial: data.serial || 'N/A',
       model: data.model || 'QL700',
       connection: data.connection || 'USB'
     };
