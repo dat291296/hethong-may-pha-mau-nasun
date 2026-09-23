@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Bell, Search, PlusCircle, AlertTriangle, ShieldAlert, CheckCircle2, UserCheck, Wifi, WifiOff, RefreshCw, Menu, Database } from 'lucide-react';
 import RoleSelector from './RoleSelector.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -34,6 +34,7 @@ export default function Header({
   const [queueCount, setQueueCount] = useState(0);
   const [syncState, setSyncState] = useState('idle'); // idle | syncing | error
   const [syncErrorMessage, setSyncErrorMessage] = useState('');
+  const syncingRef = useRef(false);
 
   // Update states on mount and set listeners
   useEffect(() => {
@@ -45,8 +46,9 @@ export default function Header({
       }
     };
 
-    const updateQueueCount = () => {
-      setQueueCount(getOfflineQueue().length);
+    const updateQueueCount = async () => {
+      const queue = await getOfflineQueue();
+      setQueueCount(queue.length);
     };
 
     window.addEventListener('online', updateStatus);
@@ -69,21 +71,28 @@ export default function Header({
   }, []);
 
   const handleSync = async () => {
-    if (syncState === 'syncing' || !navigator.onLine) return;
+    if (syncingRef.current || !navigator.onLine) return;
     
+    syncingRef.current = true;
     setSyncState('syncing');
     setSyncErrorMessage('');
     
-    const success = await syncOfflineQueue((status, remaining, err) => {
-      if (status === 'error') {
-        setSyncState('error');
-        setSyncErrorMessage(err || 'Đồng bộ thất bại');
-      }
-    });
+    try {
+      const success = await syncOfflineQueue((status, remaining, err) => {
+        if (status === 'error') {
+          setSyncState('error');
+          setSyncErrorMessage(err || 'Đồng bộ thất bại');
+        }
+        setQueueCount(remaining || 0);
+      });
 
-    if (success) {
-      setSyncState('idle');
-      setQueueCount(0);
+      const queue = await getOfflineQueue();
+      setQueueCount(queue.length);
+      if (success) {
+        setSyncState('idle');
+      }
+    } finally {
+      syncingRef.current = false;
     }
   };
 

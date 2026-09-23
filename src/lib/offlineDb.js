@@ -1,11 +1,13 @@
 const DB_NAME = 'nasun_offline_db';
 const DB_VERSION = 1;
+let dbPromise = null;
 
 /**
  * Open or initialize the IndexedDB connection
  */
 function openDb() {
-  return new Promise((resolve, reject) => {
+  if (dbPromise) return dbPromise;
+  dbPromise = new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
 
     request.onupgradeneeded = (event) => {
@@ -23,13 +25,24 @@ function openDb() {
     };
 
     request.onsuccess = (event) => {
-      resolve(event.target.result);
+      const db = event.target.result;
+      db.onversionchange = () => {
+        db.close();
+        dbPromise = null;
+      };
+      resolve(db);
     };
 
     request.onerror = (event) => {
+      dbPromise = null;
       reject(event.target.error || 'Failed to open IndexedDB');
     };
+
+    request.onblocked = () => {
+      console.warn('[offlineDb] Database upgrade is blocked by another tab.');
+    };
   });
+  return dbPromise;
 }
 
 /**

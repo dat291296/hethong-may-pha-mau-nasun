@@ -1,6 +1,33 @@
 import { supabase, isSupabaseConfigured } from './supabase';
 import { addToQueue, getQueue, removeFromQueue, clearQueue, setCache, getCache } from './offlineDb';
 
+let activeSyncPromise = null;
+
+function getActionIdentity(item) {
+  const payload = item?.payload || {};
+  switch (item?.action) {
+    case 'EDIT_DEVICE': return `${item.action}:${item.category}:${payload.id}`;
+    case 'EDIT_NPP':
+    case 'EDIT_REPAIR':
+    case 'UPDATE_AUDIT_LOG': return `${item.action}:${payload.id}`;
+    case 'UPDATE_SYSTEM_SET': return `${item.action}:${payload.targetSetCode || payload.set_code || payload.setCode}`;
+    default: return null;
+  }
+}
+
+async function updateDeviceWithSchemaFallback(table, id, updates) {
+  const compatibleUpdates = { ...updates };
+  while (true) {
+    const { error } = await supabase.from(table).update(compatibleUpdates).eq('id', id);
+    if (!error) return null;
+    const match = String(error.message || '').match(/Could not find the '([^']+)' column/i);
+    const missingColumn = match?.[1];
+    if (!missingColumn || !(missingColumn in compatibleUpdates)) return error;
+    console.warn(`[OfflineSync] ${table}.${missingColumn} is absent; retrying with legacy schema.`);
+    delete compatibleUpdates[missingColumn];
+  }
+}
+
 /**
  * Push an action to the offline queue
  */
@@ -12,6 +39,14 @@ export async function enqueueOfflineAction(action, payload, category = null) {
     category,
     timestamp: Date.now()
   };
+
+  // Collapse consecutive edits to the same record so a weak mobile connection
+  // does not replay obsolete intermediate versions.
+  const queue = await getQueue();
+  const previousItem = queue.at(-1);
+  if (previousItem && getActionIdentity(previousItem) === getActionIdentity(newItem)) {
+    await removeFromQueue(previousItem.id);
+  }
   
   await addToQueue(newItem);
   
@@ -48,13 +83,14 @@ export async function clearOfflineQueue() {
  * Process the offline queue and upload all actions to Supabase.
  * Returns true if all synchronized successfully.
  */
-export async function syncOfflineQueue(onStatusChange) {
+async function processOfflineQueue(onStatusChange) {
   if (!isSupabaseConfigured || !navigator.onLine) {
     return false;
   }
 
   const queue = await getOfflineQueue();
   if (queue.length === 0) {
+    window.dispatchEvent(new CustomEvent('nasun-sync-completed', { detail: { synced: 0 } }));
     return true;
   }
 
@@ -85,8 +121,7 @@ export async function syncOfflineQueue(onStatusChange) {
           {
             const devicePayload = normalizeDevicePayload(item.payload);
             const { id, ...deviceUpdates } = devicePayload;
-            const { error: editDevErr } = await supabase.from(item.category).update(deviceUpdates).eq('id', id);
-            error = editDevErr;
+            error = await updateDeviceWithSchemaFallback(item.category, id, deviceUpdates);
           }
           break;
         case 'DELETE_DEVICE':
@@ -170,7 +205,17 @@ export async function syncOfflineQueue(onStatusChange) {
 
   console.log(`[OfflineSync] Sync complete! Successfully synced ${successCount} actions.`);
   if (onStatusChange) onStatusChange('idle', 0);
+  window.dispatchEvent(new CustomEvent('nasun-sync-completed', { detail: { synced: successCount } }));
   return true;
+}
+
+export function syncOfflineQueue(onStatusChange) {
+  if (activeSyncPromise) return activeSyncPromise;
+  activeSyncPromise = processOfflineQueue(onStatusChange)
+    .finally(() => {
+      activeSyncPromise = null;
+    });
+  return activeSyncPromise;
 }
 
 /**

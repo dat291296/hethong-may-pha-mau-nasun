@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase, isSupabaseConfigured, safeQuery } from '../lib/supabase.js';
 import {
   INITIAL_DISPENSERS,
@@ -80,6 +80,9 @@ export function useAssets() {
   const [systemSets,  setSystemSets]  = useState(() => getInitialAssets('system_sets', INITIAL_SYSTEM_SETS));
   const [loading, setLoading] = useState(false);
   const [cacheHydrated, setCacheHydrated] = useState(false);
+  const fetchInFlightRef = useRef(null);
+  const fetchPendingRef = useRef(false);
+  const realtimeTimerRef = useRef(null);
 
   // Hydrate from IndexedDB cache on mount if available
   useEffect(() => {
@@ -105,7 +108,7 @@ export function useAssets() {
   }, []);
 
   // ── Fetch all asset tables ────────────────────────────────────────────────
-  const fetchAssets = useCallback(async () => {
+  const performFetchAssets = useCallback(async () => {
     if (!isSupabaseConfigured) return;
     const pendingQueue = await getOfflineQueue();
     if (pendingQueue.some(isPendingAssetAction)) {
@@ -169,36 +172,44 @@ export function useAssets() {
     setLoading(false);
   }, []);
 
+  const fetchAssets = useCallback(() => {
+    if (fetchInFlightRef.current) {
+      fetchPendingRef.current = true;
+      return fetchInFlightRef.current;
+    }
+
+    const request = performFetchAssets().finally(() => {
+      fetchInFlightRef.current = null;
+      if (fetchPendingRef.current) {
+        fetchPendingRef.current = false;
+        window.setTimeout(() => fetchAssets(), 0);
+      }
+    });
+    fetchInFlightRef.current = request;
+    return request;
+  }, [performFetchAssets]);
+
   useEffect(() => {
     if (cacheHydrated) fetchAssets();
-  }, [cacheHydrated, fetchAssets]);
-
-  // Refresh authoritative data when a phone returns to the app or reconnects.
-  useEffect(() => {
-    if (!cacheHydrated) return;
-    const refreshWhenActive = () => {
-      if (document.visibilityState === 'visible' && navigator.onLine) fetchAssets();
-    };
-    window.addEventListener('focus', refreshWhenActive);
-    window.addEventListener('online', refreshWhenActive);
-    document.addEventListener('visibilitychange', refreshWhenActive);
-    return () => {
-      window.removeEventListener('focus', refreshWhenActive);
-      window.removeEventListener('online', refreshWhenActive);
-      document.removeEventListener('visibilitychange', refreshWhenActive);
-    };
   }, [cacheHydrated, fetchAssets]);
 
   // ── Realtime subscriptions for all asset tables ───────────────────────────
   useEffect(() => {
     if (!cacheHydrated || !isSupabaseConfigured || !supabase) return;
+    const scheduleRefresh = () => {
+      window.clearTimeout(realtimeTimerRef.current);
+      realtimeTimerRef.current = window.setTimeout(() => fetchAssets(), 250);
+    };
     const tables = ['dispensers', 'mixers', 'computers', 'printers', 'system_sets'];
     const channels = tables.map(table =>
       supabase.channel(`${table}-changes`)
-        .on('postgres_changes', { event: '*', schema: 'public', table }, () => fetchAssets())
+        .on('postgres_changes', { event: '*', schema: 'public', table }, scheduleRefresh)
         .subscribe()
     );
-    return () => channels.forEach(ch => supabase.removeChannel(ch));
+    return () => {
+      window.clearTimeout(realtimeTimerRef.current);
+      channels.forEach(ch => supabase.removeChannel(ch));
+    };
   }, [cacheHydrated, fetchAssets]);
 
   // ── Generic add stock device ────────────────────────────────────────────────

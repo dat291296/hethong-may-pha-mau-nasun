@@ -109,16 +109,46 @@ export default function App() {
   }, [user]);
 
   // Main State via Supabase hooks
-  const { npps, addNpp, editNpp, deleteNpp, importNpps } = useNpps();
+  const { npps, addNpp, editNpp, deleteNpp, importNpps, refetch: refetchNpps } = useNpps();
   const {
     dispensers, setDispensers, mixers, setMixers, computers, setComputers, printers, setPrinters, systemSets, setSystemSets,
-    addStockDevice, editDevice, deleteDevice, deleteSystemSet, assembleSet, updateSystemSet, importDevices, importSystemSets
+    addStockDevice, editDevice, deleteDevice, deleteSystemSet, assembleSet, updateSystemSet, importDevices, importSystemSets, refetch: refetchAssets
   } = useAssets();
-  const { repairTickets, addTicket, editTicket, deleteTicket, importTickets } = useRepairs();
-  const { auditLogs, addAuditLog, editAuditLog, deleteAuditLog, importAuditLogs } = useAuditLogs();
+  const { repairTickets, addTicket, editTicket, deleteTicket, importTickets, refetch: refetchRepairs } = useRepairs();
+  const { auditLogs, addAuditLog, editAuditLog, deleteAuditLog, importAuditLogs, refetch: refetchAuditLogs } = useAuditLogs();
   const { lockedMonths, lockMonth, unlockMonth, isDateLocked, loading: lockLoading, error: lockError } = useLockedMonths();
-  const { tintingLogs, setTintingLogs, importLogs } = useTintingLogs();
-  const { formulaVersions } = useFormulaVersions();
+  const { tintingLogs, setTintingLogs, importLogs, refetch: refetchTintingLogs } = useTintingLogs();
+  const { formulaVersions, refetch: refetchFormulaVersions } = useFormulaVersions();
+
+  useEffect(() => {
+    let refreshTimer = null;
+    const refreshAllData = () => {
+      if (!navigator.onLine || document.visibilityState !== 'visible') return;
+      window.clearTimeout(refreshTimer);
+      refreshTimer = window.setTimeout(() => {
+        Promise.allSettled([
+          refetchNpps(),
+          refetchAssets(),
+          refetchRepairs(),
+          refetchAuditLogs(),
+          refetchTintingLogs(),
+          refetchFormulaVersions()
+        ]);
+      }, 200);
+    };
+
+    window.addEventListener('focus', refreshAllData);
+    window.addEventListener('online', refreshAllData);
+    window.addEventListener('nasun-sync-completed', refreshAllData);
+    document.addEventListener('visibilitychange', refreshAllData);
+    return () => {
+      window.clearTimeout(refreshTimer);
+      window.removeEventListener('focus', refreshAllData);
+      window.removeEventListener('online', refreshAllData);
+      window.removeEventListener('nasun-sync-completed', refreshAllData);
+      document.removeEventListener('visibilitychange', refreshAllData);
+    };
+  }, [refetchNpps, refetchAssets, refetchRepairs, refetchAuditLogs, refetchTintingLogs, refetchFormulaVersions]);
 
   // Excel Import Modal state
   const [showImportModal, setShowImportModal] = useState(false);
