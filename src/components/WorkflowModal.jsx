@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowLeftRight, CheckCircle2, AlertTriangle, ShieldCheck, Printer, Calendar, Camera, X } from 'lucide-react';
+import { ArrowLeftRight, CheckCircle2, AlertTriangle, ShieldCheck, Printer, Calendar, Camera, X, Search } from 'lucide-react';
 import { compressImage } from '../utils/imageCompressor.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useModalScrollLock } from '../hooks/useModalScrollLock.js';
@@ -34,6 +34,9 @@ export default function WorkflowModal({
   const [technician, setTechnician] = useState('Nguyễn Văn Hùng');
   const [handoverDate, setHandoverDate] = useState(new Date().toISOString().split('T')[0]);
   const [reason, setReason] = useState('');
+  const [withdrawNppSearch, setWithdrawNppSearch] = useState('');
+  const [transferSourceSearch, setTransferSourceSearch] = useState('');
+  const [transferTargetSearch, setTransferTargetSearch] = useState('');
   const [notes, setNotes] = useState('');
   const [stabilizerBrand, setStabilizerBrand] = useState('Lioa 2000VA');
   const [hasStabilizer, setHasStabilizer] = useState(true);
@@ -128,6 +131,31 @@ export default function WorkflowModal({
 
   const selectedSet = systemSets.find(s => s.setCode === selectedSetCode);
   const targetNpp = npps.find(n => n.id === targetNppId);
+  const naturalCompare = (a, b, key) => String(a?.[key] || '').localeCompare(String(b?.[key] || ''), undefined, { numeric: true, sensitivity: 'base' });
+  const compareSystemByNpp = (a, b) => {
+    const nppIdDelta = naturalCompare(a, b, 'nppId');
+    if (nppIdDelta !== 0) return nppIdDelta;
+    const nppNameDelta = naturalCompare(a, b, 'nppName');
+    return nppNameDelta !== 0 ? nppNameDelta : naturalCompare(a, b, 'setCode');
+  };
+  const matchesSearch = (item, query, fields) => {
+    const normalizedQuery = query.trim().toLowerCase();
+    if (!normalizedQuery) return true;
+    return fields.some(field => String(item?.[field] || '').toLowerCase().includes(normalizedQuery));
+  };
+  const withdrawalSetOptions = filteredSets
+    .filter(set => set.status === 'DA_LAP_DAT' || set.status === 'BAO_THUONG_BAO_TRI')
+    .filter(set => matchesSearch(set, withdrawNppSearch, ['nppName', 'nppId', 'setCode', 'region', 'province']))
+    .sort(compareSystemByNpp);
+  const transferSourceOptions = filteredSets
+    .filter(set => set.status === 'DA_LAP_DAT')
+    .filter(set => matchesSearch(set, transferSourceSearch, ['nppName', 'nppId', 'setCode', 'region', 'province']))
+    .sort(compareSystemByNpp);
+  const transferTargetOptions = filteredNpps
+    .filter(npp => npp.status === 'Đang hợp tác')
+    .filter(npp => String(npp.id) !== String(selectedSet?.nppId || selectedSet?.npp_id || ''))
+    .filter(npp => matchesSearch(npp, transferTargetSearch, ['name', 'id', 'region', 'province', 'address']))
+    .sort((a, b) => naturalCompare(a, b, 'id'));
 
   return (
     <div className="modal-overlay">
@@ -159,7 +187,7 @@ export default function WorkflowModal({
                   <select className="form-select" required value={selectedSetCode} onChange={e => setSelectedSetCode(e.target.value)}>
                     <option value="">-- Chọn bộ máy từ kho --</option>
                     {systemSets.filter(s => s.status === 'TRONG_KHO' || s.status === 'DA_THU_HOI').map(s => (
-                      <option key={s.id} value={s.setCode}>
+                      <option key={s.setCode} value={s.setCode}>
                         [{s.setCode}] Chiết: {s.dispenserModel} | Lắc: {s.mixerModel} | PC: {s.pcType} | In: QL700
                       </option>
                     ))}
@@ -223,10 +251,14 @@ export default function WorkflowModal({
 
                 <div className="form-group">
                   <label className="form-label">1. Chọn Bộ Máy Cần Thu Hồi Từ NPP *</label>
+                  <div style={{ position: 'relative', marginBottom: '7px' }}>
+                    <Search size={15} style={{ position: 'absolute', left: '11px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                    <input className="form-input" value={withdrawNppSearch} onChange={e => setWithdrawNppSearch(e.target.value)} placeholder="Tìm tên/mã NPP, mã bộ máy, khu vực..." style={{ paddingLeft: '34px' }} />
+                  </div>
                   <select className="form-select" required value={selectedSetCode} onChange={e => setSelectedSetCode(e.target.value)}>
-                    <option value="">-- Chọn bộ máy đang lắp đặt tại NPP --</option>
-                    {filteredSets.filter(s => s.status === 'DA_LAP_DAT' || s.status === 'BAO_THUONG_BAO_TRI').map(s => (
-                      <option key={s.id} value={s.setCode}>
+                    <option value="">-- Chọn bộ máy đang lắp đặt tại NPP ({withdrawalSetOptions.length}) --</option>
+                    {withdrawalSetOptions.map(s => (
+                      <option key={s.setCode} value={s.setCode}>
                         [{s.setCode}] tại {s.nppName} (Chiết: {s.dispenserModel})
                       </option>
                     ))}
@@ -272,10 +304,14 @@ export default function WorkflowModal({
               <>
                 <div className="form-group">
                   <label className="form-label">1. Chọn Bộ Máy Cần Điều Chuyển *</label>
+                  <div style={{ position: 'relative', marginBottom: '7px' }}>
+                    <Search size={15} style={{ position: 'absolute', left: '11px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                    <input className="form-input" value={transferSourceSearch} onChange={e => setTransferSourceSearch(e.target.value)} placeholder="Tìm NPP đang giữ máy, mã bộ máy, khu vực..." style={{ paddingLeft: '34px' }} />
+                  </div>
                   <select className="form-select" required value={selectedSetCode} onChange={e => setSelectedSetCode(e.target.value)}>
-                    <option value="">-- Chọn bộ máy cần điều chuyển --</option>
-                    {filteredSets.filter(s => s.status === 'DA_LAP_DAT').map(s => (
-                      <option key={s.id} value={s.setCode}>
+                    <option value="">-- Chọn bộ máy cần điều chuyển ({transferSourceOptions.length}) --</option>
+                    {transferSourceOptions.map(s => (
+                      <option key={s.setCode} value={s.setCode}>
                         [{s.setCode}] Đang ở: {s.nppName} ({s.region})
                       </option>
                     ))}
@@ -284,9 +320,13 @@ export default function WorkflowModal({
 
                 <div className="form-group">
                   <label className="form-label">2. Chọn NPP Đích Nhận Điều Chuyển *</label>
+                  <div style={{ position: 'relative', marginBottom: '7px' }}>
+                    <Search size={15} style={{ position: 'absolute', left: '11px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                    <input className="form-input" value={transferTargetSearch} onChange={e => setTransferTargetSearch(e.target.value)} placeholder="Tìm tên/mã NPP đích, tỉnh hoặc khu vực..." style={{ paddingLeft: '34px' }} />
+                  </div>
                   <select className="form-select" required value={targetNppId} onChange={e => setTargetNppId(e.target.value)}>
-                    <option value="">-- Chọn NPP nhận điều chuyển --</option>
-                    {filteredNpps.filter(n => n.status === 'Đang hợp tác').map(n => (
+                    <option value="">-- Chọn NPP nhận điều chuyển ({transferTargetOptions.length}) --</option>
+                    {transferTargetOptions.map(n => (
                       <option key={n.id} value={n.id}>[{n.id}] {n.name} ({n.region})</option>
                     ))}
                   </select>

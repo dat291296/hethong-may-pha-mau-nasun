@@ -16,12 +16,29 @@ import {
 import { formatDateVN } from '../utils/dateUtils.js';
 import { getSystemSetMissingFields } from '../utils/systemSetValidation.js';
 
+const MAINTENANCE_REGIONS = ['Miền Bắc', 'Miền Trung', 'Miền Nam'];
+
+function normalizeRegion(region = '') {
+  const value = String(region).toLowerCase();
+  if (value.includes('bắc') || value === 'mb') return 'Miền Bắc';
+  if (value.includes('trung') || value === 'mt') return 'Miền Trung';
+  if (value.includes('nam') || value === 'mn') return 'Miền Nam';
+  return 'Chưa xác định';
+}
+
+function isDateInYear(value, year) {
+  if (!value) return false;
+  const date = new Date(value);
+  return !Number.isNaN(date.getTime()) && date.getFullYear() === year;
+}
+
 export default function MaintenanceSchedule({ systemSets, onCompleteMaintenance, onUpdateSystemSet, onDeleteSystemSet }) {
   const [filter, setFilter] = useState('ALL'); // ALL | DUE_SOON | OVERDUE | OK
   const [selectedSet, setSelectedSet] = useState(null);
   const [techNotes, setTechNotes] = useState('');
   const [maintDate, setMaintDate] = useState(new Date().toISOString().split('T')[0]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [regionWorkFilter, setRegionWorkFilter] = useState('ALL');
 
   // Edit maintenance states
   const [editingMaint, setEditingMaint] = useState(null);
@@ -58,6 +75,45 @@ export default function MaintenanceSchedule({ systemSets, onCompleteMaintenance,
   };
 
   const today = new Date();
+  const currentYear = today.getFullYear();
+
+  const annualRegionPlan = useMemo(() => {
+    const eligibleSets = systemSets.filter(set =>
+      (set.status === 'DA_LAP_DAT' || set.status === 'BAO_THUONG_BAO_TRI') &&
+      set.nppName && !String(set.nppName).includes('Kho Tổng')
+    );
+
+    return MAINTENANCE_REGIONS.map(region => {
+      const sets = eligibleSets.filter(set => normalizeRegion(set.region) === region);
+      const maintained = sets.filter(set => isDateInYear(set.lastMaintenanceDate, currentYear));
+      const pending = sets
+        .filter(set => !isDateInYear(set.lastMaintenanceDate, currentYear))
+        .sort((a, b) => {
+          const aTime = a.nextMaintenanceDue ? new Date(a.nextMaintenanceDue).getTime() : 0;
+          const bTime = b.nextMaintenanceDue ? new Date(b.nextMaintenanceDue).getTime() : 0;
+          if (aTime !== bTime) return aTime - bTime;
+          return naturalSortCode(a, b, 'setCode');
+        });
+      return {
+        region,
+        total: sets.length,
+        maintained,
+        pending,
+        progress: sets.length > 0 ? Math.round((maintained.length / sets.length) * 100) : 0
+      };
+    });
+  }, [systemSets, currentYear]);
+
+  const pendingAnnualWork = useMemo(() => annualRegionPlan
+    .flatMap(group => group.pending.map(set => ({ ...set, normalizedRegion: group.region })))
+    .filter(set => regionWorkFilter === 'ALL' || set.normalizedRegion === regionWorkFilter)
+    .sort((a, b) => {
+      const regionDelta = MAINTENANCE_REGIONS.indexOf(a.normalizedRegion) - MAINTENANCE_REGIONS.indexOf(b.normalizedRegion);
+      if (regionDelta !== 0) return regionDelta;
+      const aTime = a.nextMaintenanceDue ? new Date(a.nextMaintenanceDue).getTime() : 0;
+      const bTime = b.nextMaintenanceDue ? new Date(b.nextMaintenanceDue).getTime() : 0;
+      return aTime !== bTime ? aTime - bTime : naturalSortCode(a, b, 'setCode');
+    }), [annualRegionPlan, regionWorkFilter]);
 
   const processedSets = useMemo(() => {
     return systemSets.map(set => {
@@ -127,6 +183,7 @@ export default function MaintenanceSchedule({ systemSets, onCompleteMaintenance,
   }, [processedSets]);
 
   const filteredSets = processedSets.filter(s => {
+    if (regionWorkFilter !== 'ALL' && normalizeRegion(s.region) !== regionWorkFilter) return false;
     if (filter === 'DUE_SOON') return s.statusType === 'DUE_SOON';
     if (filter === 'OVERDUE') return s.statusType === 'OVERDUE';
     if (filter === 'OK') return s.statusType === 'OK';
@@ -138,7 +195,7 @@ export default function MaintenanceSchedule({ systemSets, onCompleteMaintenance,
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [filter]);
+  }, [filter, regionWorkFilter, searchTerm]);
 
   // Sort strictly in natural ascending order from 1 to N, top to bottom
   const sortedSets = [...filteredSets].sort((a, b) => naturalSortCode(a, b, 'setCode'));
@@ -194,6 +251,68 @@ export default function MaintenanceSchedule({ systemSets, onCompleteMaintenance,
           <strong>⚠️ Nhắc việc cho kỹ thuật viên:</strong> Có {processedSets.filter(set => set.missingFields.length > 0).length} bộ máy thiếu thông tin. Khi đến NPP bảo dưỡng, kiểm tra và bổ sung các mục được cảnh báo trước khi hoàn tất lịch bảo trì.
         </div>
       )}
+
+      {/* Annual regional work plan */}
+      <div className="glass-panel" style={{ padding: '18px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap', marginBottom: '14px' }}>
+          <div>
+            <h3 style={{ fontSize: '1rem', fontWeight: '800', color: 'var(--accent-cyan)', margin: 0 }}>🗺️ Kế Hoạch Công Tác Bảo Trì Năm {currentYear}</h3>
+            <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: '4px 0 0' }}>Theo dõi NPP đã bảo trì và danh sách cần đi công tác theo ba miền.</p>
+          </div>
+          <button className={`btn btn-sm ${regionWorkFilter === 'ALL' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setRegionWorkFilter('ALL')}>Cả 3 miền</button>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '12px' }}>
+          {annualRegionPlan.map((group, index) => {
+            const colors = ['#38bdf8', '#f59e0b', '#10b981'];
+            const color = colors[index];
+            return (
+              <div key={group.region} onClick={() => setRegionWorkFilter(group.region)} style={{ padding: '14px', borderRadius: '10px', cursor: 'pointer', background: regionWorkFilter === group.region ? `${color}20` : 'rgba(15,23,42,0.55)', border: `1px solid ${regionWorkFilter === group.region ? color : 'var(--border-color)'}` }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <strong style={{ color }}>{group.region}</strong>
+                  <span style={{ fontSize: '1.1rem', fontWeight: '900', color }}>{group.progress}%</span>
+                </div>
+                <div style={{ height: '7px', background: 'rgba(255,255,255,0.08)', borderRadius: '999px', overflow: 'hidden', margin: '10px 0' }}>
+                  <div style={{ width: `${group.progress}%`, height: '100%', background: color }} />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '0.78rem' }}>
+                  <div style={{ padding: '8px', borderRadius: '7px', background: 'rgba(16,185,129,0.10)' }}><span style={{ color: 'var(--text-muted)' }}>Đã bảo trì</span><div style={{ fontSize: '1.15rem', fontWeight: '900', color: '#34d399' }}>{group.maintained.length}/{group.total}</div></div>
+                  <div style={{ padding: '8px', borderRadius: '7px', background: 'rgba(244,63,94,0.10)' }}><span style={{ color: 'var(--text-muted)' }}>Chưa bảo trì</span><div style={{ fontSize: '1.15rem', fontWeight: '900', color: '#fb7185' }}>{group.pending.length}</div></div>
+                </div>
+                <details onClick={event => event.stopPropagation()} style={{ marginTop: '10px', fontSize: '0.75rem' }}>
+                  <summary style={{ cursor: 'pointer', color: '#34d399', fontWeight: '700' }}>NPP đã bảo trì ({group.maintained.length})</summary>
+                  <div style={{ marginTop: '5px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>{group.maintained.length === 0 ? 'Chưa có' : group.maintained.map(set => <div key={set.setCode}>✓ {set.nppName} — {formatDateVN(set.lastMaintenanceDate)}</div>)}</div>
+                </details>
+                <details onClick={event => event.stopPropagation()} style={{ marginTop: '6px', fontSize: '0.75rem' }}>
+                  <summary style={{ cursor: 'pointer', color: '#fb7185', fontWeight: '700' }}>NPP cần đi bảo trì ({group.pending.length})</summary>
+                  <div style={{ marginTop: '5px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>{group.pending.length === 0 ? 'Đã hoàn thành khu vực' : group.pending.map(set => <div key={set.setCode}>• {set.nppName} [{set.setCode}]</div>)}</div>
+                </details>
+              </div>
+            );
+          })}
+        </div>
+
+        <div style={{ marginTop: '16px', paddingTop: '14px', borderTop: '1px solid var(--border-color)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap', marginBottom: '8px' }}>
+            <strong style={{ fontSize: '0.86rem' }}>📋 Danh sách cần xếp lịch: {pendingAnnualWork.length} bộ máy {regionWorkFilter !== 'ALL' ? `— ${regionWorkFilter}` : ''}</strong>
+            <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Ưu tiên: quá hạn/chưa có lịch → hạn gần nhất → mã bộ máy tăng dần</span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '310px', overflowY: 'auto' }}>
+            {pendingAnnualWork.length === 0 ? <div style={{ padding: '14px', color: '#34d399', textAlign: 'center' }}>✓ Đã hoàn thành bảo trì trong năm cho khu vực đang chọn.</div> : pendingAnnualWork.map(set => {
+              const dueDate = set.nextMaintenanceDue ? new Date(set.nextMaintenanceDue) : null;
+              const isOverdue = dueDate && !Number.isNaN(dueDate.getTime()) && dueDate < today;
+              return (
+                <div key={`${set.normalizedRegion}-${set.setCode}`} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px', alignItems: 'center', padding: '9px 10px', borderRadius: '7px', background: isOverdue ? 'rgba(244,63,94,0.09)' : 'rgba(15,23,42,0.50)', fontSize: '0.76rem' }}>
+                  <strong style={{ color: isOverdue ? '#fb7185' : 'var(--accent-cyan)' }}>{set.normalizedRegion}</strong>
+                  <span><strong>{set.nppName}</strong><br /><span style={{ color: 'var(--text-muted)' }}>{set.setCode}</span></span>
+                  <span>{set.province || set.region}</span>
+                  <span>{!dueDate || Number.isNaN(dueDate.getTime()) ? <span className="badge badge-warning">Chưa có lịch</span> : isOverdue ? <span className="badge badge-danger">Quá hạn {formatDateVN(set.nextMaintenanceDue)}</span> : <span className="badge badge-info">Hạn {formatDateVN(set.nextMaintenanceDue)}</span>}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
 
       {/* CHARTS & KPI SECTION */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
