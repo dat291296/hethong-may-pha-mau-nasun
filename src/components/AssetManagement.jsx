@@ -315,12 +315,18 @@ export default function AssetManagement({
       computer: computers,
       printer: printers
     }[category] || [];
-    const usedIds = new Set(source.map(item => String(item.id || '').trim()));
-    for (let number = 0; number <= 999; number += 1) {
-      const candidate = String(number).padStart(3, '0');
-      if (!usedIds.has(candidate)) return candidate;
-    }
-    return '';
+    const prefix = { dispenser: 'DISP', mixer: 'MIXE', computer: 'COMP', printer: 'PRIN' }[category];
+    const prefixPattern = new RegExp(`^${prefix}-(\\d{1,3})$`, 'i');
+    let highestNumber = 0;
+    source.forEach(item => {
+      const id = String(item.id || '').trim();
+      const prefixedMatch = id.match(prefixPattern);
+      const legacyMatch = id.match(/^(\d{1,3})$/);
+      const matchedNumber = prefixedMatch?.[1] || legacyMatch?.[1];
+      if (matchedNumber) highestNumber = Math.max(highestNumber, Number(matchedNumber));
+    });
+    const nextNumber = highestNumber + 1;
+    return nextNumber <= 999 ? `${prefix}-${String(nextNumber).padStart(3, '0')}` : '';
   };
 
   const handleOpenAssembleModal = () => {
@@ -452,7 +458,7 @@ export default function AssetManagement({
   const handleAddDeviceSubmit = (e) => {
     e.preventDefault();
     if (!addFormData.id) {
-      alert('Đã dùng hết mã tự động từ 000 đến 999. Vui lòng liên hệ quản trị để kiểm tra kho.');
+      alert('Đã dùng hết mã tự động từ 001 đến 999 cho loại thiết bị này. Vui lòng liên hệ quản trị để kiểm tra kho.');
       return;
     }
     if (addDeviceCategory !== 'computer' && !addFormData.model && !addFormData.type) {
@@ -1968,13 +1974,13 @@ export default function AssetManagement({
             <form onSubmit={handleAddDeviceSubmit}>
               <div className="modal-body">
                 <div style={{ padding: '12px', marginBottom: '14px', borderRadius: '8px', background: 'rgba(56,189,248,0.10)', border: '1px solid rgba(56,189,248,0.35)', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                  💡 Gợi ý nhập kho: chọn model và tình trạng thiết bị. Mã QL được hệ thống tự đánh số từ 000–999. Số seri là tùy chọn; thiết bị thiếu seri sẽ được cảnh báo khi ghép bộ (trừ máy tính).
+                  💡 Gợi ý nhập kho: chọn model và tình trạng thiết bị. Mã QL tự tăng theo loại máy và tiếp tục từ mã lớn nhất đã có. Số seri là tùy chọn; thiết bị thiếu seri sẽ được cảnh báo khi ghép bộ (trừ máy tính).
                 </div>
 
                 {/* Mã QL (ID) */}
                 <div className="form-group">
                   <label className="form-label">
-                    Mã Quản Lý (Mã QL) <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>(Tự động 000–999)</span>
+                    Mã Quản Lý (Mã QL) <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>(Tự động theo loại, 001–999)</span>
                   </label>
                   <input
                     type="text"

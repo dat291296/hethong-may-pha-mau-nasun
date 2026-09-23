@@ -232,8 +232,43 @@ export default function App() {
 
   const handleEditNpp = async (updatedNpp) => {
     try {
+      const previousNpp = npps.find(npp => npp.id === updatedNpp.id);
+      const wasInactive = String(previousNpp?.status || '').toLowerCase().includes('ngưng');
+      const isNowInactive = String(updatedNpp.status || '').toLowerCase().includes('ngưng');
       await editNpp(updatedNpp.id, updatedNpp);
-      // Let backend real-time updates propagate the changes
+
+      if (!wasInactive && isNowInactive) {
+        const assignedSets = systemSets.filter(set => String(set.nppId || set.npp_id || '') === String(updatedNpp.id));
+        for (const set of assignedSets) {
+          const setCode = set.setCode || set.set_code;
+          const recallNote = `Tự động thu hồi về kho ngày ${new Date().toISOString().split('T')[0]} do NPP ${updatedNpp.name} ngưng hợp tác.`;
+          await updateSystemSet(setCode, {
+            nppId: null,
+            npp_id: null,
+            nppName: 'Kho Tổng Trung Tâm',
+            npp_name: 'Kho Tổng Trung Tâm',
+            region: 'Kho Tổng',
+            province: '',
+            status: 'TRONG_KHO',
+            agentStatus: 'Offline',
+            agent_status: 'Offline',
+            notes: [set.notes, recallNote].filter(Boolean).join('\n')
+          });
+        }
+
+        if (assignedSets.length > 0) {
+          await addAuditLog({
+            type: 'THU HỒI TỰ ĐỘNG – NPP NGƯNG HỢP TÁC',
+            setCode: assignedSets.map(set => set.setCode || set.set_code).join(', '),
+            nppId: updatedNpp.id,
+            nppName: updatedNpp.name,
+            serialList: assignedSets.map(set => set.setCode || set.set_code).join(', '),
+            technician: user?.name || user?.full_name || 'Hệ thống',
+            reason: 'Nhà phân phối chuyển trạng thái Đã ngưng hợp tác',
+            notes: `Đã chuyển ${assignedSets.length} bộ máy về Kho Tổng Trung Tâm; thiết bị trong bộ được giữ nguyên.`
+          });
+        }
+      }
     } catch (err) {
       console.error(err);
       alert('Lỗi sửa NPP: ' + err.message);

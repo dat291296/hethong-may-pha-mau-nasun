@@ -380,8 +380,9 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
           .slice((currentPage - 1) * pageSize, currentPage * pageSize)
           .map((npp) => {
           const assignedSets = systemSets.filter(s => s.nppId === npp.id);
+          const isInactive = String(npp.status || '').toLowerCase().includes('ngưng');
           return (
-            <div key={npp.id} className="glass-panel glass-panel-hover" style={{ padding: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+            <div key={npp.id} className="glass-panel glass-panel-hover" style={{ padding: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', border: isInactive ? '2px solid rgba(239,68,68,0.75)' : undefined, background: isInactive ? 'linear-gradient(135deg, rgba(127,29,29,0.32), rgba(15,23,42,0.95))' : undefined, boxShadow: isInactive ? '0 0 0 1px rgba(239,68,68,0.18), 0 10px 26px rgba(127,29,29,0.22)' : undefined }}>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -399,7 +400,7 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
                     {npp.status === 'Đang hợp tác' ? (
                       <span className="badge badge-success">✓ Đang hợp tác</span>
                     ) : (
-                      <span className="badge badge-neutral">✕ Đã ngưng</span>
+                      <span className="badge badge-danger">⚠ Đã ngưng hợp tác</span>
                     )}
 
                     {/* Edit & Delete Action Buttons */}
@@ -433,6 +434,12 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
                 <h3 style={{ fontSize: '1.05rem', fontWeight: '800', color: 'var(--text-main)', marginBottom: '8px' }}>
                   {npp.name}
                 </h3>
+
+                {isInactive && (
+                  <div style={{ padding: '8px 10px', marginBottom: '10px', borderRadius: '7px', background: 'rgba(239,68,68,0.16)', border: '1px solid rgba(239,68,68,0.4)', color: '#fecaca', fontSize: '0.76rem', fontWeight: '700' }}>
+                    ⚠️ NPP đã ngưng hợp tác — bộ máy liên kết đã được tự động thu hồi về Kho Tổng Trung Tâm.
+                  </div>
+                )}
 
                 <div style={{ fontSize: '0.825rem', color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '16px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
