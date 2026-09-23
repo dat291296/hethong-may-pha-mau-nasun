@@ -89,13 +89,13 @@ CREATE POLICY "repair_update_staff"  ON repair_tickets FOR UPDATE USING (get_my_
 CREATE POLICY "repair_delete_admin"  ON repair_tickets FOR DELETE USING (get_my_role() = 'admin' AND NOT is_month_locked(date));
 
 -- ══════════════════════════════════════════════════════════════
--- AUDIT LOGS (Nhật Ký – APPEND ONLY!)
+-- AUDIT LOGS (Nhật Ký – staff read, admin manages corrections)
 -- ══════════════════════════════════════════════════════════════
--- QC + Admin can read, authenticated users can insert, NOBODY can update/delete
+-- QC + Admin can read, authenticated users can insert, only Admin can update/delete.
 CREATE POLICY "audit_select_staff"  ON audit_logs FOR SELECT USING (get_my_role() IN ('admin', 'qc'));
 CREATE POLICY "audit_insert_auth"   ON audit_logs FOR INSERT WITH CHECK (auth.role() = 'authenticated');
--- NO UPDATE policy (append-only enforced)
--- NO DELETE policy
+CREATE POLICY "audit_update_admin"  ON audit_logs FOR UPDATE USING (get_my_role() = 'admin') WITH CHECK (get_my_role() = 'admin');
+CREATE POLICY "audit_delete_admin"  ON audit_logs FOR DELETE USING (get_my_role() = 'admin');
 
 -- ══════════════════════════════════════════════════════════════
 -- LOCKED MONTHS

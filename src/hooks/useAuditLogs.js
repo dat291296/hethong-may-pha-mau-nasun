@@ -6,7 +6,8 @@ import { cacheOfflineData, getCachedOfflineData, enqueueOfflineAction } from '..
 const LOCAL_STORAGE_KEY = 'nasun_audit_logs';
 
 function sanitizeAndRenumberAuditLogs(logs) {
-  if (!Array.isArray(logs) || logs.length === 0) return INITIAL_AUDIT_LOGS;
+  if (!Array.isArray(logs)) return [];
+  if (logs.length === 0) return [];
 
   // 1. Remove legacy sample audits 001 to 004
   const legacyTimestamps = ['2025-08-15 10:00', '2025-08-01 14:30', '2025-02-10 16:00', '2026-05-20 09:15'];
@@ -19,7 +20,7 @@ function sanitizeAndRenumberAuditLogs(logs) {
     return true;
   });
 
-  const baseLogs = filtered.length > 0 ? filtered : INITIAL_AUDIT_LOGS;
+  const baseLogs = filtered;
 
   // 2. Sort by timestamp descending (hiển thị audit gần nhất trên đầu)
   baseLogs.sort((a, b) => {
@@ -28,11 +29,8 @@ function sanitizeAndRenumberAuditLogs(logs) {
     return timeB.localeCompare(timeA);
   });
 
-  // 3. Renumber from AUDIT-001 sequentially to the end
-  return baseLogs.map((log, index) => ({
-    ...log,
-    id: `AUDIT-${String(index + 1).padStart(3, '0')}`
-  }));
+  // IDs are persistent database keys and must never be renumbered after reload.
+  return baseLogs;
 }
 
 function getInitialAuditLogs() {
@@ -40,7 +38,7 @@ function getInitialAuditLogs() {
     const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
+      if (Array.isArray(parsed)) {
         const cleaned = sanitizeAndRenumberAuditLogs(parsed);
         localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(cleaned));
         return cleaned;
@@ -98,7 +96,7 @@ export function useAuditLogs() {
         const cleaned = sanitizeAndRenumberAuditLogs(cached);
         setAuditLogs(cleaned);
       }
-    } else if (data && data.length > 0) {
+    } else if (Array.isArray(data)) {
       const mapped = data.map(mapDbToAudit);
       const cleaned = sanitizeAndRenumberAuditLogs(mapped);
       setAuditLogs(cleaned);
@@ -123,27 +121,24 @@ export function useAuditLogs() {
 
   const addAuditLog = useCallback(async (logData) => {
     const timestamp = logData.timestamp || new Date().toISOString().replace('T', ' ').substring(0, 16);
+    const stableId = logData.id || `AUDIT-${Date.now()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
     let finalLog = null;
 
-    // Update local state immediately, sort nearest on top, and renumber
+    // Update local state immediately while preserving a stable database ID.
     setAuditLogs(prev => {
       const newLog = {
         ...logData,
-        id: 'TEMP',
+        id: stableId,
         timestamp
       };
       const combined = [newLog, ...prev];
       combined.sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
-      const renumbered = combined.map((item, idx) => ({
-        ...item,
-        id: `AUDIT-${String(idx + 1).padStart(3, '0')}`
-      }));
-      finalLog = renumbered[0];
-      persistAuditLogs(renumbered);
-      return renumbered;
+      finalLog = newLog;
+      persistAuditLogs(combined);
+      return combined;
     });
 
-    const dbPayload = mapAuditToDb(finalLog || { ...logData, timestamp, id: `AUDIT-${Date.now()}` });
+    const dbPayload = mapAuditToDb(finalLog || { ...logData, timestamp, id: stableId });
 
     if (isSupabaseConfigured && navigator.onLine) {
       try {
@@ -179,30 +174,32 @@ export function useAuditLogs() {
       return updated;
     });
 
-    const dbPayload = mapAuditToDb({ id, ...(currentItem || updates) });
+    const fullDbPayload = mapAuditToDb({ id, ...(currentItem || updates) });
+    const { id: _stableId, ...dbUpdates } = fullDbPayload;
 
     if (isSupabaseConfigured && navigator.onLine) {
       try {
         const { data: updatedRows, error } = await safeQuery(
-          sb => sb.from('audit_logs').update(dbPayload).eq('id', id).select(),
+          sb => sb.from('audit_logs').update(dbUpdates).eq('id', id).select('id'),
           'editAuditLog'
         );
         if (error) throw error;
 
         if (!updatedRows || updatedRows.length === 0) {
           await safeQuery(
-            sb => sb.from('audit_logs').upsert(dbPayload),
+            sb => sb.from('audit_logs').upsert(fullDbPayload, { onConflict: 'id' }),
             'upsertAuditLog'
           );
         }
+        await fetchAuditLogs();
       } catch (err) {
         console.warn('[Offline] Failed online editAuditLog. Queueing.', err);
-        enqueueOfflineAction('UPDATE_AUDIT_LOG', { id, ...dbPayload });
+        enqueueOfflineAction('UPDATE_AUDIT_LOG', { id, ...dbUpdates });
       }
     } else if (isSupabaseConfigured && !navigator.onLine) {
-      enqueueOfflineAction('UPDATE_AUDIT_LOG', { id, ...dbPayload });
+      enqueueOfflineAction('UPDATE_AUDIT_LOG', { id, ...dbUpdates });
     }
-  }, []);
+  }, [fetchAuditLogs]);
 
   const deleteAuditLog = useCallback(async (id) => {
     setAuditLogs(prev => {
@@ -218,6 +215,7 @@ export function useAuditLogs() {
           'deleteAuditLog'
         );
         if (error) throw error;
+        await fetchAuditLogs();
       } catch (err) {
         console.warn('[Offline] Failed online deleteAuditLog. Queueing.', err);
         enqueueOfflineAction('DELETE_AUDIT_LOG', { id });
@@ -225,7 +223,7 @@ export function useAuditLogs() {
     } else if (isSupabaseConfigured && !navigator.onLine) {
       enqueueOfflineAction('DELETE_AUDIT_LOG', { id });
     }
-  }, []);
+  }, [fetchAuditLogs]);
 
   const importAuditLogs = useCallback(async (items) => {
     const dbItems = items.map(mapAuditToDb).filter(item => item.id && item.type);

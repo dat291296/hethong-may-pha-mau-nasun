@@ -477,14 +477,25 @@ export default function App() {
 
   const handleWithdrawSubmit = async (data) => {
     const targetSet = systemSets.find(s => s.setCode === data.setCode);
+    const targetNpp = npps.find(npp => String(npp.id) === String(targetSet?.nppId || targetSet?.npp_id || ''));
+    const isDistributorClosure = String(data.reason || '').toLowerCase().includes('ngưng hợp tác');
 
     try {
-      await updateSystemSet(data.setCode, {
-        status: 'DA_THU_HOI',
-        npp_id: null,
-        npp_name: 'Kho Tổng (Đã thu hồi)',
-        agent_status: 'Offline'
-      });
+      if (isDistributorClosure && targetNpp) {
+        await handleEditNpp({ ...targetNpp, status: 'Đã ngưng hợp tác' });
+      } else {
+        await updateSystemSet(data.setCode, {
+          status: 'TRONG_KHO',
+          nppId: null,
+          npp_id: null,
+          nppName: 'Kho Tổng Trung Tâm',
+          npp_name: 'Kho Tổng Trung Tâm',
+          region: 'Kho Tổng',
+          province: '',
+          agentStatus: 'Offline',
+          agent_status: 'Offline'
+        });
+      }
 
       await addAuditLog({
         type: 'THU HỒI',
@@ -494,7 +505,7 @@ export default function App() {
         serialList: `Bộ máy ${data.setCode}`,
         technician: data.technician,
         reason: data.reason,
-        notes: `${data.deviceCondition} | ${data.notes}`
+        notes: `${data.deviceCondition} | ${data.notes}${isDistributorClosure ? ' | NPP đã tự động chuyển sang Đã ngưng hợp tác; toàn bộ bộ máy liên kết đã về kho.' : ''}`
       });
     } catch (err) {
       console.error(err);

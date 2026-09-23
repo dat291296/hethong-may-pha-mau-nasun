@@ -4,8 +4,11 @@ import { useDebounce } from '../security/useDebounce.js';
 import { sanitizeForSheet } from '../security/sanitize.js';
 import { formatDateVN } from '../utils/dateUtils.js';
 import * as XLSX from 'xlsx';
+import { useAuth } from '../context/AuthContext.jsx';
 
 export default function AuditLogs({ auditLogs, onEditLog, onDeleteLog }) {
+  const { user } = useAuth();
+  const canManageLogs = user?.role === 'admin';
   const [filterType, setFilterType]     = useState('ALL');
   const [rawSearch, setRawSearch]       = useState('');
   const [severityFilter, setSeverityFilter] = useState('ALL');
@@ -207,6 +210,7 @@ export default function AuditLogs({ auditLogs, onEditLog, onDeleteLog }) {
                     <td style={{ fontWeight: '600' }}>{log.technician}</td>
                     <td style={{ fontSize: '0.8rem', color: 'var(--text-muted)', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{log.notes}</td>
                     <td>
+                      {canManageLogs ? (
                       <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
                         <button className="btn btn-secondary btn-sm" style={{ padding: '4px 8px' }} onClick={() => handleOpenEditLog(log)}>
                           <Edit3 size={14} color="var(--accent-cyan)" />
@@ -215,6 +219,7 @@ export default function AuditLogs({ auditLogs, onEditLog, onDeleteLog }) {
                           <Trash2 size={14} />
                         </button>
                       </div>
+                      ) : <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Chỉ admin</span>}
                     </td>
                   </tr>
                 );
@@ -280,7 +285,7 @@ export default function AuditLogs({ auditLogs, onEditLog, onDeleteLog }) {
                       <span className="mobile-card-value" style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'left' }}>{log.notes}</span>
                     </div>
                   </div>
-                  <div className="mobile-card-actions">
+                  {canManageLogs && <div className="mobile-card-actions">
                     <button className="btn btn-secondary btn-sm" onClick={() => handleOpenEditLog(log)}>
                       <Edit3 size={14} color="var(--accent-cyan)" />
                       <span>Sửa</span>
@@ -289,7 +294,7 @@ export default function AuditLogs({ auditLogs, onEditLog, onDeleteLog }) {
                       <Trash2 size={14} />
                       <span>Xóa</span>
                     </button>
-                  </div>
+                  </div>}
                 </div>
               );
             })
