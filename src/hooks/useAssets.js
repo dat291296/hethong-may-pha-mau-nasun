@@ -61,6 +61,12 @@ function createPersistenceError(message) {
   return error;
 }
 
+function getMissingSchemaColumn(error) {
+  const message = String(error?.message || '');
+  const match = message.match(/Could not find the '([^']+)' column/i);
+  return match?.[1] || null;
+}
+
 /**
  * useAssets – unified hook for all physical equipment:
  * Dispensers, Mixers, Computers, Printers, System Sets.
@@ -268,11 +274,22 @@ export function useAssets() {
 
     if (isSupabaseConfigured && navigator.onLine) {
       try {
-        const { data, error } = await safeQuery(
-          sb => sb.from(targetTable).update(dbUpdates).eq('id', id).select('id'),
-          `editDevice:${targetTable}`
-        );
-        if (error) throw error;
+        const compatibleUpdates = { ...dbUpdates };
+        let data = null;
+        while (true) {
+          const result = await safeQuery(
+            sb => sb.from(targetTable).update(compatibleUpdates).eq('id', id).select('id'),
+            `editDevice:${targetTable}`
+          );
+          if (!result.error) {
+            data = result.data;
+            break;
+          }
+          const missingColumn = getMissingSchemaColumn(result.error);
+          if (!missingColumn || !(missingColumn in compatibleUpdates)) throw result.error;
+          console.warn(`[Assets] ${targetTable}.${missingColumn} is absent; retrying with the legacy schema.`);
+          delete compatibleUpdates[missingColumn];
+        }
         if (!data || data.length === 0) throw createPersistenceError('Không có quyền cập nhật hoặc thiết bị không tồn tại trên Supabase');
         await fetchAssets();
       } catch (err) {
@@ -638,7 +655,7 @@ function mapDeviceToDb(obj, category) {
 
   // Basic identification & PK
   if (obj.id !== undefined) dbObj.id = obj.id;
-  if (obj.serial !== undefined && obj.serial !== '') dbObj.serial = obj.serial;
+  if (cat !== 'computer' && cat !== 'computers' && obj.serial !== undefined && obj.serial !== '') dbObj.serial = obj.serial;
 
   // Assignment status & system set link
   if (obj.isAssigned !== undefined || obj.is_assigned !== undefined) {
@@ -650,7 +667,7 @@ function mapDeviceToDb(obj, category) {
 
   // Category specific allowed fields (STRICT SCHEMA SANITIZATION)
   if (cat === 'computer' || cat === 'computers') {
-    if (obj.type !== undefined) dbObj.type = obj.type;
+    if (obj.type !== undefined) dbObj.type = obj.type === 'Case' ? 'Case' : 'AIO';
     if (obj.os !== undefined) dbObj.os = obj.os;
     if (obj.specs !== undefined) dbObj.specs = obj.specs;
     if (obj.network !== undefined) dbObj.network = obj.network;

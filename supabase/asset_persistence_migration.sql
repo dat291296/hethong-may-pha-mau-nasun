@@ -7,6 +7,7 @@ DECLARE
 BEGIN
   FOREACH table_name IN ARRAY ARRAY['dispensers', 'mixers', 'computers', 'printers'] LOOP
     IF to_regclass('public.' || table_name) IS NOT NULL THEN
+      EXECUTE format('ALTER TABLE public.%I ADD COLUMN IF NOT EXISTS status TEXT DEFAULT ''Đang chạy tốt''', table_name);
       EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', table_name);
       EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', 'asset_update_' || table_name, table_name);
       EXECUTE format(
