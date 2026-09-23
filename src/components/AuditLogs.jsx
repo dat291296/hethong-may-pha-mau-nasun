@@ -16,6 +16,7 @@ export default function AuditLogs({ auditLogs, onEditLog, onDeleteLog }) {
   // Edit states
   const [editingLog, setEditingLog] = useState(null);
   const [editLogFormData, setEditLogFormData] = useState({});
+  const [deletingLogId, setDeletingLogId] = useState(null);
 
   const handleOpenEditLog = (log) => {
     setEditingLog(log);
@@ -39,10 +40,19 @@ export default function AuditLogs({ auditLogs, onEditLog, onDeleteLog }) {
     setEditingLog(null);
   };
 
-  const handleDeleteLog = (id) => {
+  const handleDeleteLog = async (id) => {
+    if (deletingLogId) return;
     if (window.confirm(`Bạn có chắc chắn muốn xóa bản ghi nhật ký tác nghiệp [${id}] không?`)) {
       if (onDeleteLog) {
-        onDeleteLog(id);
+        setDeletingLogId(id);
+        try {
+          await onDeleteLog(id);
+        } catch (err) {
+          console.error('[AuditLogs] Delete failed:', err);
+          alert(`Không thể xóa nhật ký: ${err.message}`);
+        } finally {
+          setDeletingLogId(null);
+        }
       }
     }
   };
@@ -215,7 +225,7 @@ export default function AuditLogs({ auditLogs, onEditLog, onDeleteLog }) {
                         <button className="btn btn-secondary btn-sm" style={{ padding: '4px 8px' }} onClick={() => handleOpenEditLog(log)}>
                           <Edit3 size={14} color="var(--accent-cyan)" />
                         </button>
-                        <button className="btn btn-danger btn-sm" style={{ padding: '4px 8px' }} onClick={() => handleDeleteLog(log.id)}>
+                        <button className="btn btn-danger btn-sm" style={{ padding: '4px 8px' }} onClick={() => handleDeleteLog(log.id)} disabled={deletingLogId !== null} title={deletingLogId === log.id ? 'Đang xóa...' : 'Xóa'}>
                           <Trash2 size={14} />
                         </button>
                       </div>
@@ -290,9 +300,9 @@ export default function AuditLogs({ auditLogs, onEditLog, onDeleteLog }) {
                       <Edit3 size={14} color="var(--accent-cyan)" />
                       <span>Sửa</span>
                     </button>
-                    <button className="btn btn-danger btn-sm" onClick={() => handleDeleteLog(log.id)}>
+                    <button className="btn btn-danger btn-sm" onClick={() => handleDeleteLog(log.id)} disabled={deletingLogId !== null}>
                       <Trash2 size={14} />
-                      <span>Xóa</span>
+                      <span>{deletingLogId === log.id ? 'Đang xóa...' : 'Xóa'}</span>
                     </button>
                   </div>}
                 </div>

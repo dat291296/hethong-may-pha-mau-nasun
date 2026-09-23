@@ -5,6 +5,16 @@ import { cacheOfflineData, getCachedOfflineData, enqueueOfflineAction } from '..
 
 const LOCAL_STORAGE_KEY = 'nasun_audit_logs';
 
+function canRetryOffline(error) {
+  return !error?.code || error.code === 'QUERY_TIMEOUT';
+}
+
+function createPersistenceError(message) {
+  const error = new Error(message);
+  error.code = 'PERSISTENCE_DENIED';
+  return error;
+}
+
 function sanitizeAndRenumberAuditLogs(logs) {
   if (!Array.isArray(logs)) return [];
   if (logs.length === 0) return [];
@@ -210,18 +220,22 @@ export function useAuditLogs() {
 
     if (isSupabaseConfigured && navigator.onLine) {
       try {
-        const { error } = await safeQuery(
-          sb => sb.from('audit_logs').delete().eq('id', id),
+        const { data, error } = await safeQuery(
+          sb => sb.from('audit_logs').delete().eq('id', id).select('id'),
           'deleteAuditLog'
         );
         if (error) throw error;
-        await fetchAuditLogs();
+        if (!data || data.length === 0) throw createPersistenceError('Không có quyền xóa hoặc nhật ký không tồn tại trên Supabase');
       } catch (err) {
         console.warn('[Offline] Failed online deleteAuditLog. Queueing.', err);
-        enqueueOfflineAction('DELETE_AUDIT_LOG', { id });
+        if (!canRetryOffline(err)) {
+          await fetchAuditLogs();
+          throw err;
+        }
+        await enqueueOfflineAction('DELETE_AUDIT_LOG', { id });
       }
     } else if (isSupabaseConfigured && !navigator.onLine) {
-      enqueueOfflineAction('DELETE_AUDIT_LOG', { id });
+      await enqueueOfflineAction('DELETE_AUDIT_LOG', { id });
     }
   }, [fetchAuditLogs]);
 

@@ -51,6 +51,16 @@ function isPendingAssetAction(item) {
   return ['ADD_DEVICE', 'EDIT_DEVICE', 'DELETE_DEVICE', 'ASSEMBLE_SET', 'UPDATE_SYSTEM_SET', 'DELETE_SYSTEM_SET'].includes(item.action);
 }
 
+function canRetryOffline(error) {
+  return !error?.code || error.code === 'QUERY_TIMEOUT';
+}
+
+function createPersistenceError(message) {
+  const error = new Error(message);
+  error.code = 'PERSISTENCE_DENIED';
+  return error;
+}
+
 /**
  * useAssets – unified hook for all physical equipment:
  * Dispensers, Mixers, Computers, Printers, System Sets.
@@ -63,22 +73,27 @@ export function useAssets() {
   const [printers,    setPrinters]    = useState(() => getInitialAssets('printers', INITIAL_PRINTERS));
   const [systemSets,  setSystemSets]  = useState(() => getInitialAssets('system_sets', INITIAL_SYSTEM_SETS));
   const [loading, setLoading] = useState(false);
+  const [cacheHydrated, setCacheHydrated] = useState(false);
 
   // Hydrate from IndexedDB cache on mount if available
   useEffect(() => {
     async function loadCached() {
-      const [d, m, c, p, s] = await Promise.all([
-        getCachedOfflineData('dispensers', null),
-        getCachedOfflineData('mixers', null),
-        getCachedOfflineData('computers', null),
-        getCachedOfflineData('printers', null),
-        getCachedOfflineData('system_sets', null),
-      ]);
-      if (d && d.length > 0) { setDispensers(d); persistAssetsLocal('dispensers', d); }
-      if (m && m.length > 0) { setMixers(m); persistAssetsLocal('mixers', m); }
-      if (c && c.length > 0) { setComputers(c); persistAssetsLocal('computers', c); }
-      if (p && p.length > 0) { setPrinters(p); persistAssetsLocal('printers', p); }
-      if (s && s.length > 0) { setSystemSets(s); persistAssetsLocal('system_sets', s); }
+      try {
+        const [d, m, c, p, s] = await Promise.all([
+          getCachedOfflineData('dispensers', null),
+          getCachedOfflineData('mixers', null),
+          getCachedOfflineData('computers', null),
+          getCachedOfflineData('printers', null),
+          getCachedOfflineData('system_sets', null),
+        ]);
+        if (d && d.length > 0) { setDispensers(d); persistAssetsLocal('dispensers', d); }
+        if (m && m.length > 0) { setMixers(m); persistAssetsLocal('mixers', m); }
+        if (c && c.length > 0) { setComputers(c); persistAssetsLocal('computers', c); }
+        if (p && p.length > 0) { setPrinters(p); persistAssetsLocal('printers', p); }
+        if (s && s.length > 0) { setSystemSets(s); persistAssetsLocal('system_sets', s); }
+      } finally {
+        setCacheHydrated(true);
+      }
     }
     loadCached();
   }, []);
@@ -100,46 +115,46 @@ export function useAssets() {
       safeQuery(sb => sb.from('system_sets').select('*'), 'fetchSystemSets'),
     ]);
 
-    if (dRes.data && dRes.data.length > 0) {
+    if (Array.isArray(dRes.data)) {
       const mapped = dRes.data.map(mapDbToDispenser);
       setDispensers(mapped);
-      cacheOfflineData('dispensers', mapped);
+      persistAssetsLocal('dispensers', mapped);
     } else if (dRes.error) {
       const cached = await getCachedOfflineData('dispensers', null);
       if (cached && cached.length > 0) setDispensers(cached);
     }
 
-    if (mRes.data && mRes.data.length > 0) {
+    if (Array.isArray(mRes.data)) {
       const mapped = mRes.data.map(mapDbToMixer);
       setMixers(mapped);
-      cacheOfflineData('mixers', mapped);
+      persistAssetsLocal('mixers', mapped);
     } else if (mRes.error) {
       const cached = await getCachedOfflineData('mixers', null);
       if (cached && cached.length > 0) setMixers(cached);
     }
 
-    if (cRes.data && cRes.data.length > 0) {
+    if (Array.isArray(cRes.data)) {
       const mapped = cRes.data.map(mapDbToComputer);
       setComputers(mapped);
-      cacheOfflineData('computers', mapped);
+      persistAssetsLocal('computers', mapped);
     } else if (cRes.error) {
       const cached = await getCachedOfflineData('computers', null);
       if (cached && cached.length > 0) setComputers(cached);
     }
 
-    if (pRes.data && pRes.data.length > 0) {
+    if (Array.isArray(pRes.data)) {
       const mapped = pRes.data.map(mapDbToPrinter);
       setPrinters(mapped);
-      cacheOfflineData('printers', mapped);
+      persistAssetsLocal('printers', mapped);
     } else if (pRes.error) {
       const cached = await getCachedOfflineData('printers', null);
       if (cached && cached.length > 0) setPrinters(cached);
     }
 
-    if (sRes.data && sRes.data.length > 0) {
+    if (Array.isArray(sRes.data)) {
       const mapped = sRes.data.map(mapDbToSystemSet);
       setSystemSets(mapped);
-      cacheOfflineData('system_sets', mapped);
+      persistAssetsLocal('system_sets', mapped);
     } else if (sRes.error) {
       const cached = await getCachedOfflineData('system_sets', null);
       if (cached && cached.length > 0) setSystemSets(cached);
@@ -148,11 +163,13 @@ export function useAssets() {
     setLoading(false);
   }, []);
 
-  useEffect(() => { fetchAssets(); }, [fetchAssets]);
+  useEffect(() => {
+    if (cacheHydrated) fetchAssets();
+  }, [cacheHydrated, fetchAssets]);
 
   // ── Realtime subscriptions for all asset tables ───────────────────────────
   useEffect(() => {
-    if (!isSupabaseConfigured || !supabase) return;
+    if (!cacheHydrated || !isSupabaseConfigured || !supabase) return;
     const tables = ['dispensers', 'mixers', 'computers', 'printers', 'system_sets'];
     const channels = tables.map(table =>
       supabase.channel(`${table}-changes`)
@@ -160,7 +177,7 @@ export function useAssets() {
         .subscribe()
     );
     return () => channels.forEach(ch => supabase.removeChannel(ch));
-  }, [fetchAssets]);
+  }, [cacheHydrated, fetchAssets]);
 
   // ── Generic add stock device ────────────────────────────────────────────────
   const addStockDevice = useCallback(async (category, deviceData) => {
@@ -240,16 +257,20 @@ export function useAssets() {
           `editDevice:${targetTable}`
         );
         if (error) throw error;
-        if (!data || data.length === 0) throw new Error('Không có quyền cập nhật hoặc thiết bị không tồn tại trên Supabase');
+        if (!data || data.length === 0) throw createPersistenceError('Không có quyền cập nhật hoặc thiết bị không tồn tại trên Supabase');
       } catch (err) {
         console.warn(`[Offline] Failed online editDevice for ${targetTable}. Queueing action.`, err);
+        if (!canRetryOffline(err)) {
+          await fetchAssets();
+          throw err;
+        }
         await enqueueOfflineAction('EDIT_DEVICE', { id, ...dbUpdates }, targetTable);
       }
     } else if (isSupabaseConfigured && !navigator.onLine) {
       console.log(`[Offline] Network down. Enqueueing editDevice for ${targetTable}.`);
       await enqueueOfflineAction('EDIT_DEVICE', { id, ...dbUpdates }, targetTable);
     }
-  }, []);
+  }, [fetchAssets]);
 
   // ── Generic delete device ──────────────────────────────────────────────────
   const deleteDevice = useCallback(async (category, id) => {
@@ -276,20 +297,25 @@ export function useAssets() {
 
     if (isSupabaseConfigured && navigator.onLine) {
       try {
-        const { error } = await safeQuery(
-          sb => sb.from(targetTable).delete().eq('id', id),
+        const { data, error } = await safeQuery(
+          sb => sb.from(targetTable).delete().eq('id', id).select('id'),
           `deleteDevice:${targetTable}`
         );
         if (error) throw error;
+        if (!data || data.length === 0) throw createPersistenceError('Không có quyền xóa hoặc thiết bị không tồn tại trên Supabase');
       } catch (err) {
         console.warn(`[Offline] Failed online deleteDevice for ${targetTable}. Queueing action.`, err);
-        enqueueOfflineAction('DELETE_DEVICE', { id }, targetTable);
+        if (!canRetryOffline(err)) {
+          await fetchAssets();
+          throw err;
+        }
+        await enqueueOfflineAction('DELETE_DEVICE', { id }, targetTable);
       }
     } else if (isSupabaseConfigured && !navigator.onLine) {
       console.log(`[Offline] Network down. Enqueueing deleteDevice for ${targetTable}.`);
-      enqueueOfflineAction('DELETE_DEVICE', { id }, targetTable);
+      await enqueueOfflineAction('DELETE_DEVICE', { id }, targetTable);
     }
-  }, []);
+  }, [fetchAssets]);
 
   // ── Batch Import Devices from Excel ────────────────────────────────────────
   const importDevices = useCallback(async (type, items) => {
@@ -422,11 +448,12 @@ export function useAssets() {
 
     if (isSupabaseConfigured && navigator.onLine) {
       try {
-        const { error } = await safeQuery(
-          sb => sb.from('system_sets').update(dbPayload).eq('set_code', oldSetCode),
+        const { data, error } = await safeQuery(
+          sb => sb.from('system_sets').update(dbPayload).eq('set_code', oldSetCode).select('set_code'),
           'updateSystemSet'
         );
         if (error) throw error;
+        if (!data || data.length === 0) throw createPersistenceError('Không có quyền cập nhật hoặc bộ máy không tồn tại trên Supabase');
 
         if (isCodeChanged) {
           await safeQuery(sb => sb.from('dispensers').update({ set_code: newSetCode }).eq('set_code', oldSetCode), 'updateDeviceSetCode');
@@ -437,19 +464,22 @@ export function useAssets() {
         await fetchAssets();
       } catch (err) {
         console.warn('[Offline] Failed online updateSystemSet. Queueing action.', err);
-        enqueueOfflineAction('UPDATE_SYSTEM_SET', { targetSetCode: oldSetCode, data: dbPayload });
+        if (!canRetryOffline(err)) {
+          await fetchAssets();
+          throw err;
+        }
+        await enqueueOfflineAction('UPDATE_SYSTEM_SET', { targetSetCode: oldSetCode, data: dbPayload });
       }
     } else if (isSupabaseConfigured && !navigator.onLine) {
       console.log('[Offline] Network down. Enqueueing updateSystemSet.');
-      enqueueOfflineAction('UPDATE_SYSTEM_SET', { targetSetCode: oldSetCode, data: dbPayload });
+      await enqueueOfflineAction('UPDATE_SYSTEM_SET', { targetSetCode: oldSetCode, data: dbPayload });
     }
   }, [fetchAssets]);
 
   // ── Delete system set ──────────────────────────────────────────────────────
   const deleteSystemSet = useCallback(async (setCode) => {
-    let setObj = null;
+    const setObj = systemSets.find(s => (s.setCode || s.set_code) === setCode) || null;
     setSystemSets(prev => {
-      setObj = prev.find(s => (s.setCode || s.set_code) === setCode);
       const filtered = prev.filter(s => (s.setCode || s.set_code) !== setCode);
       persistAssetsLocal('system_sets', filtered);
       return filtered;
@@ -466,19 +496,24 @@ export function useAssets() {
 
     if (isSupabaseConfigured && navigator.onLine) {
       try {
-        const { error } = await safeQuery(
-          sb => sb.from('system_sets').delete().eq('set_code', setCode),
+        const { data, error } = await safeQuery(
+          sb => sb.from('system_sets').delete().eq('set_code', setCode).select('set_code'),
           'deleteSystemSet'
         );
         if (error) throw error;
+        if (!data || data.length === 0) throw createPersistenceError('Không có quyền xóa hoặc bộ máy không tồn tại trên Supabase');
       } catch (err) {
         console.warn('[Offline] Failed online deleteSystemSet. Queueing action.', err);
-        enqueueOfflineAction('DELETE_SYSTEM_SET', { set_code: setCode });
+        if (!canRetryOffline(err)) {
+          await fetchAssets();
+          throw err;
+        }
+        await enqueueOfflineAction('DELETE_SYSTEM_SET', { set_code: setCode });
       }
     } else if (isSupabaseConfigured && !navigator.onLine) {
-      enqueueOfflineAction('DELETE_SYSTEM_SET', { set_code: setCode });
+      await enqueueOfflineAction('DELETE_SYSTEM_SET', { set_code: setCode });
     }
-  }, [editDevice]);
+  }, [editDevice, fetchAssets, systemSets]);
 
   return {
     dispensers, setDispensers,

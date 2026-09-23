@@ -46,7 +46,16 @@ export async function safeQuery(queryFn, context = 'unknown') {
     return { data: null, error: new Error('Supabase not configured') };
   }
   try {
-    const result = await queryFn(supabase);
+    const timeoutMs = 15000;
+    let timeoutId;
+    const timeoutPromise = new Promise(resolve => {
+      timeoutId = window.setTimeout(() => resolve({
+        data: null,
+        error: Object.assign(new Error(`Yêu cầu Supabase quá thời gian ${timeoutMs / 1000} giây`), { code: 'QUERY_TIMEOUT' })
+      }), timeoutMs);
+    });
+    const result = await Promise.race([Promise.resolve(queryFn(supabase)), timeoutPromise]);
+    window.clearTimeout(timeoutId);
     if (result.error) {
       console.error(`[Supabase][${context}] Query error:`, result.error.message);
     }
