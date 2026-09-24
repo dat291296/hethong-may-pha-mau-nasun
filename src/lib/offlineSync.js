@@ -6,12 +6,88 @@ let activeSyncPromise = null;
 function getActionIdentity(item) {
   const payload = item?.payload || {};
   switch (item?.action) {
+    case 'ADD_DEVICE': return `${item.action}:${item.category}:${payload.id}`;
+    case 'ASSEMBLE_SET': {
+      const setCode = payload.set_code || payload.setCode;
+      return setCode ? `${item.action}:${setCode}` : null;
+    }
     case 'EDIT_DEVICE': return `${item.action}:${item.category}:${payload.id}`;
     case 'EDIT_NPP':
     case 'EDIT_REPAIR':
     case 'UPDATE_AUDIT_LOG': return `${item.action}:${payload.id}`;
     case 'UPDATE_SYSTEM_SET': return `${item.action}:${payload.targetSetCode || payload.set_code || payload.setCode}`;
     default: return null;
+  }
+}
+
+async function compactDuplicateCreates(queue) {
+  const latestByIdentity = new Map();
+  for (const item of queue) {
+    if (!['ADD_DEVICE', 'ASSEMBLE_SET'].includes(item.action)) continue;
+    const identity = getActionIdentity(item);
+    if (identity) latestByIdentity.set(identity, item.id);
+  }
+
+  const compacted = [];
+  for (const item of queue) {
+    const identity = getActionIdentity(item);
+    const isDuplicateCreate = ['ADD_DEVICE', 'ASSEMBLE_SET'].includes(item.action) &&
+      identity && latestByIdentity.get(identity) !== item.id;
+    if (isDuplicateCreate) {
+      await removeFromQueue(item.id);
+    } else {
+      compacted.push(item);
+    }
+  }
+  if (compacted.length !== queue.length) {
+    window.dispatchEvent(new Event('offline-queue-updated'));
+  }
+  return compacted;
+}
+
+function normalizeSystemSetPayload(payload) {
+  const source = payload || {};
+  const mappings = {
+    setCode: 'set_code', nppId: 'npp_id', nppName: 'npp_name',
+    dispenserId: 'dispenser_id', dispenserModel: 'dispenser_model', dispenserSerial: 'dispenser_serial',
+    mixerId: 'mixer_id', mixerModel: 'mixer_model', mixerSerial: 'mixer_serial',
+    computerId: 'computer_id', computerType: 'computer_type', computerSerial: 'computer_serial', pcType: 'computer_type',
+    printerId: 'printer_id', printerSerial: 'printer_serial',
+    tintingSoftware: 'tinting_software', softwareVersion: 'software_version', agentStatus: 'agent_status',
+    installDate: 'install_date', installedDate: 'install_date', lastMaintenanceDate: 'last_maintenance_date',
+    nextMaintenanceDue: 'next_maintenance_due', installationPhotos: 'installation_photos'
+  };
+  const allowed = new Set([
+    'set_code', 'npp_id', 'npp_name', 'region', 'province', 'status',
+    'dispenser_id', 'dispenser_model', 'dispenser_serial',
+    'mixer_id', 'mixer_model', 'mixer_serial',
+    'computer_id', 'computer_type', 'computer_serial',
+    'printer_id', 'printer_serial', 'tinting_software', 'software_version',
+    'agent_status', 'install_date', 'last_maintenance_date', 'next_maintenance_due',
+    'technician', 'salesperson', 'stabilizer', 'notes', 'installation_photos'
+  ]);
+  const normalized = {};
+  for (const [key, value] of Object.entries(source)) {
+    const dbKey = mappings[key] || key;
+    if (allowed.has(dbKey) && value !== undefined) normalized[dbKey] = value;
+  }
+  return normalized;
+}
+
+async function writeSystemSetWithSchemaFallback(payload, targetSetCode = null) {
+  const compatiblePayload = normalizeSystemSetPayload(payload);
+  const setCode = targetSetCode || compatiblePayload.set_code;
+  if (!setCode) return new Error('Thiếu mã bộ máy khi đồng bộ system_sets');
+  while (true) {
+    const { error } = targetSetCode
+      ? await supabase.from('system_sets').update(compatiblePayload).eq('set_code', targetSetCode)
+      : await supabase.from('system_sets').upsert(compatiblePayload, { onConflict: 'set_code' });
+    if (!error) return null;
+    const match = String(error.message || '').match(/Could not find the '([^']+)' column/i);
+    const missingColumn = match?.[1];
+    if (!missingColumn || !(missingColumn in compatiblePayload)) return error;
+    console.warn(`[OfflineSync] system_sets.${missingColumn} is absent; retrying without it.`);
+    delete compatiblePayload[missingColumn];
   }
 }
 
@@ -120,7 +196,8 @@ async function processOfflineQueue(onStatusChange) {
     return false;
   }
 
-  const queue = await getOfflineQueue();
+  let queue = await getOfflineQueue();
+  queue = await compactDuplicateCreates(queue);
   if (queue.length === 0) {
     window.dispatchEvent(new CustomEvent('nasun-sync-completed', { detail: { synced: 0 } }));
     return true;
@@ -179,8 +256,7 @@ async function processOfflineQueue(onStatusChange) {
           error = delDevErr;
           break;
         case 'ASSEMBLE_SET':
-          const { error: assembleErr } = await supabase.from('system_sets').upsert(item.payload, { onConflict: 'set_code' });
-          error = assembleErr;
+          error = await writeSystemSetWithSchemaFallback(item.payload);
           break;
         case 'UPDATE_SYSTEM_SET':
           {
@@ -189,8 +265,7 @@ async function processOfflineQueue(onStatusChange) {
             if (!targetSetCode || !updatePayload || typeof updatePayload !== 'object') {
               throw new Error('Invalid UPDATE_SYSTEM_SET queue payload');
             }
-            const { error: updateSetErr } = await supabase.from('system_sets').update(updatePayload).eq('set_code', targetSetCode);
-            error = updateSetErr;
+            error = await writeSystemSetWithSchemaFallback(updatePayload, targetSetCode);
           }
           break;
         case 'DELETE_SYSTEM_SET':
@@ -247,6 +322,7 @@ async function processOfflineQueue(onStatusChange) {
       if (!deferredDeviceLinks.some(link => link.queueItem.id === item.id)) {
         await dequeueOfflineAction(item.id);
         successCount++;
+        if (onStatusChange) onStatusChange('syncing', queue.length - successCount);
       }
       
     } catch (err) {
