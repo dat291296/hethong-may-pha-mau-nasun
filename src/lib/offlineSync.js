@@ -149,6 +149,12 @@ function normalizeSystemSetPayload(payload, applyDefaults = true) {
     const dbKey = mappings[key] || key;
     if (allowed.has(dbKey) && value !== undefined) normalized[dbKey] = value;
   }
+  const dateFields = ['install_date', 'last_maintenance_date', 'next_maintenance_due'];
+  for (const field of dateFields) {
+    if (field in normalized && (normalized[field] === '' || String(normalized[field]).trim() === '')) {
+      normalized[field] = null;
+    }
+  }
   if (applyDefaults) {
     normalized.npp_name = normalized.npp_name || '';
     const allowedStatuses = ['DA_LAP_DAT', 'TRONG_KHO', 'DA_THU_HOI', 'BAO_THUONG_BAO_TRI'];
