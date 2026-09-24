@@ -123,6 +123,121 @@ function describeQueueError(item, error) {
   return `${item.action}${item.category ? `/${item.category}` : ''} (${recordId}): ${error.message}`;
 }
 
+function normalizeRepairCategory(category, machineModel = '') {
+  const raw = String(category || '').trim();
+  const allowed = ['Máy chiết', 'Máy lắc', 'Máy tính', 'Máy in', 'Phụ kiện', 'Linh kiện'];
+  const exact = allowed.find(value => value.toLocaleLowerCase('vi') === raw.toLocaleLowerCase('vi'));
+  if (exact) return exact;
+
+  const hint = `${raw} ${machineModel || ''}`.toLocaleLowerCase('vi');
+  if (/chiết|dispenser|satint|hero|first/.test(hint)) return 'Máy chiết';
+  if (/lắc|mixer|shaker|ai88|ysa|kmc/.test(hint)) return 'Máy lắc';
+  if (/máy tính|computer|\bpc\b|\baio\b|\bcase\b|laptop/.test(hint)) return 'Máy tính';
+  if (/máy in|printer|ql700|brother/.test(hint)) return 'Máy in';
+  if (/linh kiện|component|spare part/.test(hint)) return 'Linh kiện';
+  return 'Phụ kiện';
+}
+
+function normalizeRepairPayload(payload, applyDefaults = false, queueItemId = null) {
+  const source = payload || {};
+  const mappings = {
+    ticketCode: 'ticket_code', nppId: 'npp_id', nppName: 'npp_name',
+    productCategory: 'product_category', machineModel: 'machine_model', serialNumber: 'serial_number',
+    errorDescription: 'error_description', errorCategory: 'error_category',
+    actionDirection: 'action_direction', replacementCondition: 'replacement_condition',
+    processingStatus: 'processing_status', customerReturnStatus: 'customer_return_status',
+    createdBy: 'created_by'
+  };
+  const allowed = new Set([
+    'id', 'ticket_code', 'date', 'technician', 'npp_id', 'npp_name', 'product_category',
+    'machine_model', 'serial_number', 'error_description', 'error_category', 'action_direction',
+    'replacement_condition', 'processing_status', 'customer_return_status', 'notes', 'photos', 'created_by'
+  ]);
+  const normalized = {};
+  for (const [key, value] of Object.entries(source)) {
+    const dbKey = mappings[key] || key;
+    if (allowed.has(dbKey) && value !== undefined) normalized[dbKey] = value;
+  }
+
+  if ('product_category' in normalized || applyDefaults) {
+    normalized.product_category = normalizeRepairCategory(
+      normalized.product_category,
+      normalized.machine_model
+    );
+  }
+
+  const exchangeType = source.exchangeType ?? source.exchange_type;
+  if (exchangeType !== undefined) {
+    const exchangeText = String(exchangeType).toLocaleLowerCase('vi');
+    normalized.action_direction = exchangeText.includes('không') ? 'Sửa chữa' : 'Xuất đổi';
+    normalized.replacement_condition = exchangeText.includes('cũ')
+      ? 'Cũ'
+      : (exchangeText.includes('mới') ? 'Mới' : 'N/A');
+  }
+
+  if (normalized.date === '' || (typeof normalized.date === 'string' && !normalized.date.trim())) {
+    if (applyDefaults) normalized.date = new Date().toISOString().slice(0, 10);
+    else delete normalized.date;
+  }
+  if (normalized.action_direction && !['Sửa chữa', 'Xuất đổi'].includes(normalized.action_direction)) {
+    normalized.action_direction = 'Sửa chữa';
+  }
+  if (normalized.replacement_condition && !['Mới', 'Cũ', 'N/A'].includes(normalized.replacement_condition)) {
+    normalized.replacement_condition = 'N/A';
+  }
+  if (normalized.processing_status && !['Chưa xử lý', 'Đã xử lý'].includes(normalized.processing_status)) {
+    normalized.processing_status = 'Chưa xử lý';
+  }
+  if (normalized.customer_return_status && !['Chưa gửi trả', 'Đã gửi trả'].includes(normalized.customer_return_status)) {
+    normalized.customer_return_status = 'Chưa gửi trả';
+  }
+  if ('photos' in normalized && !Array.isArray(normalized.photos)) normalized.photos = [];
+  if (applyDefaults) {
+    const fallbackId = `TICK-OFFLINE-${String(queueItemId || Date.now()).replace(/[^a-z0-9]/gi, '').slice(-12).toUpperCase()}`;
+    normalized.id = normalized.id || normalized.ticket_code || fallbackId;
+    normalized.ticket_code = normalized.ticket_code || normalized.id;
+    normalized.technician = normalized.technician || 'Chưa cập nhật';
+    normalized.npp_name = normalized.npp_name || '';
+    normalized.machine_model = normalized.machine_model || 'Chưa cập nhật';
+    normalized.serial_number = normalized.serial_number || 'N/A';
+    normalized.action_direction = normalized.action_direction || 'Sửa chữa';
+    normalized.replacement_condition = normalized.replacement_condition || 'N/A';
+    normalized.processing_status = normalized.processing_status || 'Chưa xử lý';
+    normalized.customer_return_status = normalized.customer_return_status || 'Chưa gửi trả';
+    normalized.photos = Array.isArray(normalized.photos) ? normalized.photos : [];
+  }
+  return normalized;
+}
+
+function normalizeAuditPayload(payload, queueItemId) {
+  const source = payload || {};
+  const mappings = {
+    setCode: 'set_code', nppId: 'npp_id', nppName: 'npp_name', serialList: 'serial_list',
+    userId: 'user_id', targetId: 'target_id'
+  };
+  const allowed = new Set([
+    'id', 'type', 'timestamp', 'set_code', 'npp_id', 'npp_name', 'serial_list',
+    'technician', 'reason', 'notes', 'user_id', 'target_id', 'severity'
+  ]);
+  const normalized = {};
+  for (const [key, value] of Object.entries(source)) {
+    const dbKey = mappings[key] || key;
+    if (allowed.has(dbKey) && value !== undefined) normalized[dbKey] = value;
+  }
+  if (!normalized.id) {
+    const stableToken = String(queueItemId || Date.now()).replace(/[^a-z0-9-]/gi, '').toUpperCase();
+    normalized.id = `AUDIT-${stableToken}`;
+  }
+  normalized.type = normalized.type || 'CẬP NHẬT HỆ THỐNG';
+  normalized.set_code = normalized.set_code || '—';
+  normalized.npp_id = normalized.npp_id || '—';
+  if (!['INFO', 'WARNING', 'CRITICAL'].includes(normalized.severity)) normalized.severity = 'INFO';
+  if (!normalized.timestamp || Number.isNaN(new Date(normalized.timestamp).getTime())) {
+    normalized.timestamp = new Date().toISOString();
+  }
+  return normalized;
+}
+
 function normalizeSystemSetPayload(payload, applyDefaults = true) {
   const source = payload || {};
   const mappings = {
@@ -470,6 +585,8 @@ async function processOfflineQueue(onStatusChange) {
           }
           break;
         case 'ADD_REPAIR':
+          item.payload = normalizeRepairPayload(item.payload, true, item.id);
+          await addToQueue(item);
           const { error: addRepErr } = await supabase.from('repair_tickets').upsert(item.payload, { onConflict: 'id' });
           error = addRepErr;
           break;
@@ -478,14 +595,23 @@ async function processOfflineQueue(onStatusChange) {
           error = delNppErr;
           break;
         case 'EDIT_REPAIR':
-          const { error: editRepErr } = await supabase.from('repair_tickets').update(item.payload).eq('id', item.payload.id);
-          error = editRepErr;
+          {
+            const repairPayload = normalizeRepairPayload(item.payload, false);
+            const { id, ...repairUpdates } = repairPayload;
+            if (!id) throw new Error('Invalid EDIT_REPAIR queue payload');
+            item.payload = { id, ...repairUpdates };
+            await addToQueue(item);
+            const { error: editRepErr } = await supabase.from('repair_tickets').update(repairUpdates).eq('id', id);
+            error = editRepErr;
+          }
           break;
         case 'DELETE_REPAIR':
           const { error: delRepErr } = await supabase.from('repair_tickets').delete().eq('id', item.payload.id);
           error = delRepErr;
           break;
         case 'ADD_AUDIT_LOG':
+          item.payload = normalizeAuditPayload(item.payload, item.id);
+          await addToQueue(item);
           const { error: auditErr } = await supabase.from('audit_logs').upsert(item.payload, { onConflict: 'id' });
           error = auditErr;
           break;

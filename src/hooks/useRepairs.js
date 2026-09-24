@@ -3,6 +3,20 @@ import { supabase, isSupabaseConfigured, safeQuery } from '../lib/supabase.js';
 import { INITIAL_REPAIR_TICKETS } from '../data/mockData.js';
 import { cacheOfflineData, getCachedOfflineData, enqueueOfflineAction, getOfflineQueue } from '../lib/offlineSync.js';
 
+function normalizeProductCategory(category, machineModel = '') {
+  const raw = String(category || '').trim();
+  const allowed = ['Máy chiết', 'Máy lắc', 'Máy tính', 'Máy in', 'Phụ kiện', 'Linh kiện'];
+  const exact = allowed.find(value => value.toLocaleLowerCase('vi') === raw.toLocaleLowerCase('vi'));
+  if (exact) return exact;
+  const hint = `${raw} ${machineModel || ''}`.toLocaleLowerCase('vi');
+  if (/chiết|dispenser|satint|hero|first/.test(hint)) return 'Máy chiết';
+  if (/lắc|mixer|shaker|ai88|ysa|kmc/.test(hint)) return 'Máy lắc';
+  if (/máy tính|computer|\bpc\b|\baio\b|\bcase\b|laptop/.test(hint)) return 'Máy tính';
+  if (/máy in|printer|ql700|brother/.test(hint)) return 'Máy in';
+  if (/linh kiện|component|spare part/.test(hint)) return 'Linh kiện';
+  return 'Phụ kiện';
+}
+
 export function filterRepairTicketsById(tickets, idToRemove) {
   return tickets.filter(ticket => String(ticket.id) !== String(idToRemove));
 }
@@ -162,8 +176,20 @@ export function useRepairs() {
     };
 
     for (const key in updates) {
+      if (key === 'exchangeType' || key === 'exchange_type') continue;
       if (fieldMap[key]) dbUpdates[fieldMap[key]] = updates[key];
       else dbUpdates[key] = updates[key];
+    }
+    if ('product_category' in dbUpdates) {
+      dbUpdates.product_category = normalizeProductCategory(dbUpdates.product_category, dbUpdates.machine_model);
+    }
+    const exchangeType = updates.exchangeType ?? updates.exchange_type;
+    if (exchangeType !== undefined) {
+      const exchangeText = String(exchangeType).toLocaleLowerCase('vi');
+      dbUpdates.action_direction = exchangeText.includes('không') ? 'Sửa chữa' : 'Xuất đổi';
+      dbUpdates.replacement_condition = exchangeText.includes('cũ')
+        ? 'Cũ'
+        : (exchangeText.includes('mới') ? 'Mới' : 'N/A');
     }
 
     if (isSupabaseConfigured && navigator.onLine) {
@@ -293,7 +319,7 @@ function mapRepairToDb(r) {
     technician:             r.technician,
     npp_id:                 r.nppId,
     npp_name:               r.nppName,
-    product_category:       r.productCategory,
+    product_category:       normalizeProductCategory(r.productCategory, r.machineModel),
     machine_model:          r.machineModel,
     serial_number:          r.serialNumber,
     error_description:      r.errorDescription || '',
