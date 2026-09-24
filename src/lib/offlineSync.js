@@ -26,7 +26,13 @@ function getActionIdentity(item) {
     case 'EDIT_NPP':
     case 'EDIT_REPAIR':
     case 'UPDATE_AUDIT_LOG': return `${item.action}:${payload.id}`;
-    case 'UPDATE_SYSTEM_SET': return `${item.action}:${payload.targetSetCode || payload.set_code || payload.setCode}`;
+    case 'UPDATE_SYSTEM_SET': {
+      const setCode = payload.targetSetCode || payload.oldSetCode || payload.previousSetCode ||
+        payload.currentSetCode || payload.originalSetCode || payload.old_code ||
+        payload.set_code || payload.setCode || payload.data?.set_code || payload.data?.setCode ||
+        payload.dbPayload?.set_code || payload.dbPayload?.setCode;
+      return setCode ? `${item.action}:${setCode}` : null;
+    }
     default: return null;
   }
 }
@@ -117,7 +123,7 @@ function describeQueueError(item, error) {
   return `${item.action}${item.category ? `/${item.category}` : ''} (${recordId}): ${error.message}`;
 }
 
-function normalizeSystemSetPayload(payload) {
+function normalizeSystemSetPayload(payload, applyDefaults = true) {
   const source = payload || {};
   const mappings = {
     setCode: 'set_code', nppId: 'npp_id', nppName: 'npp_name',
@@ -143,15 +149,17 @@ function normalizeSystemSetPayload(payload) {
     const dbKey = mappings[key] || key;
     if (allowed.has(dbKey) && value !== undefined) normalized[dbKey] = value;
   }
-  normalized.npp_name = normalized.npp_name || '';
-  const allowedStatuses = ['DA_LAP_DAT', 'TRONG_KHO', 'DA_THU_HOI', 'BAO_THUONG_BAO_TRI'];
-  if (!allowedStatuses.includes(normalized.status)) normalized.status = 'TRONG_KHO';
-  if (!Array.isArray(normalized.installation_photos)) normalized.installation_photos = [];
+  if (applyDefaults) {
+    normalized.npp_name = normalized.npp_name || '';
+    const allowedStatuses = ['DA_LAP_DAT', 'TRONG_KHO', 'DA_THU_HOI', 'BAO_THUONG_BAO_TRI'];
+    if (!allowedStatuses.includes(normalized.status)) normalized.status = 'TRONG_KHO';
+    if (!Array.isArray(normalized.installation_photos)) normalized.installation_photos = [];
+  }
   return normalized;
 }
 
 async function writeSystemSetWithSchemaFallback(payload, targetSetCode = null) {
-  const compatiblePayload = normalizeSystemSetPayload(payload);
+  const compatiblePayload = normalizeSystemSetPayload(payload, !targetSetCode);
   const setCode = targetSetCode || compatiblePayload.set_code;
   if (!setCode) return new Error('Thiếu mã bộ máy khi đồng bộ system_sets');
   while (true) {
@@ -165,6 +173,45 @@ async function writeSystemSetWithSchemaFallback(payload, targetSetCode = null) {
     console.warn(`[OfflineSync] system_sets.${missingColumn} is absent; retrying without it.`);
     delete compatiblePayload[missingColumn];
   }
+}
+
+async function resolveSystemSetTarget(queuePayload, updatePayload) {
+  const directCode = queuePayload?.targetSetCode || queuePayload?.oldSetCode ||
+    queuePayload?.previousSetCode || queuePayload?.currentSetCode || queuePayload?.originalSetCode ||
+    queuePayload?.old_code || queuePayload?.set_code ||
+    queuePayload?.setCode || updatePayload?.targetSetCode || updatePayload?.oldSetCode ||
+    updatePayload?.set_code || updatePayload?.setCode;
+  if (directCode) return String(directCode).trim();
+
+  const normalized = normalizeSystemSetPayload(updatePayload, false);
+  const lookupFields = ['dispenser_id', 'mixer_id', 'computer_id', 'printer_id'];
+  for (const field of lookupFields) {
+    if (!normalized[field]) continue;
+    const { data, error } = await supabase
+      .from('system_sets')
+      .select('set_code')
+      .eq(field, normalized[field])
+      .limit(2);
+    if (!error && data?.length === 1) return data[0].set_code;
+  }
+
+  const cachedSets = await getCache('system_sets', []);
+  if (Array.isArray(cachedSets)) {
+    const matches = cachedSets.filter(set => lookupFields.some(field => {
+      if (!normalized[field]) return false;
+      const camelKey = field.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+      return String(set[field] ?? set[camelKey] ?? '') === String(normalized[field]);
+    }));
+    if (matches.length === 1) return matches[0].set_code || matches[0].setCode || null;
+
+    const nppName = normalized.npp_name;
+    if (nppName) {
+      const nppMatches = cachedSets.filter(set => String(set.npp_name || set.nppName || '') === String(nppName));
+      if (nppMatches.length === 1) return nppMatches[0].set_code || nppMatches[0].setCode || null;
+    }
+  }
+
+  return null;
 }
 
 async function updateDeviceWithSchemaFallback(table, id, updates) {
@@ -372,10 +419,14 @@ async function processOfflineQueue(onStatusChange) {
           break;
         case 'UPDATE_SYSTEM_SET':
           {
-            const targetSetCode = item.payload.targetSetCode || item.payload.set_code || item.payload.setCode;
-            const updatePayload = item.payload.data || item.payload.dbPayload || item.payload;
+            const updatePayload = item.payload.data || item.payload.dbPayload || item.payload.updates || item.payload.update || item.payload;
+            const targetSetCode = await resolveSystemSetTarget(item.payload, updatePayload);
             if (!targetSetCode || !updatePayload || typeof updatePayload !== 'object') {
               throw new Error('Invalid UPDATE_SYSTEM_SET queue payload');
+            }
+            if (!item.payload.targetSetCode) {
+              item.payload = { targetSetCode, data: updatePayload };
+              await addToQueue(item);
             }
             error = await writeSystemSetWithSchemaFallback(updatePayload, targetSetCode);
           }
