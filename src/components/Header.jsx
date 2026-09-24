@@ -61,6 +61,9 @@ export default function Header({
     window.addEventListener('focus', syncWhenVisible);
     window.addEventListener('offline-queue-updated', updateQueueCount);
     document.addEventListener('visibilitychange', syncWhenVisible);
+    const continuousSyncTimer = window.setInterval(() => {
+      if (navigator.onLine && document.visibilityState === 'visible') updateQueueCount();
+    }, 15000);
     
     // Initial fetch
     updateQueueCount();
@@ -76,6 +79,7 @@ export default function Header({
       window.removeEventListener('focus', syncWhenVisible);
       window.removeEventListener('offline-queue-updated', updateQueueCount);
       document.removeEventListener('visibilitychange', syncWhenVisible);
+      window.clearInterval(continuousSyncTimer);
     };
   }, []);
 

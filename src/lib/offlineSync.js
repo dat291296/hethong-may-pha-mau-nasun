@@ -1,8 +1,34 @@
 import { supabase, isSupabaseConfigured } from './supabase';
 import { addToQueue, getQueue, removeFromQueue, clearQueue, setCache, getCache } from './offlineDb';
+import { createOperationId, migrateQueueItem, classifySyncError, getRetryDelay } from './syncQueue';
 
 let activeSyncPromise = null;
 const deviceIdPools = new Map();
+const syncChannel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('nasun-sync-v2') : null;
+
+function emitQueueUpdated(broadcast = true) {
+  window.dispatchEvent(new Event('offline-queue-updated'));
+  if (broadcast) syncChannel?.postMessage({ type: 'queue-updated', at: Date.now() });
+}
+
+if (syncChannel) {
+  syncChannel.onmessage = event => {
+    if (event.data?.type === 'queue-updated') emitQueueUpdated(false);
+  };
+}
+
+async function saveQueueState(item, status, error = null) {
+  const attempts = status === 'syncing' ? Number(item.attempts || 0) : Number(item.attempts || 0) + 1;
+  const retryDelay = getRetryDelay(attempts);
+  Object.assign(item, {
+    status,
+    attempts,
+    lastError: error ? String(error.message || error) : null,
+    nextAttemptAt: status === 'retry_wait' ? Date.now() + retryDelay : 0,
+    updatedAt: Date.now()
+  });
+  await addToQueue(item);
+}
 
 const DEVICE_PREFIXES = {
   dispensers: 'DISP',
@@ -88,7 +114,7 @@ async function compactDuplicateCreates(queue) {
     }
   }
   if (compacted.length !== queue.length) {
-    window.dispatchEvent(new Event('offline-queue-updated'));
+    emitQueueUpdated();
   }
   return compacted;
 }
@@ -465,13 +491,21 @@ async function insertDeviceWithSchemaFallback(table, payload, queueItemId) {
  * Push an action to the offline queue
  */
 export async function enqueueOfflineAction(action, payload, category = null) {
-  const newItem = {
+  const now = Date.now();
+  const newItem = migrateQueueItem({
     id: `action-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    operationId: createOperationId(),
     action,
     payload,
     category,
-    timestamp: Date.now()
-  };
+    status: 'pending',
+    attempts: 0,
+    nextAttemptAt: 0,
+    lastError: null,
+    createdAt: now,
+    updatedAt: now,
+    timestamp: now
+  });
 
   // Collapse consecutive edits to the same record so a weak mobile connection
   // does not replay obsolete intermediate versions.
@@ -485,7 +519,7 @@ export async function enqueueOfflineAction(action, payload, category = null) {
   await addToQueue(newItem);
   
   // Dispatch custom event to trigger sync warning badge or sync attempt
-  window.dispatchEvent(new Event('offline-queue-updated'));
+  emitQueueUpdated();
   
   console.log(`[OfflineSync] Enqueued action: ${action}`, payload);
 }
@@ -494,7 +528,14 @@ export async function enqueueOfflineAction(action, payload, category = null) {
  * Get all enqueued offline actions
  */
 export async function getOfflineQueue() {
-  return await getQueue();
+  const queue = await getQueue();
+  const migrated = [];
+  for (const rawItem of queue) {
+    const item = migrateQueueItem(rawItem);
+    migrated.push(item);
+    if (JSON.stringify(item) !== JSON.stringify(rawItem)) await addToQueue(item);
+  }
+  return migrated;
 }
 
 /**
@@ -502,7 +543,7 @@ export async function getOfflineQueue() {
  */
 export async function dequeueOfflineAction(id) {
   await removeFromQueue(id);
-  window.dispatchEvent(new Event('offline-queue-updated'));
+  emitQueueUpdated();
 }
 
 /**
@@ -510,7 +551,7 @@ export async function dequeueOfflineAction(id) {
  */
 export async function clearOfflineQueue() {
   await clearQueue();
-  window.dispatchEvent(new Event('offline-queue-updated'));
+  emitQueueUpdated();
 }
 
 /**
@@ -530,8 +571,20 @@ async function processOfflineQueue(onStatusChange) {
     return true;
   }
 
-  console.log(`[OfflineSync] Starting sync of ${queue.length} actions...`);
-  if (onStatusChange) onStatusChange('syncing', queue.length);
+  const totalQueueCount = queue.length;
+  const now = Date.now();
+  const reviewItems = queue.filter(item => item.status === 'needs_review');
+  queue = queue.filter(item => item.status !== 'needs_review' && Number(item.nextAttemptAt || 0) <= now);
+  if (queue.length === 0) {
+    if (reviewItems.length > 0 && onStatusChange) {
+      const details = reviewItems.slice(0, 3).map(item => `${item.action}: ${item.lastError || 'Cần kiểm tra dữ liệu'}`).join(' | ');
+      onStatusChange('error', totalQueueCount, `${reviewItems.length} mục cần kiểm tra. ${details}`);
+    }
+    return false;
+  }
+
+  console.log(`[OfflineSync] Starting sync of ${queue.length}/${totalQueueCount} eligible actions...`);
+  if (onStatusChange) onStatusChange('syncing', totalQueueCount);
 
   let successCount = 0;
   const deferredDeviceLinks = [];
@@ -539,6 +592,7 @@ async function processOfflineQueue(onStatusChange) {
 
   for (const item of queue) {
     try {
+      await saveQueueState(item, 'syncing');
       console.log(`[OfflineSync] Syncing action ${item.action}...`, item.payload);
       let error = null;
 
@@ -662,7 +716,7 @@ async function processOfflineQueue(onStatusChange) {
       }
 
       if (error) {
-        throw new Error(error.message);
+        throw error;
       }
 
       // A device whose system set is not created yet stays queued until the
@@ -675,6 +729,7 @@ async function processOfflineQueue(onStatusChange) {
       
     } catch (err) {
       console.error(`[OfflineSync] Failed to sync action ${item.id}:`, err);
+      await saveQueueState(item, classifySyncError(err), err);
       syncErrors.push(describeQueueError(item, err));
       if (onStatusChange) onStatusChange('syncing', queue.length - successCount, err.message);
     }
@@ -694,6 +749,7 @@ async function processOfflineQueue(onStatusChange) {
     }
     if (linkError) {
       console.error(`[OfflineSync] Failed to link ${link.table}.${link.id} to ${link.set_code}:`, linkError);
+      await saveQueueState(link.queueItem, classifySyncError(linkError), linkError);
       syncErrors.push(`LINK_DEVICE/${link.table} (${link.id}): ${linkError.message}`);
       continue;
     }
@@ -706,9 +762,14 @@ async function processOfflineQueue(onStatusChange) {
     successCount++;
   }
 
-  if (syncErrors.length > 0) {
-    const remainingQueue = await getOfflineQueue();
-    const summary = `${syncErrors.length} mục chưa đồng bộ. ${syncErrors.slice(0, 3).join(' | ')}`;
+  const remainingQueue = await getOfflineQueue();
+  if (syncErrors.length > 0 || remainingQueue.length > 0) {
+    const storedErrors = remainingQueue
+      .filter(item => item.lastError)
+      .slice(0, 3)
+      .map(item => `${item.action}: ${item.lastError}`);
+    const errorDetails = syncErrors.length > 0 ? syncErrors.slice(0, 3) : storedErrors;
+    const summary = `${remainingQueue.length} mục chưa đồng bộ. ${errorDetails.join(' | ')}`;
     console.error('[OfflineSync] Partial sync completed:', summary);
     if (onStatusChange) onStatusChange('error', remainingQueue.length, summary);
     window.dispatchEvent(new CustomEvent('nasun-sync-partial', {
@@ -725,7 +786,11 @@ async function processOfflineQueue(onStatusChange) {
 
 export function syncOfflineQueue(onStatusChange) {
   if (activeSyncPromise) return activeSyncPromise;
-  activeSyncPromise = processOfflineQueue(onStatusChange)
+  const runSync = () => processOfflineQueue(onStatusChange);
+  const syncTask = navigator.locks?.request
+    ? navigator.locks.request('nasun-offline-sync', { mode: 'exclusive' }, runSync)
+    : runSync();
+  activeSyncPromise = syncTask
     .finally(() => {
       activeSyncPromise = null;
     });

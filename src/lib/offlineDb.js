@@ -1,5 +1,5 @@
 const DB_NAME = 'nasun_offline_db';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 let dbPromise = null;
 
 /**
@@ -20,7 +20,15 @@ function openDb() {
 
       // Store to queue offline actions (mutations)
       if (!db.objectStoreNames.contains('offline_queue')) {
-        db.createObjectStore('offline_queue', { keyPath: 'id' });
+        const queueStore = db.createObjectStore('offline_queue', { keyPath: 'id' });
+        queueStore.createIndex('status', 'status', { unique: false });
+        queueStore.createIndex('nextAttemptAt', 'nextAttemptAt', { unique: false });
+        queueStore.createIndex('operationId', 'operationId', { unique: false });
+      } else {
+        const queueStore = event.target.transaction.objectStore('offline_queue');
+        if (!queueStore.indexNames.contains('status')) queueStore.createIndex('status', 'status', { unique: false });
+        if (!queueStore.indexNames.contains('nextAttemptAt')) queueStore.createIndex('nextAttemptAt', 'nextAttemptAt', { unique: false });
+        if (!queueStore.indexNames.contains('operationId')) queueStore.createIndex('operationId', 'operationId', { unique: false });
       }
     };
 
