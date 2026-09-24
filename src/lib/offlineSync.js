@@ -169,6 +169,16 @@ async function writeSystemSetWithSchemaFallback(payload, targetSetCode = null) {
 
 async function updateDeviceWithSchemaFallback(table, id, updates) {
   const compatibleUpdates = { ...updates };
+  if (table === 'computers') {
+    if ('type' in compatibleUpdates) {
+      compatibleUpdates.type = compatibleUpdates.type === 'Case' ? 'Case' : 'AIO';
+    }
+    if ('network' in compatibleUpdates) {
+      const allowedNetworks = ['Có mạng LAN', 'Có mạng Wifi', 'Không có mạng'];
+      if (!allowedNetworks.includes(compatibleUpdates.network)) compatibleUpdates.network = 'Có mạng LAN';
+    }
+    if ('os' in compatibleUpdates && !compatibleUpdates.os) compatibleUpdates.os = 'Windows 10 LTSC';
+  }
   if (compatibleUpdates.serial && ['N/A', '—', 'null', 'undefined'].includes(String(compatibleUpdates.serial).trim())) {
     compatibleUpdates.serial = `AUTO-${id}`;
   }
