@@ -125,6 +125,7 @@ function sortQueueByDependency(queue) {
     EDIT_NPP: 20,
     ADD_DEVICE: 30,
     ASSEMBLE_SET: 40,
+    EXECUTE_WORKFLOW: 45,
     EDIT_DEVICE: 50,
     UPDATE_SYSTEM_SET: 60,
     ADD_REPAIR: 70,
@@ -644,6 +645,20 @@ async function processOfflineQueue(onStatusChange) {
           break;
         case 'ASSEMBLE_SET':
           error = await writeSystemSetWithSchemaFallback(item.payload);
+          break;
+        case 'EXECUTE_WORKFLOW':
+          {
+            const workflowPayload = item.payload || {};
+            if (!workflowPayload.operationId || !workflowPayload.workflow || !workflowPayload.data) {
+              throw new Error('Invalid EXECUTE_WORKFLOW queue payload');
+            }
+            const { error: workflowError } = await supabase.rpc('execute_equipment_workflow', {
+              p_operation_id: workflowPayload.operationId,
+              p_workflow: workflowPayload.workflow,
+              p_payload: workflowPayload.data
+            });
+            error = workflowError;
+          }
           break;
         case 'UPDATE_SYSTEM_SET':
           {

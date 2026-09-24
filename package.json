@@ -8,6 +8,7 @@
     "build": "vite build && node scripts/generate-service-worker.mjs",
     "lint": "oxlint",
     "test:sync": "node --test tests/syncQueue.test.mjs",
+    "test:workflow": "node --test tests/workflowMigration.test.mjs",
     "preview": "vite preview",
     "deploy": "npm run build && wrangler deploy",
     "backup": "node scripts/backup-database.js",

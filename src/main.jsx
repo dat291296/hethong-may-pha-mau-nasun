@@ -25,7 +25,7 @@ if ('serviceWorker' in navigator) {
       window.location.reload();
     });
 
-    navigator.serviceWorker.register('/sw.js?v=5.0', { updateViaCache: 'none' })
+    navigator.serviceWorker.register('/sw.js?v=5.1', { updateViaCache: 'none' })
       .then(reg => {
         console.log('[SW] Registered successfully:', reg.scope);
         return reg.update();

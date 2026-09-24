@@ -48,7 +48,7 @@ function persistAssetsLocal(key, data) {
 }
 
 function isPendingAssetAction(item) {
-  return ['ADD_DEVICE', 'EDIT_DEVICE', 'DELETE_DEVICE', 'ASSEMBLE_SET', 'UPDATE_SYSTEM_SET', 'DELETE_SYSTEM_SET'].includes(item.action);
+  return ['ADD_DEVICE', 'EDIT_DEVICE', 'DELETE_DEVICE', 'ASSEMBLE_SET', 'UPDATE_SYSTEM_SET', 'DELETE_SYSTEM_SET', 'EXECUTE_WORKFLOW'].includes(item.action);
 }
 
 function canRetryOffline(error) {

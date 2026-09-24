@@ -7,6 +7,8 @@ import MobileBottomNav from './components/MobileBottomNav';
 import LoginModal from './components/LoginModal';
 import { useAuth } from './context/AuthContext';
 import { supabase, isSupabaseConfigured } from './lib/supabase';
+import { cacheOfflineData } from './lib/offlineSync.js';
+import { executeWorkflowTransaction } from './lib/workflowTransactions.js';
 
 import {
   INITIAL_FORMULA_VERSIONS,
@@ -41,6 +43,15 @@ function normalizeWarehouseRegion(region) {
   if (value.includes('trung') || value === 'mt') return 'Miền Trung';
   if (value.includes('nam') || value === 'mn') return 'Miền Nam';
   return 'Miền Bắc';
+}
+
+function persistWorkflowCache(key, data) {
+  try {
+    window.localStorage.setItem(`nasun_${key}`, JSON.stringify(data));
+  } catch (err) {
+    console.warn(`[Workflow] Failed to persist ${key} locally:`, err);
+  }
+  cacheOfflineData(key, data);
 }
 
 export default function App() {
@@ -109,7 +120,7 @@ export default function App() {
   }, [user]);
 
   // Main State via Supabase hooks
-  const { npps, addNpp, editNpp, deleteNpp, importNpps, refetch: refetchNpps } = useNpps();
+  const { npps, setNpps, addNpp, editNpp, deleteNpp, importNpps, refetch: refetchNpps } = useNpps();
   const {
     dispensers, setDispensers, mixers, setMixers, computers, setComputers, printers, setPrinters, systemSets, setSystemSets,
     addStockDevice, editDevice, deleteDevice, deleteSystemSet, assembleSet, updateSystemSet, importDevices, importSystemSets, refetch: refetchAssets
@@ -480,8 +491,36 @@ export default function App() {
 
   const handleInstallSubmit = async (data) => {
     const targetNpp = npps.find(n => n.id === data.nppId);
+    const workflowData = {
+      ...data,
+      nppName: targetNpp?.name || 'NPP',
+      region: targetNpp?.region || 'Việt Nam',
+      province: targetNpp?.province || '',
+      photos: data.installationPhotos || []
+    };
 
     try {
+      const transaction = await executeWorkflowTransaction('INSTALL', workflowData);
+      if (!transaction.fallbackRequired) {
+        if (transaction.queued) {
+          setSystemSets(prev => {
+            const updated = prev.map(set => (set.setCode || set.set_code) === data.setCode ? {
+              ...set, nppId: data.nppId, npp_id: data.nppId,
+              nppName: workflowData.nppName, npp_name: workflowData.nppName,
+              region: workflowData.region, province: workflowData.province,
+              status: 'DA_LAP_DAT', installDate: data.installedDate,
+              lastMaintenanceDate: data.installedDate, nextMaintenanceDue: data.nextMaintenanceDue,
+              agentStatus: 'Online'
+            } : set);
+            persistWorkflowCache('system_sets', updated);
+            return updated;
+          });
+        } else {
+          await Promise.allSettled([refetchAssets(), refetchNpps(), refetchAuditLogs()]);
+        }
+        return;
+      }
+
       await updateSystemSet(data.setCode, {
         npp_id: data.nppId,
         npp_name: targetNpp ? targetNpp.name : 'NPP',
@@ -523,6 +562,43 @@ export default function App() {
     const warehouseRegion = normalizeWarehouseRegion(targetNpp?.region || targetSet?.region);
 
     try {
+      const workflowData = {
+        ...data,
+        sourceNppId: targetNpp?.id || targetSet?.nppId || targetSet?.npp_id || null,
+        sourceNppName: targetNpp?.name || targetSet?.nppName || '',
+        warehouseRegion,
+        isDistributorClosure,
+        photos: data.photos || [],
+        notes: `${data.deviceCondition} | ${data.notes || ''}`
+      };
+      const transaction = await executeWorkflowTransaction('WITHDRAW', workflowData);
+      if (!transaction.fallbackRequired) {
+        if (transaction.queued) {
+          setSystemSets(prev => {
+            const updated = prev.map(set => {
+              const sameSet = (set.setCode || set.set_code) === data.setCode;
+              const sameNpp = isDistributorClosure && String(set.nppId || set.npp_id || '') === String(workflowData.sourceNppId || '');
+              return sameSet || sameNpp ? {
+                ...set, nppId: null, npp_id: null, nppName: 'Tự do trong kho', npp_name: 'Tự do trong kho',
+                region: warehouseRegion, status: 'TRONG_KHO', agentStatus: 'Offline', agent_status: 'Offline'
+              } : set;
+            });
+            persistWorkflowCache('system_sets', updated);
+            return updated;
+          });
+          if (isDistributorClosure && targetNpp) {
+            setNpps(prev => {
+              const updated = prev.map(npp => npp.id === targetNpp.id ? { ...npp, status: 'Đã ngưng hợp tác' } : npp);
+              persistWorkflowCache('npps', updated);
+              return updated;
+            });
+          }
+        } else {
+          await Promise.allSettled([refetchAssets(), refetchNpps(), refetchAuditLogs()]);
+        }
+        return;
+      }
+
       if (isDistributorClosure && targetNpp) {
         await handleEditNpp({ ...targetNpp, status: 'Đã ngưng hợp tác' });
       } else {
@@ -561,6 +637,33 @@ export default function App() {
     const targetSet = systemSets.find(s => s.setCode === data.setCode);
 
     try {
+      const workflowData = {
+        ...data,
+        nppId: data.newNppId,
+        nppName: targetNpp?.name || 'NPP Mới',
+        region: targetNpp?.region || targetSet?.region || '',
+        province: targetNpp?.province || '',
+        sourceNppName: targetSet?.nppName || '',
+        photos: data.photos || []
+      };
+      const transaction = await executeWorkflowTransaction('TRANSFER', workflowData);
+      if (!transaction.fallbackRequired) {
+        if (transaction.queued) {
+          setSystemSets(prev => {
+            const updated = prev.map(set => (set.setCode || set.set_code) === data.setCode ? {
+              ...set, nppId: data.newNppId, npp_id: data.newNppId,
+              nppName: workflowData.nppName, npp_name: workflowData.nppName,
+              region: workflowData.region, province: workflowData.province, status: 'DA_LAP_DAT'
+            } : set);
+            persistWorkflowCache('system_sets', updated);
+            return updated;
+          });
+        } else {
+          await Promise.allSettled([refetchAssets(), refetchNpps(), refetchAuditLogs()]);
+        }
+        return;
+      }
+
       await updateSystemSet(data.setCode, {
         npp_id: data.newNppId,
         npp_name: targetNpp ? targetNpp.name : 'NPP Mới',
