@@ -168,11 +168,35 @@ async function writeSystemSetWithSchemaFallback(payload, targetSetCode = null) {
   const compatiblePayload = normalizeSystemSetPayload(payload, !targetSetCode);
   const setCode = targetSetCode || compatiblePayload.set_code;
   if (!setCode) return new Error('Thiếu mã bộ máy khi đồng bộ system_sets');
+  const requestedSetCode = compatiblePayload.set_code;
+
+  // The primary key is also used as the UPDATE selector. Re-sending the same
+  // value is unnecessary, while old queued renames may point at a code that
+  // already exists after an earlier action was synchronized.
+  if (targetSetCode && requestedSetCode === targetSetCode) {
+    delete compatiblePayload.set_code;
+  }
+  if (targetSetCode && Object.keys(compatiblePayload).length === 0) return null;
+
   while (true) {
     const { error } = targetSetCode
       ? await supabase.from('system_sets').update(compatiblePayload).eq('set_code', targetSetCode)
       : await supabase.from('system_sets').upsert(compatiblePayload, { onConflict: 'set_code' });
     if (!error) return null;
+
+    const isPrimaryKeyConflict = targetSetCode && requestedSetCode &&
+      error.code === '23505' && String(error.message || '').includes('system_sets_pkey');
+    if (isPrimaryKeyConflict) {
+      const canonicalPayload = { ...compatiblePayload };
+      delete canonicalPayload.set_code;
+      if (Object.keys(canonicalPayload).length === 0) return null;
+      const { error: canonicalError } = await supabase
+        .from('system_sets')
+        .update(canonicalPayload)
+        .eq('set_code', requestedSetCode);
+      return canonicalError;
+    }
+
     const match = String(error.message || '').match(/Could not find the '([^']+)' column/i);
     const missingColumn = match?.[1];
     if (!missingColumn || !(missingColumn in compatiblePayload)) return error;
