@@ -169,14 +169,25 @@ async function writeSystemSetWithSchemaFallback(payload, targetSetCode = null) {
 
 async function updateDeviceWithSchemaFallback(table, id, updates) {
   const compatibleUpdates = { ...updates };
+  if (compatibleUpdates.serial && ['N/A', '—', 'null', 'undefined'].includes(String(compatibleUpdates.serial).trim())) {
+    compatibleUpdates.serial = `AUTO-${id}`;
+  }
   while (true) {
     const { error } = await supabase.from(table).update(compatibleUpdates).eq('id', id);
     if (!error) return null;
     const match = String(error.message || '').match(/Could not find the '([^']+)' column/i);
     const missingColumn = match?.[1];
-    if (!missingColumn || !(missingColumn in compatibleUpdates)) return error;
-    console.warn(`[OfflineSync] ${table}.${missingColumn} is absent; retrying with legacy schema.`);
-    delete compatibleUpdates[missingColumn];
+    if (missingColumn && missingColumn in compatibleUpdates) {
+      console.warn(`[OfflineSync] ${table}.${missingColumn} is absent; retrying with legacy schema.`);
+      delete compatibleUpdates[missingColumn];
+      continue;
+    }
+    const isDuplicateSerial = error.code === '23505' && String(error.message || '').toLowerCase().includes('serial');
+    if (isDuplicateSerial && compatibleUpdates.serial !== `AUTO-${id}`) {
+      compatibleUpdates.serial = `AUTO-${id}`;
+      continue;
+    }
+    return error;
   }
 }
 
@@ -302,7 +313,7 @@ async function processOfflineQueue(onStatusChange) {
 
       switch (item.action) {
         case 'ADD_NPP':
-          const { error: addNppErr } = await supabase.from('distributors').insert(item.payload);
+          const { error: addNppErr } = await supabase.from('distributors').upsert(item.payload, { onConflict: 'id' });
           error = addNppErr;
           break;
         case 'EDIT_NPP':
@@ -368,7 +379,7 @@ async function processOfflineQueue(onStatusChange) {
           }
           break;
         case 'ADD_REPAIR':
-          const { error: addRepErr } = await supabase.from('repair_tickets').insert(item.payload);
+          const { error: addRepErr } = await supabase.from('repair_tickets').upsert(item.payload, { onConflict: 'id' });
           error = addRepErr;
           break;
         case 'DELETE_NPP':
@@ -384,7 +395,7 @@ async function processOfflineQueue(onStatusChange) {
           error = delRepErr;
           break;
         case 'ADD_AUDIT_LOG':
-          const { error: auditErr } = await supabase.from('audit_logs').insert(item.payload);
+          const { error: auditErr } = await supabase.from('audit_logs').upsert(item.payload, { onConflict: 'id' });
           error = auditErr;
           break;
         case 'UPDATE_AUDIT_LOG':
