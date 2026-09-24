@@ -359,6 +359,35 @@ async function resolveSystemSetTarget(queuePayload, updatePayload) {
   return null;
 }
 
+async function resolveDeviceLinkTarget(table, deviceId, requestedSetCode) {
+  if (requestedSetCode) {
+    const { data, error } = await supabase
+      .from('system_sets')
+      .select('set_code')
+      .eq('set_code', requestedSetCode)
+      .limit(1);
+    if (error) throw error;
+    if (data?.length === 1) return requestedSetCode;
+  }
+
+  const deviceFieldByTable = {
+    dispensers: 'dispenser_id',
+    mixers: 'mixer_id',
+    computers: 'computer_id',
+    printers: 'printer_id'
+  };
+  const deviceField = deviceFieldByTable[table];
+  if (!deviceField || !deviceId) return null;
+
+  const { data, error } = await supabase
+    .from('system_sets')
+    .select('set_code')
+    .eq(deviceField, deviceId)
+    .limit(2);
+  if (error) throw error;
+  return data?.length === 1 ? data[0].set_code : null;
+}
+
 async function updateDeviceWithSchemaFallback(table, id, updates) {
   const compatibleUpdates = { ...updates };
   if (table === 'computers') {
@@ -652,14 +681,26 @@ async function processOfflineQueue(onStatusChange) {
   }
 
   for (const link of deferredDeviceLinks) {
-    const linkError = await updateDeviceWithSchemaFallback(link.table, link.id, {
-      set_code: link.set_code,
-      is_assigned: link.is_assigned !== false
-    });
+    let resolvedSetCode = null;
+    let linkError = null;
+    try {
+      resolvedSetCode = await resolveDeviceLinkTarget(link.table, link.id, link.set_code);
+      linkError = await updateDeviceWithSchemaFallback(link.table, link.id, {
+        set_code: resolvedSetCode,
+        is_assigned: Boolean(resolvedSetCode) && link.is_assigned !== false
+      });
+    } catch (err) {
+      linkError = err;
+    }
     if (linkError) {
       console.error(`[OfflineSync] Failed to link ${link.table}.${link.id} to ${link.set_code}:`, linkError);
       syncErrors.push(`LINK_DEVICE/${link.table} (${link.id}): ${linkError.message}`);
       continue;
+    }
+    if (!resolvedSetCode) {
+      console.warn(`[OfflineSync] Set ${link.set_code} no longer exists; ${link.table}.${link.id} remains free in stock.`);
+    } else if (resolvedSetCode !== link.set_code) {
+      console.info(`[OfflineSync] Relinked ${link.table}.${link.id} from ${link.set_code} to ${resolvedSetCode}.`);
     }
     await dequeueOfflineAction(link.queueItem.id);
     successCount++;
