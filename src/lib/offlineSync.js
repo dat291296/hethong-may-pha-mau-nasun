@@ -113,6 +113,10 @@ function normalizeSystemSetPayload(payload) {
     const dbKey = mappings[key] || key;
     if (allowed.has(dbKey) && value !== undefined) normalized[dbKey] = value;
   }
+  normalized.npp_name = normalized.npp_name || '';
+  const allowedStatuses = ['DA_LAP_DAT', 'TRONG_KHO', 'DA_THU_HOI', 'BAO_THUONG_BAO_TRI'];
+  if (!allowedStatuses.includes(normalized.status)) normalized.status = 'TRONG_KHO';
+  if (!Array.isArray(normalized.installation_photos)) normalized.installation_photos = [];
   return normalized;
 }
 
@@ -149,7 +153,7 @@ async function updateDeviceWithSchemaFallback(table, id, updates) {
 async function insertDeviceWithSchemaFallback(table, payload, queueItemId) {
   const compatiblePayload = normalizeDevicePayload(payload);
   compatiblePayload.id = await resolveDeviceId(table, payload, queueItemId);
-  if (table === 'computers') delete compatiblePayload.serial;
+  applyRequiredDeviceDefaults(table, compatiblePayload);
   const deferredLink = compatiblePayload.set_code && compatiblePayload.is_assigned !== false ? {
     table,
     id: compatiblePayload.id,
@@ -175,6 +179,12 @@ async function insertDeviceWithSchemaFallback(table, payload, queueItemId) {
       continue;
     }
 
+    const isDuplicateSerial = error.code === '23505' && String(error.message || '').toLowerCase().includes('serial');
+    if (isDuplicateSerial && compatiblePayload.serial !== `AUTO-${compatiblePayload.id}`) {
+      compatiblePayload.serial = `AUTO-${compatiblePayload.id}`;
+      continue;
+    }
+
     return { error, deferredLink: null, resolvedId: compatiblePayload.id };
   }
 }
@@ -195,7 +205,8 @@ export async function enqueueOfflineAction(action, payload, category = null) {
   // does not replay obsolete intermediate versions.
   const queue = await getQueue();
   const previousItem = queue.at(-1);
-  if (previousItem && getActionIdentity(previousItem) === getActionIdentity(newItem)) {
+  const newIdentity = getActionIdentity(newItem);
+  if (previousItem && newIdentity && getActionIdentity(previousItem) === newIdentity) {
     await removeFromQueue(previousItem.id);
   }
   
@@ -428,4 +439,44 @@ function normalizeDevicePayload(payload) {
   if (isAssigned !== undefined) dbPayload.is_assigned = Boolean(isAssigned);
   if (setCode !== undefined) dbPayload.set_code = setCode || null;
   return dbPayload;
+}
+
+function applyRequiredDeviceDefaults(table, payload) {
+  const missingSerial = !payload.serial || ['N/A', '—', 'null', 'undefined'].includes(String(payload.serial).trim());
+  if (missingSerial) payload.serial = `AUTO-${payload.id}`;
+  payload.is_assigned = Boolean(payload.is_assigned);
+
+  if (table === 'dispensers') {
+    payload.model = payload.model || 'Satint';
+    const allowedStatuses = ['Mới 100%', 'Đang chạy tốt', 'Cần bảo trì', 'Hỏng đầu phun', 'Hỏng nặng'];
+    if (!allowedStatuses.includes(payload.status)) payload.status = 'Đang chạy tốt';
+    return;
+  }
+
+  if (table === 'mixers') {
+    payload.model = payload.model || 'Satint ST-50';
+    const allowedTypes = ['Lắc xoay khép kín', 'Lắc rung đứng', 'Lắc rung ngang', 'Lắc mâm xoay'];
+    if (!allowedTypes.includes(payload.type)) payload.type = 'Lắc xoay khép kín';
+    const allowedStatuses = ['Mới 100%', 'Đang chạy tốt', 'Cần bảo trì', 'Hỏng motor', 'Hỏng nặng', 'Hỏng đầu phun'];
+    if (!allowedStatuses.includes(payload.status)) payload.status = 'Đang chạy tốt';
+    return;
+  }
+
+  if (table === 'computers') {
+    payload.type = payload.type === 'Case' ? 'Case' : 'AIO';
+    payload.os = payload.os || 'Windows 10 LTSC';
+    payload.specs = payload.specs || '';
+    const allowedNetworks = ['Có mạng LAN', 'Có mạng Wifi', 'Không có mạng'];
+    if (!allowedNetworks.includes(payload.network)) payload.network = 'Có mạng LAN';
+    if (!payload.status) payload.status = 'Đang chạy tốt';
+    return;
+  }
+
+  if (table === 'printers') {
+    payload.model = payload.model || 'QL700';
+    const allowedConnections = ['USB', 'LAN', 'Bluetooth', 'Wifi'];
+    if (!allowedConnections.includes(payload.connection)) payload.connection = 'USB';
+    const allowedStatuses = ['Mới 100%', 'Đang chạy tốt', 'Cần bảo trì', 'Hỏng đầu in', 'Hỏng đầu phun', 'Hỏng nặng'];
+    if (!allowedStatuses.includes(payload.status)) payload.status = 'Đang chạy tốt';
+  }
 }

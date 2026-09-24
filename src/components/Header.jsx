@@ -49,11 +49,18 @@ export default function Header({
     const updateQueueCount = async () => {
       const queue = await getOfflineQueue();
       setQueueCount(queue.length);
+      if (navigator.onLine && queue.length > 0) handleSync();
+    };
+
+    const syncWhenVisible = () => {
+      if (document.visibilityState === 'visible' && navigator.onLine) handleSync();
     };
 
     window.addEventListener('online', updateStatus);
     window.addEventListener('offline', updateStatus);
+    window.addEventListener('focus', syncWhenVisible);
     window.addEventListener('offline-queue-updated', updateQueueCount);
+    document.addEventListener('visibilitychange', syncWhenVisible);
     
     // Initial fetch
     updateQueueCount();
@@ -66,7 +73,9 @@ export default function Header({
     return () => {
       window.removeEventListener('online', updateStatus);
       window.removeEventListener('offline', updateStatus);
+      window.removeEventListener('focus', syncWhenVisible);
       window.removeEventListener('offline-queue-updated', updateQueueCount);
+      document.removeEventListener('visibilitychange', syncWhenVisible);
     };
   }, []);
 
