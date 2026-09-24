@@ -31,9 +31,23 @@ async function updateDeviceWithSchemaFallback(table, id, updates) {
 async function insertDeviceWithSchemaFallback(table, payload) {
   const compatiblePayload = normalizeDevicePayload(payload);
   if (table === 'computers') delete compatiblePayload.serial;
+  const deferredLink = compatiblePayload.set_code && compatiblePayload.is_assigned !== false ? {
+    table,
+    id: compatiblePayload.id,
+    set_code: compatiblePayload.set_code,
+    is_assigned: compatiblePayload.is_assigned
+  } : null;
+
+  // Device tables reference system_sets. Always create the stock device first,
+  // then restore its set link in the second pass after all set records exist.
+  if (compatiblePayload.set_code) {
+    compatiblePayload.set_code = null;
+    compatiblePayload.is_assigned = false;
+  }
+
   while (true) {
     const { error } = await supabase.from(table).upsert(compatiblePayload, { onConflict: 'id' });
-    if (!error) return { error: null, deferredLink: null };
+    if (!error) return { error: null, deferredLink };
     const match = String(error.message || '').match(/Could not find the '([^']+)' column/i);
     const missingColumn = match?.[1];
     if (missingColumn && missingColumn in compatiblePayload) {
@@ -42,20 +56,6 @@ async function insertDeviceWithSchemaFallback(table, payload) {
       continue;
     }
 
-    const isSetCodeForeignKeyError = error.code === '23503' &&
-      String(error.message || '').includes(`${table}_set_code_fkey`);
-    if (isSetCodeForeignKeyError && compatiblePayload.set_code) {
-      const deferredLink = {
-        table,
-        id: compatiblePayload.id,
-        set_code: compatiblePayload.set_code,
-        is_assigned: compatiblePayload.is_assigned
-      };
-      const stockPayload = { ...compatiblePayload, set_code: null, is_assigned: false };
-      const stockResult = await supabase.from(table).upsert(stockPayload, { onConflict: 'id' });
-      if (!stockResult.error) return { error: null, deferredLink };
-      return { error: stockResult.error, deferredLink: null };
-    }
     return { error, deferredLink: null };
   }
 }
@@ -159,7 +159,19 @@ async function processOfflineQueue(onStatusChange) {
           {
             const devicePayload = normalizeDevicePayload(item.payload);
             const { id, ...deviceUpdates } = devicePayload;
+            const deferredLink = deviceUpdates.set_code && deviceUpdates.is_assigned !== false ? {
+              queueItem: item,
+              table: item.category,
+              id,
+              set_code: deviceUpdates.set_code,
+              is_assigned: deviceUpdates.is_assigned
+            } : null;
+            if (deviceUpdates.set_code) {
+              deviceUpdates.set_code = null;
+              deviceUpdates.is_assigned = false;
+            }
             error = await updateDeviceWithSchemaFallback(item.category, id, deviceUpdates);
+            if (!error && deferredLink) deferredDeviceLinks.push(deferredLink);
           }
           break;
         case 'DELETE_DEVICE':
