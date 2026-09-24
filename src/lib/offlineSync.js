@@ -87,6 +87,36 @@ async function compactDuplicateCreates(queue) {
   return compacted;
 }
 
+function sortQueueByDependency(queue) {
+  const priorities = {
+    ADD_NPP: 10,
+    EDIT_NPP: 20,
+    ADD_DEVICE: 30,
+    ASSEMBLE_SET: 40,
+    EDIT_DEVICE: 50,
+    UPDATE_SYSTEM_SET: 60,
+    ADD_REPAIR: 70,
+    EDIT_REPAIR: 80,
+    ADD_AUDIT_LOG: 90,
+    UPDATE_AUDIT_LOG: 100,
+    DELETE_AUDIT_LOG: 110,
+    DELETE_REPAIR: 120,
+    DELETE_SYSTEM_SET: 130,
+    DELETE_DEVICE: 140,
+    DELETE_NPP: 150
+  };
+  return [...queue].sort((a, b) => {
+    const priorityDiff = (priorities[a.action] || 999) - (priorities[b.action] || 999);
+    return priorityDiff || (Number(a.timestamp) || 0) - (Number(b.timestamp) || 0);
+  });
+}
+
+function describeQueueError(item, error) {
+  const payload = item?.payload || {};
+  const recordId = payload.id || payload.set_code || payload.setCode || payload.targetSetCode || 'không có mã';
+  return `${item.action}${item.category ? `/${item.category}` : ''} (${recordId}): ${error.message}`;
+}
+
 function normalizeSystemSetPayload(payload) {
   const source = payload || {};
   const mappings = {
@@ -252,6 +282,7 @@ async function processOfflineQueue(onStatusChange) {
 
   let queue = await getOfflineQueue();
   queue = await compactDuplicateCreates(queue);
+  queue = sortQueueByDependency(queue);
   if (queue.length === 0) {
     window.dispatchEvent(new CustomEvent('nasun-sync-completed', { detail: { synced: 0 } }));
     return true;
@@ -262,6 +293,7 @@ async function processOfflineQueue(onStatusChange) {
 
   let successCount = 0;
   const deferredDeviceLinks = [];
+  const syncErrors = [];
 
   for (const item of queue) {
     try {
@@ -386,8 +418,8 @@ async function processOfflineQueue(onStatusChange) {
       
     } catch (err) {
       console.error(`[OfflineSync] Failed to sync action ${item.id}:`, err);
-      if (onStatusChange) onStatusChange('error', queue.length - successCount, err.message);
-      return false;
+      syncErrors.push(describeQueueError(item, err));
+      if (onStatusChange) onStatusChange('syncing', queue.length - successCount, err.message);
     }
   }
 
@@ -398,11 +430,22 @@ async function processOfflineQueue(onStatusChange) {
     });
     if (linkError) {
       console.error(`[OfflineSync] Failed to link ${link.table}.${link.id} to ${link.set_code}:`, linkError);
-      if (onStatusChange) onStatusChange('error', deferredDeviceLinks.length, linkError.message);
-      return false;
+      syncErrors.push(`LINK_DEVICE/${link.table} (${link.id}): ${linkError.message}`);
+      continue;
     }
     await dequeueOfflineAction(link.queueItem.id);
     successCount++;
+  }
+
+  if (syncErrors.length > 0) {
+    const remainingQueue = await getOfflineQueue();
+    const summary = `${syncErrors.length} mục chưa đồng bộ. ${syncErrors.slice(0, 3).join(' | ')}`;
+    console.error('[OfflineSync] Partial sync completed:', summary);
+    if (onStatusChange) onStatusChange('error', remainingQueue.length, summary);
+    window.dispatchEvent(new CustomEvent('nasun-sync-partial', {
+      detail: { synced: successCount, remaining: remainingQueue.length, errors: syncErrors.slice(0, 10) }
+    }));
+    return false;
   }
 
   console.log(`[OfflineSync] Sync complete! Successfully synced ${successCount} actions.`);
