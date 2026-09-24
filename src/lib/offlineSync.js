@@ -2,11 +2,22 @@ import { supabase, isSupabaseConfigured } from './supabase';
 import { addToQueue, getQueue, removeFromQueue, clearQueue, setCache, getCache } from './offlineDb';
 
 let activeSyncPromise = null;
+const deviceIdPools = new Map();
+
+const DEVICE_PREFIXES = {
+  dispensers: 'DISP',
+  mixers: 'MIXE',
+  computers: 'COMP',
+  printers: 'PRIN'
+};
 
 function getActionIdentity(item) {
   const payload = item?.payload || {};
   switch (item?.action) {
-    case 'ADD_DEVICE': return `${item.action}:${item.category}:${payload.id}`;
+    case 'ADD_DEVICE': {
+      const deviceId = payload.id || payload.sourceId || payload.managementCode || payload.management_code || payload.code || payload.qlCode || payload.ql_code;
+      return deviceId ? `${item.action}:${item.category}:${deviceId}` : null;
+    }
     case 'ASSEMBLE_SET': {
       const setCode = payload.set_code || payload.setCode;
       return setCode ? `${item.action}:${setCode}` : null;
@@ -18,6 +29,37 @@ function getActionIdentity(item) {
     case 'UPDATE_SYSTEM_SET': return `${item.action}:${payload.targetSetCode || payload.set_code || payload.setCode}`;
     default: return null;
   }
+}
+
+async function resolveDeviceId(table, payload, queueItemId) {
+  const existingId = payload?.id || payload?.sourceId || payload?.managementCode ||
+    payload?.management_code || payload?.code || payload?.qlCode || payload?.ql_code;
+  if (existingId) return String(existingId).trim();
+
+  const prefix = DEVICE_PREFIXES[table] || 'DEV';
+  if (!deviceIdPools.has(table)) {
+    deviceIdPools.set(table, (async () => {
+      const used = new Set();
+      const { data, error } = await supabase.from(table).select('id');
+      if (error) throw error;
+      for (const row of data || []) {
+        const match = String(row.id || '').match(new RegExp(`^${prefix}-(\\d{1,3})$`, 'i'));
+        if (match) used.add(Number(match[1]));
+      }
+      return used;
+    })());
+  }
+
+  const used = await deviceIdPools.get(table);
+  for (let number = 1; number <= 999; number += 1) {
+    if (!used.has(number)) {
+      used.add(number);
+      return `${prefix}-${String(number).padStart(3, '0')}`;
+    }
+  }
+
+  const fallbackToken = String(queueItemId || Date.now()).replace(/[^a-z0-9]/gi, '').slice(-8).toUpperCase();
+  return `${prefix}-${fallbackToken}`;
 }
 
 async function compactDuplicateCreates(queue) {
@@ -104,8 +146,9 @@ async function updateDeviceWithSchemaFallback(table, id, updates) {
   }
 }
 
-async function insertDeviceWithSchemaFallback(table, payload) {
+async function insertDeviceWithSchemaFallback(table, payload, queueItemId) {
   const compatiblePayload = normalizeDevicePayload(payload);
+  compatiblePayload.id = await resolveDeviceId(table, payload, queueItemId);
   if (table === 'computers') delete compatiblePayload.serial;
   const deferredLink = compatiblePayload.set_code && compatiblePayload.is_assigned !== false ? {
     table,
@@ -123,7 +166,7 @@ async function insertDeviceWithSchemaFallback(table, payload) {
 
   while (true) {
     const { error } = await supabase.from(table).upsert(compatiblePayload, { onConflict: 'id' });
-    if (!error) return { error: null, deferredLink };
+    if (!error) return { error: null, deferredLink, resolvedId: compatiblePayload.id };
     const match = String(error.message || '').match(/Could not find the '([^']+)' column/i);
     const missingColumn = match?.[1];
     if (missingColumn && missingColumn in compatiblePayload) {
@@ -132,7 +175,7 @@ async function insertDeviceWithSchemaFallback(table, payload) {
       continue;
     }
 
-    return { error, deferredLink: null };
+    return { error, deferredLink: null, resolvedId: compatiblePayload.id };
   }
 }
 
@@ -225,7 +268,12 @@ async function processOfflineQueue(onStatusChange) {
           break;
         case 'ADD_DEVICE':
           {
-            const result = await insertDeviceWithSchemaFallback(item.category, item.payload);
+            const hadStableId = Boolean(item.payload?.id);
+            const result = await insertDeviceWithSchemaFallback(item.category, item.payload, item.id);
+            if (!hadStableId && result.resolvedId) {
+              item.payload = { ...item.payload, id: result.resolvedId };
+              await addToQueue(item);
+            }
             error = result.error;
             if (result.deferredLink) {
               deferredDeviceLinks.push({ queueItem: item, ...result.deferredLink });
