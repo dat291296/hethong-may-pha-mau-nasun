@@ -173,6 +173,7 @@ export default function App() {
 
   // Workflow Modal state
   const [workflowMode, setWorkflowMode] = useState(null); // 'INSTALL' | 'WITHDRAW' | 'TRANSFER' | null
+  const [workflowResult, setWorkflowResult] = useState(null);
   const [printProtocolData, setPrintProtocolData] = useState(null);
 
   // Tech Handbook -> Repair Ticket Prefill State
@@ -519,6 +520,7 @@ export default function App() {
         } else {
           await Promise.allSettled([refetchAssets(), refetchNpps(), refetchAuditLogs()]);
         }
+        setWorkflowResult({ mode: 'INSTALL', setCode: data.setCode, destinationNpp: workflowData.nppName, queued: Boolean(transaction.queued) });
         return;
       }
 
@@ -550,9 +552,11 @@ export default function App() {
         reason: 'Lắp mới bộ máy pha màu cho NPP',
         notes: data.notes || 'Bàn giao chạy thử tốt.'
       });
+      setWorkflowResult({ mode: 'INSTALL', setCode: data.setCode, destinationNpp: workflowData.nppName, queued: false });
     } catch (err) {
       console.error(err);
       alert('Lỗi lắp đặt máy: ' + err.message);
+      throw err;
     }
   };
 
@@ -597,6 +601,7 @@ export default function App() {
         } else {
           await Promise.allSettled([refetchAssets(), refetchNpps(), refetchAuditLogs()]);
         }
+        setWorkflowResult({ mode: 'WITHDRAW', setCode: data.setCode, sourceNpp: workflowData.sourceNppName || targetSet?.nppName || 'NPP', destinationNpp: `Tự do trong kho - ${warehouseRegion}`, queued: Boolean(transaction.queued) });
         return;
       }
 
@@ -626,6 +631,7 @@ export default function App() {
         reason: data.reason,
         notes: `${data.deviceCondition} | ${data.notes}${isDistributorClosure ? ' | NPP đã tự động chuyển sang Đã ngưng hợp tác; toàn bộ bộ máy liên kết đã về kho.' : ''}`
       });
+      setWorkflowResult({ mode: 'WITHDRAW', setCode: data.setCode, sourceNpp: targetSet?.nppName || targetNpp?.name || 'NPP', destinationNpp: `Tự do trong kho - ${warehouseRegion}`, queued: false });
     } catch (err) {
       console.error(err);
       alert('Lỗi thu hồi máy: ' + err.message);
@@ -662,6 +668,7 @@ export default function App() {
         } else {
           await Promise.allSettled([refetchAssets(), refetchNpps(), refetchAuditLogs()]);
         }
+        setWorkflowResult({ mode: 'TRANSFER', setCode: data.setCode, sourceNpp: workflowData.sourceNppName || targetSet?.nppName || 'NPP nguồn', destinationNpp: workflowData.nppName, queued: Boolean(transaction.queued) });
         return;
       }
 
@@ -681,9 +688,11 @@ export default function App() {
         reason: data.reason || 'Điều chuyển tối ưu',
         notes: data.notes
       });
+      setWorkflowResult({ mode: 'TRANSFER', setCode: data.setCode, sourceNpp: targetSet?.nppName || 'NPP nguồn', destinationNpp: targetNpp?.name || 'NPP đích', queued: false });
     } catch (err) {
       console.error(err);
       alert('Lỗi điều chuyển máy: ' + err.message);
+      throw err;
     }
   };
 
@@ -910,12 +919,26 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Show Audit Trail Log */}
-              <AuditLogs 
-                auditLogs={auditLogs} 
-                onEditLog={editAuditLog} 
-                onDeleteLog={deleteAuditLog} 
-              />
+              {workflowResult && (
+                <div className="glass-panel" style={{ padding: '18px 20px', borderColor: 'rgba(16, 185, 129, 0.4)' }}>
+                  <div style={{ color: 'var(--accent-emerald)', fontWeight: 800, marginBottom: '6px' }}>
+                    ✓ {workflowResult.mode === 'INSTALL' ? 'Đã cấp phát' : workflowResult.mode === 'WITHDRAW' ? 'Đã thu hồi' : 'Đã điều chuyển'} bộ máy {workflowResult.setCode}
+                  </div>
+                  <div style={{ color: 'var(--text-main)', fontSize: '0.9rem' }}>
+                    {workflowResult.mode === 'INSTALL' && <>Nhà phân phối nhận: <strong>{workflowResult.destinationNpp}</strong></>}
+                    {workflowResult.mode === 'WITHDRAW' && <>Thu hồi từ <strong>{workflowResult.sourceNpp}</strong> về <strong>{workflowResult.destinationNpp}</strong></>}
+                    {workflowResult.mode === 'TRANSFER' && <>Từ <strong>{workflowResult.sourceNpp}</strong> sang <strong>{workflowResult.destinationNpp}</strong></>}
+                  </div>
+                  {workflowResult.queued && (
+                    <div style={{ color: 'var(--accent-amber)', fontSize: '0.78rem', marginTop: '6px' }}>
+                      Đang chờ đồng bộ lên Cloud khi kết nối ổn định.
+                    </div>
+                  )}
+                  <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '8px' }}>
+                    Chi tiết tác vụ đã được lưu tại mục Nhật Ký Tác Nghiệp.
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
