@@ -3,6 +3,18 @@ import { KeyRound, LoaderCircle, LogOut, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { supabase } from '../lib/supabase.js';
 
+function formatMfaError(error) {
+  const code = error?.code || error?.name || 'MFA_SETUP_ERROR';
+  const message = error?.message || 'Không rõ nguyên nhân';
+  if (message.toLowerCase().includes('factor') && message.toLowerCase().includes('exist')) {
+    return `Đã tồn tại cấu hình MFA chưa hoàn tất. Hãy bấm Thử lại. (${code})`;
+  }
+  if (message.toLowerCase().includes('disabled')) {
+    return `TOTP MFA đang bị tắt trong Supabase Authentication. (${code})`;
+  }
+  return `Không thể thiết lập xác thực hai lớp: ${message} (${code})`;
+}
+
 export default function MfaGate() {
   const { user, mfaSatisfied, refreshMfaStatus, markMfaVerified, signOut } = useAuth();
   const [factorId, setFactorId] = useState('');
@@ -20,29 +32,35 @@ export default function MfaGate() {
 
       const { data: factors, error: listError } = await supabase.auth.mfa.listFactors();
       if (listError) throw listError;
-      const verifiedFactor = factors?.totp?.find(item => item.status === 'verified');
+      const totpFactors = (factors?.all || []).filter(item => item.factor_type === 'totp');
+      const verifiedFactor = totpFactors.find(item => item.status === 'verified');
       if (verifiedFactor) {
         setFactorId(verifiedFactor.id);
         return;
       }
 
-      for (const staleFactor of factors?.totp || []) {
+      for (const staleFactor of totpFactors) {
         if (staleFactor.status !== 'verified') {
-          await supabase.auth.mfa.unenroll({ factorId: staleFactor.id });
+          const { error: removeError } = await supabase.auth.mfa.unenroll({ factorId: staleFactor.id });
+          if (removeError) throw removeError;
         }
       }
 
       const { data: enrollment, error: enrollError } = await supabase.auth.mfa.enroll({
         factorType: 'totp',
-        friendlyName: `NASUN ${user?.email || 'Account'}`,
+        friendlyName: `NASUN-${Date.now()}`,
+        issuer: 'NASUN PAINT',
       });
       if (enrollError) throw enrollError;
+      if (!enrollment?.id || !enrollment?.totp?.qr_code) {
+        throw new Error('Supabase không trả về mã QR TOTP.');
+      }
       setFactorId(enrollment.id);
       setQrCode(enrollment.totp.qr_code);
       setSecret(enrollment.totp.secret);
     } catch (err) {
       console.error('[MFA] Setup failed:', err.message);
-      setError('Không thể thiết lập xác thực hai lớp. Hãy tải lại trang hoặc liên hệ quản trị viên.');
+      setError(formatMfaError(err));
     } finally {
       setPending(false);
     }
@@ -130,6 +148,12 @@ export default function MfaGate() {
         )}
 
         {error && <div className="alert alert-error" style={{ marginTop: 12 }}>{error}</div>}
+
+        {!pending && error && navigator.onLine && (
+          <button type="button" className="btn btn-primary" onClick={prepareFactor} style={{ marginTop: 12 }}>
+            Thử lại thiết lập MFA
+          </button>
+        )}
 
         <button type="button" className="btn btn-secondary" onClick={signOut} style={{ marginTop: 16 }}>
           <LogOut size={16} /> Đăng xuất

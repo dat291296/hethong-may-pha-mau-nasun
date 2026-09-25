@@ -27,6 +27,8 @@ test('frontend enrolls and verifies TOTP before privileged access', async () => 
   assert.match(auth, /getAuthenticatorAssuranceLevel/);
   assert.match(auth, /PRIVILEGED_SESSION_MS = 8 \* 60 \* 60 \* 1000/);
   assert.match(gate, /mfa\.enroll/);
+  assert.match(gate, /factors\?\.all/);
+  assert.match(gate, /mfa\.unenroll/);
   assert.match(gate, /mfa\.challenge/);
   assert.match(gate, /mfa\.verify/);
 });
