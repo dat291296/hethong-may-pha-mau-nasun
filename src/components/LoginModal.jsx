@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase.js';
 import { syncOfflineQueue } from '../lib/offlineSync.js';
 import { clearOfflineStorage } from '../lib/offlineDb.js';
 import { AUTH_REDIRECT_PURPOSES, createPrivateIdentifier, getAuthRedirectUrl } from '../security/authRuntime.js';
+import { completePasswordRecovery, requestPasswordRecovery, resendSignupVerification } from '../security/authEmailFlows.js';
 
 const isKeycloakEnabled = import.meta.env.VITE_ENABLE_KEYCLOAK === 'true';
 const LOGIN_ATTEMPTS_KEY = 'nasun_login_attempts';
@@ -65,6 +66,8 @@ export default function LoginModal() {
   const [capsLockOn, setCapsLockOn] = useState(false);
   const [verificationEmail, setVerificationEmail] = useState('');
   const [resendCooldown, setResendCooldown] = useState(0);
+  const [resetCooldown, setResetCooldown] = useState(0);
+  const [privacyOpen, setPrivacyOpen] = useState(false);
 
   const passwordRules = getPasswordRules(password);
   const passwordIsStrong = passwordRules.every(rule => rule.passed);
@@ -101,6 +104,14 @@ export default function LoginModal() {
     }, 1000);
     return () => window.clearInterval(timer);
   }, [resendCooldown]);
+
+  useEffect(() => {
+    if (resetCooldown <= 0) return undefined;
+    const timer = window.setInterval(() => {
+      setResetCooldown(value => Math.max(0, value - 1));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [resetCooldown]);
 
   if ((user && !passwordRecovery) || loading) return null;
 
@@ -218,12 +229,7 @@ export default function LoginModal() {
     setPending(true);
     try {
       const emailRedirectTo = await getAuthRedirectUrl(AUTH_REDIRECT_PURPOSES.VERIFIED);
-      const { error: resendError } = await supabase.auth.resend({
-        type: 'signup',
-        email: verificationEmail,
-        options: { emailRedirectTo },
-      });
-      if (resendError) throw resendError;
+      await resendSignupVerification(supabase.auth, verificationEmail, emailRedirectTo);
       setResendCooldown(RESEND_COOLDOWN_SECONDS);
       setNotice('Đã gửi lại email xác minh. Hãy kiểm tra hộp thư đến hoặc thư rác.');
     } catch (err) {
@@ -244,8 +250,8 @@ export default function LoginModal() {
         return;
       }
       const redirectTo = await getAuthRedirectUrl(AUTH_REDIRECT_PURPOSES.RECOVERY);
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), { redirectTo });
-      if (resetError) throw resetError;
+      await requestPasswordRecovery(supabase.auth, email, redirectTo);
+      setResetCooldown(RESEND_COOLDOWN_SECONDS);
       setNotice('Nếu email đã đăng ký, liên kết đặt lại mật khẩu sẽ được gửi. Hãy kiểm tra hộp thư đến hoặc thư rác.');
     } catch (err) {
       console.error('[Login] Password reset failed:', err.message);
@@ -268,8 +274,7 @@ export default function LoginModal() {
     }
     setPending(true);
     try {
-      const { error: updateError } = await supabase.auth.updateUser({ password });
-      if (updateError) throw updateError;
+      await completePasswordRecovery(supabase.auth, password);
       window.history.replaceState({}, document.title, `${window.location.origin}${window.location.pathname}`);
       setPasswordRecovery(false);
       await clearOfflineStorage();
@@ -324,6 +329,11 @@ export default function LoginModal() {
           autoComplete="new-password"
         />
       </div>
+      {confirmPassword && (
+        <small className={password === confirmPassword ? 'auth-password-match is-valid' : 'auth-password-match is-invalid'} aria-live="polite">
+          {password === confirmPassword ? 'Mật khẩu đã khớp' : 'Mật khẩu chưa khớp'}
+        </small>
+      )}
     </label>
   );
 
@@ -387,6 +397,7 @@ export default function LoginModal() {
               {renderPasswordInput()}
               {renderConfirmPasswordInput()}
               <button className="btn btn-primary auth-submit" type="submit" disabled={pending}>{pending ? 'Đang xử lý...' : 'Tạo tài khoản'}</button>
+              <p className="auth-privacy-note">Khi tạo tài khoản, bạn đồng ý với <button type="button" className="auth-text-link" onClick={() => setPrivacyOpen(true)}>chính sách quyền riêng tư</button>.</p>
               <button type="button" className="auth-back" onClick={() => changeMode('login')}><ArrowLeft size={16} />Quay lại đăng nhập</button>
             </form>
           )}
@@ -395,7 +406,7 @@ export default function LoginModal() {
             <form className="auth-form" onSubmit={submitReset}>
               <p className="auth-help">Nhập email công việc. Hệ thống sẽ gửi liên kết đặt lại mật khẩu.</p>
               <label className="auth-field"><span>Email công việc</span><div className="auth-input-wrap"><Mail size={18} aria-hidden="true" /><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required autoComplete="email" /></div></label>
-              <button className="btn btn-primary auth-submit" type="submit" disabled={pending}>{pending ? 'Đang xử lý...' : 'Gửi liên kết khôi phục'}</button>
+              <button className="btn btn-primary auth-submit" type="submit" disabled={pending || resetCooldown > 0}>{pending ? 'Đang xử lý...' : resetCooldown > 0 ? `Gửi lại sau ${resetCooldown}s` : 'Gửi liên kết khôi phục'}</button>
               <button type="button" className="auth-back" onClick={() => changeMode('login')}><ArrowLeft size={16} />Quay lại đăng nhập</button>
             </form>
           )}
@@ -412,6 +423,18 @@ export default function LoginModal() {
           {isDevMode && <div className="auth-dev-note">Chế độ phát triển đang bật. Nhập email chứa <strong>admin</strong> hoặc <strong>qc</strong> để mô phỏng quyền tương ứng.</div>}
         </div>
       </section>
+      {privacyOpen && (
+        <div className="auth-privacy-overlay" role="presentation" onMouseDown={() => setPrivacyOpen(false)}>
+          <section className="auth-privacy-dialog" role="dialog" aria-modal="true" aria-labelledby="auth-privacy-title" onMouseDown={(event) => event.stopPropagation()}>
+            <h3 id="auth-privacy-title">Chính sách quyền riêng tư</h3>
+            <p>Hệ thống sử dụng email để xác thực tài khoản, gửi liên kết xác minh và khôi phục mật khẩu.</p>
+            <p>Dữ liệu NPP, thiết bị và sửa chữa chỉ được sử dụng cho hoạt động quản lý kỹ thuật theo quyền tài khoản.</p>
+            <p>Camera và vị trí chỉ được truy cập khi bạn chủ động dùng chức năng quét mã hoặc công tác hiện trường.</p>
+            <p>Bạn có thể liên hệ quản trị viên để kiểm tra, chỉnh sửa hoặc ngừng tài khoản.</p>
+            <button type="button" className="btn btn-primary" onClick={() => setPrivacyOpen(false)}>Đã hiểu</button>
+          </section>
+        </div>
+      )}
     </main>
   );
 }

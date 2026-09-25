@@ -30,9 +30,18 @@ test('signup and password recovery enforce visible password rules', async () => 
 
 test('unverified users can resend a verification email with cooldown', async () => {
   const source = await readFile(loginUrl, 'utf8');
-  assert.match(source, /supabase\.auth\.resend/);
-  assert.match(source, /type: 'signup'/);
+  assert.match(source, /resendSignupVerification\(supabase\.auth/);
   assert.match(source, /RESEND_COOLDOWN_SECONDS = 60/);
   assert.match(source, /email_not_confirmed/);
   assert.match(source, /Gửi lại email xác minh/);
+});
+
+test('password confirmation, reset cooldown, and privacy notice are visible', async () => {
+  const source = await readFile(loginUrl, 'utf8');
+  assert.match(source, /Mật khẩu đã khớp/);
+  assert.match(source, /Mật khẩu chưa khớp/);
+  assert.match(source, /setResetCooldown\(RESEND_COOLDOWN_SECONDS\)/);
+  assert.match(source, /Gửi lại sau \$\{resetCooldown\}s/);
+  assert.match(source, /Chính sách quyền riêng tư/);
+  assert.match(source, /Camera và vị trí chỉ được truy cập/);
 });
