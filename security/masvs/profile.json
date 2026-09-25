@@ -30,7 +30,7 @@
   },
   "modules": [
     { "id": "MASVS-1", "status": "implemented", "scope": ["architecture", "threat-model", "mobile-bridge-contract"] },
-    { "id": "MASVS-2", "status": "planned", "scope": ["storage", "cryptography", "key-lifecycle"] },
+    { "id": "MASVS-2", "status": "implemented", "scope": ["storage", "cryptography", "key-lifecycle"] },
     { "id": "MASVS-3", "status": "planned", "scope": ["authentication", "session", "reauthentication"] },
     { "id": "MASVS-4", "status": "planned", "scope": ["network", "endpoint-allowlist", "transport"] },
     { "id": "MASVS-5", "status": "planned", "scope": ["camera", "geolocation", "files", "clipboard"] },

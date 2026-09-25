@@ -4,6 +4,8 @@ export const RUNTIME_PLATFORMS = Object.freeze({ WEB: 'web', PWA: 'pwa', NATIVE:
 
 const REQUIRED_NATIVE_METHODS = Object.freeze([
   'getOrCreateEncryptionKey',
+  'encrypt',
+  'decrypt',
   'deleteEncryptionKey',
   'setScreenProtection',
   'getIntegrityToken',
@@ -54,6 +56,11 @@ export function requireNativeSecurityBridge() {
     throw error;
   }
   return bridge;
+}
+
+export function getNativeKeyAlias(ownerId) {
+  if (!ownerId) throw new Error('NATIVE_KEY_OWNER_REQUIRED');
+  return `nasun.offline.${String(ownerId)}`;
 }
 
 export const MOBILE_SECURITY_BRIDGE_CONTRACT = Object.freeze({
