@@ -38,10 +38,11 @@ function updateLoginAttemptState(email, succeeded) {
 }
 
 export default function LoginModal() {
-  const { user, isDevMode, switchDevRole, loading, emailVerifiedSuccess, setEmailVerifiedSuccess, authRedirectError, setAuthRedirectError } = useAuth();
+  const { user, isDevMode, switchDevRole, loading, emailVerifiedSuccess, setEmailVerifiedSuccess, passwordRecovery, setPasswordRecovery, authRedirectError, setAuthRedirectError } = useAuth();
   const [mode, setMode] = useState('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [pending, setPending] = useState(false);
@@ -57,13 +58,22 @@ export default function LoginModal() {
   }, [emailVerifiedSuccess, setEmailVerifiedSuccess]);
 
   useEffect(() => {
+    if (passwordRecovery) {
+      setMode('new-password');
+      setPassword('');
+      setConfirmPassword('');
+      resetFeedback();
+    }
+  }, [passwordRecovery]);
+
+  useEffect(() => {
     if (authRedirectError) {
       setError(authRedirectError);
       setAuthRedirectError('');
     }
   }, [authRedirectError, setAuthRedirectError]);
 
-  if (user || loading) return null;
+  if ((user && !passwordRecovery) || loading) return null;
 
   const resetFeedback = () => {
     setError('');
@@ -73,6 +83,7 @@ export default function LoginModal() {
   const changeMode = (nextMode) => {
     setMode(nextMode);
     setPassword('');
+    setConfirmPassword('');
     resetFeedback();
   };
 
@@ -134,14 +145,16 @@ export default function LoginModal() {
         setMode('login');
         return;
       }
-      const { error: signUpError } = await supabase.auth.signUp({
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email: email.trim().toLowerCase(),
         password,
         options: { emailRedirectTo: `${window.location.origin}?verified=true`, data: { full_name: fullName.trim() } },
       });
       if (signUpError) throw signUpError;
       setMode('login');
-      setNotice('Đã gửi email xác thực. Kiểm tra hộp thư để kích hoạt tài khoản.');
+      setNotice(signUpData.session
+        ? 'Tài khoản đã được tạo. Bạn có thể đăng nhập.'
+        : 'Đã gửi email xác thực. Kiểm tra hộp thư đến hoặc thư rác để kích hoạt tài khoản.');
     } catch (err) {
       console.error('[Login] Sign-up failed:', err.message);
       setError(err.message || 'Không thể tạo tài khoản.');
@@ -159,12 +172,43 @@ export default function LoginModal() {
         setNotice('Mô phỏng: yêu cầu đặt lại mật khẩu đã được gửi.');
         return;
       }
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), { redirectTo: window.location.origin });
+      const redirectTo = `${window.location.origin}?recovery=true`;
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), { redirectTo });
       if (resetError) throw resetError;
-      setNotice('Đã gửi liên kết đặt lại mật khẩu. Kiểm tra hộp thư của bạn.');
+      setNotice('Nếu email đã đăng ký, liên kết đặt lại mật khẩu sẽ được gửi. Hãy kiểm tra hộp thư đến hoặc thư rác.');
     } catch (err) {
       console.error('[Login] Password reset failed:', err.message);
       setError('Không thể gửi yêu cầu đặt lại mật khẩu.');
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const submitNewPassword = async (event) => {
+    event.preventDefault();
+    resetFeedback();
+    if (password.length < 12) {
+      setError('Mật khẩu mới phải có ít nhất 12 ký tự.');
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError('Mật khẩu xác nhận không khớp.');
+      return;
+    }
+    setPending(true);
+    try {
+      const { error: updateError } = await supabase.auth.updateUser({ password });
+      if (updateError) throw updateError;
+      window.history.replaceState({}, document.title, `${window.location.origin}${window.location.pathname}`);
+      setPasswordRecovery(false);
+      await supabase.auth.signOut({ scope: 'local' });
+      setMode('login');
+      setPassword('');
+      setConfirmPassword('');
+      setNotice('Mật khẩu đã được cập nhật. Bạn có thể đăng nhập bằng mật khẩu mới.');
+    } catch (err) {
+      console.error('[Login] Password update failed:', err.message);
+      setError('Liên kết đã hết hạn hoặc không hợp lệ. Hãy yêu cầu gửi lại liên kết đặt lại mật khẩu.');
     } finally {
       setPending(false);
     }
@@ -175,7 +219,7 @@ export default function LoginModal() {
       <span>Mật khẩu</span>
       <div className="auth-input-wrap">
         <LockKeyhole size={18} aria-hidden="true" />
-        <input type={showPassword ? 'text' : 'password'} value={password} onChange={(event) => setPassword(event.target.value)} minLength={mode === 'signup' ? 12 : 6} required placeholder={mode === 'signup' ? 'Tối thiểu 12 ký tự' : 'Nhập mật khẩu'} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} />
+        <input type={showPassword ? 'text' : 'password'} value={password} onChange={(event) => setPassword(event.target.value)} minLength={mode === 'login' ? 6 : 12} required placeholder={mode === 'login' ? 'Nhập mật khẩu' : 'Tối thiểu 12 ký tự'} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} />
         <button type="button" className="auth-icon-button" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}>
           {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
         </button>
@@ -207,7 +251,7 @@ export default function LoginModal() {
           </div>
           <div className="auth-heading">
             <div>
-              <h2>{mode === 'login' ? 'Đăng nhập hệ thống' : mode === 'signup' ? 'Tạo tài khoản mới' : 'Khôi phục mật khẩu'}</h2>
+              <h2>{mode === 'login' ? 'Đăng nhập hệ thống' : mode === 'signup' ? 'Tạo tài khoản mới' : mode === 'new-password' ? 'Đặt mật khẩu mới' : 'Khôi phục mật khẩu'}</h2>
             </div>
           </div>
 
@@ -244,6 +288,18 @@ export default function LoginModal() {
               <label className="auth-field"><span>Email công việc</span><div className="auth-input-wrap"><Mail size={18} aria-hidden="true" /><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required autoComplete="email" /></div></label>
               <button className="btn btn-primary auth-submit" type="submit" disabled={pending}>{pending ? 'Đang xử lý...' : 'Gửi liên kết khôi phục'}</button>
               <button type="button" className="auth-back" onClick={() => changeMode('login')}><ArrowLeft size={16} />Quay lại đăng nhập</button>
+            </form>
+          )}
+
+          {mode === 'new-password' && (
+            <form className="auth-form" onSubmit={submitNewPassword}>
+              <p className="auth-help">Tạo mật khẩu mới có ít nhất 12 ký tự cho tài khoản của bạn.</p>
+              {renderPasswordInput()}
+              <label className="auth-field">
+                <span>Xác nhận mật khẩu mới</span>
+                <div className="auth-input-wrap"><LockKeyhole size={18} aria-hidden="true" /><input type={showPassword ? 'text' : 'password'} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} minLength="12" required placeholder="Nhập lại mật khẩu mới" autoComplete="new-password" /></div>
+              </label>
+              <button className="btn btn-primary auth-submit" type="submit" disabled={pending}>{pending ? 'Đang cập nhật...' : 'Cập nhật mật khẩu'}</button>
             </form>
           )}
 
