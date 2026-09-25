@@ -3,7 +3,7 @@ import { FileText, Filter, Search, Calendar, UserCheck, Download, ShieldAlert, E
 import { useDebounce } from '../security/useDebounce.js';
 import { sanitizeForSheet } from '../security/sanitize.js';
 import { formatDateVN } from '../utils/dateUtils.js';
-import * as XLSX from 'xlsx';
+import { downloadSpreadsheet } from '../utils/secureSpreadsheet.js';
 import { useAuth } from '../context/AuthContext.jsx';
 
 export default function AuditLogs({ auditLogs, onEditLog, onDeleteLog }) {
@@ -91,7 +91,7 @@ export default function AuditLogs({ auditLogs, onEditLog, onDeleteLog }) {
   };
 
   // ── Export to Excel (with Formula Injection protection) ────────────────────
-  const handleExport = () => {
+  const handleExport = async () => {
     const rows = filteredLogs.map(log => ({
       'Mã GD':           sanitizeForSheet(log.id),
       'Thời Gian':       sanitizeForSheet(log.timestamp),
@@ -104,11 +104,17 @@ export default function AuditLogs({ auditLogs, onEditLog, onDeleteLog }) {
       'Ghi Chú':         sanitizeForSheet(log.notes),
     }));
 
-    const ws = XLSX.utils.json_to_sheet(rows);
-    ws['!cols'] = Object.keys(rows[0] || {}).map(() => ({ wch: 28 }));
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'NhatKyTacNghiep');
-    XLSX.writeFile(wb, `NhatKy_TacNghiep_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    const headers = Object.keys(rows[0] || {
+      'Mã GD': '', 'Thời Gian': '', 'Mức Độ': '', 'Loại Tác Nghiệp': '',
+      'Nhà Phân Phối': '', 'Mã Bộ Máy': '', 'Lý Do': '', 'Kỹ Thuật Viên': '', 'Ghi Chú': '',
+    });
+    const body = rows.map(row => headers.map(header => row[header] ?? ''));
+    await downloadSpreadsheet(
+      [headers, ...body],
+      `NhatKy_TacNghiep_${new Date().toISOString().slice(0, 10)}.xlsx`,
+      'NhatKyTacNghiep',
+      headers.map(() => 28),
+    );
   };
 
   const typeOptions = [

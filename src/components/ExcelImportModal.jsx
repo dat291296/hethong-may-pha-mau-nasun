@@ -1,5 +1,4 @@
 import React, { useState, useCallback, useRef } from 'react';
-import * as XLSX from 'xlsx';
 import {
   Upload,
   Download,
@@ -12,6 +11,7 @@ import {
   Loader2
 } from 'lucide-react';
 import { sanitizeForSheet, sanitizeText, validatePhone, validateSerial, validateGps } from '../security/sanitize.js';
+import { downloadSpreadsheet, parseSpreadsheetFile } from '../utils/secureSpreadsheet.js';
 
 
 // ─────────────────────────────────────────────
@@ -137,17 +137,15 @@ function normalizeRegion(val = '') {
 // ─────────────────────────────────────────────
 // Generate and download a sample Excel template
 // ─────────────────────────────────────────────
-function downloadTemplate(importType) {
+async function downloadTemplate(importType) {
   const config = IMPORT_CONFIGS[importType];
   const headers = config.columns.map(c => c.label);
-  const ws = XLSX.utils.aoa_to_sheet([headers, ...config.sampleRows]);
-
-  // Style header row width
-  ws['!cols'] = headers.map(() => ({ wch: 32 }));
-
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Data');
-  XLSX.writeFile(wb, `Mau_Import_${importType.toUpperCase()}.xlsx`);
+  await downloadSpreadsheet(
+    [headers, ...config.sampleRows.map(row => row.map(value => sanitizeForSheet(value)))],
+    `Mau_Import_${importType.toUpperCase()}.xlsx`,
+    'Data',
+    headers.map(() => 32),
+  );
 }
 
 // ─────────────────────────────────────────────
@@ -183,18 +181,13 @@ export default function ExcelImportModal({
   const config = IMPORT_CONFIGS[importType];
 
   // ── Parse an Excel/CSV file ──────────────────
-  const parseFile = useCallback((file) => {
+  const parseFile = useCallback(async (file) => {
     if (!file) return;
     setFileName(file.name);
     setImportResult(null);
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const data = new Uint8Array(e.target.result);
-        const workbook = XLSX.read(data, { type: 'array' });
-        const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+    try {
+        const jsonData = await parseSpreadsheetFile(file);
 
         if (jsonData.length < 2) {
           alert('File Excel không có dữ liệu! Vui lòng kiểm tra lại.');
@@ -290,11 +283,10 @@ export default function ExcelImportModal({
         setValidRows(valid);
         setErrorRows(errors);
         setSelectedRows(new Set(valid.map((_, i) => i)));
-      } catch (err) {
-        alert(`Lỗi đọc file: ${err.message}\nVui lòng kiểm tra định dạng file Excel (.xlsx / .xls / .csv)`);
-      }
-    };
-    reader.readAsArrayBuffer(file);
+    } catch (err) {
+      console.error('[ExcelImport] File rejected:', err.message);
+      alert(`Lỗi đọc file: ${err.message}\nChỉ sử dụng file .xlsx hoặc .csv hợp lệ, tối đa 5 MB.`);
+    }
   }, [config, importType, existingNpps, existingDispensers, existingMixers, existingComputers, existingPrinters]);
 
   const handleDrop = useCallback((e) => {
@@ -467,7 +459,7 @@ export default function ExcelImportModal({
                 📥 Import Dữ Liệu Hàng Loạt Từ File Excel
               </h3>
               <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                Hỗ trợ định dạng: .xlsx · .xls · .csv
+                Hỗ trợ định dạng: .xlsx · .csv · tối đa 5 MB
               </p>
             </div>
           </div>
@@ -557,7 +549,7 @@ export default function ExcelImportModal({
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".xlsx,.xls,.csv"
+                accept=".xlsx,.csv"
                 style={{ display: 'none' }}
                 onChange={handleFileInput}
               />

@@ -9,7 +9,7 @@
     "lint": "oxlint",
     "test:sync": "node --test tests/syncQueue.test.mjs",
     "test:workflow": "node --test tests/workflowMigration.test.mjs",
-    "test:security": "node --test tests/securityModule1.test.mjs tests/securityModule2.test.mjs tests/securityModule3.test.mjs tests/securityModule4.test.mjs tests/securityModule5.test.mjs tests/securityModule6.test.mjs tests/securityModule7.test.mjs tests/securityModule8.test.mjs tests/securityModule9.test.mjs tests/securityModule10.test.mjs tests/securityModule11.test.mjs",
+    "test:security": "node --test tests/securityModule1.test.mjs tests/securityModule2.test.mjs tests/securityModule3.test.mjs tests/securityModule4.test.mjs tests/securityModule5.test.mjs tests/securityModule6.test.mjs tests/securityModule7.test.mjs tests/securityModule8.test.mjs tests/securityModule9.test.mjs tests/securityModule10.test.mjs tests/securityModule11.test.mjs tests/securityModule12.test.mjs",
     "preview": "vite preview",
     "deploy": "npm run build && wrangler deploy",
     "backup": "node scripts/backup-database.js",
@@ -18,13 +18,13 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.9",
+    "exceljs": "^4.4.0",
     "html5-qrcode": "^2.3.8",
     "lucide-react": "^1.27.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-is": "^19.2.8",
-    "recharts": "^3.10.1",
-    "xlsx": "^0.18.5"
+    "recharts": "^3.10.1"
   },
   "devDependencies": {
     "@types/react": "^19.2.17",
