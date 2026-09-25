@@ -119,13 +119,16 @@ export default function UserManagement({
       const nextRegion = newRole === 'admin'
         ? 'Toàn Quốc'
         : (profile?.managed_region === 'Toàn Quốc' ? 'Miền Bắc' : profile?.managed_region || 'Miền Bắc');
-      const { error: updateErr } = await supabase.rpc('update_user_access', {
+      const { data: updateResult, error: updateErr } = await supabase.rpc('update_user_access', {
         target_user_id: profileId,
         target_role: newRole,
         target_region: nextRegion,
       });
 
       if (updateErr) throw updateErr;
+      if (updateResult?.error === 'RATE_LIMIT_EXCEEDED') {
+        throw new Error(`Thao tác quá nhanh. Vui lòng thử lại sau ${updateResult.retry_after_seconds} giây.`);
+      }
       
       setSuccess('Đã cập nhật quyền tài khoản thành công!');
       fetchProfiles();
@@ -148,13 +151,16 @@ export default function UserManagement({
     try {
       const profile = profiles.find(item => item.id === profileId);
       if (!profile) throw new Error('Không tìm thấy tài khoản cần cập nhật.');
-      const { error: updateErr } = await supabase.rpc('update_user_access', {
+      const { data: updateResult, error: updateErr } = await supabase.rpc('update_user_access', {
         target_user_id: profileId,
         target_role: profile.role,
         target_region: newRegion,
       });
 
       if (updateErr) throw updateErr;
+      if (updateResult?.error === 'RATE_LIMIT_EXCEEDED') {
+        throw new Error(`Thao tác quá nhanh. Vui lòng thử lại sau ${updateResult.retry_after_seconds} giây.`);
+      }
       
       setSuccess('Đã cập nhật vùng quản lý tài khoản thành công!');
       fetchProfiles();
@@ -188,12 +194,15 @@ export default function UserManagement({
     }
 
     try {
-      const { error: delErr } = await supabase.rpc('set_user_account_active', {
+      const { data: statusResult, error: delErr } = await supabase.rpc('set_user_account_active', {
         target_user_id: profileId,
         target_active: nextActive,
       });
 
       if (delErr) throw delErr;
+      if (statusResult?.error === 'RATE_LIMIT_EXCEEDED') {
+        throw new Error(`Thao tác quá nhanh. Vui lòng thử lại sau ${statusResult.retry_after_seconds} giây.`);
+      }
       
       setSuccess(nextActive ? 'Đã kích hoạt lại tài khoản!' : 'Đã khóa tài khoản; toàn bộ dữ liệu được giữ nguyên!');
       fetchProfiles();
