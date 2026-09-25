@@ -23,14 +23,11 @@ test('live verifier covers anonymous, vertical, and regional access boundaries',
   assert.match(verifier, /viewerResult\.can_insert_target_region, false/);
 });
 
-test('privileged integration accounts retain MFA enforcement', async () => {
+test('RLS integration accounts authenticate without MFA secrets', async () => {
   const [verifier, workflow] = await Promise.all([
     readFile(verifierUrl, 'utf8'),
     readFile(workflowUrl, 'utf8'),
   ]);
-  assert.match(verifier, /getAuthenticatorAssuranceLevel/);
-  assert.match(verifier, /mfa\.challenge/);
-  assert.match(verifier, /mfa\.verify/);
-  assert.match(workflow, /RLS_TEST_ADMIN_TOTP_SECRET/);
-  assert.match(workflow, /RLS_TEST_QC_TOTP_SECRET/);
+  assert.doesNotMatch(verifier, /getAuthenticatorAssuranceLevel|mfa\.challenge|mfa\.verify/);
+  assert.doesNotMatch(workflow, /TOTP_SECRET/);
 });

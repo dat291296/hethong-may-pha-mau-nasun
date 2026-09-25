@@ -13,17 +13,12 @@ test('rate-limit storage is isolated from browser roles', async () => {
   assert.match(sql, /REVOKE ALL ON FUNCTION public\.consume_security_rate_limit\(TEXT, INTEGER, INTEGER\) FROM authenticated/);
 });
 
-test('sensitive account functions enforce MFA-aware role checks and fixed server limits', async () => {
+test('sensitive account functions enforce role checks and fixed server limits', async () => {
   const sql = await readFile(migrationUrl, 'utf8');
   assert.match(sql, /caller_role TEXT := public\.get_my_role\(\)/g);
   assert.match(sql, /consume_security_rate_limit\('update_user_access', 10, 600\)/);
   assert.match(sql, /consume_security_rate_limit\('set_user_account_active', 10, 600\)/);
   assert.match(sql, /'error', 'RATE_LIMIT_EXCEEDED'/);
-});
-
-test('changing a user to a privileged role also requires MFA', async () => {
-  const sql = await readFile(migrationUrl, 'utf8');
-  assert.match(sql, /mfa_required = normalized_role IN \('admin', 'qc'\)/);
 });
 
 test('account UI handles committed rate-limit responses', async () => {

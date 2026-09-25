@@ -115,7 +115,6 @@ BEGIN
   UPDATE public.profiles
   SET role = normalized_role,
       managed_region = normalized_region,
-      mfa_required = normalized_role IN ('admin', 'qc'),
       updated_at = NOW()
   WHERE id = target_user_id
   RETURNING * INTO updated_profile;
@@ -124,8 +123,7 @@ BEGIN
   RETURN jsonb_build_object(
     'id', updated_profile.id,
     'role', updated_profile.role,
-    'managed_region', updated_profile.managed_region,
-    'mfa_required', updated_profile.mfa_required
+    'managed_region', updated_profile.managed_region
   );
 END;
 $$;

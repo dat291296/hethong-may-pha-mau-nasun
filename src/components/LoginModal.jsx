@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowLeft, CheckCircle2, Eye, EyeOff, KeyRound, LockKeyhole, Mail, ShieldCheck, UserRound } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Eye, EyeOff, KeyRound, LockKeyhole, Mail, UserRound } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { supabase } from '../lib/supabase.js';
 import { syncOfflineQueue } from '../lib/offlineSync.js';
@@ -206,20 +206,19 @@ export default function LoginModal() {
             <span>NASUN PAINT</span>
           </div>
           <div className="auth-heading">
-            <div className="auth-heading-icon"><ShieldCheck size={23} /></div>
             <div>
               <h2>{mode === 'login' ? 'Đăng nhập hệ thống' : mode === 'signup' ? 'Tạo tài khoản mới' : 'Khôi phục mật khẩu'}</h2>
             </div>
           </div>
 
           {notice && <div className="auth-alert auth-alert-success"><CheckCircle2 size={18} />{notice}</div>}
-          {error && <div className="auth-alert auth-alert-error"><ShieldCheck size={18} />{error}</div>}
+          {error && <div className="auth-alert auth-alert-error">{error}</div>}
 
           {mode === 'login' && (
             <form className="auth-form" onSubmit={submitLogin}>
               <label className="auth-field">
                 <span>Email công việc</span>
-                <div className="auth-input-wrap"><Mail size={18} aria-hidden="true" /><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required placeholder="ten@nasun.vn" autoComplete="email" /></div>
+                <div className="auth-input-wrap"><Mail size={18} aria-hidden="true" /><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required autoComplete="email" /></div>
               </label>
               {renderPasswordInput()}
               <button type="button" className="auth-text-link auth-forgot" onClick={() => changeMode('reset')}>Quên mật khẩu?</button>
@@ -232,7 +231,7 @@ export default function LoginModal() {
           {mode === 'signup' && (
             <form className="auth-form" onSubmit={submitSignup}>
               <label className="auth-field"><span>Họ và tên</span><div className="auth-input-wrap"><UserRound size={18} aria-hidden="true" /><input type="text" value={fullName} onChange={(event) => setFullName(event.target.value)} required maxLength="100" placeholder="Họ tên của bạn" autoComplete="name" /></div></label>
-              <label className="auth-field"><span>Email công việc</span><div className="auth-input-wrap"><Mail size={18} aria-hidden="true" /><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required placeholder="ten@nasun.vn" autoComplete="email" /></div></label>
+              <label className="auth-field"><span>Email công việc</span><div className="auth-input-wrap"><Mail size={18} aria-hidden="true" /><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required autoComplete="email" /></div></label>
               {renderPasswordInput()}
               <button className="btn btn-primary auth-submit" type="submit" disabled={pending}>{pending ? 'Đang xử lý...' : 'Tạo tài khoản'}</button>
               <p className="auth-switch">Đã có tài khoản? <button type="button" className="auth-text-link" onClick={() => changeMode('login')}>Đăng nhập</button></p>
@@ -242,7 +241,7 @@ export default function LoginModal() {
           {mode === 'reset' && (
             <form className="auth-form" onSubmit={submitReset}>
               <p className="auth-help">Nhập email công việc. Hệ thống sẽ gửi liên kết đặt lại mật khẩu.</p>
-              <label className="auth-field"><span>Email công việc</span><div className="auth-input-wrap"><Mail size={18} aria-hidden="true" /><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required placeholder="ten@nasun.vn" autoComplete="email" /></div></label>
+              <label className="auth-field"><span>Email công việc</span><div className="auth-input-wrap"><Mail size={18} aria-hidden="true" /><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required autoComplete="email" /></div></label>
               <button className="btn btn-primary auth-submit" type="submit" disabled={pending}>{pending ? 'Đang xử lý...' : 'Gửi liên kết khôi phục'}</button>
               <button type="button" className="auth-back" onClick={() => changeMode('login')}><ArrowLeft size={16} />Quay lại đăng nhập</button>
             </form>
