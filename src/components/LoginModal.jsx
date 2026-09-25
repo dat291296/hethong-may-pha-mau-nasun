@@ -4,16 +4,18 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { supabase } from '../lib/supabase.js';
 import { syncOfflineQueue } from '../lib/offlineSync.js';
 import { clearOfflineStorage } from '../lib/offlineDb.js';
+import { AUTH_REDIRECT_PURPOSES, createPrivateIdentifier, getAuthRedirectUrl } from '../security/authRuntime.js';
 
 const isKeycloakEnabled = import.meta.env.VITE_ENABLE_KEYCLOAK === 'true';
 const LOGIN_ATTEMPTS_KEY = 'nasun_login_attempts';
 const MAX_LOGIN_FAILURES = 5;
 const LOGIN_LOCK_MS = 15 * 60 * 1000;
 
-function getLoginAttemptState(email) {
+async function getLoginAttemptState(email) {
   try {
+    const identifier = await createPrivateIdentifier(email);
     const attempts = JSON.parse(localStorage.getItem(LOGIN_ATTEMPTS_KEY) || '{}');
-    const state = attempts[email] || { count: 0, firstFailureAt: 0 };
+    const state = attempts[identifier] || { count: 0, firstFailureAt: 0 };
     if (Date.now() - state.firstFailureAt >= LOGIN_LOCK_MS) return { count: 0, firstFailureAt: 0 };
     return state;
   } catch {
@@ -21,13 +23,14 @@ function getLoginAttemptState(email) {
   }
 }
 
-function updateLoginAttemptState(email, succeeded) {
+async function updateLoginAttemptState(email, succeeded) {
   try {
+    const identifier = await createPrivateIdentifier(email);
     const attempts = JSON.parse(localStorage.getItem(LOGIN_ATTEMPTS_KEY) || '{}');
-    if (succeeded) delete attempts[email];
+    if (succeeded) delete attempts[identifier];
     else {
-      const previous = getLoginAttemptState(email);
-      attempts[email] = {
+      const previous = await getLoginAttemptState(email);
+      attempts[identifier] = {
         count: previous.count + 1,
         firstFailureAt: previous.firstFailureAt || Date.now(),
       };
@@ -98,21 +101,21 @@ export default function LoginModal() {
         switchDevRole(email.toLowerCase().includes('qc') ? 'QC' : email.toLowerCase().includes('admin') ? 'ADMIN' : 'VIEWER');
         return;
       }
-      const attemptState = getLoginAttemptState(normalizedEmail);
+      const attemptState = await getLoginAttemptState(normalizedEmail);
       if (attemptState.count >= MAX_LOGIN_FAILURES) {
         const remainingMinutes = Math.max(1, Math.ceil((LOGIN_LOCK_MS - (Date.now() - attemptState.firstFailureAt)) / 60000));
         throw new Error(`LOCAL_LOGIN_LOCKED:${remainingMinutes}`);
       }
       const { error: signInError } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password });
       if (signInError) throw signInError;
-      updateLoginAttemptState(normalizedEmail, true);
+      await updateLoginAttemptState(normalizedEmail, true);
       await syncOfflineQueue();
     } catch (err) {
       console.error('[Login] Password sign-in failed:', err.message);
       if (err.message?.startsWith('LOCAL_LOGIN_LOCKED:')) {
         setError(`Đã tạm khóa đăng nhập trên thiết bị này. Thử lại sau ${err.message.split(':')[1]} phút.`);
       } else {
-        updateLoginAttemptState(normalizedEmail, false);
+        await updateLoginAttemptState(normalizedEmail, false);
         setError('Không thể đăng nhập. Kiểm tra lại email và mật khẩu.');
       }
     } finally {
@@ -124,9 +127,10 @@ export default function LoginModal() {
     resetFeedback();
     setPending(true);
     try {
+      const redirectTo = await getAuthRedirectUrl(AUTH_REDIRECT_PURPOSES.LOGIN);
       const { error: signInError } = await supabase.auth.signInWithOAuth({
         provider: 'keycloak',
-        options: { scopes: 'openid', redirectTo: window.location.origin },
+        options: { scopes: 'openid', redirectTo },
       });
       if (signInError) throw signInError;
     } catch (err) {
@@ -146,10 +150,11 @@ export default function LoginModal() {
         setMode('login');
         return;
       }
+      const emailRedirectTo = await getAuthRedirectUrl(AUTH_REDIRECT_PURPOSES.VERIFIED);
       const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email: email.trim().toLowerCase(),
         password,
-        options: { emailRedirectTo: `${window.location.origin}?verified=true`, data: { full_name: fullName.trim() } },
+        options: { emailRedirectTo, data: { full_name: fullName.trim() } },
       });
       if (signUpError) throw signUpError;
       setMode('login');
@@ -173,7 +178,7 @@ export default function LoginModal() {
         setNotice('Mô phỏng: yêu cầu đặt lại mật khẩu đã được gửi.');
         return;
       }
-      const redirectTo = `${window.location.origin}?recovery=true`;
+      const redirectTo = await getAuthRedirectUrl(AUTH_REDIRECT_PURPOSES.RECOVERY);
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), { redirectTo });
       if (resetError) throw resetError;
       setNotice('Nếu email đã đăng ký, liên kết đặt lại mật khẩu sẽ được gửi. Hãy kiểm tra hộp thư đến hoặc thư rác.');

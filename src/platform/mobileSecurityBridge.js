@@ -7,6 +7,10 @@ const REQUIRED_NATIVE_METHODS = Object.freeze([
   'encrypt',
   'decrypt',
   'deleteEncryptionKey',
+  'getSecureItem',
+  'setSecureItem',
+  'removeSecureItem',
+  'getAuthRedirectUrl',
   'setScreenProtection',
   'getIntegrityToken',
 ]);
