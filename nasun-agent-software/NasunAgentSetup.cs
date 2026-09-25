@@ -946,6 +946,17 @@ namespace NasunAgent
                     
                     if (!string.IsNullOrEmpty(latestVersion) && latestVersion != formulaVersion && !string.IsNullOrEmpty(downloadUrl) && !string.IsNullOrEmpty(filename))
                     {
+                        Uri parsedDownloadUrl;
+                        string safeFilename = Path.GetFileName(filename);
+                        if (!Uri.TryCreate(downloadUrl, UriKind.Absolute, out parsedDownloadUrl) || parsedDownloadUrl.Scheme != Uri.UriSchemeHttps)
+                        {
+                            throw new InvalidOperationException("URL tải công thức phải sử dụng HTTPS.");
+                        }
+                        if (string.IsNullOrEmpty(safeFilename) || !string.Equals(safeFilename, filename, StringComparison.Ordinal))
+                        {
+                            throw new InvalidOperationException("Tên tệp công thức không hợp lệ.");
+                        }
+
                         Log(logFile, string.Format("Phát hiện công thức màu mới: {0}. Đang tải về...", latestVersion));
                         
                         if (!Directory.Exists(formulaOverrideDir))
@@ -953,8 +964,8 @@ namespace NasunAgent
                             Directory.CreateDirectory(formulaOverrideDir);
                         }
                         
-                        string targetPath = Path.Combine(formulaOverrideDir, filename);
-                        string backupPath = Path.Combine(backupDir, filename + "_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".bak");
+                        string targetPath = Path.Combine(formulaOverrideDir, safeFilename);
+                        string backupPath = Path.Combine(backupDir, safeFilename + "_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".bak");
                         
                         if (File.Exists(targetPath))
                         {
@@ -964,7 +975,7 @@ namespace NasunAgent
                             }
                             File.Copy(targetPath, backupPath, true);
                             Log(logFile, "Đã tạo bản sao lưu công thức cũ tại: " + backupPath);
-                            RotateBackups(backupDir, filename, logFile);
+                            RotateBackups(backupDir, safeFilename, logFile);
                         }
                         
                         string tempFile = Path.Combine(Path.GetTempPath(), "nasun_formula_" + DateTime.Now.Ticks + ".tmp");

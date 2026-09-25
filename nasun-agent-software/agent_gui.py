@@ -360,14 +360,20 @@ class NasunAgentApp:
         script_abs_path = os.path.abspath(__file__)
         pythonw_path = sys.executable.replace("python.exe", "pythonw.exe")
         
-        # Double quotes wrapper for paths with space
         task_cmd = f'"{pythonw_path}" "{script_abs_path}" --silent'
-        
-        # Use schtasks to create logon task (no admin required for current user!)
-        create_task_cmd = f'schtasks /create /tn "NasunAgentService" /tr "{task_cmd}" /sc onlogon /f'
+        create_task_args = [
+            "schtasks", "/create", "/tn", "NasunAgentService",
+            "/tr", task_cmd, "/sc", "onlogon", "/f",
+        ]
         
         try:
-            res = subprocess.run(create_task_cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            res = subprocess.run(
+                create_task_args,
+                shell=False,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False,
+            )
             if res.returncode == 0:
                 messagebox.showinfo("Thành Công", "Đã cấu hình Agent khởi động cùng Windows thành công!")
                 logging.info("Đã đăng ký tác vụ chạy ngầm trên Windows Startup (Task Scheduler).")

@@ -31,6 +31,10 @@ backup/
 *.sql.gz
 gitleaks-report.*
 
+# Python generated files
+__pycache__/
+*.py[cod]
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

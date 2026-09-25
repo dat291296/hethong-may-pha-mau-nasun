@@ -68,7 +68,7 @@ export default function UserManagement({
     try {
       const { data, error: fetchErr } = await supabase
         .from('profiles')
-        .select('*')
+        .select('id, full_name, role, managed_region, is_active, created_at')
         .order('created_at', { ascending: false });
       
       if (fetchErr) throw fetchErr;
@@ -115,10 +115,15 @@ export default function UserManagement({
     }
 
     try {
-      const { error: updateErr } = await supabase
-        .from('profiles')
-        .update({ role: newRole })
-        .eq('id', profileId);
+      const profile = profiles.find(item => item.id === profileId);
+      const nextRegion = newRole === 'admin'
+        ? 'Toàn Quốc'
+        : (profile?.managed_region === 'Toàn Quốc' ? 'Miền Bắc' : profile?.managed_region || 'Miền Bắc');
+      const { error: updateErr } = await supabase.rpc('update_user_access', {
+        target_user_id: profileId,
+        target_role: newRole,
+        target_region: nextRegion,
+      });
 
       if (updateErr) throw updateErr;
       
@@ -141,10 +146,13 @@ export default function UserManagement({
     }
 
     try {
-      const { error: updateErr } = await supabase
-        .from('profiles')
-        .update({ managed_region: newRegion })
-        .eq('id', profileId);
+      const profile = profiles.find(item => item.id === profileId);
+      if (!profile) throw new Error('Không tìm thấy tài khoản cần cập nhật.');
+      const { error: updateErr } = await supabase.rpc('update_user_access', {
+        target_user_id: profileId,
+        target_role: profile.role,
+        target_region: newRegion,
+      });
 
       if (updateErr) throw updateErr;
       

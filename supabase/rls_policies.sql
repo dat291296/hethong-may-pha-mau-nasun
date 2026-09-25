@@ -58,7 +58,9 @@ $$;
 CREATE POLICY "profile_select_own" ON profiles FOR SELECT USING (id = auth.uid());
 -- Admin can view all profiles
 CREATE POLICY "profile_select_admin" ON profiles FOR SELECT USING (get_my_role() = 'admin');
-CREATE POLICY "profile_update_admin" ON profiles FOR UPDATE USING (get_my_role() = 'admin');
+-- Profile access fields are updated only through allowlisted SECURITY DEFINER RPCs.
+DROP POLICY IF EXISTS "profile_update_own" ON profiles;
+DROP POLICY IF EXISTS "profile_update_admin" ON profiles;
 
 -- ══════════════════════════════════════════════════════════════
 -- DISTRIBUTORS (Nhà Phân Phối / NPP)

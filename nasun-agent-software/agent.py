@@ -7,6 +7,7 @@ import logging
 import sqlite3
 import urllib.request
 import urllib.error
+from urllib.parse import urlparse
 import xml.etree.ElementTree as ET
 from datetime import datetime
 
@@ -92,7 +93,14 @@ def check_for_formula_updates(url, api_key, config, state):
                     if not os.path.exists(override_dir):
                         os.makedirs(override_dir)
                     
-                    target_path = os.path.join(override_dir, filename)
+                    safe_filename = os.path.basename(filename or "")
+                    download_uri = urlparse(download_url or "")
+                    if not safe_filename or safe_filename != filename:
+                        raise ValueError("Tên tệp công thức không hợp lệ.")
+                    if download_uri.scheme != "https" or not download_uri.netloc:
+                        raise ValueError("URL tải công thức phải sử dụng HTTPS.")
+
+                    target_path = os.path.join(override_dir, safe_filename)
                     backup_path = target_path + ".bak"
 
                     # Download temp file
