@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { ROLES, ROLE_LABELS, hasPermission } from '../security/rbac.js';
 import { supabase, isSupabaseConfigured } from '../lib/supabase.js';
 
@@ -7,6 +7,8 @@ const AuthContext = createContext(null);
 const OFFLINE_USER_KEY = 'nasun_offline_user';
 const MFA_VERIFIED_KEY = 'nasun_mfa_verified_at';
 const PRIVILEGED_SESSION_MS = 8 * 60 * 60 * 1000;
+const SESSION_VALIDATION_MS = 5 * 60 * 1000;
+const TOKEN_REFRESH_WINDOW_SECONDS = 5 * 60;
 
 function getOfflineUser(authUser) {
   try {
@@ -42,6 +44,7 @@ export function AuthProvider({ children }) {
   const [emailVerifiedSuccess, setEmailVerifiedSuccess] = useState(false);
   const [authRedirectError, setAuthRedirectError] = useState('');
   const [mfaSatisfied, setMfaSatisfied] = useState(false);
+  const sessionValidationRunning = useRef(false);
 
   const refreshMfaStatus = useCallback(async (profile = user) => {
     if (!profile?.mfaRequired) {
@@ -331,6 +334,91 @@ export function AuthProvider({ children }) {
     refreshMfaStatus,
     markMfaVerified,
   };
+
+  // Revalidate the server-side account state after reconnects and while the app is open.
+  useEffect(() => {
+    if (!isSupabaseConfigured || !supabase || !user?.id) return undefined;
+
+    let cancelled = false;
+
+    const clearInvalidSession = async (reason) => {
+      console.warn(`[Auth] Session invalidated: ${reason}`);
+      try {
+        await supabase.auth.signOut({ scope: 'local' });
+      } catch (error) {
+        console.warn('[Auth] Local session cleanup failed:', error.message);
+      }
+      if (cancelled) return;
+      setUser(null);
+      setRole(ROLES.VIEWER);
+      setMfaSatisfied(false);
+      persistOfflineUser(null);
+      localStorage.removeItem(MFA_VERIFIED_KEY);
+    };
+
+    const validateSession = async () => {
+      if (cancelled || !navigator.onLine || sessionValidationRunning.current) return;
+      sessionValidationRunning.current = true;
+      try {
+        const { data: state, error } = await supabase.rpc('get_session_security_state');
+        if (error) {
+          if ([401, 403].includes(error.status) || ['PGRST301', '28000'].includes(error.code)) {
+            await clearInvalidSession(error.code || 'AUTH_REJECTED');
+          } else {
+            console.warn('[Auth] Session validation deferred:', error.message);
+          }
+          return;
+        }
+
+        if (!state?.profile_found || !state?.is_active) {
+          await clearInvalidSession('ACCOUNT_DISABLED_OR_MISSING');
+          return;
+        }
+
+        const expiresIn = Number(state.token_expires_at || 0) - Math.floor(Date.now() / 1000);
+        if (expiresIn <= TOKEN_REFRESH_WINDOW_SECONDS) {
+          const { error: refreshError } = await supabase.auth.refreshSession();
+          if (refreshError) {
+            await clearInvalidSession('TOKEN_REFRESH_FAILED');
+            return;
+          }
+        }
+
+        if (state.role !== user.role || state.managed_region !== user.managedRegion) {
+          const { data: authData, error: userError } = await supabase.auth.getUser();
+          if (userError || !authData.user) {
+            await clearInvalidSession('USER_VALIDATION_FAILED');
+            return;
+          }
+          await loadUserProfile(authData.user);
+        } else if (user.mfaRequired) {
+          await refreshMfaStatus(user);
+        }
+      } catch (error) {
+        console.warn('[Auth] Session validation deferred:', error.message);
+      } finally {
+        sessionValidationRunning.current = false;
+      }
+    };
+
+    const validateWhenVisible = () => {
+      if (document.visibilityState === 'visible') validateSession();
+    };
+
+    validateSession();
+    const timer = window.setInterval(validateSession, SESSION_VALIDATION_MS);
+    window.addEventListener('online', validateSession);
+    window.addEventListener('focus', validateSession);
+    document.addEventListener('visibilitychange', validateWhenVisible);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      window.removeEventListener('online', validateSession);
+      window.removeEventListener('focus', validateSession);
+      document.removeEventListener('visibilitychange', validateWhenVisible);
+    };
+  }, [user?.id, user?.role, user?.managedRegion, user?.mfaRequired, refreshMfaStatus]);
 
   return (
     <AuthContext.Provider value={value}>
