@@ -12,7 +12,10 @@ import {
   Copy,
   Check
 } from 'lucide-react';
-import { getOfflineQueue, syncOfflineQueue, clearOfflineQueue, cacheOfflineData } from '../lib/offlineSync.js';
+import { getOfflineQueue, syncOfflineQueue } from '../lib/offlineSync.js';
+import { createSecureBackup, parseAndValidateBackup, MAX_BACKUP_BYTES } from '../utils/secureBackup.js';
+import { useAuth } from '../context/AuthContext.jsx';
+import { ROLES } from '../security/rbac.js';
 
 /**
  * DataBackupSyncModal - Export/Import local device data & trigger cloud sync
@@ -31,6 +34,8 @@ export default function DataBackupSyncModal({
   tintingLogs = [],
   onImportData
 }) {
+  const { role } = useAuth();
+  const canManageBackups = role === ROLES.ADMIN;
   const [activeTab, setActiveTab] = useState('export'); // 'export' | 'import' | 'sync'
   const [importJsonText, setImportJsonText] = useState('');
   const [syncStatus, setSyncStatus] = useState('idle'); // 'idle' | 'syncing' | 'success' | 'error'
@@ -42,73 +47,58 @@ export default function DataBackupSyncModal({
   React.useEffect(() => {
     if (isOpen) {
       getOfflineQueue().then(q => setQueueCount(q.length));
+      if (!canManageBackups) setActiveTab('sync');
     }
-  }, [isOpen, activeTab]);
+  }, [isOpen, activeTab, canManageBackups]);
 
   if (!isOpen) return null;
 
   // Prepare full data package
-  const buildDataPackage = () => {
-    return {
-      appName: 'Paint Tinting Manager',
-      version: '2.0.0',
-      exportedAt: new Date().toISOString(),
-      summary: {
-        nppsCount: npps.length,
-        dispensersCount: dispensers.length,
-        mixersCount: mixers.length,
-        computersCount: computers.length,
-        printersCount: printers.length,
-        systemSetsCount: systemSets.length,
-        repairTicketsCount: repairTickets.length,
-        auditLogsCount: auditLogs.length,
-        tintingLogsCount: tintingLogs.length,
-      },
-      data: {
-        npps,
-        dispensers,
-        mixers,
-        computers,
-        printers,
-        systemSets,
-        repairTickets,
-        auditLogs,
-        tintingLogs
-      }
-    };
-  };
+  const getBackupData = () => ({
+    npps, dispensers, mixers, computers, printers, systemSets,
+    repairTickets, auditLogs, tintingLogs,
+  });
 
   // Export JSON file download
-  const handleExportFile = () => {
-    const dataPkg = buildDataPackage();
-    const jsonStr = JSON.stringify(dataPkg, null, 2);
-    const blob = new Blob([jsonStr], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    const dateStr = new Date().toISOString().split('T')[0];
-    a.href = url;
-    a.download = `nasun-tinting-data-backup-${dateStr}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+  const handleExportFile = async () => {
+    if (!canManageBackups) return alert('Chỉ Admin được phép xuất toàn bộ dữ liệu.');
+    try {
+      const dataPkg = await createSecureBackup(getBackupData());
+      const jsonStr = JSON.stringify(dataPkg, null, 2);
+      const blob = new Blob([jsonStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const dateStr = new Date().toISOString().split('T')[0];
+      a.href = url;
+      a.download = `nasun-secure-backup-${dateStr}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      alert(`Không thể tạo tệp sao lưu: ${error.message}`);
+    }
   };
 
   // Copy JSON string to clipboard
-  const handleCopyJson = () => {
-    const dataPkg = buildDataPackage();
-    const jsonStr = JSON.stringify(dataPkg);
-    navigator.clipboard.writeText(jsonStr).then(() => {
+  const handleCopyJson = async () => {
+    if (!canManageBackups) return alert('Chỉ Admin được phép sao chép toàn bộ dữ liệu.');
+    try {
+      const dataPkg = await createSecureBackup(getBackupData());
+      await navigator.clipboard.writeText(JSON.stringify(dataPkg));
       setCopied(true);
       setTimeout(() => setCopied(false), 2500);
-    });
+    } catch (error) {
+      alert(`Không thể sao chép dữ liệu: ${error.message}`);
+    }
   };
 
   // Process Import File Upload
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    if (file.size > 10 * 1024 * 1024) {
+    if (!canManageBackups) return alert('Chỉ Admin được phép nhập dữ liệu sao lưu.');
+    if (file.size > MAX_BACKUP_BYTES) {
       alert('Tệp sao lưu vượt quá giới hạn 10 MB. Vui lòng chia nhỏ hoặc dùng bản sao lưu khác.');
       e.target.value = '';
       return;
@@ -123,27 +113,29 @@ export default function DataBackupSyncModal({
 
   // Perform Import & Merge Data
   const handleExecuteImport = async () => {
+    if (!canManageBackups) return alert('Chỉ Admin được phép nhập dữ liệu sao lưu.');
     if (!importJsonText.trim()) {
       alert('Vui lòng chọn tệp JSON hoặc dán chuỗi dữ liệu sao lưu.');
       return;
     }
 
     try {
-      const parsed = JSON.parse(importJsonText);
-      const importedData = parsed.data || parsed;
+      const result = await parseAndValidateBackup(importJsonText);
+      const integrityMessage = result.integrityVerified
+        ? 'Tệp đã vượt qua kiểm tra toàn vẹn SHA-256.'
+        : 'Đây là tệp sao lưu phiên bản cũ, không có mã kiểm tra toàn vẹn.';
+      const confirmed = window.confirm(
+        `${integrityMessage}\nTổng cộng ${result.totalRecords} bản ghi sẽ được hợp nhất. Dữ liệu trùng mã có thể được cập nhật. Tiếp tục?`
+      );
+      if (!confirmed) return;
 
-      if (!importedData.npps && !importedData.dispensers && !importedData.systemSets) {
-        alert('Cấu trúc tệp dữ liệu không hợp lệ. Vui lòng kiểm tra lại tệp sao lưu.');
-        return;
-      }
-
-      if (onImportData) await onImportData(importedData);
+      if (onImportData) await onImportData(result.data);
 
       alert('Đã nhập dữ liệu từ tệp sao lưu thành công!');
       setImportJsonText('');
       onClose();
     } catch (err) {
-      alert(`Lỗi đọc tệp JSON: ${err.message}`);
+      alert(`Không thể nhập tệp sao lưu: ${err.message}`);
     }
   };
 
@@ -201,23 +193,23 @@ export default function DataBackupSyncModal({
 
         {/* Tab Navigation */}
         <div style={{ display: 'flex', borderBottom: '1px solid var(--border-color)', margin: '0.75rem 0' }}>
-          <button
+          {canManageBackups && <button
             className={`btn ${activeTab === 'export' ? 'btn-primary' : 'btn-ghost'}`}
             style={{ borderRadius: 0, borderBottom: activeTab === 'export' ? '2px solid var(--primary-color)' : 'none' }}
             onClick={() => setActiveTab('export')}
           >
             <Download size={16} style={{ marginRight: '0.4rem' }} />
             1. Xuất Dữ Liệu Điện Thoại
-          </button>
+          </button>}
 
-          <button
+          {canManageBackups && <button
             className={`btn ${activeTab === 'import' ? 'btn-primary' : 'btn-ghost'}`}
             style={{ borderRadius: 0, borderBottom: activeTab === 'import' ? '2px solid var(--primary-color)' : 'none' }}
             onClick={() => setActiveTab('import')}
           >
             <Upload size={16} style={{ marginRight: '0.4rem' }} />
             2. Nạp Dữ Liệu Vào Web
-          </button>
+          </button>}
 
           <button
             className={`btn ${activeTab === 'sync' ? 'btn-primary' : 'btn-ghost'}`}
@@ -230,7 +222,7 @@ export default function DataBackupSyncModal({
         </div>
 
         {/* Tab 1: EXPORT */}
-        {activeTab === 'export' && (
+        {activeTab === 'export' && canManageBackups && (
           <div className="modal-body">
             <div className="alert alert-info" style={{ marginBottom: '1rem' }}>
               <HardDrive size={18} style={{ flexShrink: 0 }} />
@@ -277,7 +269,7 @@ export default function DataBackupSyncModal({
         )}
 
         {/* Tab 2: IMPORT */}
-        {activeTab === 'import' && (
+        {activeTab === 'import' && canManageBackups && (
           <div className="modal-body">
             <div className="alert alert-warning" style={{ marginBottom: '1rem' }}>
               <AlertTriangle size={18} style={{ flexShrink: 0 }} />

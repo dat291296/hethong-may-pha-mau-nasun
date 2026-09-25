@@ -9,7 +9,7 @@
     "lint": "oxlint",
     "test:sync": "node --test tests/syncQueue.test.mjs",
     "test:workflow": "node --test tests/workflowMigration.test.mjs",
-    "test:security": "node --test tests/securityModule1.test.mjs tests/securityModule2.test.mjs tests/securityModule3.test.mjs tests/securityModule4.test.mjs tests/securityModule5.test.mjs tests/securityModule6.test.mjs tests/securityModule7.test.mjs tests/securityModule8.test.mjs tests/securityModule9.test.mjs tests/securityModule10.test.mjs tests/securityModule11.test.mjs tests/securityModule12.test.mjs tests/securityModule13.test.mjs tests/securityModule14.test.mjs tests/securityModule15.test.mjs",
+    "test:security": "node --test tests/securityModule1.test.mjs tests/securityModule2.test.mjs tests/securityModule3.test.mjs tests/securityModule4.test.mjs tests/securityModule5.test.mjs tests/securityModule6.test.mjs tests/securityModule7.test.mjs tests/securityModule8.test.mjs tests/securityModule9.test.mjs tests/securityModule10.test.mjs tests/securityModule11.test.mjs tests/securityModule12.test.mjs tests/securityModule13.test.mjs tests/securityModule14.test.mjs tests/securityModule15.test.mjs tests/securityModule16.test.mjs",
     "test:rls": "node scripts/verify-rls.mjs",
     "preview": "vite preview",
     "deploy": "npm run build && wrangler deploy",
