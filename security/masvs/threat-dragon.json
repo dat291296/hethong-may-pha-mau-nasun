@@ -1,0 +1,20 @@
+{
+  "version": "2.2",
+  "summary": {
+    "title": "NASUN Mobile-Ready Application",
+    "owner": "NASUN Engineering",
+    "description": "Level-0 STRIDE model for the current PWA and future Android/iOS application. Detailed threats and mitigations are versioned in threat-register.json."
+  },
+  "detail": {
+    "contributors": [{ "name": "NASUN Engineering" }],
+    "diagrams": [
+      {
+        "id": 0,
+        "title": "PWA and Future Native Trust Boundaries",
+        "diagramType": "STRIDE",
+        "description": "User device -> PWA/native sandbox -> Cloudflare -> Supabase Auth/API -> PostgreSQL RLS, with external geolocation providers as a separate trust boundary.",
+        "cells": []
+      }
+    ]
+  }
+}

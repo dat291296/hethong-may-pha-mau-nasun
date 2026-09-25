@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "standard": "OWASP MASVS",
+  "application": "NASUN Paint Machine Management",
+  "currentRuntime": "pwa",
+  "futureRuntimes": ["android", "ios"],
+  "targetProfiles": ["MAS-L1", "MAS-P"],
+  "advancedControls": ["MASVS-STORAGE", "MASVS-CRYPTO", "MASVS-AUTH", "MASVS-NETWORK"],
+  "dataClasses": [
+    { "id": "auth", "classification": "restricted", "examples": ["session", "refresh token", "account profile"] },
+    { "id": "business", "classification": "confidential", "examples": ["distributors", "equipment", "repair tickets", "audit logs"] },
+    { "id": "location", "classification": "sensitive", "examples": ["technician GPS", "distributor coordinates"] },
+    { "id": "public", "classification": "public", "examples": ["application shell", "logo", "static assets"] }
+  ],
+  "trustBoundaries": [
+    "User and device",
+    "Browser or native application sandbox",
+    "Cloudflare delivery edge",
+    "Supabase Auth and API",
+    "PostgreSQL with RLS",
+    "Third-party geolocation services"
+  ],
+  "mobileMigrationRules": {
+    "businessLogicRemainsInReact": true,
+    "platformAccessUsesBridge": true,
+    "backendAuthorizationRemainsServerSide": true,
+    "nativeSecretsUsePlatformKeystore": true,
+    "nativeReleaseRequiresAttestation": true,
+    "mfaMandatory": false
+  },
+  "modules": [
+    { "id": "MASVS-1", "status": "implemented", "scope": ["architecture", "threat-model", "mobile-bridge-contract"] },
+    { "id": "MASVS-2", "status": "planned", "scope": ["storage", "cryptography", "key-lifecycle"] },
+    { "id": "MASVS-3", "status": "planned", "scope": ["authentication", "session", "reauthentication"] },
+    { "id": "MASVS-4", "status": "planned", "scope": ["network", "endpoint-allowlist", "transport"] },
+    { "id": "MASVS-5", "status": "planned", "scope": ["camera", "geolocation", "files", "clipboard"] },
+    { "id": "MASVS-6", "status": "planned", "scope": ["code", "input-validation", "production-flags"] },
+    { "id": "MASVS-7", "status": "planned", "scope": ["service-worker", "updates", "cache-integrity"] },
+    { "id": "MASVS-8", "status": "planned", "scope": ["supply-chain", "sbom", "release"] },
+    { "id": "MASVS-9", "status": "planned", "scope": ["privacy", "mastg-verification", "evidence"] }
+  ]
+}
