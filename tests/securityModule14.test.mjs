@@ -28,5 +28,5 @@ test('invalid or disabled sessions are cleared without disabling offline access'
   assert.match(auth, /ACCOUNT_DISABLED_OR_MISSING/);
   assert.match(auth, /signOut\(\{ scope: 'local' \}\)/);
   assert.match(auth, /TOKEN_REFRESH_FAILED/);
-  assert.match(auth, /persistOfflineUser\(null\)/);
+  assert.match(auth, /clearOfflineStorage\(user\.id\)/);
 });

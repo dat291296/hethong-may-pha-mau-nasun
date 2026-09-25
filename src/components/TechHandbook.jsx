@@ -25,6 +25,7 @@ import {
   RotateCcw
 } from 'lucide-react';
 import SafePortal from './SafePortal';
+import { cacheOfflineData, getCachedOfflineData } from '../lib/offlineSync.js';
 
 import {
   ERROR_CODES_DATA,
@@ -35,27 +36,18 @@ import {
 export default function TechHandbook({ onSelectErrorForRepair }) {
   const [activeSubTab, setActiveSubTab] = useState('ERRORS'); // 'ERRORS' | 'SOPS' | 'TIPS'
 
-  // Error Codes with LocalStorage Persistence
-  const [errorCodes, setErrorCodes] = useState(() => {
-    try {
-      const saved = localStorage.getItem('tech_handbook_errors');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch (e) {
-      console.warn('Error loading error codes from storage:', e);
-    }
-    return ERROR_CODES_DATA;
-  });
+  const [errorCodes, setErrorCodes] = useState(ERROR_CODES_DATA);
+  const [errorsHydrated, setErrorsHydrated] = useState(false);
 
   useEffect(() => {
-    try {
-      localStorage.setItem('tech_handbook_errors', JSON.stringify(errorCodes));
-    } catch (e) {
-      console.warn('Error saving error codes to storage:', e);
-    }
-  }, [errorCodes]);
+    if (errorsHydrated) cacheOfflineData('tech_handbook_errors', errorCodes);
+  }, [errorCodes, errorsHydrated]);
+
+  useEffect(() => {
+    getCachedOfflineData('tech_handbook_errors', null).then(cached => {
+      if (Array.isArray(cached) && cached.length > 0) setErrorCodes(cached);
+    }).finally(() => setErrorsHydrated(true));
+  }, []);
 
   // Error Code Search & Filter States
   const [searchTerm, setSearchTerm] = useState('');
@@ -225,16 +217,8 @@ export default function TechHandbook({ onSelectErrorForRepair }) {
   };
 
   // Field Tips State
-  const [fieldTips, setFieldTips] = useState(() => {
-    try {
-      const saved = localStorage.getItem('tech_handbook_field_tips');
-      const parsed = saved ? JSON.parse(saved) : null;
-      return Array.isArray(parsed) ? parsed : FIELD_TIPS_DATA;
-    } catch (err) {
-      console.warn('Error loading field tips from storage:', err);
-      return FIELD_TIPS_DATA;
-    }
-  });
+  const [fieldTips, setFieldTips] = useState(FIELD_TIPS_DATA);
+  const [tipsHydrated, setTipsHydrated] = useState(false);
   const [showAddTipModal, setShowAddTipModal] = useState(false);
   const [newTip, setNewTip] = useState({
     title: '',
@@ -247,12 +231,14 @@ export default function TechHandbook({ onSelectErrorForRepair }) {
   const [expandedSopId, setExpandedSopId] = useState('SOP-01');
 
   useEffect(() => {
-    try {
-      localStorage.setItem('tech_handbook_field_tips', JSON.stringify(fieldTips));
-    } catch (err) {
-      console.warn('Error saving field tips to storage:', err);
-    }
-  }, [fieldTips]);
+    if (tipsHydrated) cacheOfflineData('tech_handbook_field_tips', fieldTips);
+  }, [fieldTips, tipsHydrated]);
+
+  useEffect(() => {
+    getCachedOfflineData('tech_handbook_field_tips', null).then(cached => {
+      if (Array.isArray(cached)) setFieldTips(cached);
+    }).finally(() => setTipsHydrated(true));
+  }, []);
 
 
 

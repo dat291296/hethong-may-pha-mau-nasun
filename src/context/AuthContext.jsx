@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { ROLES, ROLE_LABELS, hasPermission } from '../security/rbac.js';
 import { supabase, isSupabaseConfigured } from '../lib/supabase.js';
+import { clearOfflineStorage, getCache, getQueue, initializeOfflineStorage, setCache } from '../lib/offlineDb.js';
+import { syncOfflineQueue } from '../lib/offlineSync.js';
 
 // ─── Auth Context ─────────────────────────────────────────────────────────────
 const AuthContext = createContext(null);
@@ -8,22 +10,13 @@ const OFFLINE_USER_KEY = 'nasun_offline_user';
 const SESSION_VALIDATION_MS = 5 * 60 * 1000;
 const TOKEN_REFRESH_WINDOW_SECONDS = 5 * 60;
 
-function getOfflineUser(authUser) {
-  try {
-    const cached = JSON.parse(localStorage.getItem(OFFLINE_USER_KEY) || 'null');
-    return cached?.id === authUser?.id ? cached : null;
-  } catch {
-    return null;
-  }
+async function getOfflineUser(authUser) {
+  const cached = await getCache(OFFLINE_USER_KEY, null);
+  return cached?.id === authUser?.id ? cached : null;
 }
 
-function persistOfflineUser(user) {
-  try {
-    if (user) localStorage.setItem(OFFLINE_USER_KEY, JSON.stringify(user));
-    else localStorage.removeItem(OFFLINE_USER_KEY);
-  } catch (error) {
-    console.warn('[Auth] Could not persist offline user profile:', error.message);
-  }
+async function persistOfflineUser(user) {
+  if (user) await setCache(OFFLINE_USER_KEY, user);
 }
 
 // Default dev user (used when Supabase not configured)
@@ -67,7 +60,7 @@ export function AuthProvider({ children }) {
         setPasswordRecovery(false);
         setAuthRedirectError(cleanMsg);
 
-        supabase.auth.signOut().then(() => {
+        clearOfflineStorage().then(() => supabase.auth.signOut()).then(() => {
           const newUrl = window.location.origin + window.location.pathname;
           window.history.replaceState({}, document.title, newUrl);
         });
@@ -76,7 +69,7 @@ export function AuthProvider({ children }) {
       } else if (isVerified) {
         setEmailVerifiedSuccess(true);
         // Force logout to let user log in manually
-        supabase.auth.signOut().then(() => {
+        clearOfflineStorage().then(() => supabase.auth.signOut()).then(() => {
           // Clear query params so refreshing does not trigger this again
           const newUrl = window.location.origin + window.location.pathname;
           window.history.replaceState({}, document.title, newUrl);
@@ -84,7 +77,7 @@ export function AuthProvider({ children }) {
       }
 
       // Production: Use Supabase Auth
-      supabase.auth.getSession().then(({ data: { session } }) => {
+      supabase.auth.getSession().then(async ({ data: { session } }) => {
         const currentUrlParams = new URLSearchParams(window.location.search);
         const currentIsVerified = currentUrlParams.get('verified') === 'true';
         const currentIsRecovery = currentUrlParams.get('recovery') === 'true';
@@ -93,8 +86,9 @@ export function AuthProvider({ children }) {
           setPasswordRecovery(true);
           setLoading(false);
         } else if (session && !currentIsVerified) {
+          await initializeOfflineStorage(session.user.id);
           if (!navigator.onLine) {
-            const cachedUser = getOfflineUser(session.user);
+            const cachedUser = await getOfflineUser(session.user);
             const fallbackUser = cachedUser || {
               id: session.user.id,
               email: session.user.email,
@@ -128,8 +122,9 @@ export function AuthProvider({ children }) {
             setRole(ROLES.VIEWER);
             setLoading(false);
           } else if (session && !currentIsVerified) {
+            await initializeOfflineStorage(session.user.id);
             if (!navigator.onLine) {
-              const cachedUser = getOfflineUser(session.user);
+              const cachedUser = await getOfflineUser(session.user);
               const fallbackUser = cachedUser || {
                 id: session.user.id,
                 email: session.user.email,
@@ -144,6 +139,7 @@ export function AuthProvider({ children }) {
               await loadUserProfile(session.user);
             }
           } else {
+            if (event === 'SIGNED_OUT') await clearOfflineStorage();
             setUser(null);
             setRole(ROLES.VIEWER);
             setLoading(false);
@@ -153,15 +149,18 @@ export function AuthProvider({ children }) {
       return () => subscription.unsubscribe();
     } else {
       // Development: use mock user (dropdown role selector in Header)
-      setUser(DEV_USERS[ROLES.ADMIN]);
-      setRole(ROLES.ADMIN);
-      setLoading(false);
+      initializeOfflineStorage(DEV_USERS[ROLES.ADMIN].id).finally(() => {
+        setUser(DEV_USERS[ROLES.ADMIN]);
+        setRole(ROLES.ADMIN);
+        setLoading(false);
+      });
     }
   }, []);
 
   // ── Load user profile + role from Supabase ──────────────────────────────────
   const loadUserProfile = async (authUser) => {
     try {
+      await initializeOfflineStorage(authUser.id);
       const isMasterAdmin = authUser.email?.toLowerCase() === 'dat291219962.hust@gmail.com';
 
       // For master admin: first ensure their role is set in DB via SECURITY DEFINER RPC
@@ -180,7 +179,7 @@ export function AuthProvider({ children }) {
         .single();
 
       if (profile?.is_active === false) {
-        persistOfflineUser(null);
+        await clearOfflineStorage(authUser.id);
         await supabase.auth.signOut();
         const disabledError = new Error('ACCOUNT_DISABLED');
         disabledError.code = 'ACCOUNT_DISABLED';
@@ -207,18 +206,18 @@ export function AuthProvider({ children }) {
         managedRegion: finalRegion,
       };
       setUser(resolvedUser);
-      persistOfflineUser(resolvedUser);
+      await persistOfflineUser(resolvedUser);
       setRole(finalRole);
     } catch (err) {
       console.error('[Auth] Failed to load user profile:', err.message);
       if (err?.code === 'ACCOUNT_DISABLED' || err?.message === 'ACCOUNT_DISABLED') {
         setUser(null);
         setRole(ROLES.VIEWER);
-        persistOfflineUser(null);
+        await clearOfflineStorage(authUser.id);
         return;
       }
       const isSpecificAdmin = authUser.email?.toLowerCase() === 'dat291219962.hust@gmail.com';
-      const fallbackUser = getOfflineUser(authUser) || {
+      const fallbackUser = await getOfflineUser(authUser) || {
         id: authUser.id, 
         email: authUser.email, 
         name: authUser.email, 
@@ -226,7 +225,7 @@ export function AuthProvider({ children }) {
         managedRegion: isSpecificAdmin ? 'Toàn Quốc' : 'Miền Bắc'
       };
       setUser(fallbackUser);
-      persistOfflineUser(fallbackUser);
+      await persistOfflineUser(fallbackUser);
       setRole(fallbackUser.role || (isSpecificAdmin ? ROLES.ADMIN : ROLES.VIEWER));
     } finally {
       setLoading(false);
@@ -273,13 +272,24 @@ export function AuthProvider({ children }) {
 
   // ── Sign out ───────────────────────────────────────────────────────────────
   const signOut = useCallback(async () => {
+    let pendingItems = await getQueue();
+    if (pendingItems.length > 0 && navigator.onLine) {
+      await syncOfflineQueue();
+      pendingItems = await getQueue();
+    }
+    if (pendingItems.length > 0) {
+      window.alert(`Không thể đăng xuất khi còn ${pendingItems.length} thay đổi chưa đồng bộ. Hãy kết nối mạng và đồng bộ trước để tránh mất dữ liệu.`);
+      return false;
+    }
+    const signedOutUserId = user?.id;
     if (isSupabaseConfigured && supabase) {
       await supabase.auth.signOut();
     }
+    await clearOfflineStorage(signedOutUserId);
     setUser(null);
     setRole(ROLES.VIEWER);
-    persistOfflineUser(null);
-  }, []);
+    return true;
+  }, [user]);
 
   const value = {
     user,
@@ -317,7 +327,7 @@ export function AuthProvider({ children }) {
       if (cancelled) return;
       setUser(null);
       setRole(ROLES.VIEWER);
-      persistOfflineUser(null);
+      await clearOfflineStorage(user.id);
     };
 
     const validateSession = async () => {

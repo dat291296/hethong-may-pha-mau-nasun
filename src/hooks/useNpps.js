@@ -8,7 +8,7 @@ import { cacheOfflineData, getCachedOfflineData, enqueueOfflineAction, getOfflin
  * Uses Supabase when configured, falls back to mock data locally, with offline caching & queuing.
  */
 export function useNpps() {
-  const [npps, setNpps] = useState(() => readNppsFromLocalStorage());
+  const [npps, setNpps] = useState(INITIAL_NPPS);
   const [loading, setLoading] = useState(false);
   const [error, setError]   = useState(null);
 
@@ -198,28 +198,9 @@ export function useNpps() {
   return { npps, setNpps, loading, error, addNpp, editNpp, deleteNpp, importNpps, refetch: fetchNpps };
 }
 
-function readNppsFromLocalStorage() {
-  if (typeof window === 'undefined') return INITIAL_NPPS;
-  try {
-    const raw = window.localStorage.getItem('nasun_npps');
-    const parsed = raw ? JSON.parse(raw) : null;
-    return Array.isArray(parsed) ? parsed : INITIAL_NPPS;
-  } catch (err) {
-    console.warn('[useNpps] Failed to read local NPP cache:', err);
-    return INITIAL_NPPS;
-  }
-}
-
 function persistNpps(nextNpps, setNpps, shouldSetState = true) {
   if (shouldSetState) setNpps(nextNpps);
   cacheOfflineData('npps', nextNpps);
-  try {
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem('nasun_npps', JSON.stringify(nextNpps));
-    }
-  } catch (err) {
-    console.warn('[useNpps] Failed to save local NPP cache:', err);
-  }
 }
 
 // ─── Field Mappers ─────────────────────────────────────────────────────────────

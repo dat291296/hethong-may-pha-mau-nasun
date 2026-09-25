@@ -3,8 +3,6 @@ import { supabase, isSupabaseConfigured, safeQuery } from '../lib/supabase.js';
 import { INITIAL_AUDIT_LOGS } from '../data/mockData.js';
 import { cacheOfflineData, getCachedOfflineData, enqueueOfflineAction } from '../lib/offlineSync.js';
 
-const LOCAL_STORAGE_KEY = 'nasun_audit_logs';
-
 function canRetryOffline(error) {
   return !error?.code || error.code === 'QUERY_TIMEOUT';
 }
@@ -50,28 +48,10 @@ function sanitizeAndRenumberAuditLogs(logs) {
 }
 
 function getInitialAuditLogs() {
-  try {
-    const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        const cleaned = sanitizeAndRenumberAuditLogs(parsed);
-        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(cleaned));
-        return cleaned;
-      }
-    }
-  } catch (e) {
-    console.warn('Failed to parse audit logs from localStorage', e);
-  }
   return sanitizeAndRenumberAuditLogs(INITIAL_AUDIT_LOGS);
 }
 
 function persistAuditLogs(logs) {
-  try {
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(logs));
-  } catch (e) {
-    console.warn('Failed to save audit logs to localStorage', e);
-  }
   cacheOfflineData('audit_logs', logs);
 }
 
@@ -83,11 +63,6 @@ export function useAuditLogs() {
   useEffect(() => {
     async function loadCached() {
       if (navigator.onLine) return;
-      const stored = getInitialAuditLogs();
-      if (stored && stored.length > 0) {
-        setAuditLogs(stored);
-        return;
-      }
       const cached = await getCachedOfflineData('audit_logs', null);
       if (cached && cached.length > 0) {
         const cleaned = sanitizeAndRenumberAuditLogs(cached);

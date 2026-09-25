@@ -21,36 +21,13 @@ export function filterRepairTicketsById(tickets, idToRemove) {
   return tickets.filter(ticket => String(ticket.id) !== String(idToRemove));
 }
 
-function readRepairTicketsFromLocalStorage() {
-  if (typeof window === 'undefined') return INITIAL_REPAIR_TICKETS;
-
-  try {
-    const raw = window.localStorage.getItem('cached_repair_tickets');
-    if (!raw) return INITIAL_REPAIR_TICKETS;
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-  } catch (err) {
-    console.warn('[useRepairs] Failed to parse cached repair tickets:', err);
-  }
-
-  return INITIAL_REPAIR_TICKETS;
-}
-
 export function useRepairs() {
-  const [repairTickets, setRepairTickets] = useState(() => readRepairTicketsFromLocalStorage());
+  const [repairTickets, setRepairTickets] = useState(INITIAL_REPAIR_TICKETS);
   const [loading, setLoading] = useState(false);
 
   const persistRepairTickets = useCallback((nextTickets) => {
     setRepairTickets(nextTickets);
     cacheOfflineData('repair_tickets', nextTickets);
-
-    try {
-      if (typeof window !== 'undefined') {
-        window.localStorage.setItem('cached_repair_tickets', JSON.stringify(nextTickets));
-      }
-    } catch (err) {
-      console.warn('[useRepairs] Failed to persist repair tickets:', err);
-    }
   }, []);
 
   // Hydrate cache from IndexedDB on mount
@@ -110,13 +87,6 @@ export function useRepairs() {
     setRepairTickets(prev => {
       const updated = [localTicket, ...prev];
       cacheOfflineData('repair_tickets', updated);
-      try {
-        if (typeof window !== 'undefined') {
-          window.localStorage.setItem('cached_repair_tickets', JSON.stringify(updated));
-        }
-      } catch (err) {
-        console.warn('[useRepairs] Failed to persist added repair ticket:', err);
-      }
       return updated;
     });
 
@@ -145,13 +115,6 @@ export function useRepairs() {
     setRepairTickets(prev => {
       const updated = prev.map(t => t.id === id ? { ...t, ...updates } : t);
       cacheOfflineData('repair_tickets', updated);
-      try {
-        if (typeof window !== 'undefined') {
-          window.localStorage.setItem('cached_repair_tickets', JSON.stringify(updated));
-        }
-      } catch (err) {
-        console.warn('[useRepairs] Failed to persist edited repair ticket:', err);
-      }
       return updated;
     });
 
@@ -214,13 +177,6 @@ export function useRepairs() {
     setRepairTickets(prev => {
       const updated = filterRepairTicketsById(prev, id);
       cacheOfflineData('repair_tickets', updated);
-      try {
-        if (typeof window !== 'undefined') {
-          window.localStorage.setItem('cached_repair_tickets', JSON.stringify(updated));
-        }
-      } catch (err) {
-        console.warn('[useRepairs] Failed to persist deleted repair ticket:', err);
-      }
       return updated;
     });
 
@@ -250,13 +206,6 @@ export function useRepairs() {
       dbItems.map(mapDbToRepair).forEach(item => merged.set(item.id, item));
       const updated = Array.from(merged.values());
       cacheOfflineData('repair_tickets', updated);
-      try {
-        if (typeof window !== 'undefined') {
-          window.localStorage.setItem('cached_repair_tickets', JSON.stringify(updated));
-        }
-      } catch (err) {
-        console.warn('[useRepairs] Failed to persist imported repair tickets:', err);
-      }
       return updated;
     });
 

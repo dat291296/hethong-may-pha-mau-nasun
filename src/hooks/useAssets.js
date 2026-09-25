@@ -15,35 +15,10 @@ import { cacheOfflineData, getCachedOfflineData, enqueueOfflineAction, getOfflin
  * Integrated with offline support, local persistence & action queuing.
  */
 function getInitialAssets(key, fallback) {
-  try {
-    const raw = localStorage.getItem(`nasun_${key}`) || localStorage.getItem(`cached_${key}`);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        if (key === 'computers') {
-          return parsed.map(c => {
-            let cleanType = c.type;
-            if (!cleanType || cleanType === 'AIO' || String(cleanType).includes('Lắc') || cleanType !== 'Case') {
-              cleanType = 'All In One';
-            }
-            return { ...c, type: cleanType };
-          });
-        }
-        return parsed;
-      }
-    }
-  } catch (e) {
-    console.warn(`Failed to parse ${key} from storage`, e);
-  }
   return fallback;
 }
 
 function persistAssetsLocal(key, data) {
-  try {
-    localStorage.setItem(`nasun_${key}`, JSON.stringify(data));
-  } catch (e) {
-    console.warn(`Failed to save nasun_${key} to localStorage`, e);
-  }
   cacheOfflineData(key, data);
 }
 

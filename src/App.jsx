@@ -46,11 +46,6 @@ function normalizeWarehouseRegion(region) {
 }
 
 function persistWorkflowCache(key, data) {
-  try {
-    window.localStorage.setItem(`nasun_${key}`, JSON.stringify(data));
-  } catch (err) {
-    console.warn(`[Workflow] Failed to persist ${key} locally:`, err);
-  }
   cacheOfflineData(key, data);
 }
 

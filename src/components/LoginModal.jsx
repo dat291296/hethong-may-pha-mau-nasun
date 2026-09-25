@@ -3,6 +3,7 @@ import { ArrowLeft, CheckCircle2, Eye, EyeOff, KeyRound, LockKeyhole, Mail, User
 import { useAuth } from '../context/AuthContext.jsx';
 import { supabase } from '../lib/supabase.js';
 import { syncOfflineQueue } from '../lib/offlineSync.js';
+import { clearOfflineStorage } from '../lib/offlineDb.js';
 
 const isKeycloakEnabled = import.meta.env.VITE_ENABLE_KEYCLOAK === 'true';
 const LOGIN_ATTEMPTS_KEY = 'nasun_login_attempts';
@@ -201,6 +202,7 @@ export default function LoginModal() {
       if (updateError) throw updateError;
       window.history.replaceState({}, document.title, `${window.location.origin}${window.location.pathname}`);
       setPasswordRecovery(false);
+      await clearOfflineStorage();
       await supabase.auth.signOut({ scope: 'local' });
       setMode('login');
       setPassword('');
