@@ -1,0 +1,40 @@
+name: RLS Integration Test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-access-control:
+    name: Verify Admin QC Viewer policies
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      RLS_TEST_URL: ${{ vars.VITE_SUPABASE_URL }}
+      RLS_TEST_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+      RLS_TEST_ADMIN_EMAIL: ${{ secrets.RLS_TEST_ADMIN_EMAIL }}
+      RLS_TEST_ADMIN_PASSWORD: ${{ secrets.RLS_TEST_ADMIN_PASSWORD }}
+      RLS_TEST_ADMIN_TOTP_SECRET: ${{ secrets.RLS_TEST_ADMIN_TOTP_SECRET }}
+      RLS_TEST_QC_EMAIL: ${{ secrets.RLS_TEST_QC_EMAIL }}
+      RLS_TEST_QC_PASSWORD: ${{ secrets.RLS_TEST_QC_PASSWORD }}
+      RLS_TEST_QC_TOTP_SECRET: ${{ secrets.RLS_TEST_QC_TOTP_SECRET }}
+      RLS_TEST_QC_REGION: ${{ vars.RLS_TEST_QC_REGION }}
+      RLS_TEST_VIEWER_EMAIL: ${{ secrets.RLS_TEST_VIEWER_EMAIL }}
+      RLS_TEST_VIEWER_PASSWORD: ${{ secrets.RLS_TEST_VIEWER_PASSWORD }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Run RLS integration checks
+        run: node scripts/verify-rls.mjs
