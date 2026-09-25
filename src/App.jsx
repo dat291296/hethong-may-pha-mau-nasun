@@ -5,6 +5,7 @@ import WorkflowModal from './components/WorkflowModal';
 import HandoverPrintModal from './components/HandoverPrintModal';
 import MobileBottomNav from './components/MobileBottomNav';
 import LoginModal from './components/LoginModal';
+import MfaGate from './components/MfaGate';
 import { useAuth } from './context/AuthContext';
 import { supabase, isSupabaseConfigured } from './lib/supabase';
 import { cacheOfflineData } from './lib/offlineSync.js';
@@ -753,6 +754,8 @@ export default function App() {
   }
 
   return (
+    <>
+      <MfaGate />
     <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg-main)' }}>
       
       {/* Sidebar Navigation for Desktop & Mobile sliding drawer */}
@@ -1111,6 +1114,7 @@ export default function App() {
       )}
 
     </div>
+    </>
   );
 }
 

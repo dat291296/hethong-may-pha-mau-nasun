@@ -19,7 +19,14 @@ ALTER TABLE locked_months  ENABLE ROW LEVEL SECURITY;
 -- ── Helper: get current user's role ──────────────────────────────────────────
 CREATE OR REPLACE FUNCTION public.get_my_role()
 RETURNS TEXT LANGUAGE SQL STABLE SECURITY DEFINER SET search_path = public AS $$
-  SELECT role FROM public.profiles WHERE id = auth.uid() AND is_active = TRUE;
+  SELECT role FROM public.profiles
+  WHERE id = auth.uid()
+    AND is_active = TRUE
+    AND (
+      role NOT IN ('admin', 'qc')
+      OR mfa_required = FALSE
+      OR COALESCE(auth.jwt()->>'aal', '') = 'aal2'
+    );
 $$;
 
 CREATE OR REPLACE FUNCTION public.get_my_region()

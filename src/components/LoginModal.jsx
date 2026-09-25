@@ -5,6 +5,37 @@ import { supabase } from '../lib/supabase.js';
 import { syncOfflineQueue } from '../lib/offlineSync.js';
 
 const isKeycloakEnabled = import.meta.env.VITE_ENABLE_KEYCLOAK === 'true';
+const LOGIN_ATTEMPTS_KEY = 'nasun_login_attempts';
+const MAX_LOGIN_FAILURES = 5;
+const LOGIN_LOCK_MS = 15 * 60 * 1000;
+
+function getLoginAttemptState(email) {
+  try {
+    const attempts = JSON.parse(localStorage.getItem(LOGIN_ATTEMPTS_KEY) || '{}');
+    const state = attempts[email] || { count: 0, firstFailureAt: 0 };
+    if (Date.now() - state.firstFailureAt >= LOGIN_LOCK_MS) return { count: 0, firstFailureAt: 0 };
+    return state;
+  } catch {
+    return { count: 0, firstFailureAt: 0 };
+  }
+}
+
+function updateLoginAttemptState(email, succeeded) {
+  try {
+    const attempts = JSON.parse(localStorage.getItem(LOGIN_ATTEMPTS_KEY) || '{}');
+    if (succeeded) delete attempts[email];
+    else {
+      const previous = getLoginAttemptState(email);
+      attempts[email] = {
+        count: previous.count + 1,
+        firstFailureAt: previous.firstFailureAt || Date.now(),
+      };
+    }
+    localStorage.setItem(LOGIN_ATTEMPTS_KEY, JSON.stringify(attempts));
+  } catch (storageError) {
+    console.warn('[Login] Could not update local attempt state:', storageError.message);
+  }
+}
 
 export default function LoginModal() {
   const { user, isDevMode, switchDevRole, loading, emailVerifiedSuccess, setEmailVerifiedSuccess, authRedirectError, setAuthRedirectError } = useAuth();
@@ -49,17 +80,29 @@ export default function LoginModal() {
     event.preventDefault();
     resetFeedback();
     setPending(true);
+    const normalizedEmail = email.trim().toLowerCase();
     try {
       if (isDevMode) {
         switchDevRole(email.toLowerCase().includes('qc') ? 'QC' : email.toLowerCase().includes('admin') ? 'ADMIN' : 'VIEWER');
         return;
       }
-      const { error: signInError } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
+      const attemptState = getLoginAttemptState(normalizedEmail);
+      if (attemptState.count >= MAX_LOGIN_FAILURES) {
+        const remainingMinutes = Math.max(1, Math.ceil((LOGIN_LOCK_MS - (Date.now() - attemptState.firstFailureAt)) / 60000));
+        throw new Error(`LOCAL_LOGIN_LOCKED:${remainingMinutes}`);
+      }
+      const { error: signInError } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password });
       if (signInError) throw signInError;
+      updateLoginAttemptState(normalizedEmail, true);
       await syncOfflineQueue();
     } catch (err) {
       console.error('[Login] Password sign-in failed:', err.message);
-      setError('Không thể đăng nhập. Kiểm tra lại email và mật khẩu.');
+      if (err.message?.startsWith('LOCAL_LOGIN_LOCKED:')) {
+        setError(`Đã tạm khóa đăng nhập trên thiết bị này. Thử lại sau ${err.message.split(':')[1]} phút.`);
+      } else {
+        updateLoginAttemptState(normalizedEmail, false);
+        setError('Không thể đăng nhập. Kiểm tra lại email và mật khẩu.');
+      }
     } finally {
       setPending(false);
     }
@@ -132,7 +175,7 @@ export default function LoginModal() {
       <span>Mật khẩu</span>
       <div className="auth-input-wrap">
         <LockKeyhole size={18} aria-hidden="true" />
-        <input type={showPassword ? 'text' : 'password'} value={password} onChange={(event) => setPassword(event.target.value)} minLength="6" required placeholder="Tối thiểu 6 ký tự" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} />
+        <input type={showPassword ? 'text' : 'password'} value={password} onChange={(event) => setPassword(event.target.value)} minLength={mode === 'signup' ? 12 : 6} required placeholder={mode === 'signup' ? 'Tối thiểu 12 ký tự' : 'Nhập mật khẩu'} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} />
         <button type="button" className="auth-icon-button" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}>
           {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
         </button>

@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS profiles (
   managed_region TEXT DEFAULT 'Miền Bắc'
                    CHECK (managed_region IN ('Miền Bắc', 'Miền Trung', 'Miền Nam', 'Toàn Quốc')),
   is_active      BOOLEAN NOT NULL DEFAULT TRUE,
+  mfa_required   BOOLEAN NOT NULL DEFAULT FALSE,
   deactivated_at TIMESTAMPTZ,
   deactivated_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   avatar_url     TEXT,
@@ -97,6 +98,15 @@ $$;
 REVOKE ALL ON FUNCTION public.bootstrap_admin_role() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.bootstrap_admin_role() FROM anon;
 GRANT EXECUTE ON FUNCTION public.bootstrap_admin_role() TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.has_privileged_aal()
+RETURNS BOOLEAN LANGUAGE SQL STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT COALESCE(auth.jwt()->>'aal', '') = 'aal2';
+$$;
+
+REVOKE ALL ON FUNCTION public.has_privileged_aal() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.has_privileged_aal() FROM anon;
+GRANT EXECUTE ON FUNCTION public.has_privileged_aal() TO authenticated;
 
 -- Trigger to prevent self-privilege escalation (modifying profiles.role)
 CREATE OR REPLACE FUNCTION public.check_role_update()

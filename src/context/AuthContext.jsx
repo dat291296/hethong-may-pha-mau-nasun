@@ -5,6 +5,8 @@ import { supabase, isSupabaseConfigured } from '../lib/supabase.js';
 // ─── Auth Context ─────────────────────────────────────────────────────────────
 const AuthContext = createContext(null);
 const OFFLINE_USER_KEY = 'nasun_offline_user';
+const MFA_VERIFIED_KEY = 'nasun_mfa_verified_at';
+const PRIVILEGED_SESSION_MS = 8 * 60 * 60 * 1000;
 
 function getOfflineUser(authUser) {
   try {
@@ -39,6 +41,42 @@ export function AuthProvider({ children }) {
   const [securityEvents, setSecurityEvents] = useState([]);
   const [emailVerifiedSuccess, setEmailVerifiedSuccess] = useState(false);
   const [authRedirectError, setAuthRedirectError] = useState('');
+  const [mfaSatisfied, setMfaSatisfied] = useState(false);
+
+  const refreshMfaStatus = useCallback(async (profile = user) => {
+    if (!profile?.mfaRequired) {
+      setMfaSatisfied(true);
+      return true;
+    }
+
+    if (!navigator.onLine) {
+      const verifiedAt = Number(localStorage.getItem(MFA_VERIFIED_KEY) || 0);
+      const isRecent = Date.now() - verifiedAt < PRIVILEGED_SESSION_MS;
+      setMfaSatisfied(isRecent);
+      return isRecent;
+    }
+
+    const { data, error } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    const verifiedAt = Number(localStorage.getItem(MFA_VERIFIED_KEY) || 0);
+    const hasFreshLocalProof = verifiedAt > 0 && Date.now() - verifiedAt < PRIVILEGED_SESSION_MS;
+    const verified = !error && data?.currentLevel === 'aal2' && (verifiedAt === 0 || hasFreshLocalProof);
+    if (verified && verifiedAt === 0) localStorage.setItem(MFA_VERIFIED_KEY, String(Date.now()));
+    setMfaSatisfied(verified);
+    return verified;
+  }, [user]);
+
+  const markMfaVerified = useCallback(() => {
+    localStorage.setItem(MFA_VERIFIED_KEY, String(Date.now()));
+    setMfaSatisfied(true);
+  }, []);
+
+  useEffect(() => {
+    if (!user?.mfaRequired || !mfaSatisfied) return undefined;
+    const verifiedAt = Number(localStorage.getItem(MFA_VERIFIED_KEY) || Date.now());
+    const remaining = Math.max(0, PRIVILEGED_SESSION_MS - (Date.now() - verifiedAt));
+    const timer = window.setTimeout(() => setMfaSatisfied(false), remaining);
+    return () => window.clearTimeout(timer);
+  }, [mfaSatisfied, user?.mfaRequired]);
 
   // ── Initialize auth ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -93,6 +131,7 @@ export function AuthProvider({ children }) {
             };
             setUser(fallbackUser);
             setRole(fallbackUser.role || ROLES.VIEWER);
+            refreshMfaStatus(fallbackUser);
             setLoading(false);
           } else {
             loadUserProfile(session.user);
@@ -122,6 +161,7 @@ export function AuthProvider({ children }) {
               };
               setUser(fallbackUser);
               setRole(fallbackUser.role || ROLES.VIEWER);
+              refreshMfaStatus(fallbackUser);
               setLoading(false);
             } else {
               await loadUserProfile(session.user);
@@ -158,7 +198,7 @@ export function AuthProvider({ children }) {
 
       const { data: profile, error } = await supabase
         .from('profiles')
-        .select('id, full_name, role, avatar_url, managed_region, is_active')
+        .select('id, full_name, role, avatar_url, managed_region, is_active, mfa_required')
         .eq('id', authUser.id)
         .single();
 
@@ -188,10 +228,12 @@ export function AuthProvider({ children }) {
         role: finalRole,
         avatarUrl: profile?.avatar_url || null,
         managedRegion: finalRegion,
+        mfaRequired: Boolean(profile?.mfa_required && ['admin', 'qc'].includes(finalRole)),
       };
       setUser(resolvedUser);
       persistOfflineUser(resolvedUser);
       setRole(finalRole);
+      await refreshMfaStatus(resolvedUser);
     } catch (err) {
       console.error('[Auth] Failed to load user profile:', err.message);
       if (err?.code === 'ACCOUNT_DISABLED' || err?.message === 'ACCOUNT_DISABLED') {
@@ -264,7 +306,9 @@ export function AuthProvider({ children }) {
     }
     setUser(null);
     setRole(ROLES.VIEWER);
+    setMfaSatisfied(false);
     persistOfflineUser(null);
+    localStorage.removeItem(MFA_VERIFIED_KEY);
   }, []);
 
   const value = {
@@ -283,6 +327,9 @@ export function AuthProvider({ children }) {
     setEmailVerifiedSuccess,
     authRedirectError,
     setAuthRedirectError,
+    mfaSatisfied,
+    refreshMfaStatus,
+    markMfaVerified,
   };
 
   return (
