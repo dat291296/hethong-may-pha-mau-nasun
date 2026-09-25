@@ -15,6 +15,10 @@ DROP POLICY IF EXISTS "sync_operations_select_own" ON public.sync_operations;
 CREATE POLICY "sync_operations_select_own"
   ON public.sync_operations FOR SELECT
   USING (user_id = auth.uid() OR public.get_my_role() = 'admin');
+DROP POLICY IF EXISTS "sync_operations_insert_own" ON public.sync_operations;
+CREATE POLICY "sync_operations_insert_own"
+  ON public.sync_operations FOR INSERT TO authenticated
+  WITH CHECK (user_id = auth.uid() AND public.get_my_role() IN ('admin', 'qc'));
 
 CREATE OR REPLACE FUNCTION public.execute_equipment_workflow(
   p_operation_id TEXT,
@@ -23,7 +27,7 @@ CREATE OR REPLACE FUNCTION public.execute_equipment_workflow(
 )
 RETURNS JSONB
 LANGUAGE plpgsql
-SECURITY DEFINER
+SECURITY INVOKER
 SET search_path = public
 AS $$
 DECLARE
@@ -119,21 +123,18 @@ BEGIN
     END IF;
   END IF;
 
-  INSERT INTO public.audit_logs (
-    id, type, timestamp, set_code, npp_id, npp_name, serial_list,
-    technician, reason, notes, user_id, severity
-  ) VALUES (
-    v_audit_id,
-    CASE p_workflow WHEN 'INSTALL' THEN 'LẮP ĐẶT MỚI' WHEN 'WITHDRAW' THEN 'THU HỒI' ELSE 'ĐIỀU CHUYỂN NPP' END,
-    NOW(), v_set_code,
-    COALESCE(v_target_npp_id, v_source_npp_id, '—'),
-    COALESCE(v_target_npp.name, v_set.npp_name, ''),
-    'Bộ máy ' || v_set_code,
-    COALESCE(p_payload->>'technician', ''),
-    COALESCE(p_payload->>'reason', CASE p_workflow WHEN 'INSTALL' THEN 'Lắp mới bộ máy pha màu cho NPP' ELSE '' END),
-    COALESCE(p_payload->>'notes', ''), auth.uid(),
-    CASE WHEN p_workflow = 'WITHDRAW' THEN 'WARNING' ELSE 'INFO' END
-  ) ON CONFLICT (id) DO NOTHING;
+  PERFORM public.create_audit_log(jsonb_build_object(
+    'id', v_audit_id,
+    'type', CASE p_workflow WHEN 'INSTALL' THEN 'LẮP ĐẶT MỚI' WHEN 'WITHDRAW' THEN 'THU HỒI' ELSE 'ĐIỀU CHUYỂN NPP' END,
+    'set_code', v_set_code,
+    'npp_id', COALESCE(v_target_npp_id, v_source_npp_id, '—'),
+    'npp_name', COALESCE(v_target_npp.name, v_set.npp_name, ''),
+    'serial_list', 'Bộ máy ' || v_set_code,
+    'technician', COALESCE(p_payload->>'technician', ''),
+    'reason', COALESCE(p_payload->>'reason', CASE p_workflow WHEN 'INSTALL' THEN 'Lắp mới bộ máy pha màu cho NPP' ELSE '' END),
+    'notes', COALESCE(p_payload->>'notes', ''),
+    'severity', CASE WHEN p_workflow = 'WITHDRAW' THEN 'WARNING' ELSE 'INFO' END
+  ));
 
   v_result := jsonb_build_object(
     'ok', TRUE,

@@ -156,13 +156,17 @@ export default function UserManagement({
     }
   };
 
-  const handleDeleteProfile = async (profileId) => {
+  const handleAccountStatusChange = async (profileId, isActive) => {
     if (profileId === currentUser.id) {
-      alert('Bạn không thể tự xóa tài khoản của chính mình!');
+      alert('Bạn không thể tự khóa tài khoản của chính mình!');
       return;
     }
 
-    if (!window.confirm('Bạn có chắc chắn muốn xóa tài khoản này khỏi danh sách quản lý?')) {
+    const nextActive = !isActive;
+    const confirmation = nextActive
+      ? 'Bạn có chắc chắn muốn kích hoạt lại tài khoản này?'
+      : 'Bạn có chắc chắn muốn khóa tài khoản này? Dữ liệu liên quan vẫn được giữ nguyên.';
+    if (!window.confirm(confirmation)) {
       return;
     }
 
@@ -170,25 +174,24 @@ export default function UserManagement({
     setError(null);
 
     if (!isSupabaseConfigured) {
-      setProfiles(prev => prev.filter(p => p.id !== profileId));
-      setSuccess('Đã xóa tài khoản thành công (Mô phỏng)!');
+      setProfiles(prev => prev.map(p => p.id === profileId ? { ...p, is_active: nextActive } : p));
+      setSuccess(nextActive ? 'Đã kích hoạt lại tài khoản (Mô phỏng)!' : 'Đã khóa tài khoản (Mô phỏng)!');
       return;
     }
 
     try {
-      // Delete from profiles table
-      const { error: delErr } = await supabase
-        .from('profiles')
-        .delete()
-        .eq('id', profileId);
+      const { error: delErr } = await supabase.rpc('set_user_account_active', {
+        target_user_id: profileId,
+        target_active: nextActive,
+      });
 
       if (delErr) throw delErr;
       
-      setSuccess('Đã gỡ tài khoản khỏi danh sách!');
+      setSuccess(nextActive ? 'Đã kích hoạt lại tài khoản!' : 'Đã khóa tài khoản; toàn bộ dữ liệu được giữ nguyên!');
       fetchProfiles();
     } catch (err) {
       console.error(err);
-      setError('Lỗi gỡ tài khoản: ' + err.message);
+      setError('Lỗi cập nhật trạng thái tài khoản: ' + err.message);
     }
   };
 
@@ -319,7 +322,7 @@ export default function UserManagement({
                   {profiles.map(p => {
                     const isSelf = p.id === currentUser.id;
                     return (
-                      <tr key={p.id} style={{ background: isSelf ? 'rgba(6, 182, 212, 0.03)' : 'transparent' }}>
+                      <tr key={p.id} style={{ background: p.is_active === false ? 'rgba(239,68,68,0.06)' : (isSelf ? 'rgba(6, 182, 212, 0.03)' : 'transparent'), opacity: p.is_active === false ? 0.72 : 1 }}>
                         <td>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <div style={{
@@ -339,6 +342,7 @@ export default function UserManagement({
                             <div>
                               <div style={{ fontWeight: '700' }}>
                                 {p.full_name} {isSelf && <span style={{ fontSize: '0.7rem', color: 'var(--accent-cyan)' }}>(Bạn)</span>}
+                                {p.is_active === false && <span style={{ marginLeft: '6px', fontSize: '0.7rem', color: '#ef4444' }}>(Đã khóa)</span>}
                               </div>
                             </div>
                           </div>
@@ -396,18 +400,18 @@ export default function UserManagement({
                         </td>
                         <td style={{ textAlign: 'center' }}>
                           <button
-                            onClick={() => handleDeleteProfile(p.id)}
+                            onClick={() => handleAccountStatusChange(p.id, p.is_active !== false)}
                             disabled={isSelf}
                             className="btn btn-secondary btn-sm"
                             style={{
                               borderColor: 'transparent',
-                              color: isSelf ? 'var(--text-muted)' : '#ef4444',
+                              color: isSelf ? 'var(--text-muted)' : (p.is_active === false ? '#22c55e' : '#ef4444'),
                               opacity: isSelf ? 0.4 : 1,
                               padding: '6px'
                             }}
-                            title="Xóa tài khoản"
+                            title={p.is_active === false ? 'Kích hoạt lại tài khoản' : 'Khóa tài khoản'}
                           >
-                            <Trash2 size={16} />
+                            {p.is_active === false ? <RefreshCw size={16} /> : <Trash2 size={16} />}
                           </button>
                         </td>
                       </tr>

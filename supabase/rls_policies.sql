@@ -18,10 +18,23 @@ ALTER TABLE locked_months  ENABLE ROW LEVEL SECURITY;
 
 -- ── Helper: get current user's role ──────────────────────────────────────────
 CREATE OR REPLACE FUNCTION public.get_my_role()
-RETURNS TEXT LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $$
-BEGIN
-  RETURN (SELECT role FROM public.profiles WHERE id = auth.uid());
-END;
+RETURNS TEXT LANGUAGE SQL STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT role FROM public.profiles WHERE id = auth.uid() AND is_active = TRUE;
+$$;
+
+CREATE OR REPLACE FUNCTION public.get_my_region()
+RETURNS TEXT LANGUAGE SQL STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT COALESCE((SELECT managed_region FROM public.profiles WHERE id = auth.uid()), '');
+$$;
+
+CREATE OR REPLACE FUNCTION public.can_access_region(target_region TEXT)
+RETURNS BOOLEAN LANGUAGE SQL STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT CASE
+    WHEN public.get_my_role() = 'admin' THEN TRUE
+    WHEN public.get_my_region() = 'Toàn Quốc' THEN TRUE
+    WHEN NULLIF(BTRIM(target_region), '') IS NULL THEN FALSE
+    ELSE public.get_my_region() = target_region
+  END;
 $$;
 
 -- ── Helper: check if a target date belongs to a locked month ────────────────
@@ -41,9 +54,8 @@ $$;
 -- ══════════════════════════════════════════════════════════════
 -- PROFILES
 -- ══════════════════════════════════════════════════════════════
--- Users can read/update their own profile
+-- Users can read their own profile. Security fields are admin-managed only.
 CREATE POLICY "profile_select_own" ON profiles FOR SELECT USING (id = auth.uid());
-CREATE POLICY "profile_update_own" ON profiles FOR UPDATE USING (id = auth.uid());
 -- Admin can view all profiles
 CREATE POLICY "profile_select_admin" ON profiles FOR SELECT USING (get_my_role() = 'admin');
 CREATE POLICY "profile_update_admin" ON profiles FOR UPDATE USING (get_my_role() = 'admin');
@@ -51,11 +63,9 @@ CREATE POLICY "profile_update_admin" ON profiles FOR UPDATE USING (get_my_role()
 -- ══════════════════════════════════════════════════════════════
 -- DISTRIBUTORS (Nhà Phân Phối / NPP)
 -- ══════════════════════════════════════════════════════════════
--- Read: ALL authenticated users
-CREATE POLICY "npp_select_auth" ON distributors FOR SELECT USING (auth.role() = 'authenticated');
--- Insert/Update: admin + qc only
-CREATE POLICY "npp_insert_staff" ON distributors FOR INSERT WITH CHECK (get_my_role() IN ('admin', 'qc'));
-CREATE POLICY "npp_update_staff" ON distributors FOR UPDATE USING (get_my_role() IN ('admin', 'qc'));
+CREATE POLICY "npp_select_regional" ON distributors FOR SELECT USING (can_access_region(region));
+CREATE POLICY "npp_insert_regional_staff" ON distributors FOR INSERT WITH CHECK (get_my_role() IN ('admin', 'qc') AND can_access_region(region));
+CREATE POLICY "npp_update_regional_staff" ON distributors FOR UPDATE USING (get_my_role() IN ('admin', 'qc') AND can_access_region(region)) WITH CHECK (get_my_role() IN ('admin', 'qc') AND can_access_region(region));
 -- Delete: ADMIN ONLY
 CREATE POLICY "npp_delete_admin" ON distributors FOR DELETE USING (get_my_role() = 'admin');
 
@@ -65,9 +75,9 @@ CREATE POLICY "npp_delete_admin" ON distributors FOR DELETE USING (get_my_role()
 DO $$ DECLARE t TEXT;
 BEGIN
   FOREACH t IN ARRAY ARRAY['dispensers', 'mixers', 'computers', 'printers'] LOOP
-    EXECUTE FORMAT('CREATE POLICY "asset_select_%1$s" ON %1$s FOR SELECT USING (auth.role() = ''authenticated'')', t);
-    EXECUTE FORMAT('CREATE POLICY "asset_insert_%1$s" ON %1$s FOR INSERT WITH CHECK (get_my_role() IN (''admin'', ''qc''))', t);
-    EXECUTE FORMAT('CREATE POLICY "asset_update_%1$s" ON %1$s FOR UPDATE USING (get_my_role() IN (''admin'', ''qc''))', t);
+    EXECUTE FORMAT('CREATE POLICY "asset_select_regional_%1$s" ON %1$s FOR SELECT USING (get_my_role() = ''admin'' OR (get_my_role() = ''qc'' AND set_code IS NULL) OR EXISTS (SELECT 1 FROM system_sets s WHERE s.set_code = %1$s.set_code AND can_access_region(s.region)))', t);
+    EXECUTE FORMAT('CREATE POLICY "asset_insert_regional_%1$s" ON %1$s FOR INSERT WITH CHECK (get_my_role() IN (''admin'', ''qc'') AND (set_code IS NULL OR EXISTS (SELECT 1 FROM system_sets s WHERE s.set_code = %1$s.set_code AND can_access_region(s.region))))', t);
+    EXECUTE FORMAT('CREATE POLICY "asset_update_regional_%1$s" ON %1$s FOR UPDATE USING (get_my_role() IN (''admin'', ''qc'') AND (set_code IS NULL OR EXISTS (SELECT 1 FROM system_sets s WHERE s.set_code = %1$s.set_code AND can_access_region(s.region)))) WITH CHECK (get_my_role() IN (''admin'', ''qc'') AND (set_code IS NULL OR EXISTS (SELECT 1 FROM system_sets s WHERE s.set_code = %1$s.set_code AND can_access_region(s.region))))', t);
     EXECUTE FORMAT('CREATE POLICY "asset_delete_%1$s" ON %1$s FOR DELETE USING (get_my_role() = ''admin'')', t);
   END LOOP;
 END $$;
@@ -75,17 +85,17 @@ END $$;
 -- ══════════════════════════════════════════════════════════════
 -- SYSTEM SETS (Bộ Máy Lắp Đặt)
 -- ══════════════════════════════════════════════════════════════
-CREATE POLICY "sets_select_auth"  ON system_sets FOR SELECT USING (auth.role() = 'authenticated');
-CREATE POLICY "sets_insert_staff" ON system_sets FOR INSERT WITH CHECK (get_my_role() IN ('admin', 'qc') AND NOT is_month_locked(install_date));
-CREATE POLICY "sets_update_staff" ON system_sets FOR UPDATE USING (get_my_role() IN ('admin', 'qc') AND NOT is_month_locked(install_date)) WITH CHECK (NOT is_month_locked(install_date));
+CREATE POLICY "sets_select_regional" ON system_sets FOR SELECT USING (can_access_region(region) OR (get_my_role() = 'qc' AND NULLIF(BTRIM(region), '') IS NULL));
+CREATE POLICY "sets_insert_regional_staff" ON system_sets FOR INSERT WITH CHECK (get_my_role() IN ('admin', 'qc') AND NOT is_month_locked(install_date) AND (can_access_region(region) OR (get_my_role() = 'qc' AND NULLIF(BTRIM(region), '') IS NULL));
+CREATE POLICY "sets_update_regional_staff" ON system_sets FOR UPDATE USING (get_my_role() IN ('admin', 'qc') AND NOT is_month_locked(install_date) AND (can_access_region(region) OR (get_my_role() = 'qc' AND NULLIF(BTRIM(region), '') IS NULL)) WITH CHECK (get_my_role() IN ('admin', 'qc') AND NOT is_month_locked(install_date) AND (can_access_region(region) OR (get_my_role() = 'qc' AND NULLIF(BTRIM(region), '') IS NULL));
 CREATE POLICY "sets_delete_admin" ON system_sets FOR DELETE USING (get_my_role() = 'admin' AND NOT is_month_locked(install_date));
 
 -- ══════════════════════════════════════════════════════════════
 -- REPAIR TICKETS (Phiếu Xử Lý Máy)
 -- ══════════════════════════════════════════════════════════════
-CREATE POLICY "repair_select_auth"   ON repair_tickets FOR SELECT USING (auth.role() = 'authenticated');
-CREATE POLICY "repair_insert_staff"  ON repair_tickets FOR INSERT WITH CHECK (get_my_role() IN ('admin', 'qc') AND NOT is_month_locked(date));
-CREATE POLICY "repair_update_staff"  ON repair_tickets FOR UPDATE USING (get_my_role() IN ('admin', 'qc') AND NOT is_month_locked(date)) WITH CHECK (NOT is_month_locked(date));
+CREATE POLICY "repair_select_regional" ON repair_tickets FOR SELECT USING (get_my_role() = 'admin' OR created_by = auth.uid() OR EXISTS (SELECT 1 FROM distributors d WHERE d.id = repair_tickets.npp_id AND can_access_region(d.region)));
+CREATE POLICY "repair_insert_regional_staff" ON repair_tickets FOR INSERT WITH CHECK (get_my_role() IN ('admin', 'qc') AND NOT is_month_locked(date) AND (npp_id IS NULL OR EXISTS (SELECT 1 FROM distributors d WHERE d.id = repair_tickets.npp_id AND can_access_region(d.region))));
+CREATE POLICY "repair_update_regional_staff" ON repair_tickets FOR UPDATE USING (get_my_role() IN ('admin', 'qc') AND NOT is_month_locked(date) AND (npp_id IS NULL OR EXISTS (SELECT 1 FROM distributors d WHERE d.id = repair_tickets.npp_id AND can_access_region(d.region)))) WITH CHECK (get_my_role() IN ('admin', 'qc') AND NOT is_month_locked(date) AND (npp_id IS NULL OR EXISTS (SELECT 1 FROM distributors d WHERE d.id = repair_tickets.npp_id AND can_access_region(d.region))));
 CREATE POLICY "repair_delete_admin"  ON repair_tickets FOR DELETE USING (get_my_role() = 'admin' AND NOT is_month_locked(date));
 
 -- ══════════════════════════════════════════════════════════════
@@ -93,7 +103,7 @@ CREATE POLICY "repair_delete_admin"  ON repair_tickets FOR DELETE USING (get_my_
 -- ══════════════════════════════════════════════════════════════
 -- QC + Admin can read, authenticated users can insert, only Admin can update/delete.
 CREATE POLICY "audit_select_staff"  ON audit_logs FOR SELECT USING (get_my_role() IN ('admin', 'qc'));
-CREATE POLICY "audit_insert_auth"   ON audit_logs FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+-- Audit inserts are allowed only through public.create_audit_log(JSONB).
 CREATE POLICY "audit_update_admin"  ON audit_logs FOR UPDATE USING (get_my_role() = 'admin') WITH CHECK (get_my_role() = 'admin');
 CREATE POLICY "audit_delete_admin"  ON audit_logs FOR DELETE USING (get_my_role() = 'admin');
 
@@ -105,7 +115,7 @@ CREATE POLICY "lock_insert_admin" ON locked_months FOR INSERT WITH CHECK (get_my
 CREATE POLICY "lock_delete_admin" ON locked_months FOR DELETE USING (get_my_role() = 'admin');
 
 -- ══════════════════════════════════════════════════════════════
--- AGENT TABLES POLICIES (Allowing public/anon access for agent client)
+-- AGENT TABLES POLICIES (authenticated access only)
 -- ══════════════════════════════════════════════════════════════
 
 -- Enable RLS on new tables
@@ -115,23 +125,18 @@ ALTER TABLE agent_telemetry     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE diagnostic_commands ENABLE ROW LEVEL SECURITY;
 
 -- 1. Tinting Logs
-CREATE POLICY "tinting_logs_anon_insert" ON tinting_logs FOR INSERT TO anon WITH CHECK (true);
-CREATE POLICY "tinting_logs_anon_select" ON tinting_logs FOR SELECT TO anon USING (true);
-CREATE POLICY "tinting_logs_auth_all"    ON tinting_logs FOR ALL TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "tinting_logs_select_staff" ON tinting_logs FOR SELECT TO authenticated USING (get_my_role() IN ('admin', 'qc'));
+CREATE POLICY "tinting_logs_insert_staff" ON tinting_logs FOR INSERT TO authenticated WITH CHECK (get_my_role() IN ('admin', 'qc'));
 
 -- 2. Formula Versions
-CREATE POLICY "formula_versions_anon_read" ON formula_versions FOR SELECT TO anon USING (true);
 CREATE POLICY "formula_versions_auth_read" ON formula_versions FOR SELECT TO authenticated USING (true);
 CREATE POLICY "formula_versions_staff_all" ON formula_versions FOR ALL TO authenticated USING (get_my_role() IN ('admin', 'qc')) WITH CHECK (get_my_role() IN ('admin', 'qc'));
 
 -- 3. Agent Telemetry
-CREATE POLICY "agent_telemetry_anon_insert" ON agent_telemetry FOR INSERT TO anon WITH CHECK (true);
-CREATE POLICY "agent_telemetry_staff_all"    ON agent_telemetry FOR ALL TO authenticated USING (get_my_role() IN ('admin', 'qc')) WITH CHECK (get_my_role() IN ('admin', 'qc'));
+CREATE POLICY "agent_telemetry_staff_all" ON agent_telemetry FOR ALL TO authenticated USING (get_my_role() IN ('admin', 'qc')) WITH CHECK (get_my_role() IN ('admin', 'qc'));
 
 -- 4. Diagnostic Commands
-CREATE POLICY "diagnostic_commands_anon_all" ON diagnostic_commands FOR ALL TO anon USING (true) WITH CHECK (true);
-CREATE POLICY "diagnostic_commands_auth_all" ON diagnostic_commands FOR ALL TO authenticated USING (true) WITH CHECK (true);
-
--- 5. System Sets updates from Agent (allow updating agent_status & updated_at)
-CREATE POLICY "sets_update_agent" ON system_sets FOR UPDATE TO anon USING (true) WITH CHECK (true);
+CREATE POLICY "diagnostic_commands_select_staff" ON diagnostic_commands FOR SELECT TO authenticated USING (get_my_role() IN ('admin', 'qc'));
+CREATE POLICY "diagnostic_commands_insert_admin" ON diagnostic_commands FOR INSERT TO authenticated WITH CHECK (get_my_role() = 'admin');
+CREATE POLICY "diagnostic_commands_update_admin" ON diagnostic_commands FOR UPDATE TO authenticated USING (get_my_role() = 'admin') WITH CHECK (get_my_role() = 'admin');
 

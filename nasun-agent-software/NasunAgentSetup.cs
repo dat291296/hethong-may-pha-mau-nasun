@@ -34,7 +34,7 @@ namespace NasunAgent
                 {
                     string json = File.ReadAllText(configFile, Encoding.UTF8);
                     string apiUrl = GetJsonVal(json, "api_url", "https://tqoxyharlsubyqjxjnfg.supabase.co");
-                    string apiKey = GetJsonVal(json, "api_key", "sb_publishable_0AaZT5TafLGaFRF0IIqynA_gmGtwHs8");
+                    string apiKey = GetJsonVal(json, "api_key", "");
                     string softwareType = GetJsonVal(json, "software_type", "ColorExpert 3");
                     
                     StartRealtimeWebSocket(apiUrl, apiKey, softwareType, configFile, logFile);
@@ -1000,7 +1000,7 @@ namespace NasunAgent
 
                 string json = File.ReadAllText(configFile, Encoding.UTF8);
                 string apiUrl = GetJsonVal(json, "api_url", "https://tqoxyharlsubyqjxjnfg.supabase.co");
-                string apiKey = GetJsonVal(json, "api_key", "sb_publishable_0AaZT5TafLGaFRF0IIqynA_gmGtwHs8");
+                string apiKey = GetJsonVal(json, "api_key", "");
                 string setCode = GetJsonVal(json, "set_code", "");
                 string softwareType = GetJsonVal(json, "software_type", "ColorExpert 3");
                 
@@ -1428,7 +1428,7 @@ namespace NasunAgent
                 {
                     string json = File.ReadAllText(configFile, Encoding.UTF8);
                     txtApiUrl.Text = GetJsonVal(json, "api_url", "https://tqoxyharlsubyqjxjnfg.supabase.co");
-                    txtApiKey.Text = GetJsonVal(json, "api_key", "sb_publishable_0AaZT5TafLGaFRF0IIqynA_gmGtwHs8");
+                    txtApiKey.Text = GetJsonVal(json, "api_key", "");
                     txtSetCode.Text = GetJsonVal(json, "set_code", "SET-2024-001");
                     txtFormulaDir.Text = GetJsonVal(json, "formula_override_dir", @"C:\ColorExpert3\Data\Formulas");
                     txtLogFile.Text = GetJsonVal(json, "history_log_file", @"C:\ColorExpert3\Data\History.db");
@@ -1439,7 +1439,7 @@ namespace NasunAgent
             }
 
             txtApiUrl.Text = "https://tqoxyharlsubyqjxjnfg.supabase.co";
-            txtApiKey.Text = "sb_publishable_0AaZT5TafLGaFRF0IIqynA_gmGtwHs8";
+            txtApiKey.Text = "";
             txtSetCode.Text = "SET-2024-001";
             txtFormulaDir.Text = @"C:\ColorExpert3\Data\Formulas";
             txtLogFile.Text = @"C:\ColorExpert3\Data\History.db";

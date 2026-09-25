@@ -30,7 +30,7 @@ STATE_FILE = "last_sync.json"
 
 DEFAULT_CONFIG = {
     "api_url": "https://tqoxyharlsubyqjxjnfg.supabase.co",
-    "api_key": "sb_publishable_0AaZT5TafLGaFRF0IIqynA_gmGtwHs8",
+    "api_key": "",
     "set_code": "SET-2024-001",
     "sync_interval_minutes": 15,
     "software_type": "ColorExpert 3",

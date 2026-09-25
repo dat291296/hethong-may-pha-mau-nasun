@@ -710,7 +710,7 @@ async function processOfflineQueue(onStatusChange) {
         case 'ADD_AUDIT_LOG':
           item.payload = normalizeAuditPayload(item.payload, item.id);
           await addToQueue(item);
-          const { error: auditErr } = await supabase.from('audit_logs').upsert(item.payload, { onConflict: 'id' });
+          const { error: auditErr } = await supabase.rpc('create_audit_log', { p_payload: item.payload });
           error = auditErr;
           break;
         case 'UPDATE_AUDIT_LOG':

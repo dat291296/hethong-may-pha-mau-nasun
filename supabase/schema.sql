@@ -25,6 +25,9 @@ CREATE TABLE IF NOT EXISTS profiles (
                    CHECK (role IN ('admin', 'qc', 'viewer')),
   managed_region TEXT DEFAULT 'Miền Bắc'
                    CHECK (managed_region IN ('Miền Bắc', 'Miền Trung', 'Miền Nam', 'Toàn Quốc')),
+  is_active      BOOLEAN NOT NULL DEFAULT TRUE,
+  deactivated_at TIMESTAMPTZ,
+  deactivated_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   avatar_url     TEXT,
   created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -60,18 +63,40 @@ CREATE TRIGGER on_auth_user_created
 -- ── Bootstrap admin helper (SECURITY DEFINER – bypasses RLS) ─────────────────
 -- This function can be called from the client to fix the role of the master admin
 -- even if their current role in the DB is 'viewer'.
-CREATE OR REPLACE FUNCTION public.bootstrap_admin_role(user_id UUID, user_email TEXT)
-RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DROP FUNCTION IF EXISTS public.bootstrap_admin_role(UUID, TEXT);
+CREATE OR REPLACE FUNCTION public.bootstrap_admin_role()
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  current_user_id UUID := auth.uid();
+  current_user_email TEXT;
 BEGIN
-  IF LOWER(user_email) = 'dat291219962.hust@gmail.com' THEN
-    INSERT INTO public.profiles (id, full_name, role, managed_region)
-    VALUES (user_id, 'Admin Nasun', 'admin', 'Toàn Quốc')
-    ON CONFLICT (id) DO UPDATE SET role = 'admin', managed_region = 'Toàn Quốc', updated_at = NOW();
-  ELSE
-    RAISE EXCEPTION 'Unauthorized: this function only applies to the master admin email';
+  IF current_user_id IS NULL THEN
+    RAISE EXCEPTION 'AUTH_REQUIRED';
   END IF;
+
+  SELECT email
+  INTO current_user_email
+  FROM auth.users
+  WHERE id = current_user_id;
+
+  IF LOWER(COALESCE(current_user_email, '')) <> 'dat291219962.hust@gmail.com' THEN
+    RAISE EXCEPTION 'FORBIDDEN_ADMIN_BOOTSTRAP';
+  END IF;
+
+  INSERT INTO public.profiles (id, full_name, role, managed_region)
+  VALUES (current_user_id, 'Admin Nasun', 'admin', 'Toàn Quốc')
+  ON CONFLICT (id) DO UPDATE
+  SET role = 'admin', managed_region = 'Toàn Quốc', updated_at = NOW();
 END;
 $$;
+
+REVOKE ALL ON FUNCTION public.bootstrap_admin_role() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.bootstrap_admin_role() FROM anon;
+GRANT EXECUTE ON FUNCTION public.bootstrap_admin_role() TO authenticated;
 
 -- Trigger to prevent self-privilege escalation (modifying profiles.role)
 CREATE OR REPLACE FUNCTION public.check_role_update()

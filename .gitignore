@@ -12,6 +12,25 @@ dist
 dist-ssr
 *.local
 
+# Local environment and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+*.pfx
+*.key
+credentials*.json
+secrets*.json
+
+# Database exports and local backups
+backups/
+backup/
+*.dump
+*.backup
+*.sql.gz
+gitleaks-report.*
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

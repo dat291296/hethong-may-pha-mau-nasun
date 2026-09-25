@@ -150,10 +150,7 @@ export function AuthProvider({ children }) {
       // For master admin: first ensure their role is set in DB via SECURITY DEFINER RPC
       // This bypasses RLS so it always works regardless of current DB role
       if (isMasterAdmin) {
-        const { error: rpcErr } = await supabase.rpc('bootstrap_admin_role', {
-          user_id: authUser.id,
-          user_email: authUser.email,
-        });
+        const { error: rpcErr } = await supabase.rpc('bootstrap_admin_role');
         if (rpcErr) {
           console.warn('[Auth] bootstrap_admin_role RPC warning:', rpcErr.message);
         }
@@ -161,9 +158,17 @@ export function AuthProvider({ children }) {
 
       const { data: profile, error } = await supabase
         .from('profiles')
-        .select('id, full_name, role, avatar_url, managed_region')
+        .select('id, full_name, role, avatar_url, managed_region, is_active')
         .eq('id', authUser.id)
         .single();
+
+      if (profile?.is_active === false) {
+        persistOfflineUser(null);
+        await supabase.auth.signOut();
+        const disabledError = new Error('ACCOUNT_DISABLED');
+        disabledError.code = 'ACCOUNT_DISABLED';
+        throw disabledError;
+      }
 
       let finalRole = profile?.role || ROLES.VIEWER;
       let finalRegion = profile?.managed_region || 'Miền Bắc';
@@ -189,6 +194,12 @@ export function AuthProvider({ children }) {
       setRole(finalRole);
     } catch (err) {
       console.error('[Auth] Failed to load user profile:', err.message);
+      if (err?.code === 'ACCOUNT_DISABLED' || err?.message === 'ACCOUNT_DISABLED') {
+        setUser(null);
+        setRole(ROLES.VIEWER);
+        persistOfflineUser(null);
+        return;
+      }
       const isSpecificAdmin = authUser.email?.toLowerCase() === 'dat291219962.hust@gmail.com';
       const fallbackUser = getOfflineUser(authUser) || {
         id: authUser.id, 
@@ -234,13 +245,13 @@ export function AuthProvider({ children }) {
 
     // Also write to Supabase audit_logs if configured
     if (isSupabaseConfigured && supabase) {
-      supabase.from('audit_logs').insert({
+      supabase.rpc('create_audit_log', { p_payload: {
+        id: event.id.replace('SEC-', 'AUDIT-SEC-'),
         type: `SECURITY: ${type}`,
-        user_id: user?.id,
         target_id: details?.targetId || null,
         notes: JSON.stringify(details),
         severity: event.severity,
-      }).then(({ error }) => {
+      } }).then(({ error }) => {
         if (error) console.error('[Auth] Failed to log security event:', error.message);
       });
     }

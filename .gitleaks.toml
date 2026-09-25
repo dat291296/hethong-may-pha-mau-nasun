@@ -1,0 +1,30 @@
+title = "Nasun secret scanning configuration"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "supabase-service-role-assignment"
+description = "Supabase service role key must never be committed"
+regex = '''(?i)SUPABASE_SERVICE_ROLE_KEY\s*[:=]\s*["']?([A-Za-z0-9._-]{24,})'''
+keywords = ["SUPABASE_SERVICE_ROLE_KEY"]
+tags = ["supabase", "service-role", "secret"]
+
+[[rules]]
+id = "nasun-private-api-token"
+description = "Nasun private API token"
+regex = '''(?i)(NASUN_PRIVATE_TOKEN|NASUN_AGENT_SECRET)\s*[:=]\s*["']?([A-Za-z0-9_./+-]{24,})'''
+keywords = ["NASUN_PRIVATE_TOKEN", "NASUN_AGENT_SECRET"]
+tags = ["nasun", "api", "secret"]
+
+[allowlist]
+description = "Public examples and Supabase publishable browser keys"
+paths = [
+  '''(^|/)\.env\.example$''',
+  '''(^|/)tests?/'''
+]
+regexes = [
+  '''sb_publishable_[A-Za-z0-9_-]+''',
+  '''your[_-]?(key|token|secret|password)''',
+  '''(?i)placeholder'''
+]

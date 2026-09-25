@@ -15,6 +15,12 @@ function createPersistenceError(message) {
   return error;
 }
 
+async function createAuditLogRpc(payload) {
+  const { data, error } = await supabase.rpc('create_audit_log', { p_payload: payload });
+  if (error) throw error;
+  return data;
+}
+
 function sanitizeAndRenumberAuditLogs(logs) {
   if (!Array.isArray(logs)) return [];
   if (logs.length === 0) return [];
@@ -153,11 +159,7 @@ export function useAuditLogs() {
 
     if (isSupabaseConfigured && navigator.onLine) {
       try {
-        const { error } = await safeQuery(
-          sb => sb.from('audit_logs').insert(dbPayload),
-          'addAuditLog'
-        );
-        if (error) throw error;
+        await createAuditLogRpc(dbPayload);
         await fetchAuditLogs();
       } catch (err) {
         console.warn('[Offline] Failed online addAuditLog. Queueing.', err);
@@ -253,11 +255,7 @@ export function useAuditLogs() {
     });
 
     if (!isSupabaseConfigured || !navigator.onLine) return;
-    const { error } = await safeQuery(
-      sb => sb.from('audit_logs').upsert(dbItems, { onConflict: 'id', ignoreDuplicates: true }),
-      'importAuditLogs'
-    );
-    if (error) throw error;
+    await Promise.all(dbItems.map(createAuditLogRpc));
     await fetchAuditLogs();
   }, [fetchAuditLogs]);
 
