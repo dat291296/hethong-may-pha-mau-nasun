@@ -23,6 +23,8 @@ export default function UserManagement({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState('');
+  const [securityEvents, setSecurityEvents] = useState([]);
+  const [securityLoading, setSecurityLoading] = useState(false);
 
   // Sub-tab selection state
   const [activeSubTab, setActiveSubTab] = useState('users');
@@ -88,6 +90,26 @@ export default function UserManagement({
       setError('Lỗi tải danh sách tài khoản: ' + err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchSecurityEvents = async () => {
+    if (!isSupabaseConfigured) return;
+    setSecurityLoading(true);
+    setError(null);
+    try {
+      const { data, error: fetchErr } = await supabase
+        .from('security_events')
+        .select('id, occurred_at, event_type, severity, actor_id, target_user_id, source, details')
+        .order('occurred_at', { ascending: false })
+        .limit(200);
+      if (fetchErr) throw fetchErr;
+      setSecurityEvents(data || []);
+    } catch (err) {
+      console.error('[UserManagement] Error loading security events:', err.message);
+      setError('Lỗi tải nhật ký bảo mật: ' + err.message);
+    } finally {
+      setSecurityLoading(false);
     }
   };
 
@@ -243,6 +265,14 @@ export default function UserManagement({
         >
           <Lock size={16} />
           Khóa Sổ Tháng (Locked Months)
+        </button>
+        <button
+          onClick={() => { setActiveSubTab('security_events'); fetchSecurityEvents(); }}
+          className={`btn ${activeSubTab === 'security_events' ? 'btn-primary' : 'btn-secondary'}`}
+          style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', fontSize: '0.85rem' }}
+        >
+          <ShieldAlert size={16} />
+          Nhật Ký Bảo Mật
         </button>
       </div>
 
@@ -570,6 +600,47 @@ export default function UserManagement({
                 )}
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {activeSubTab === 'security_events' && (
+        <div className="glass-panel" style={{ padding: '20px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+            <div>
+              <h3 style={{ margin: 0, fontSize: '1.05rem' }}>Nhật Ký Sự Kiện Bảo Mật</h3>
+              <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginTop: '4px' }}>
+                Nhật ký bất biến, chỉ Admin được xem. Hiển thị tối đa 200 sự kiện gần nhất.
+              </div>
+            </div>
+            <button className="btn btn-secondary btn-sm" onClick={fetchSecurityEvents} disabled={securityLoading}>
+              <RefreshCw size={14} className={securityLoading ? 'spin' : ''} /> Tải lại
+            </button>
+          </div>
+
+          <div className="data-table-container">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Thời gian</th><th>Mức độ</th><th>Sự kiện</th><th>Nguồn</th><th>Tài khoản đích</th><th>Chi tiết</th>
+                </tr>
+              </thead>
+              <tbody>
+                {securityEvents.map((event) => (
+                  <tr key={event.id}>
+                    <td style={{ whiteSpace: 'nowrap', fontSize: '0.78rem' }}>{new Date(event.occurred_at).toLocaleString('vi-VN')}</td>
+                    <td><span className={`badge ${event.severity === 'CRITICAL' ? 'badge-danger' : event.severity === 'WARNING' ? 'badge-warning' : 'badge-info'}`}>{event.severity}</span></td>
+                    <td style={{ fontWeight: 700 }}>{event.event_type}</td>
+                    <td>{event.source === 'database' ? 'Cơ sở dữ liệu' : 'Ứng dụng'}</td>
+                    <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem' }}>{event.target_user_id || '—'}</td>
+                    <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', maxWidth: '360px', overflowWrap: 'anywhere' }}>{JSON.stringify(event.details || {})}</td>
+                  </tr>
+                ))}
+                {!securityLoading && securityEvents.length === 0 && (
+                  <tr><td colSpan="6" style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '24px' }}>Chưa có sự kiện bảo mật.</td></tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
       )}

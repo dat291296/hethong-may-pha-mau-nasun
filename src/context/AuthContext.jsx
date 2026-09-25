@@ -288,15 +288,12 @@ export function AuthProvider({ children }) {
     console.error(`[SECURITY][${event.severity}] ${type}:`, details);
     setSecurityEvents(prev => [event, ...prev].slice(0, 50)); // Keep last 50 events
 
-    // Also write to Supabase audit_logs if configured
+    // Security events are stored separately from editable operational audit logs.
     if (isSupabaseConfigured && supabase) {
-      supabase.rpc('create_audit_log', { p_payload: {
-        id: event.id.replace('SEC-', 'AUDIT-SEC-'),
-        type: `SECURITY: ${type}`,
-        target_id: details?.targetId || null,
-        notes: JSON.stringify(details),
-        severity: event.severity,
-      } }).then(({ error }) => {
+      supabase.rpc('record_security_event', {
+        p_event_type: type,
+        p_details: details || {},
+      }).then(({ error }) => {
         if (error) console.error('[Auth] Failed to log security event:', error.message);
       });
     }
