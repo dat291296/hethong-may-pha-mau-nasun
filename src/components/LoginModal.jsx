@@ -143,6 +143,10 @@ export default function LoginModal() {
   const submitSignup = async (event) => {
     event.preventDefault();
     resetFeedback();
+    if (password !== confirmPassword) {
+      setError('Mật khẩu xác nhận không khớp.');
+      return;
+    }
     setPending(true);
     try {
       if (isDevMode) {
@@ -234,6 +238,24 @@ export default function LoginModal() {
     </label>
   );
 
+  const renderConfirmPasswordInput = () => (
+    <label className="auth-field">
+      <span>Xác nhận mật khẩu</span>
+      <div className="auth-input-wrap">
+        <LockKeyhole size={18} aria-hidden="true" />
+        <input
+          type={showPassword ? 'text' : 'password'}
+          value={confirmPassword}
+          onChange={(event) => setConfirmPassword(event.target.value)}
+          minLength="12"
+          required
+          placeholder="Nhập lại mật khẩu"
+          autoComplete="new-password"
+        />
+      </div>
+    </label>
+  );
+
   return (
     <main className="auth-page">
       <section className="auth-intro" aria-label="Giới thiệu hệ thống">
@@ -284,8 +306,9 @@ export default function LoginModal() {
               <label className="auth-field"><span>Họ và tên</span><div className="auth-input-wrap"><UserRound size={18} aria-hidden="true" /><input type="text" value={fullName} onChange={(event) => setFullName(event.target.value)} required maxLength="100" placeholder="Họ tên của bạn" autoComplete="name" /></div></label>
               <label className="auth-field"><span>Email công việc</span><div className="auth-input-wrap"><Mail size={18} aria-hidden="true" /><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required autoComplete="email" /></div></label>
               {renderPasswordInput()}
+              {renderConfirmPasswordInput()}
               <button className="btn btn-primary auth-submit" type="submit" disabled={pending}>{pending ? 'Đang xử lý...' : 'Tạo tài khoản'}</button>
-              <p className="auth-switch">Đã có tài khoản? <button type="button" className="auth-text-link" onClick={() => changeMode('login')}>Đăng nhập</button></p>
+              <button type="button" className="auth-back" onClick={() => changeMode('login')}><ArrowLeft size={16} />Quay lại đăng nhập</button>
             </form>
           )}
 
@@ -302,10 +325,7 @@ export default function LoginModal() {
             <form className="auth-form" onSubmit={submitNewPassword}>
               <p className="auth-help">Tạo mật khẩu mới có ít nhất 12 ký tự cho tài khoản của bạn.</p>
               {renderPasswordInput()}
-              <label className="auth-field">
-                <span>Xác nhận mật khẩu mới</span>
-                <div className="auth-input-wrap"><LockKeyhole size={18} aria-hidden="true" /><input type={showPassword ? 'text' : 'password'} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} minLength="12" required placeholder="Nhập lại mật khẩu mới" autoComplete="new-password" /></div>
-              </label>
+              {renderConfirmPasswordInput()}
               <button className="btn btn-primary auth-submit" type="submit" disabled={pending}>{pending ? 'Đang cập nhật...' : 'Cập nhật mật khẩu'}</button>
             </form>
           )}
