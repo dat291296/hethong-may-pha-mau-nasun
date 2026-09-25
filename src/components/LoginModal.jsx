@@ -10,6 +10,16 @@ const isKeycloakEnabled = import.meta.env.VITE_ENABLE_KEYCLOAK === 'true';
 const LOGIN_ATTEMPTS_KEY = 'nasun_login_attempts';
 const MAX_LOGIN_FAILURES = 5;
 const LOGIN_LOCK_MS = 15 * 60 * 1000;
+const RESEND_COOLDOWN_SECONDS = 60;
+
+function getPasswordRules(value) {
+  return [
+    { id: 'length', label: 'Ít nhất 12 ký tự', passed: value.length >= 12 },
+    { id: 'uppercase', label: 'Có chữ hoa', passed: /[A-Z]/.test(value) },
+    { id: 'lowercase', label: 'Có chữ thường', passed: /[a-z]/.test(value) },
+    { id: 'number', label: 'Có chữ số', passed: /\d/.test(value) },
+  ];
+}
 
 async function getLoginAttemptState(email) {
   try {
@@ -52,10 +62,17 @@ export default function LoginModal() {
   const [pending, setPending] = useState(false);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
+  const [capsLockOn, setCapsLockOn] = useState(false);
+  const [verificationEmail, setVerificationEmail] = useState('');
+  const [resendCooldown, setResendCooldown] = useState(0);
+
+  const passwordRules = getPasswordRules(password);
+  const passwordIsStrong = passwordRules.every(rule => rule.passed);
 
   useEffect(() => {
     if (emailVerifiedSuccess) {
       setMode('login');
+      setVerificationEmail('');
       setNotice('Email đã được xác thực. Bạn có thể đăng nhập.');
       setEmailVerifiedSuccess(false);
     }
@@ -76,6 +93,14 @@ export default function LoginModal() {
       setAuthRedirectError('');
     }
   }, [authRedirectError, setAuthRedirectError]);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return undefined;
+    const timer = window.setInterval(() => {
+      setResendCooldown(value => Math.max(0, value - 1));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [resendCooldown]);
 
   if ((user && !passwordRecovery) || loading) return null;
 
@@ -112,7 +137,10 @@ export default function LoginModal() {
       await syncOfflineQueue();
     } catch (err) {
       console.error('[Login] Password sign-in failed:', err.message);
-      if (err.message?.startsWith('LOCAL_LOGIN_LOCKED:')) {
+      if (err.code === 'email_not_confirmed' || /email not confirmed/i.test(err.message || '')) {
+        setVerificationEmail(normalizedEmail);
+        setError('Email chưa được xác minh. Hãy kiểm tra hộp thư hoặc gửi lại liên kết xác nhận.');
+      } else if (err.message?.startsWith('LOCAL_LOGIN_LOCKED:')) {
         setError(`Đã tạm khóa đăng nhập trên thiết bị này. Thử lại sau ${err.message.split(':')[1]} phút.`);
       } else {
         await updateLoginAttemptState(normalizedEmail, false);
@@ -143,6 +171,10 @@ export default function LoginModal() {
   const submitSignup = async (event) => {
     event.preventDefault();
     resetFeedback();
+    if (!passwordIsStrong) {
+      setError('Mật khẩu chưa đáp ứng đầy đủ các yêu cầu bảo mật.');
+      return;
+    }
     if (password !== confirmPassword) {
       setError('Mật khẩu xác nhận không khớp.');
       return;
@@ -161,13 +193,42 @@ export default function LoginModal() {
         options: { emailRedirectTo, data: { full_name: fullName.trim() } },
       });
       if (signUpError) throw signUpError;
+      const normalizedEmail = email.trim().toLowerCase();
       setMode('login');
+      if (!signUpData.session) {
+        setVerificationEmail(normalizedEmail);
+        setResendCooldown(RESEND_COOLDOWN_SECONDS);
+      } else {
+        setVerificationEmail('');
+      }
       setNotice(signUpData.session
         ? 'Tài khoản đã được tạo. Bạn có thể đăng nhập.'
         : 'Đã gửi email xác thực. Kiểm tra hộp thư đến hoặc thư rác để kích hoạt tài khoản.');
     } catch (err) {
       console.error('[Login] Sign-up failed:', err.message);
       setError(err.message || 'Không thể tạo tài khoản.');
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const resendVerificationEmail = async () => {
+    if (!verificationEmail || resendCooldown > 0 || pending) return;
+    resetFeedback();
+    setPending(true);
+    try {
+      const emailRedirectTo = await getAuthRedirectUrl(AUTH_REDIRECT_PURPOSES.VERIFIED);
+      const { error: resendError } = await supabase.auth.resend({
+        type: 'signup',
+        email: verificationEmail,
+        options: { emailRedirectTo },
+      });
+      if (resendError) throw resendError;
+      setResendCooldown(RESEND_COOLDOWN_SECONDS);
+      setNotice('Đã gửi lại email xác minh. Hãy kiểm tra hộp thư đến hoặc thư rác.');
+    } catch (err) {
+      console.error('[Login] Verification resend failed:', err.message);
+      setError('Chưa thể gửi lại email xác minh. Vui lòng thử lại sau.');
     } finally {
       setPending(false);
     }
@@ -197,8 +258,8 @@ export default function LoginModal() {
   const submitNewPassword = async (event) => {
     event.preventDefault();
     resetFeedback();
-    if (password.length < 12) {
-      setError('Mật khẩu mới phải có ít nhất 12 ký tự.');
+    if (!passwordIsStrong) {
+      setError('Mật khẩu mới chưa đáp ứng đầy đủ các yêu cầu bảo mật.');
       return;
     }
     if (password !== confirmPassword) {
@@ -230,11 +291,21 @@ export default function LoginModal() {
       <span>Mật khẩu</span>
       <div className="auth-input-wrap">
         <LockKeyhole size={18} aria-hidden="true" />
-        <input type={showPassword ? 'text' : 'password'} value={password} onChange={(event) => setPassword(event.target.value)} minLength={mode === 'login' ? 6 : 12} required placeholder={mode === 'login' ? 'Nhập mật khẩu' : 'Tối thiểu 12 ký tự'} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} />
+        <input type={showPassword ? 'text' : 'password'} value={password} onChange={(event) => setPassword(event.target.value)} onKeyDown={(event) => setCapsLockOn(event.getModifierState('CapsLock'))} onKeyUp={(event) => setCapsLockOn(event.getModifierState('CapsLock'))} onBlur={() => setCapsLockOn(false)} minLength={mode === 'login' ? 6 : 12} required placeholder={mode === 'login' ? 'Nhập mật khẩu' : 'Tối thiểu 12 ký tự'} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} />
         <button type="button" className="auth-icon-button" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}>
           {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
         </button>
       </div>
+      {capsLockOn && <small className="auth-caps-warning">Caps Lock đang bật</small>}
+      {mode !== 'login' && (
+        <div className="auth-password-rules" aria-live="polite">
+          {passwordRules.map(rule => (
+            <span key={rule.id} className={rule.passed ? 'is-valid' : ''}>
+              <CheckCircle2 size={13} aria-hidden="true" />{rule.label}
+            </span>
+          ))}
+        </div>
+      )}
     </label>
   );
 
@@ -286,6 +357,14 @@ export default function LoginModal() {
 
           {notice && <div className="auth-alert auth-alert-success"><CheckCircle2 size={18} />{notice}</div>}
           {error && <div className="auth-alert auth-alert-error">{error}</div>}
+          {mode === 'login' && verificationEmail && (
+            <div className="auth-verification-panel">
+              <span>Chưa nhận được email xác minh?</span>
+              <button type="button" className="auth-text-link" onClick={resendVerificationEmail} disabled={pending || resendCooldown > 0}>
+                {resendCooldown > 0 ? `Gửi lại sau ${resendCooldown}s` : 'Gửi lại email xác minh'}
+              </button>
+            </div>
+          )}
 
           {mode === 'login' && (
             <form className="auth-form" onSubmit={submitLogin}>

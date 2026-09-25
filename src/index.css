@@ -1394,6 +1394,12 @@ body:has(.modal-backdrop) .mobile-bottom-nav,
 .auth-alert-success { color: #047857; background: #ecfdf5; border: 1px solid #a7f3d0; }
 .auth-alert-error { color: #b91c1c; background: #fff1f2; border: 1px solid #fecdd3; }
 .auth-help { margin: 0; color: #64748b; font-size: .86rem; line-height: 1.55; }
+.auth-caps-warning { color: #b45309; font-size: .74rem; font-weight: 700; }
+.auth-password-rules { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 10px; color: #94a3b8; font-size: .72rem; font-weight: 650; }
+.auth-password-rules span { display: inline-flex; align-items: center; gap: 5px; }
+.auth-password-rules span.is-valid { color: #059669; }
+.auth-verification-panel { display: grid; gap: 6px; margin: -6px 0 16px; padding: 11px 12px; border: 1px solid #bae6fd; border-radius: 10px; color: #475569; background: #f0f9ff; font-size: .8rem; }
+.auth-verification-panel .auth-text-link { width: fit-content; }
 .auth-back { display: inline-flex; justify-content: center; align-items: center; gap: 7px; margin: 0 auto; padding: 6px; border: 0; color: #475569; background: transparent; font: inherit; font-size: .82rem; cursor: pointer; }
 .auth-dev-note { margin-top: 26px; padding: 10px 12px; border-radius: 10px; color: #92400e; background: #fffbeb; border: 1px solid #fde68a; font-size: .73rem; line-height: 1.45; }
 
@@ -1446,6 +1452,10 @@ body:has(.modal-backdrop) .mobile-bottom-nav,
 .auth-icon-button { color: #bae6fd; }
 .auth-text-link { color: #67e8f9; }
 .auth-switch, .auth-help { color: #bfdbfe; }
+.auth-caps-warning { color: #fbbf24; }
+.auth-password-rules { color: #94a3b8; }
+.auth-password-rules span.is-valid { color: #34d399; }
+.auth-verification-panel { border-color: rgba(103, 232, 249, .24); color: #bfdbfe; background: rgba(8, 145, 178, .12); }
 .auth-divider { color: #94a3b8; }
 .auth-divider::before, .auth-divider::after { border-color: rgba(186, 230, 253, .18); }
 .auth-keycloak-button { border-color: rgba(186, 230, 253, .28); color: #e0f2fe; background: rgba(2, 12, 27, .35); }

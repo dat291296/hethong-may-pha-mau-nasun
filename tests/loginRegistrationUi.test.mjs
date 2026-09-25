@@ -17,3 +17,22 @@ test('signup and password reset provide a return-to-login action', async () => {
   assert.ok(matches.length >= 2);
   assert.match(source, /onClick=\{\(\) => changeMode\('login'\)\}/);
 });
+
+test('signup and password recovery enforce visible password rules', async () => {
+  const source = await readFile(loginUrl, 'utf8');
+  assert.match(source, /Ít nhất 12 ký tự/);
+  assert.match(source, /Có chữ hoa/);
+  assert.match(source, /Có chữ thường/);
+  assert.match(source, /Có chữ số/);
+  assert.match(source, /if \(!passwordIsStrong\)/);
+  assert.match(source, /Caps Lock đang bật/);
+});
+
+test('unverified users can resend a verification email with cooldown', async () => {
+  const source = await readFile(loginUrl, 'utf8');
+  assert.match(source, /supabase\.auth\.resend/);
+  assert.match(source, /type: 'signup'/);
+  assert.match(source, /RESEND_COOLDOWN_SECONDS = 60/);
+  assert.match(source, /email_not_confirmed/);
+  assert.match(source, /Gửi lại email xác minh/);
+});
