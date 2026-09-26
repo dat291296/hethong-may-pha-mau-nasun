@@ -137,6 +137,7 @@ export default function LoginModal() {
         switchDevRole(email.toLowerCase().includes('qc') ? 'QC' : email.toLowerCase().includes('admin') ? 'ADMIN' : 'VIEWER');
         return;
       }
+      if (!supabase) throw new Error('AUTH_CONFIGURATION_UNAVAILABLE');
       const attemptState = await getLoginAttemptState(normalizedEmail);
       if (attemptState.count >= MAX_LOGIN_FAILURES) {
         const remainingMinutes = Math.max(1, Math.ceil((LOGIN_LOCK_MS - (Date.now() - attemptState.firstFailureAt)) / 60000));
@@ -151,6 +152,8 @@ export default function LoginModal() {
       if (err.code === 'email_not_confirmed' || /email not confirmed/i.test(err.message || '')) {
         setVerificationEmail(normalizedEmail);
         setError('Email chưa được xác minh. Hãy kiểm tra hộp thư hoặc gửi lại liên kết xác nhận.');
+      } else if (err.message === 'AUTH_CONFIGURATION_UNAVAILABLE') {
+        setError('Hệ thống đăng nhập chưa được cấu hình. Vui lòng liên hệ quản trị viên.');
       } else if (err.message?.startsWith('LOCAL_LOGIN_LOCKED:')) {
         setError(`Đã tạm khóa đăng nhập trên thiết bị này. Thử lại sau ${err.message.split(':')[1]} phút.`);
       } else {
@@ -430,7 +433,9 @@ export default function LoginModal() {
             <p>Hệ thống sử dụng email để xác thực tài khoản, gửi liên kết xác minh và khôi phục mật khẩu.</p>
             <p>Dữ liệu NPP, thiết bị và sửa chữa chỉ được sử dụng cho hoạt động quản lý kỹ thuật theo quyền tài khoản.</p>
             <p>Camera và vị trí chỉ được truy cập khi bạn chủ động dùng chức năng quét mã hoặc công tác hiện trường.</p>
-            <p>Bạn có thể liên hệ quản trị viên để kiểm tra, chỉnh sửa hoặc ngừng tài khoản.</p>
+            <p>Nếu bạn chủ động chọn định vị IP dự phòng, địa chỉ mạng sẽ được gửi đến BigDataCloud hoặc ipapi để ước tính vị trí.</p>
+            <p>Camera không ghi hình. Ảnh kỹ thuật được loại bỏ metadata trước khi lưu cùng hồ sơ nghiệp vụ.</p>
+            <p>Dữ liệu được lưu theo thời gian hoạt động của tài khoản hoặc hồ sơ nghiệp vụ. Bạn có thể liên hệ quản trị viên để kiểm tra, chỉnh sửa hoặc ngừng tài khoản; lịch sử nghiệp vụ được xử lý theo quy định lưu trữ của NASUN.</p>
             <button type="button" className="btn btn-primary" onClick={() => setPrivacyOpen(false)}>Đã hiểu</button>
           </section>
         </div>

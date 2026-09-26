@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "owner": "NASUN application administrator",
+  "dataSubjects": ["employees", "technicians", "account holders", "distributor contacts"],
+  "records": [
+    { "class": "account", "fields": ["email", "display name", "role", "managed region"], "purpose": "authentication and authorization", "storage": "Supabase Auth and profiles", "retention": "while account is active; deactivation is reversible by admin", "sharing": [] },
+    { "class": "operations", "fields": ["distributor", "equipment", "repair", "maintenance", "audit"], "purpose": "paint-machine fleet operations", "storage": "Supabase PostgreSQL and encrypted offline cache", "retention": "business retention policy controlled by NASUN", "sharing": [] },
+    { "class": "location", "fields": ["distributor coordinates", "field check-in distance"], "purpose": "route planning and field verification", "storage": "approved operational records", "retention": "with the related operational record", "sharing": ["BigDataCloud or ipapi only after explicit IP fallback"] },
+    { "class": "camera", "fields": ["live frames for QR recognition"], "purpose": "scan equipment identifier", "storage": "not stored", "retention": "camera stream lifetime only", "sharing": [] },
+    { "class": "photos", "fields": ["installation and repair evidence"], "purpose": "technical evidence", "storage": "operational record after metadata-stripping re-encode", "retention": "with the related operational record", "sharing": [] }
+  ],
+  "rightsProcess": ["Contact an administrator to inspect or correct account data", "Administrator can deactivate an account without deleting business history", "Business-record deletion follows authorized NASUN retention procedures"],
+  "prohibitedUses": ["advertising", "background location tracking", "camera recording", "sale of personal data"]
+}

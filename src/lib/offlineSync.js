@@ -522,7 +522,7 @@ export async function enqueueOfflineAction(action, payload, category = null) {
   // Dispatch custom event to trigger sync warning badge or sync attempt
   emitQueueUpdated();
   
-  console.log(`[OfflineSync] Enqueued action: ${action}`, payload);
+  if (import.meta.env.DEV) console.debug(`[OfflineSync] Enqueued action: ${action}`);
 }
 
 /**
@@ -584,7 +584,7 @@ async function processOfflineQueue(onStatusChange) {
     return false;
   }
 
-  console.log(`[OfflineSync] Starting sync of ${queue.length}/${totalQueueCount} eligible actions...`);
+  if (import.meta.env.DEV) console.debug(`[OfflineSync] Starting sync of ${queue.length}/${totalQueueCount} eligible actions...`);
   if (onStatusChange) onStatusChange('syncing', totalQueueCount);
 
   let successCount = 0;
@@ -594,7 +594,7 @@ async function processOfflineQueue(onStatusChange) {
   for (const item of queue) {
     try {
       await saveQueueState(item, 'syncing');
-      console.log(`[OfflineSync] Syncing action ${item.action}...`, item.payload);
+      if (import.meta.env.DEV) console.debug(`[OfflineSync] Syncing action ${item.action}...`);
       let error = null;
 
       switch (item.action) {
@@ -793,7 +793,7 @@ async function processOfflineQueue(onStatusChange) {
     return false;
   }
 
-  console.log(`[OfflineSync] Sync complete! Successfully synced ${successCount} actions.`);
+  if (import.meta.env.DEV) console.debug(`[OfflineSync] Sync complete: ${successCount} actions.`);
   if (onStatusChange) onStatusChange('idle', 0);
   window.dispatchEvent(new CustomEvent('nasun-sync-completed', { detail: { synced: successCount } }));
   return true;

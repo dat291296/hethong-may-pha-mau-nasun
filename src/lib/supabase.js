@@ -23,6 +23,7 @@ export const isSupabaseConfigured =
     validatedSupabaseUrl && supabaseAnonKey &&
     (supabaseAnonKey.startsWith('eyJ') || supabaseAnonKey.startsWith('sb_publishable_'))
   );
+export const isDevelopmentFallback = import.meta.env.DEV && !isSupabaseConfigured;
 
 export const supabase = isSupabaseConfigured
   ? createClient(validatedSupabaseUrl, supabaseAnonKey, {

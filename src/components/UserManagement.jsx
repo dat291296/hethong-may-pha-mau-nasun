@@ -3,12 +3,6 @@ import { supabase, isSupabaseConfigured } from '../lib/supabase.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { UserCheck, ShieldAlert, Trash2, Key, RefreshCw, Award, Lock, Unlock, Calendar, ExternalLink } from 'lucide-react';
 
-const MOCK_PROFILES = [
-  { id: 'dev-admin', email: 'dat291219962.hust@gmail.com', full_name: 'Nguyễn Tiến Đạt (Admin)', role: 'admin', managed_region: 'Toàn Quốc', created_at: '2026-07-28' },
-  { id: 'dev-qc', email: 'qc@dev.local', full_name: 'Trần Minh Hoàng (QC)', role: 'qc', managed_region: 'Miền Bắc', created_at: '2026-07-30' },
-  { id: 'dev-viewer', email: 'viewer@dev.local', full_name: 'Đại Lý Sơn Nasun Hải Phòng', role: 'viewer', managed_region: 'Miền Bắc', created_at: '2026-07-31' }
-];
-
 const keycloakAccountUrl = import.meta.env.VITE_KEYCLOAK_ACCOUNT_URL;
 
 export default function UserManagement({
@@ -19,7 +13,7 @@ export default function UserManagement({
   lockError = null
 }) {
   const { user: currentUser } = useAuth();
-  const [profiles, setProfiles] = useState(MOCK_PROFILES);
+  const [profiles, setProfiles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState('');
@@ -64,7 +58,17 @@ export default function UserManagement({
   };
 
   const fetchProfiles = async () => {
-    if (!isSupabaseConfigured) return;
+    if (!isSupabaseConfigured) {
+      setProfiles(currentUser ? [{
+        id: currentUser.id,
+        email: currentUser.email,
+        full_name: currentUser.name,
+        role: currentUser.role,
+        managed_region: currentUser.managedRegion,
+        created_at: null,
+      }] : []);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {

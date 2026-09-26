@@ -34,9 +34,9 @@
     { "id": "MASVS-3", "status": "implemented", "scope": ["authentication", "session", "pkce", "native-secure-session-storage"] },
     { "id": "MASVS-4", "status": "implemented", "scope": ["network", "endpoint-allowlist", "transport"] },
     { "id": "MASVS-5", "status": "implemented", "scope": ["camera", "geolocation", "files", "clipboard"] },
-    { "id": "MASVS-6", "status": "planned", "scope": ["code", "input-validation", "production-flags"] },
-    { "id": "MASVS-7", "status": "planned", "scope": ["service-worker", "updates", "cache-integrity"] },
-    { "id": "MASVS-8", "status": "planned", "scope": ["supply-chain", "sbom", "release"] },
-    { "id": "MASVS-9", "status": "planned", "scope": ["privacy", "mastg-verification", "evidence"] }
+    { "id": "MASVS-6", "status": "implemented", "scope": ["code", "input-validation", "production-flags"] },
+    { "id": "MASVS-7", "status": "implemented", "scope": ["service-worker", "updates", "cache-integrity"] },
+    { "id": "MASVS-8", "status": "implemented", "scope": ["supply-chain", "sbom", "release"] },
+    { "id": "MASVS-9", "status": "implemented", "scope": ["privacy", "mastg-verification", "evidence"] }
   ]
 }

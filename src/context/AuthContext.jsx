@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { ROLES, ROLE_LABELS, hasPermission } from '../security/rbac.js';
-import { supabase, isSupabaseConfigured } from '../lib/supabase.js';
+import { supabase, isSupabaseConfigured, isDevelopmentFallback } from '../lib/supabase.js';
 import { clearOfflineStorage, getCache, getQueue, initializeOfflineStorage, setCache } from '../lib/offlineDb.js';
 import { syncOfflineQueue } from '../lib/offlineSync.js';
 
@@ -21,9 +21,9 @@ async function persistOfflineUser(user) {
 
 // Default dev user (used when Supabase not configured)
 const DEV_USERS = {
-  [ROLES.ADMIN]:  { id: 'dev-admin',  email: 'dat291219962.hust@gmail.com',  name: 'Admin Nasun',  role: ROLES.ADMIN,  managedRegion: 'Toàn Quốc'  },
-  [ROLES.QC]:     { id: 'dev-qc',     email: 'qc@dev.local',     name: 'QC Dev',     role: ROLES.QC,     managedRegion: 'Miền Bắc'  },
-  [ROLES.VIEWER]: { id: 'dev-viewer', email: 'viewer@dev.local',  name: 'Viewer Dev', role: ROLES.VIEWER, managedRegion: 'Miền Nam'  },
+  [ROLES.ADMIN]:  { id: 'local-admin',  email: 'admin@local.invalid',  name: 'Local Admin',  role: ROLES.ADMIN,  managedRegion: 'Toàn Quốc'  },
+  [ROLES.QC]:     { id: 'local-qc',     email: 'qc@local.invalid',     name: 'Local QC',     role: ROLES.QC,     managedRegion: 'Miền Bắc'  },
+  [ROLES.VIEWER]: { id: 'local-viewer', email: 'viewer@local.invalid', name: 'Local Viewer', role: ROLES.VIEWER, managedRegion: 'Miền Nam'  },
 };
 
 // ─── Auth Provider ────────────────────────────────────────────────────────────
@@ -147,13 +147,18 @@ export function AuthProvider({ children }) {
         }
       );
       return () => subscription.unsubscribe();
-    } else {
+    } else if (isDevelopmentFallback) {
       // Development: use mock user (dropdown role selector in Header)
       initializeOfflineStorage(DEV_USERS[ROLES.ADMIN].id).finally(() => {
         setUser(DEV_USERS[ROLES.ADMIN]);
         setRole(ROLES.ADMIN);
         setLoading(false);
       });
+    } else {
+      // Production must fail closed when cloud authentication is misconfigured.
+      setUser(null);
+      setRole(ROLES.VIEWER);
+      setLoading(false);
     }
   }, []);
 
@@ -234,7 +239,7 @@ export function AuthProvider({ children }) {
 
   // ── Dev-only: switch role via dropdown ─────────────────────────────────────
   const switchDevRole = useCallback((newRole) => {
-    if (isSupabaseConfigured) return; // Ignore in production
+    if (!isDevelopmentFallback) return;
     setRole(newRole);
     setUser(DEV_USERS[newRole] || DEV_USERS[ROLES.VIEWER]);
   }, []);
@@ -300,7 +305,7 @@ export function AuthProvider({ children }) {
     signOut,
     securityEvents,
     reportSecurityEvent,
-    isDevMode: !isSupabaseConfigured,
+    isDevMode: isDevelopmentFallback,
     ROLES,
     ROLE_LABELS,
     emailVerifiedSuccess,

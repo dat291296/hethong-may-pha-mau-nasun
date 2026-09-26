@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "standard": "OWASP MASVS",
+  "profile": ["MAS-L1", "MAS-P"],
+  "verificationBoundary": "Automated source and build verification for the PWA. Native Android and iOS items remain release requirements until native packages exist.",
+  "modules": [
+    { "id": "MASVS-1", "areas": ["architecture", "threat model"], "tests": ["tests/securityMasvs1.test.mjs"], "evidence": ["security/masvs/threat-register.json", "security/masvs/threat-dragon.json"] },
+    { "id": "MASVS-2", "areas": ["storage", "cryptography"], "tests": ["tests/securityMasvs2.test.mjs"], "evidence": ["src/lib/offlineDb.js", "src/platform/mobileSecurityBridge.js"] },
+    { "id": "MASVS-3", "areas": ["authentication", "session"], "tests": ["tests/securityMasvs3.test.mjs"], "evidence": ["src/security/authRuntime.js", "src/context/AuthContext.jsx"] },
+    { "id": "MASVS-4", "areas": ["network", "transport"], "tests": ["tests/securityMasvs4.test.mjs"], "evidence": ["security/masvs/network-policy.json", "src/security/networkPolicy.js"] },
+    { "id": "MASVS-5", "areas": ["platform permissions"], "tests": ["tests/securityMasvs5.test.mjs"], "evidence": ["security/masvs/platform-permissions.json", "src/security/permissionPolicy.js"] },
+    { "id": "MASVS-6", "areas": ["code quality", "production flags", "input validation"], "tests": ["tests/securityMasvs6.test.mjs"], "evidence": ["scripts/verify-production-build.mjs", "vite.config.js"] },
+    { "id": "MASVS-7", "areas": ["resilience", "updates", "cache integrity"], "tests": ["tests/securityMasvs7.test.mjs"], "evidence": ["scripts/generate-service-worker.mjs", "dist/build-manifest.json"] },
+    { "id": "MASVS-8", "areas": ["supply chain", "release"], "tests": ["tests/securityMasvs8.test.mjs"], "evidence": ["scripts/generate-sbom.mjs", ".github/workflows/security-analysis.yml", ".github/workflows/deploy.yml"] },
+    { "id": "MASVS-9", "areas": ["privacy", "verification evidence"], "tests": ["tests/securityMasvs9.test.mjs"], "evidence": ["security/masvs/privacy-inventory.json", "security/masvs/verification-matrix.json"] }
+  ],
+  "nativeReleaseChecks": ["Run OWASP MASTG tests against signed Android and iOS packages", "Verify platform keystore and backup exclusion", "Verify ATS or Network Security Config", "Verify application signing, integrity, and store privacy declarations"]
+}
