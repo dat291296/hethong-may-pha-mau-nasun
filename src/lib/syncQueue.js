@@ -1,4 +1,6 @@
-export const QUEUE_SCHEMA_VERSION = 2;
+import { resolveSyncEntity, SYNC_CONTRACT_VERSION } from './syncContract.js';
+
+export const QUEUE_SCHEMA_VERSION = 3;
 export const SYNC_ENGINE_VERSION = 1;
 export const MAX_RETRY_DELAY_MS = 5 * 60 * 1000;
 
@@ -9,11 +11,16 @@ export function createOperationId() {
 
 export function migrateQueueItem(item, now = Date.now()) {
   const needsEngineReset = Number(item?.engineVersion || 0) < SYNC_ENGINE_VERSION;
+  const entity = resolveSyncEntity(item?.action, item?.payload, item?.category);
   return {
     ...item,
     operationId: item?.operationId || item?.id || createOperationId(),
     schemaVersion: QUEUE_SCHEMA_VERSION,
     engineVersion: SYNC_ENGINE_VERSION,
+    contractVersion: SYNC_CONTRACT_VERSION,
+    entityType: item?.entityType || entity.entityType,
+    entityId: item?.entityId || entity.entityId,
+    baseVersion: Number.isInteger(item?.baseVersion) ? item.baseVersion : null,
     status: needsEngineReset || item?.status === 'syncing' ? 'pending' : (item?.status || 'pending'),
     attempts: Number(item?.attempts || 0),
     nextAttemptAt: needsEngineReset ? 0 : Number(item?.nextAttemptAt || 0),

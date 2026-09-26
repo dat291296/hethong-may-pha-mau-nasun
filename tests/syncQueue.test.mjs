@@ -14,8 +14,19 @@ test('migrates a legacy queue item without changing its stable id', () => {
   assert.equal(migrated.operationId, 'action-1');
   assert.equal(migrated.schemaVersion, QUEUE_SCHEMA_VERSION);
   assert.equal(migrated.engineVersion, SYNC_ENGINE_VERSION);
+  assert.equal(migrated.contractVersion, 1);
+  assert.equal(migrated.entityType, 'distributors');
   assert.equal(migrated.status, 'pending');
   assert.equal(migrated.createdAt, 100);
+});
+
+test('adds stable entity metadata to legacy device edits', () => {
+  const migrated = migrateQueueItem({
+    id: 'action-3', action: 'EDIT_DEVICE', category: 'printers', payload: { id: 'PRIN-001' }
+  }, 400);
+  assert.equal(migrated.entityType, 'printers');
+  assert.equal(migrated.entityId, 'PRIN-001');
+  assert.equal(migrated.baseVersion, null);
 });
 
 test('recovers an interrupted syncing item after reload', () => {

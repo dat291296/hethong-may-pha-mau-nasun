@@ -3,6 +3,7 @@ import { ROLES, ROLE_LABELS, hasPermission } from '../security/rbac.js';
 import { supabase, isSupabaseConfigured, isDevelopmentFallback } from '../lib/supabase.js';
 import { clearOfflineStorage, getCache, getQueue, initializeOfflineStorage, setCache } from '../lib/offlineDb.js';
 import { syncOfflineQueue } from '../lib/offlineSync.js';
+import { registerTrustedDeviceSession, validateTrustedDeviceSession } from '../security/trustedDevice.js';
 
 // ─── Auth Context ─────────────────────────────────────────────────────────────
 const AuthContext = createContext(null);
@@ -36,6 +37,7 @@ export function AuthProvider({ children }) {
   const [passwordRecovery, setPasswordRecovery] = useState(false);
   const [authRedirectError, setAuthRedirectError] = useState('');
   const sessionValidationRunning = useRef(false);
+  const trustedSessionRegistered = useRef(false);
 
   // ── Initialize auth ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -140,6 +142,7 @@ export function AuthProvider({ children }) {
             }
           } else {
             if (event === 'SIGNED_OUT') await clearOfflineStorage();
+            trustedSessionRegistered.current = false;
             setUser(null);
             setRole(ROLES.VIEWER);
             setLoading(false);
@@ -213,6 +216,18 @@ export function AuthProvider({ children }) {
       setUser(resolvedUser);
       await persistOfflineUser(resolvedUser);
       setRole(finalRole);
+      if (navigator.onLine && !trustedSessionRegistered.current) {
+        try {
+          const { supported, state } = await registerTrustedDeviceSession();
+          trustedSessionRegistered.current = supported;
+          if (state?.anomaly_detected && !sessionStorage.getItem('nasun-device-alert-shown')) {
+            sessionStorage.setItem('nasun-device-alert-shown', 'true');
+            window.alert('Phát hiện đăng nhập từ thiết bị hoặc vị trí mới. Sự kiện đã được ghi lại để quản trị viên kiểm tra.');
+          }
+        } catch (deviceError) {
+          console.warn('[Auth] Trusted-device registration deferred:', deviceError.message);
+        }
+      }
     } catch (err) {
       console.error('[Auth] Failed to load user profile:', err.message);
       if (err?.code === 'ACCOUNT_DISABLED' || err?.message === 'ACCOUNT_DISABLED') {
@@ -293,6 +308,7 @@ export function AuthProvider({ children }) {
     await clearOfflineStorage(signedOutUserId);
     setUser(null);
     setRole(ROLES.VIEWER);
+    trustedSessionRegistered.current = false;
     return true;
   }, [user]);
 
@@ -351,6 +367,15 @@ export function AuthProvider({ children }) {
 
         if (!state?.profile_found || !state?.is_active) {
           await clearInvalidSession('ACCOUNT_DISABLED_OR_MISSING');
+          return;
+        }
+
+        const trustedResult = trustedSessionRegistered.current
+          ? await validateTrustedDeviceSession()
+          : await registerTrustedDeviceSession();
+        trustedSessionRegistered.current = trustedResult.supported;
+        if (trustedResult.supported && trustedResult.state?.valid === false) {
+          await clearInvalidSession(trustedResult.state.reason || 'TRUSTED_SESSION_REJECTED');
           return;
         }
 
