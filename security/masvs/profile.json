@@ -33,7 +33,7 @@
     { "id": "MASVS-2", "status": "implemented", "scope": ["storage", "cryptography", "key-lifecycle"] },
     { "id": "MASVS-3", "status": "implemented", "scope": ["authentication", "session", "pkce", "native-secure-session-storage"] },
     { "id": "MASVS-4", "status": "implemented", "scope": ["network", "endpoint-allowlist", "transport"] },
-    { "id": "MASVS-5", "status": "planned", "scope": ["camera", "geolocation", "files", "clipboard"] },
+    { "id": "MASVS-5", "status": "implemented", "scope": ["camera", "geolocation", "files", "clipboard"] },
     { "id": "MASVS-6", "status": "planned", "scope": ["code", "input-validation", "production-flags"] },
     { "id": "MASVS-7", "status": "planned", "scope": ["service-worker", "updates", "cache-integrity"] },
     { "id": "MASVS-8", "status": "planned", "scope": ["supply-chain", "sbom", "release"] },

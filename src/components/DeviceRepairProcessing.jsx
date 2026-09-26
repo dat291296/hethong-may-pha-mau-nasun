@@ -347,15 +347,7 @@ export default function DeviceRepairProcessing({
         }));
       } catch (err) {
         console.error('Error compressing image:', err);
-        // Fallback to reading file directly on error
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          setFormData(prev => ({
-            ...prev,
-            photos: [...(prev.photos || []), reader.result]
-          }));
-        };
-        reader.readAsDataURL(file);
+        alert(`Không thể thêm ảnh ${file.name}: ${err.message}`);
       }
     }
   };

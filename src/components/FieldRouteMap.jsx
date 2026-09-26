@@ -32,6 +32,7 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { getRobustUserLocation } from '../utils/gpsHelper.js';
+import { PERMISSION_PURPOSES } from '../security/permissionPolicy.js';
 
 export default function FieldRouteMap({
   npps = [],
@@ -53,15 +54,6 @@ export default function FieldRouteMap({
 
   // GPS state
   const [userLocation, setUserLocation] = useState(null);
-
-  // User Geolocation on mount (with fallback)
-  useEffect(() => {
-    getRobustUserLocation({ allowIpFallback: true }).then((res) => {
-      if (res.success && res.coords) {
-        setUserLocation(res.coords);
-      }
-    });
-  }, []);
 
   // Distance helper (Haversine formula in km)
   const getDistanceKm = (lat1, lon1, lat2, lon2) => {
@@ -296,6 +288,17 @@ export default function FieldRouteMap({
 
   // Check-in Handler with GPS Geofencing
   const handleCheckIn = async (npp) => {
+    let currentLocation = userLocation;
+    if (!currentLocation) {
+      const locationResult = await getRobustUserLocation({
+        allowIpFallback: false,
+        purpose: PERMISSION_PURPOSES.FIELD_CHECK_IN,
+      });
+      if (locationResult.success && locationResult.coords) {
+        currentLocation = locationResult.coords;
+        setUserLocation(currentLocation);
+      }
+    }
     const timestamp =
       new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) +
       ' ' +
@@ -305,8 +308,8 @@ export default function FieldRouteMap({
     let distanceMsg = '';
     let requiresConfirmation = false;
 
-    if (userLocation && nppCoords && nppCoords.length === 2 && !isNaN(nppCoords[0]) && !isNaN(nppCoords[1])) {
-      const dist = getDistanceKm(userLocation[0], userLocation[1], nppCoords[0], nppCoords[1]);
+    if (currentLocation && nppCoords && nppCoords.length === 2 && !isNaN(nppCoords[0]) && !isNaN(nppCoords[1])) {
+      const dist = getDistanceKm(currentLocation[0], currentLocation[1], nppCoords[0], nppCoords[1]);
 
       if (dist > 0.1) {
         // 100 meters
@@ -342,7 +345,7 @@ export default function FieldRouteMap({
         technician: 'KTV. Nguyễn Văn Hùng',
         reason: `Check-in thực địa có xác thực tọa độ tại ${npp.name} (${npp.province})`,
         notes: `Đã xác nhận có mặt lúc ${timestamp}. Cách vị trí GPS đại lý: ${
-          userLocation && nppCoords ? `${getDistanceKm(userLocation[0], userLocation[1], nppCoords[0] || 0, nppCoords[1] || 0).toFixed(3)} km` : 'Không xác định'
+          currentLocation && nppCoords ? `${getDistanceKm(currentLocation[0], currentLocation[1], nppCoords[0] || 0, nppCoords[1] || 0).toFixed(3)} km` : 'Không xác định'
         }`
       });
     }

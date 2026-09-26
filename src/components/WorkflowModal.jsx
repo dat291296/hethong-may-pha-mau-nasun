@@ -56,11 +56,7 @@ export default function WorkflowModal({
         setPhotos(prev => [...prev, compressedBase64]);
       } catch (err) {
         console.error('Error compressing image:', err);
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          setPhotos(prev => [...prev, reader.result]);
-        };
-        reader.readAsDataURL(file);
+        alert(`Không thể thêm ảnh ${file.name}: ${err.message}`);
       }
     }
   };

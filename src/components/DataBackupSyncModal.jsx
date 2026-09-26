@@ -16,6 +16,7 @@ import { getOfflineQueue, syncOfflineQueue } from '../lib/offlineSync.js';
 import { createSecureBackup, parseAndValidateBackup, MAX_BACKUP_BYTES } from '../utils/secureBackup.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { ROLES } from '../security/rbac.js';
+import { PERMISSION_PURPOSES, writeSensitiveClipboard } from '../security/permissionPolicy.js';
 
 /**
  * DataBackupSyncModal - Export/Import local device data & trigger cloud sync
@@ -85,7 +86,7 @@ export default function DataBackupSyncModal({
     if (!canManageBackups) return alert('Chỉ Admin được phép sao chép toàn bộ dữ liệu.');
     try {
       const dataPkg = await createSecureBackup(getBackupData());
-      await navigator.clipboard.writeText(JSON.stringify(dataPkg));
+      await writeSensitiveClipboard(JSON.stringify(dataPkg), PERMISSION_PURPOSES.BACKUP_CLIPBOARD);
       setCopied(true);
       setTimeout(() => setCopied(false), 2500);
     } catch (error) {

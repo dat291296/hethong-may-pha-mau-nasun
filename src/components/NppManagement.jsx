@@ -143,15 +143,7 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
         }));
       } catch (err) {
         console.error('Error compressing image:', err);
-        // Fallback to reading file directly on error
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          setFormData(prev => ({
-            ...prev,
-            photos: [...(prev.photos || []), reader.result]
-          }));
-        };
-        reader.readAsDataURL(file);
+        alert(`Không thể thêm ảnh ${file.name}: ${err.message}`);
       }
     }
   };
@@ -174,7 +166,7 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
     setIsGpsLoading(true);
     setGpsStatusMsg('Đang lấy vị trí...');
 
-    const res = await getRobustUserLocation({ allowIpFallback: true });
+    const res = await getRobustUserLocation({ allowIpFallback: false });
     setIsGpsLoading(false);
 
     if (res.success && res.lat && res.lng) {

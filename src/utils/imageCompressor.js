@@ -1,12 +1,15 @@
+import { IMAGE_FILE_POLICY, validateSelectedFile } from '../security/permissionPolicy.js';
+
 /**
  * Image compressor utility using canvas
  * Compresses images client-side before storing or uploading
  */
 export function compressImage(file, maxWidth = 1280, maxHeight = 720, quality = 0.7) {
   return new Promise((resolve, reject) => {
-    // Only compress images
-    if (!file.type.startsWith('image/')) {
-      reject(new Error('File is not an image'));
+    try {
+      validateSelectedFile(file, IMAGE_FILE_POLICY);
+    } catch (error) {
+      reject(error);
       return;
     }
 
@@ -30,7 +33,12 @@ export function compressImage(file, maxWidth = 1280, maxHeight = 720, quality = 
           }
         }
 
-        // Draw image on canvas for compression
+        if (!width || !height || width * height > 40_000_000) {
+          reject(new Error('Kích thước ảnh không hợp lệ hoặc quá lớn.'));
+          return;
+        }
+
+        // Re-encoding through canvas strips embedded metadata such as GPS/EXIF.
         const canvas = document.createElement('canvas');
         canvas.width = width;
         canvas.height = height;

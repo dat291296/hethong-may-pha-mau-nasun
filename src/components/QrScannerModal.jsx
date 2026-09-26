@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Html5QrcodeScanner, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { Camera, X } from 'lucide-react';
 
@@ -11,8 +11,10 @@ import { Camera, X } from 'lucide-react';
  */
 export default function QrScannerModal({ onScanSuccess, onClose }) {
   const scannerRef = useRef(null);
+  const [cameraStarted, setCameraStarted] = useState(false);
 
   useEffect(() => {
+    if (!cameraStarted) return undefined;
     const scannerId = 'html5qr-code-full-region';
 
     // Configure formats to support standard barcodes (Code 128, Code 39, EAN) & QR codes
@@ -31,7 +33,7 @@ export default function QrScannerModal({ onScanSuccess, onClose }) {
         qrbox: { width: 250, height: 180 },
         aspectRatio: 1.0,
         formatsToSupport: formatsToSupport,
-        rememberLastUsedCamera: true,
+        rememberLastUsedCamera: false,
         showTorchButtonIfSupported: true
       },
       /* verbose= */ false
@@ -74,7 +76,7 @@ export default function QrScannerModal({ onScanSuccess, onClose }) {
         scannerRef.current.clear().catch(() => {});
       }
     };
-  }, [onScanSuccess, onClose]);
+  }, [cameraStarted, onScanSuccess, onClose]);
 
   return (
     <div className="modal-overlay" style={{ zIndex: 9999 }}>
@@ -117,20 +119,26 @@ export default function QrScannerModal({ onScanSuccess, onClose }) {
         </div>
 
         <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '14px', textAlign: 'center' }}>
-          Hướng camera về phía tem mã vạch hoặc mã QR dán trên thân máy chiết, máy lắc, máy in hoặc máy tính.
+          Camera chỉ dùng để đọc mã thiết bị, không ghi hình và sẽ tắt khi đóng cửa sổ này.
         </div>
 
         {/* Scanner Container */}
-        <div 
-          id="html5qr-code-full-region" 
-          style={{ 
-            width: '100%', 
-            borderRadius: '12px', 
-            overflow: 'hidden',
-            border: '1px solid rgba(6, 182, 212, 0.3)',
-            background: '#000'
-          }}
-        />
+        {cameraStarted ? (
+          <div
+            id="html5qr-code-full-region"
+            style={{
+              width: '100%',
+              borderRadius: '12px',
+              overflow: 'hidden',
+              border: '1px solid rgba(6, 182, 212, 0.3)',
+              background: '#000'
+            }}
+          />
+        ) : (
+          <button type="button" className="btn btn-primary" style={{ width: '100%' }} onClick={() => setCameraStarted(true)}>
+            <Camera size={18} /> Cho phép mở camera
+          </button>
+        )}
 
         <div style={{ marginTop: '16px', textAlign: 'center' }}>
           <button 

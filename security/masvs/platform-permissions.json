@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "defaultPolicy": "deny-unless-user-initiated",
+  "permissions": [
+    {
+      "name": "camera",
+      "purpose": "Scan equipment QR and barcode labels",
+      "activation": "Explicit button inside scanner modal",
+      "retention": "No video or camera frames are stored",
+      "revocation": "Camera stream stops when scanner modal closes"
+    },
+    {
+      "name": "geolocation",
+      "purpose": "Capture distributor coordinates or verify field check-in",
+      "activation": "Explicit location or check-in action",
+      "retention": "Only approved business coordinates or check-in distance are stored",
+      "fallback": "IP-based location requires a separate explicit action"
+    },
+    {
+      "name": "files",
+      "purpose": "Import approved spreadsheets, backups, and work photos",
+      "activation": "User file picker or drag and drop",
+      "controls": "Extension, MIME, size, structure, and resource limits"
+    },
+    {
+      "name": "clipboard-write",
+      "purpose": "Admin-only copy of an integrity-protected backup",
+      "activation": "Explicit copy button",
+      "controls": "Secure context, size limit, no clipboard read"
+    }
+  ],
+  "nativeRequirements": {
+    "android": ["Declare only CAMERA and location permissions that remain in use", "Show purpose before the runtime permission prompt", "Do not request background location"],
+    "ios": ["Provide specific usage descriptions", "Request When In Use location only", "Stop capture sessions when leaving the scanner"],
+    "shared": ["No permission request at application startup", "Re-request only after a user action", "Keep platform permissions revocable"]
+  }
+}

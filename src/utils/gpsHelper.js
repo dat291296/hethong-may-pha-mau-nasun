@@ -1,3 +1,6 @@
+import { secureFetch } from '../security/networkPolicy.js';
+import { PERMISSION_PURPOSES, requestGeolocationPosition } from '../security/permissionPolicy.js';
+
 /**
  * gpsHelper.js - Robust Geolocation Utility
  * Handles GPS retrieval with 3-stage fallback:
@@ -23,7 +26,11 @@
  * }>}
  */
 export async function getRobustUserLocation(options = {}) {
-  const { timeoutMs = 6000, allowIpFallback = true } = options;
+  const {
+    timeoutMs = 6000,
+    allowIpFallback = false,
+    purpose = PERMISSION_PURPOSES.NPP_LOCATION,
+  } = options;
 
   const isSecure = window.isSecureContext || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 
@@ -56,7 +63,7 @@ export async function getRobustUserLocation(options = {}) {
 
   // Stage 1: Try High Accuracy GPS
   try {
-    const highResult = await requestPosition({ enableHighAccuracy: true, timeout: timeoutMs, maximumAge: 30000 });
+    const highResult = await requestGeolocationPosition(purpose, { enableHighAccuracy: true, timeout: timeoutMs, maximumAge: 30000 });
     const lat = parseFloat(highResult.coords.latitude.toFixed(6));
     const lng = parseFloat(highResult.coords.longitude.toFixed(6));
     return {
@@ -98,7 +105,7 @@ export async function getRobustUserLocation(options = {}) {
 
     // Stage 2: Try Low Accuracy GPS (cellular/WiFi)
     try {
-      const lowResult = await requestPosition({ enableHighAccuracy: false, timeout: 10000, maximumAge: 120000 });
+      const lowResult = await requestGeolocationPosition(purpose, { enableHighAccuracy: false, timeout: 10000, maximumAge: 120000 });
       const lat = parseFloat(lowResult.coords.latitude.toFixed(6));
       const lng = parseFloat(lowResult.coords.longitude.toFixed(6));
       return {
@@ -131,15 +138,6 @@ export async function getRobustUserLocation(options = {}) {
       };
     }
   }
-}
-
-/**
- * Wrap navigator.geolocation.getCurrentPosition in a Promise
- */
-function requestPosition(positionOptions) {
-  return new Promise((resolve, reject) => {
-    navigator.geolocation.getCurrentPosition(resolve, reject, positionOptions);
-  });
 }
 
 /**
@@ -214,4 +212,3 @@ export async function fetchIpLocation(reason = '') {
     isNonSecureContext: false
   };
 }
-import { secureFetch } from '../security/networkPolicy.js';

@@ -225,14 +225,7 @@ export default function AssetManagement({
         }));
       } catch (err) {
         console.error('Lỗi nén ảnh:', err);
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          setEditSetFormData(prev => ({
-            ...prev,
-            installationPhotos: [...(prev.installationPhotos || []), reader.result]
-          }));
-        };
-        reader.readAsDataURL(file);
+        alert(`Không thể thêm ảnh ${file.name}: ${err.message}`);
       }
     }
   };
@@ -256,14 +249,7 @@ export default function AssetManagement({
         }));
       } catch (err) {
         console.error('Lỗi nén ảnh:', err);
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          setNewSetData(prev => ({
-            ...prev,
-            installationPhotos: [...(prev.installationPhotos || []), reader.result]
-          }));
-        };
-        reader.readAsDataURL(file);
+        alert(`Không thể thêm ảnh ${file.name}: ${err.message}`);
       }
     }
   };
