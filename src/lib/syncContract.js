@@ -26,7 +26,9 @@ export function resolveSyncEntity(action, payload = {}, category = null) {
 
 export function buildSyncEnvelope(item, deviceId = null) {
   if (!item?.operationId || !item?.action) throw new Error('INVALID_SYNC_ITEM');
-  const { entityType, entityId } = resolveSyncEntity(item.action, item.payload, item.category);
+  const resolved = resolveSyncEntity(item.action, item.payload, item.category);
+  const entityType = item.entityType || resolved.entityType;
+  const entityId = item.entityId || resolved.entityId;
   return {
     contractVersion: SYNC_CONTRACT_VERSION,
     operationId: String(item.operationId),

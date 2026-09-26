@@ -1,6 +1,8 @@
 import { supabase, isSupabaseConfigured } from './supabase';
 import { addToQueue, getQueue, removeFromQueue, clearQueue, setCache, getCache } from './offlineDb';
 import { createOperationId, migrateQueueItem, classifySyncError, getRetryDelay } from './syncQueue';
+import { buildSyncEnvelope } from './syncContract.js';
+import { getTrustedDeviceId } from '../security/trustedDevice.js';
 
 let activeSyncPromise = null;
 const deviceIdPools = new Map();
@@ -596,6 +598,12 @@ async function processOfflineQueue(onStatusChange) {
       await saveQueueState(item, 'syncing');
       if (import.meta.env.DEV) console.debug(`[OfflineSync] Syncing action ${item.action}...`);
       let error = null;
+      const atomicResult = await executeAtomicSyncMutation(item);
+
+      if (atomicResult.handled) {
+        error = atomicResult.error;
+        if (atomicResult.deferredLink) deferredDeviceLinks.push({ queueItem: item, ...atomicResult.deferredLink });
+      } else {
 
       switch (item.action) {
         case 'ADD_NPP':
@@ -729,6 +737,7 @@ async function processOfflineQueue(onStatusChange) {
         default:
           throw new Error(`Unknown offline action type: ${item.action}`);
       }
+      }
 
       if (error) {
         throw error;
@@ -755,10 +764,27 @@ async function processOfflineQueue(onStatusChange) {
     let linkError = null;
     try {
       resolvedSetCode = await resolveDeviceLinkTarget(link.table, link.id, link.set_code);
-      linkError = await updateDeviceWithSchemaFallback(link.table, link.id, {
+      const linkPayload = {
+        id: link.id,
         set_code: resolvedSetCode,
         is_assigned: Boolean(resolvedSetCode) && link.is_assigned !== false
-      });
+      };
+      const linkEnvelope = buildSyncEnvelope({
+        operationId: `${link.queueItem.operationId}:link`,
+        action: 'LINK_DEVICE',
+        category: link.table,
+        entityId: link.id,
+        payload: linkPayload,
+        schemaVersion: link.queueItem.schemaVersion,
+        engineVersion: link.queueItem.engineVersion,
+        timestamp: link.queueItem.timestamp
+      }, await getTrustedDeviceId());
+      const { error: atomicLinkError } = await supabase.rpc('execute_sync_operation', { p_envelope: linkEnvelope });
+      const atomicLinkUnavailable = ['42883', 'PGRST202'].includes(String(atomicLinkError?.code || '')) ||
+        /execute_sync_operation.*does not exist|schema cache/i.test(String(atomicLinkError?.message || ''));
+      linkError = atomicLinkUnavailable
+        ? await updateDeviceWithSchemaFallback(link.table, link.id, linkPayload)
+        : atomicLinkError;
     } catch (err) {
       linkError = err;
     }
@@ -797,6 +823,72 @@ async function processOfflineQueue(onStatusChange) {
   if (onStatusChange) onStatusChange('idle', 0);
   window.dispatchEvent(new CustomEvent('nasun-sync-completed', { detail: { synced: successCount } }));
   return true;
+}
+
+const ATOMIC_SYNC_ACTIONS = new Set([
+  'ADD_NPP', 'EDIT_NPP', 'DELETE_NPP',
+  'ADD_DEVICE', 'EDIT_DEVICE', 'DELETE_DEVICE', 'LINK_DEVICE',
+  'ASSEMBLE_SET', 'UPDATE_SYSTEM_SET', 'DELETE_SYSTEM_SET',
+  'ADD_REPAIR', 'EDIT_REPAIR', 'DELETE_REPAIR',
+  'ADD_AUDIT_LOG', 'UPDATE_AUDIT_LOG', 'DELETE_AUDIT_LOG'
+]);
+
+async function executeAtomicSyncMutation(item) {
+  if (!ATOMIC_SYNC_ACTIONS.has(item.action)) return { handled: false, error: null, deferredLink: null };
+
+  const originalPayload = item.payload || {};
+  let payload = originalPayload;
+  let deferredLink = item.pendingLink || null;
+  let entityId = item.entityId || null;
+
+  if (item.action === 'ADD_DEVICE') {
+    payload = normalizeDevicePayload(payload);
+    payload.id = await resolveDeviceId(item.category, payload, item.id);
+    applyRequiredDeviceDefaults(item.category, payload);
+    if (payload.set_code && payload.is_assigned !== false) {
+      deferredLink = { table: item.category, id: payload.id, set_code: payload.set_code, is_assigned: payload.is_assigned };
+      item.pendingLink = deferredLink;
+      payload.set_code = null;
+      payload.is_assigned = false;
+    }
+  } else if (item.action === 'EDIT_DEVICE' || item.action === 'LINK_DEVICE') {
+    payload = normalizeDevicePayload(payload);
+    const id = payload.id;
+    if (payload.set_code && payload.is_assigned !== false) {
+      deferredLink = { table: item.category, id, set_code: payload.set_code, is_assigned: payload.is_assigned };
+      item.pendingLink = deferredLink;
+      payload.set_code = null;
+      payload.is_assigned = false;
+    }
+  } else if (item.action === 'ASSEMBLE_SET') {
+    payload = normalizeSystemSetPayload(payload, true);
+  } else if (item.action === 'UPDATE_SYSTEM_SET') {
+    const updatePayload = payload.data || payload.dbPayload || payload.updates || payload.update || payload;
+    entityId = await resolveSystemSetTarget(payload, updatePayload);
+    if (!entityId) throw new Error('Invalid UPDATE_SYSTEM_SET queue payload');
+    payload = normalizeSystemSetPayload(updatePayload, false);
+    if (payload.set_code === entityId) delete payload.set_code;
+  } else if (item.action === 'ADD_REPAIR') {
+    payload = normalizeRepairPayload(payload, true, item.id);
+  } else if (item.action === 'EDIT_REPAIR') {
+    payload = normalizeRepairPayload(payload, false);
+  } else if (item.action === 'ADD_AUDIT_LOG') {
+    payload = normalizeAuditPayload(payload, item.id);
+  }
+
+  item.payload = payload;
+  const resolvedId = entityId || payload.id || payload.set_code || payload.setCode || item.entityId;
+  const envelope = buildSyncEnvelope({ ...item, entityId: resolvedId }, await getTrustedDeviceId());
+  await addToQueue(item);
+  const { error } = await supabase.rpc('execute_sync_operation', { p_envelope: envelope });
+  const unavailable = ['42883', 'PGRST202'].includes(String(error?.code || '')) ||
+    /execute_sync_operation.*does not exist|schema cache/i.test(String(error?.message || ''));
+  if (unavailable) {
+    item.payload = originalPayload;
+    await addToQueue(item);
+    return { handled: false, error: null, deferredLink: null };
+  }
+  return { handled: true, error, deferredLink };
 }
 
 export function syncOfflineQueue(onStatusChange) {

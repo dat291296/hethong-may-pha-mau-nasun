@@ -25,6 +25,99 @@ CREATE TABLE IF NOT EXISTS public.sync_operations (
   applied_at TIMESTAMPTZ
 );
 
+-- Upgrade the legacy workflow ledger in place when it already exists.
+ALTER TABLE public.sync_operations ADD COLUMN IF NOT EXISTS device_id_hash TEXT;
+ALTER TABLE public.sync_operations ADD COLUMN IF NOT EXISTS contract_version INTEGER;
+ALTER TABLE public.sync_operations ADD COLUMN IF NOT EXISTS schema_version INTEGER;
+ALTER TABLE public.sync_operations ADD COLUMN IF NOT EXISTS engine_version INTEGER;
+ALTER TABLE public.sync_operations ADD COLUMN IF NOT EXISTS action TEXT;
+ALTER TABLE public.sync_operations ADD COLUMN IF NOT EXISTS entity_type TEXT;
+ALTER TABLE public.sync_operations ADD COLUMN IF NOT EXISTS base_version BIGINT;
+ALTER TABLE public.sync_operations ADD COLUMN IF NOT EXISTS payload_hash TEXT;
+ALTER TABLE public.sync_operations ADD COLUMN IF NOT EXISTS status TEXT;
+ALTER TABLE public.sync_operations ADD COLUMN IF NOT EXISTS error_code TEXT;
+ALTER TABLE public.sync_operations ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;
+ALTER TABLE public.sync_operations ADD COLUMN IF NOT EXISTS applied_at TIMESTAMPTZ;
+ALTER TABLE public.sync_operations ADD COLUMN IF NOT EXISTS workflow TEXT;
+ALTER TABLE public.sync_operations ALTER COLUMN entity_id DROP NOT NULL;
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'sync_operations' AND column_name = 'workflow'
+  ) THEN
+    EXECUTE 'ALTER TABLE public.sync_operations ALTER COLUMN workflow DROP NOT NULL';
+  END IF;
+END;
+$$;
+
+UPDATE public.sync_operations
+SET contract_version = COALESCE(contract_version, 1),
+    schema_version = COALESCE(schema_version, 1),
+    engine_version = COALESCE(engine_version, 1),
+    action = COALESCE(action, 'LEGACY_OPERATION'),
+    entity_type = COALESCE(entity_type, 'system_sets'),
+    payload_hash = COALESCE(payload_hash, encode(digest(COALESCE(result, '{}'::JSONB)::TEXT, 'sha256'), 'hex')),
+    status = COALESCE(status, 'applied'),
+    updated_at = COALESCE(updated_at, created_at, NOW()),
+    applied_at = COALESCE(applied_at, created_at)
+WHERE contract_version IS NULL OR schema_version IS NULL OR engine_version IS NULL
+   OR action IS NULL OR entity_type IS NULL OR payload_hash IS NULL
+   OR status IS NULL OR updated_at IS NULL;
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'sync_operations' AND column_name = 'workflow'
+  ) THEN
+    EXECUTE 'UPDATE public.sync_operations SET action = workflow WHERE action = ''LEGACY_OPERATION'' AND workflow IS NOT NULL';
+  END IF;
+END;
+$$;
+
+ALTER TABLE public.sync_operations ALTER COLUMN contract_version SET NOT NULL;
+ALTER TABLE public.sync_operations ALTER COLUMN contract_version SET DEFAULT 1;
+ALTER TABLE public.sync_operations ALTER COLUMN schema_version SET NOT NULL;
+ALTER TABLE public.sync_operations ALTER COLUMN schema_version SET DEFAULT 1;
+ALTER TABLE public.sync_operations ALTER COLUMN engine_version SET NOT NULL;
+ALTER TABLE public.sync_operations ALTER COLUMN engine_version SET DEFAULT 1;
+ALTER TABLE public.sync_operations ALTER COLUMN action SET NOT NULL;
+ALTER TABLE public.sync_operations ALTER COLUMN action SET DEFAULT 'LEGACY_OPERATION';
+ALTER TABLE public.sync_operations ALTER COLUMN entity_type SET NOT NULL;
+ALTER TABLE public.sync_operations ALTER COLUMN entity_type SET DEFAULT 'unknown';
+ALTER TABLE public.sync_operations ALTER COLUMN payload_hash SET NOT NULL;
+ALTER TABLE public.sync_operations ALTER COLUMN payload_hash SET DEFAULT 'legacy';
+ALTER TABLE public.sync_operations ALTER COLUMN status SET NOT NULL;
+ALTER TABLE public.sync_operations ALTER COLUMN status SET DEFAULT 'registered';
+ALTER TABLE public.sync_operations ALTER COLUMN updated_at SET NOT NULL;
+ALTER TABLE public.sync_operations ALTER COLUMN updated_at SET DEFAULT NOW();
+
+CREATE OR REPLACE FUNCTION public.normalize_legacy_sync_operation()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  IF NEW.workflow IS NOT NULL THEN
+    NEW.action := COALESCE(NULLIF(NEW.action, 'LEGACY_OPERATION'), NEW.workflow);
+    NEW.entity_type := COALESCE(NULLIF(NEW.entity_type, 'unknown'), 'system_sets');
+    NEW.payload_hash := CASE WHEN NEW.payload_hash = 'legacy'
+      THEN encode(digest(COALESCE(NEW.result, '{}'::JSONB)::TEXT, 'sha256'), 'hex')
+      ELSE NEW.payload_hash END;
+    NEW.status := CASE WHEN NEW.result IS NOT NULL THEN 'applied' ELSE NEW.status END;
+    NEW.applied_at := CASE WHEN NEW.result IS NOT NULL THEN COALESCE(NEW.applied_at, NOW()) ELSE NEW.applied_at END;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_normalize_legacy_sync_operation ON public.sync_operations;
+CREATE TRIGGER trg_normalize_legacy_sync_operation
+BEFORE INSERT OR UPDATE ON public.sync_operations
+FOR EACH ROW EXECUTE FUNCTION public.normalize_legacy_sync_operation();
+
 CREATE INDEX IF NOT EXISTS idx_sync_operations_user_created
   ON public.sync_operations (user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_sync_operations_status_updated
@@ -133,6 +226,7 @@ DECLARE
   payload JSONB := COALESCE(p_envelope->'payload', '{}'::JSONB);
   new_payload_hash TEXT;
   existing_hash TEXT;
+  existing_user_id UUID;
   context_data JSONB;
 BEGIN
   IF caller_id IS NULL THEN RAISE EXCEPTION 'AUTH_REQUIRED' USING ERRCODE = '28000'; END IF;
@@ -148,8 +242,10 @@ BEGIN
   END IF;
 
   new_payload_hash := encode(digest(payload::TEXT, 'sha256'), 'hex');
-  SELECT payload_hash INTO existing_hash FROM public.sync_operations WHERE operation_id = operation_key;
+  SELECT payload_hash, user_id INTO existing_hash, existing_user_id
+  FROM public.sync_operations WHERE operation_id = operation_key;
   IF existing_hash IS NOT NULL THEN
+    IF existing_user_id IS DISTINCT FROM caller_id THEN RAISE EXCEPTION 'OPERATION_ID_ALREADY_OWNED'; END IF;
     IF existing_hash <> new_payload_hash THEN RAISE EXCEPTION 'OPERATION_ID_REUSE_MISMATCH'; END IF;
     RETURN jsonb_build_object('accepted', TRUE, 'idempotent', TRUE, 'operationId', operation_key);
   END IF;
