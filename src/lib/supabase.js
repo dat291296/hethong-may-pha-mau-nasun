@@ -5,20 +5,27 @@
  */
 import { createClient } from '@supabase/supabase-js';
 import { secureAuthStorage } from '../security/authRuntime.js';
+import { createSupabaseFetch, validateSupabaseEndpoint } from '../security/networkPolicy.js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-// Return null client when env vars not set (local mock-data mode)
+let validatedSupabaseUrl = null;
+try {
+  if (supabaseUrl) validatedSupabaseUrl = validateSupabaseEndpoint(supabaseUrl);
+} catch (error) {
+  console.error('[Security] Supabase endpoint rejected:', error.message);
+}
+
+// Return null client when env vars are missing or fail the network policy.
 export const isSupabaseConfigured =
   Boolean(
-    supabaseUrl && supabaseAnonKey &&
-    supabaseUrl.includes('.supabase.co') &&
+    validatedSupabaseUrl && supabaseAnonKey &&
     (supabaseAnonKey.startsWith('eyJ') || supabaseAnonKey.startsWith('sb_publishable_'))
   );
 
 export const supabase = isSupabaseConfigured
-  ? createClient(supabaseUrl, supabaseAnonKey, {
+  ? createClient(validatedSupabaseUrl, supabaseAnonKey, {
       auth: {
         persistSession: true,
         autoRefreshToken: true,
@@ -28,6 +35,7 @@ export const supabase = isSupabaseConfigured
         storageKey: 'paint-tinting-auth',
       },
       global: {
+        fetch: createSupabaseFetch(validatedSupabaseUrl),
         headers: {
           'x-application-name': 'paint-tinting-manager',
         },

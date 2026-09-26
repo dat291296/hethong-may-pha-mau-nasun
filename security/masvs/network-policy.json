@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "clearTextTraffic": false,
+  "minimumTlsVersion": "1.2",
+  "redirectPolicy": "deny",
+  "certificateValidation": "platform-default",
+  "certificatePinning": "not-required-for-MAS-L1",
+  "trustedServices": [
+    { "purpose": "application-api-auth-realtime", "pattern": "https://<project>.supabase.co", "dataClass": "restricted" },
+    { "purpose": "ip-location-primary", "origin": "https://api.bigdatacloud.net", "path": "/data/reverse-geocode-client", "dataClass": "sensitive" },
+    { "purpose": "ip-location-backup", "origin": "https://ipapi.co", "path": "/json/", "dataClass": "sensitive" }
+  ],
+  "nativeRequirements": {
+    "android": ["android:usesCleartextTraffic=false", "Network Security Config without user-added CA trust in release"],
+    "ios": ["NSAppTransportSecurity does not allow arbitrary loads", "System trust evaluation remains enabled"],
+    "shared": ["Use the same endpoint allowlist", "Reject invalid certificates", "Do not disable hostname verification"]
+  }
+}

@@ -149,9 +149,11 @@ export async function fetchIpLocation(reason = '') {
   try {
     console.log('[GPS] Attempting IP Geolocation fallback...');
     // Primary IP Geolocation API (free, CORS enabled, no key required)
-    const resp = await fetch('https://api.bigdatacloud.net/data/reverse-geocode-client', {
-      signal: AbortSignal.timeout(5000)
-    });
+    const resp = await secureFetch(
+      'https://api.bigdatacloud.net/data/reverse-geocode-client',
+      {},
+      { allowExternal: true, timeoutMs: 5000 },
+    );
     if (resp.ok) {
       const data = await resp.json();
       if (data.latitude && data.longitude) {
@@ -175,7 +177,11 @@ export async function fetchIpLocation(reason = '') {
 
   // Backup IP Geolocation API
   try {
-    const resp2 = await fetch('https://ipapi.co/json/', { signal: AbortSignal.timeout(5000) });
+    const resp2 = await secureFetch(
+      'https://ipapi.co/json/',
+      {},
+      { allowExternal: true, timeoutMs: 5000 },
+    );
     if (resp2.ok) {
       const data2 = await resp2.json();
       if (data2.latitude && data2.longitude) {
@@ -208,3 +214,4 @@ export async function fetchIpLocation(reason = '') {
     isNonSecureContext: false
   };
 }
+import { secureFetch } from '../security/networkPolicy.js';
