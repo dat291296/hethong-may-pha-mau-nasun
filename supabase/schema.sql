@@ -405,39 +405,10 @@ CREATE INDEX IF NOT EXISTS idx_tint_set ON tinting_logs (set_code);
 CREATE INDEX IF NOT EXISTS idx_tint_time ON tinting_logs (timestamp DESC);
 
 -- ── 12. Formula Versions ─────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS formula_versions (
-  version_id           TEXT PRIMARY KEY,
-  version_group        TEXT NOT NULL,
-  title                TEXT NOT NULL,
-  notes                TEXT DEFAULT '',
-  release_date         DATE NOT NULL DEFAULT CURRENT_DATE,
-  author               TEXT DEFAULT 'Nasun Lab',
-  software_type        TEXT NOT NULL CHECK (software_type IN ('ColorExpert 3', 'ColorExpert 2', 'CorobTINT')),
-  filename             TEXT NOT NULL,
-  download_url         TEXT NOT NULL,
-  created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
+-- Retired by ENT-3. Existing rows remain in upgraded environments.
 
 -- ── 13. Agent Telemetry ──────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS agent_telemetry (
-  id                   BIGSERIAL PRIMARY KEY,
-  set_code             TEXT REFERENCES system_sets(set_code) ON DELETE CASCADE,
-  machine_guid         TEXT,
-  os_version           TEXT,
-  pc_name              TEXT,
-  username             TEXT,
-  free_space_gb        NUMERIC,
-  total_space_gb       NUMERIC,
-  created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
+-- Retired by ENT-3. Existing rows remain in upgraded environments.
 
 -- ── 14. Diagnostic Commands ──────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS diagnostic_commands (
-  id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  set_code             TEXT REFERENCES system_sets(set_code) ON DELETE CASCADE,
-  command_text         TEXT NOT NULL,
-  status               TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'RUNNING', 'COMPLETED', 'FAILED')),
-  response_output      TEXT,
-  created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  executed_at          TIMESTAMPTZ
-);
+-- Retired by ENT-3. Existing rows remain in upgraded environments.

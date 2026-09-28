@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build && node scripts/generate-sbom.mjs && node scripts/generate-service-worker.mjs && node scripts/verify-production-build.mjs",
     "lint": "oxlint",
-    "test:enterprise": "node --test tests/enterpriseModule0.test.mjs tests/enterpriseModule1.test.mjs tests/enterpriseModule2.test.mjs",
+    "test:enterprise": "node --test tests/enterpriseModule0.test.mjs tests/enterpriseModule1.test.mjs tests/enterpriseModule2.test.mjs tests/enterpriseModule3.test.mjs",
     "sbom": "node scripts/generate-sbom.mjs dist/sbom.cdx.json",
     "test:sync": "node --test tests/syncQueue.test.mjs",
     "test:workflow": "node --test tests/workflowMigration.test.mjs",

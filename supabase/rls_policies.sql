@@ -129,23 +129,14 @@ CREATE POLICY "lock_delete_admin" ON locked_months FOR DELETE USING (get_my_role
 
 -- Enable RLS on new tables
 ALTER TABLE tinting_logs        ENABLE ROW LEVEL SECURITY;
-ALTER TABLE formula_versions    ENABLE ROW LEVEL SECURITY;
-ALTER TABLE agent_telemetry     ENABLE ROW LEVEL SECURITY;
-ALTER TABLE diagnostic_commands ENABLE ROW LEVEL SECURITY;
 
 -- 1. Tinting Logs
 CREATE POLICY "tinting_logs_select_staff" ON tinting_logs FOR SELECT TO authenticated USING (get_my_role() IN ('admin', 'qc'));
 CREATE POLICY "tinting_logs_insert_staff" ON tinting_logs FOR INSERT TO authenticated WITH CHECK (get_my_role() IN ('admin', 'qc'));
 
 -- 2. Formula Versions
-CREATE POLICY "formula_versions_auth_read" ON formula_versions FOR SELECT TO authenticated USING (true);
-CREATE POLICY "formula_versions_staff_all" ON formula_versions FOR ALL TO authenticated USING (get_my_role() IN ('admin', 'qc')) WITH CHECK (get_my_role() IN ('admin', 'qc'));
 
 -- 3. Agent Telemetry
-CREATE POLICY "agent_telemetry_staff_all" ON agent_telemetry FOR ALL TO authenticated USING (get_my_role() IN ('admin', 'qc')) WITH CHECK (get_my_role() IN ('admin', 'qc'));
 
 -- 4. Diagnostic Commands
-CREATE POLICY "diagnostic_commands_select_staff" ON diagnostic_commands FOR SELECT TO authenticated USING (get_my_role() IN ('admin', 'qc'));
-CREATE POLICY "diagnostic_commands_insert_admin" ON diagnostic_commands FOR INSERT TO authenticated WITH CHECK (get_my_role() = 'admin');
-CREATE POLICY "diagnostic_commands_update_admin" ON diagnostic_commands FOR UPDATE TO authenticated USING (get_my_role() = 'admin') WITH CHECK (get_my_role() = 'admin');
 
