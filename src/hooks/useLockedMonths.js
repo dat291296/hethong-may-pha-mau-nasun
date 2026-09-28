@@ -49,6 +49,11 @@ export function useLockedMonths() {
     fetchLockedMonths();
   }, [fetchLockedMonths]);
 
+  useEffect(() => {
+    window.addEventListener('nasun-locked-months-changed', fetchLockedMonths);
+    return () => window.removeEventListener('nasun-locked-months-changed', fetchLockedMonths);
+  }, [fetchLockedMonths]);
+
   // Real-time updates subscription
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) return;

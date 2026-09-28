@@ -9,6 +9,7 @@ import { useAuth } from './context/AuthContext';
 import { supabase, isSupabaseConfigured } from './lib/supabase';
 import { cacheOfflineData } from './lib/offlineSync.js';
 import { executeWorkflowTransaction } from './lib/workflowTransactions.js';
+import { acknowledgeChangeFeedCursor, startChangeFeed } from './lib/changeFeed.js';
 
 import {
   INITIAL_FORMULA_VERSIONS,
@@ -125,6 +126,32 @@ export default function App() {
   const { lockedMonths, lockMonth, unlockMonth, isDateLocked, loading: lockLoading, error: lockError } = useLockedMonths();
   const { tintingLogs, setTintingLogs, importLogs, refetch: refetchTintingLogs } = useTintingLogs();
   const { formulaVersions, refetch: refetchFormulaVersions } = useFormulaVersions();
+
+  useEffect(() => {
+    if (!user?.id || !isSupabaseConfigured) return undefined;
+    return startChangeFeed();
+  }, [user?.id]);
+
+  useEffect(() => {
+    const handleCloudChanges = async (event) => {
+      const detail = event.detail || {};
+      const changedTables = new Set((detail.events || []).map(item => item.table_name));
+      const refreshTasks = [];
+      if (changedTables.has('distributors')) refreshTasks.push(refetchNpps());
+      if (['system_sets', 'dispensers', 'mixers', 'computers', 'printers'].some(table => changedTables.has(table))) {
+        refreshTasks.push(refetchAssets());
+      }
+      if (changedTables.has('repair_tickets')) refreshTasks.push(refetchRepairs());
+      if (changedTables.has('audit_logs')) refreshTasks.push(refetchAuditLogs());
+      if (changedTables.has('tinting_logs')) refreshTasks.push(refetchTintingLogs());
+      if (changedTables.has('formula_versions')) refreshTasks.push(refetchFormulaVersions());
+      if (changedTables.has('locked_months')) window.dispatchEvent(new Event('nasun-locked-months-changed'));
+      await Promise.allSettled(refreshTasks);
+      await acknowledgeChangeFeedCursor(detail.nextCursor, detail.hasMore);
+    };
+    window.addEventListener('nasun-cloud-changes', handleCloudChanges);
+    return () => window.removeEventListener('nasun-cloud-changes', handleCloudChanges);
+  }, [refetchNpps, refetchAssets, refetchRepairs, refetchAuditLogs, refetchTintingLogs, refetchFormulaVersions]);
 
   useEffect(() => {
     let refreshTimer = null;
