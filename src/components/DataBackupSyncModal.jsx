@@ -13,6 +13,7 @@ import {
   Check
 } from 'lucide-react';
 import { getOfflineQueue, syncOfflineQueue } from '../lib/offlineSync.js';
+import { getSyncHealthSnapshot } from '../lib/syncHealth.js';
 import { createSecureBackup, parseAndValidateBackup, MAX_BACKUP_BYTES } from '../utils/secureBackup.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { ROLES } from '../security/rbac.js';
@@ -43,11 +44,13 @@ export default function DataBackupSyncModal({
   const [syncMsg, setSyncMsg] = useState('');
   const [copied, setCopied] = useState(false);
   const [queueCount, setQueueCount] = useState(0);
+  const [syncHealth, setSyncHealth] = useState(null);
 
   // Check offline queue count on mount/tab change
   React.useEffect(() => {
     if (isOpen) {
       getOfflineQueue().then(q => setQueueCount(q.length));
+      getSyncHealthSnapshot().then(setSyncHealth);
       if (!canManageBackups) setActiveTab('sync');
     }
   }, [isOpen, activeTab, canManageBackups]);
@@ -162,6 +165,8 @@ export default function DataBackupSyncModal({
     } catch (err) {
       setSyncStatus('error');
       setSyncMsg(`Lỗi kết nối đồng bộ: ${err.message}`);
+    } finally {
+      setSyncHealth(await getSyncHealthSnapshot());
     }
   };
 
@@ -231,6 +236,15 @@ export default function DataBackupSyncModal({
                 Xuất toàn bộ bản ghi hiện có trên điện thoại ra tệp JSON hoặc copy chuỗi dữ liệu để nạp vào tài khoản Admin trên Web máy tính.
               </span>
             </div>
+
+            {syncHealth && (
+              <div className="card" style={{ padding: '0.85rem', marginBottom: '1rem', fontSize: '0.82rem' }}>
+                <div><strong>Sync Engine:</strong> v{syncHealth.engineVersion} · {syncHealth.online ? 'Online' : 'Offline'}</div>
+                <div><strong>Hàng chờ:</strong> {syncHealth.queueTotal} · cần duyệt {syncHealth.counts.needs_review || 0} · dừng retry {syncHealth.counts.dead_letter || 0}</div>
+                <div><strong>Realtime:</strong> {syncHealth.transport.status}{syncHealth.transport.error ? ` · ${syncHealth.transport.error}` : ''}</div>
+                {syncHealth.server && <div><strong>Cloud 24h:</strong> thành công {syncHealth.server.applied24h || 0} · lỗi {syncHealth.server.failed24h || 0}</div>}
+              </div>
+            )}
 
             <div style={{ background: 'var(--bg-secondary)', padding: '1rem', borderRadius: '8px', marginBottom: '1rem' }}>
               <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.9rem' }}>📊 Thống kê dữ liệu hiện tại trên thiết bị:</h4>

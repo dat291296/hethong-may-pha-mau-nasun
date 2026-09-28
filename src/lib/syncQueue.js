@@ -1,8 +1,9 @@
 import { resolveSyncEntity, SYNC_CONTRACT_VERSION } from './syncContract.js';
 
 export const QUEUE_SCHEMA_VERSION = 3;
-export const SYNC_ENGINE_VERSION = 1;
+export const SYNC_ENGINE_VERSION = 2;
 export const MAX_RETRY_DELAY_MS = 5 * 60 * 1000;
+export const MAX_SYNC_ATTEMPTS = 12;
 
 export function createOperationId() {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
@@ -35,7 +36,7 @@ export function classifySyncError(error) {
   const code = String(error?.code || '');
   const message = String(error?.message || error || '').toLowerCase();
   const needsReviewCodes = new Set(['23502', '23503', '23505', '23514', '22P02', 'PGRST204']);
-  if (needsReviewCodes.has(code) || /schema cache|constraint|invalid input syntax|duplicate key/.test(message)) {
+  if (needsReviewCodes.has(code) || /schema cache|constraint|invalid input syntax|duplicate key|sync_conflict/.test(message)) {
     return 'needs_review';
   }
   return 'retry_wait';
@@ -43,4 +44,17 @@ export function classifySyncError(error) {
 
 export function getRetryDelay(attempts) {
   return Math.min(MAX_RETRY_DELAY_MS, 2000 * (2 ** Math.min(Number(attempts || 0), 8)));
+}
+
+export function resolveFailureState(item, error, now = Date.now()) {
+  const attempts = Number(item?.attempts || 0) + 1;
+  const classified = classifySyncError(error);
+  const status = classified === 'retry_wait' && attempts >= MAX_SYNC_ATTEMPTS ? 'dead_letter' : classified;
+  return {
+    status,
+    attempts,
+    lastError: String(error?.message || error || 'UNKNOWN_SYNC_ERROR'),
+    nextAttemptAt: status === 'retry_wait' ? now + getRetryDelay(attempts) : 0,
+    updatedAt: now
+  };
 }

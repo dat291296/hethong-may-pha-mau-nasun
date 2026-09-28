@@ -1,7 +1,7 @@
 import { supabase, isSupabaseConfigured } from './supabase';
 import { addToQueue, getQueue, removeFromQueue, clearQueue, setCache, getCache } from './offlineDb';
-import { createOperationId, migrateQueueItem, classifySyncError, getRetryDelay } from './syncQueue';
-import { buildSyncEnvelope } from './syncContract.js';
+import { createOperationId, migrateQueueItem, classifySyncError, resolveFailureState } from './syncQueue';
+import { buildSyncEnvelope, resolveSyncEntity } from './syncContract.js';
 import { getTrustedDeviceId } from '../security/trustedDevice.js';
 
 let activeSyncPromise = null;
@@ -20,15 +20,11 @@ if (syncChannel) {
 }
 
 async function saveQueueState(item, status, error = null) {
-  const attempts = status === 'syncing' ? Number(item.attempts || 0) : Number(item.attempts || 0) + 1;
-  const retryDelay = getRetryDelay(attempts);
-  Object.assign(item, {
-    status,
-    attempts,
-    lastError: error ? String(error.message || error) : null,
-    nextAttemptAt: status === 'retry_wait' ? Date.now() + retryDelay : 0,
-    updatedAt: Date.now()
-  });
+  if (status === 'syncing') {
+    Object.assign(item, { status, updatedAt: Date.now() });
+  } else {
+    Object.assign(item, resolveFailureState(item, error));
+  }
   await addToQueue(item);
 }
 
@@ -495,12 +491,19 @@ async function insertDeviceWithSchemaFallback(table, payload, queueItemId) {
  */
 export async function enqueueOfflineAction(action, payload, category = null) {
   const now = Date.now();
+  const entity = resolveSyncEntity(action, payload, category);
+  const versionMap = await getCache('sync_entity_versions_v1', {});
+  const versionKey = entity.entityId ? `${entity.entityType}:${entity.entityId}` : null;
+  const baseVersion = versionKey && Number.isInteger(versionMap?.[versionKey]) ? versionMap[versionKey] : null;
   const newItem = migrateQueueItem({
     id: `action-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
     operationId: createOperationId(),
     action,
     payload,
     category,
+    entityType: entity.entityType,
+    entityId: entity.entityId,
+    baseVersion,
     status: 'pending',
     attempts: 0,
     nextAttemptAt: 0,
@@ -577,7 +580,7 @@ async function processOfflineQueue(onStatusChange) {
   const totalQueueCount = queue.length;
   const now = Date.now();
   const reviewItems = queue.filter(item => item.status === 'needs_review');
-  queue = queue.filter(item => item.status !== 'needs_review' && Number(item.nextAttemptAt || 0) <= now);
+  queue = queue.filter(item => !['needs_review', 'dead_letter'].includes(item.status) && Number(item.nextAttemptAt || 0) <= now);
   if (queue.length === 0) {
     if (reviewItems.length > 0 && onStatusChange) {
       const details = reviewItems.slice(0, 3).map(item => `${item.action}: ${item.lastError || 'Cần kiểm tra dữ liệu'}`).join(' | ');
@@ -769,22 +772,34 @@ async function processOfflineQueue(onStatusChange) {
         set_code: resolvedSetCode,
         is_assigned: Boolean(resolvedSetCode) && link.is_assigned !== false
       };
+      const linkVersionMap = await getCache('sync_entity_versions_v1', {});
+      const linkVersionKey = `${link.table}:${link.id}`;
       const linkEnvelope = buildSyncEnvelope({
         operationId: `${link.queueItem.operationId}:link`,
         action: 'LINK_DEVICE',
         category: link.table,
         entityId: link.id,
+        baseVersion: Number.isInteger(linkVersionMap[linkVersionKey]) ? linkVersionMap[linkVersionKey] : null,
         payload: linkPayload,
         schemaVersion: link.queueItem.schemaVersion,
         engineVersion: link.queueItem.engineVersion,
         timestamp: link.queueItem.timestamp
       }, await getTrustedDeviceId());
-      const { error: atomicLinkError } = await supabase.rpc('execute_sync_operation', { p_envelope: linkEnvelope });
+      let { data: atomicLinkData, error: atomicLinkError } = await supabase.rpc('execute_sync_operation_v2', { p_envelope: linkEnvelope });
+      const atomicLinkV2Unavailable = ['42883', 'PGRST202'].includes(String(atomicLinkError?.code || '')) ||
+        /execute_sync_operation_v2.*does not exist|schema cache/i.test(String(atomicLinkError?.message || ''));
+      if (atomicLinkV2Unavailable) {
+        ({ data: atomicLinkData, error: atomicLinkError } = await supabase.rpc('execute_sync_operation', { p_envelope: linkEnvelope }));
+      }
       const atomicLinkUnavailable = ['42883', 'PGRST202'].includes(String(atomicLinkError?.code || '')) ||
         /execute_sync_operation.*does not exist|schema cache/i.test(String(atomicLinkError?.message || ''));
       linkError = atomicLinkUnavailable
         ? await updateDeviceWithSchemaFallback(link.table, link.id, linkPayload)
         : atomicLinkError;
+      if (!linkError && Number.isInteger(atomicLinkData?.currentVersion)) {
+        linkVersionMap[linkVersionKey] = atomicLinkData.currentVersion;
+        await setCache('sync_entity_versions_v1', linkVersionMap);
+      }
     } catch (err) {
       linkError = err;
     }
@@ -880,13 +895,21 @@ async function executeAtomicSyncMutation(item) {
   const resolvedId = entityId || payload.id || payload.set_code || payload.setCode || item.entityId;
   const envelope = buildSyncEnvelope({ ...item, entityId: resolvedId }, await getTrustedDeviceId());
   await addToQueue(item);
-  const { error } = await supabase.rpc('execute_sync_operation', { p_envelope: envelope });
+  let { data, error } = await supabase.rpc('execute_sync_operation_v2', { p_envelope: envelope });
+  const v2Unavailable = ['42883', 'PGRST202'].includes(String(error?.code || '')) ||
+    /execute_sync_operation_v2.*does not exist|schema cache/i.test(String(error?.message || ''));
+  if (v2Unavailable) ({ data, error } = await supabase.rpc('execute_sync_operation', { p_envelope: envelope }));
   const unavailable = ['42883', 'PGRST202'].includes(String(error?.code || '')) ||
     /execute_sync_operation.*does not exist|schema cache/i.test(String(error?.message || ''));
   if (unavailable) {
     item.payload = originalPayload;
     await addToQueue(item);
     return { handled: false, error: null, deferredLink: null };
+  }
+  if (!error && Number.isInteger(data?.currentVersion) && envelope.entityId) {
+    const versionMap = await getCache('sync_entity_versions_v1', {});
+    versionMap[`${envelope.entityType}:${envelope.entityId}`] = data.currentVersion;
+    await setCache('sync_entity_versions_v1', versionMap);
   }
   return { handled: true, error, deferredLink };
 }

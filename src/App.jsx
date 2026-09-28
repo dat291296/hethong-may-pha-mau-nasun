@@ -10,6 +10,7 @@ import { supabase, isSupabaseConfigured } from './lib/supabase';
 import { cacheOfflineData } from './lib/offlineSync.js';
 import { executeWorkflowTransaction } from './lib/workflowTransactions.js';
 import { acknowledgeChangeFeedCursor, startChangeFeed } from './lib/changeFeed.js';
+import { startPrivateRealtimeSync } from './lib/realtimeSync.js';
 
 import {
   INITIAL_FORMULA_VERSIONS,
@@ -131,6 +132,15 @@ export default function App() {
     if (!user?.id || !isSupabaseConfigured) return undefined;
     return startChangeFeed();
   }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id || !isSupabaseConfigured) return undefined;
+    return startPrivateRealtimeSync({
+      id: user.id,
+      role: user.role,
+      managedRegion: user.managedRegion,
+    });
+  }, [user?.id, user?.role, user?.managedRegion]);
 
   useEffect(() => {
     const handleCloudChanges = async (event) => {
