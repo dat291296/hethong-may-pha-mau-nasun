@@ -27,13 +27,15 @@ test('ENT-2 keeps administrator provisioning on the dedicated audited RPC', asyn
   assert.match(sql, /consume_security_rate_limit\('update_user_access'/);
 });
 
-test('ENT-2 enforces regional operational policies and preserves workflow implementation', async () => {
+test('ENT-2 enforces regional policies and safely upgrades an optional workflow function', async () => {
   const sql = await readFile(migrationUrl, 'utf8');
   assert.match(sql, /CREATE OR REPLACE FUNCTION public\.is_operational_staff/);
   assert.match(sql, /CREATE OR REPLACE FUNCTION public\.can_manage_master_data/);
   assert.match(sql, /public\.can_access_region\(region\)/);
   assert.match(sql, /pg_get_functiondef\('public\.execute_equipment_workflow/);
+  assert.match(sql, /to_regprocedure\('public\.execute_equipment_workflow\(text,text,jsonb\)'\) IS NOT NULL/);
   assert.match(sql, /ENT_2_WORKFLOW_ROLE_GATE_NOT_FOUND/);
+  assert.doesNotMatch(sql, /ENT_2_REQUIRES_EQUIPMENT_WORKFLOW/);
 });
 
 test('ENT-2 does not mutate or delete business records', async () => {

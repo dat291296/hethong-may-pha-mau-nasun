@@ -20,9 +20,6 @@ BEGIN
   IF to_regprocedure('public.consume_security_rate_limit(text,integer,integer)') IS NULL THEN
     RAISE EXCEPTION 'ENT_2_REQUIRES_SECURITY_RATE_LIMITS';
   END IF;
-  IF to_regprocedure('public.execute_equipment_workflow(text,text,jsonb)') IS NULL THEN
-    RAISE EXCEPTION 'ENT_2_REQUIRES_EQUIPMENT_WORKFLOW';
-  END IF;
 END;
 $$;
 
@@ -225,17 +222,19 @@ DECLARE
   function_definition TEXT;
   updated_definition TEXT;
 BEGIN
-  SELECT pg_get_functiondef('public.execute_equipment_workflow(text,text,jsonb)'::regprocedure)
-    INTO function_definition;
-  updated_definition := replace(
-    function_definition,
-    'public.get_my_role() NOT IN (''admin'', ''qc'')',
-    'public.get_my_role() NOT IN (''admin'', ''manager'', ''technician'', ''qc'')'
-  );
-  IF updated_definition = function_definition THEN
-    RAISE EXCEPTION 'ENT_2_WORKFLOW_ROLE_GATE_NOT_FOUND';
+  IF to_regprocedure('public.execute_equipment_workflow(text,text,jsonb)') IS NOT NULL THEN
+    SELECT pg_get_functiondef('public.execute_equipment_workflow(text,text,jsonb)'::regprocedure)
+      INTO function_definition;
+    updated_definition := replace(
+      function_definition,
+      'public.get_my_role() NOT IN (''admin'', ''qc'')',
+      'public.get_my_role() NOT IN (''admin'', ''manager'', ''technician'', ''qc'')'
+    );
+    IF updated_definition = function_definition THEN
+      RAISE EXCEPTION 'ENT_2_WORKFLOW_ROLE_GATE_NOT_FOUND';
+    END IF;
+    EXECUTE updated_definition;
   END IF;
-  EXECUTE updated_definition;
 END;
 $$;
 
