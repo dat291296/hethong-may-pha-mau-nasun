@@ -12,26 +12,17 @@ import { executeWorkflowTransaction } from './lib/workflowTransactions.js';
 import { acknowledgeChangeFeedCursor, startChangeFeed } from './lib/changeFeed.js';
 import { startPrivateRealtimeSync } from './lib/realtimeSync.js';
 
-import {
-  INITIAL_FORMULA_VERSIONS,
-  INITIAL_TINTING_LOGS
-} from './data/mockData';
-
 import { useNpps } from './hooks/useNpps.js';
 import { useAssets, generateNextSetCode } from './hooks/useAssets.js';
 import { useRepairs } from './hooks/useRepairs.js';
 import { useAuditLogs } from './hooks/useAuditLogs.js';
 import { useLockedMonths } from './hooks/useLockedMonths.js';
 import { useTintingLogs } from './hooks/useTintingLogs.js';
-import { useFormulaVersions } from './hooks/useFormulaVersions.js';
 
 const Dashboard = lazy(() => import('./components/Dashboard'));
 const NppManagement = lazy(() => import('./components/NppManagement'));
 const AssetManagement = lazy(() => import('./components/AssetManagement'));
 const MaintenanceSchedule = lazy(() => import('./components/MaintenanceSchedule'));
-const RemoteFormulaUpdates = lazy(() => import('./components/RemoteFormulaUpdates'));
-const TintingAnalytics = lazy(() => import('./components/TintingAnalytics'));
-const SerialLookup = lazy(() => import('./components/SerialLookup'));
 const AuditLogs = lazy(() => import('./components/AuditLogs'));
 const DeviceRepairProcessing = lazy(() => import('./components/DeviceRepairProcessing'));
 const ExcelImportModal = lazy(() => import('./components/ExcelImportModal'));
@@ -125,8 +116,7 @@ export default function App() {
   const { repairTickets, addTicket, editTicket, deleteTicket, importTickets, refetch: refetchRepairs } = useRepairs();
   const { auditLogs, addAuditLog, editAuditLog, deleteAuditLog, importAuditLogs, refetch: refetchAuditLogs } = useAuditLogs();
   const { lockedMonths, lockMonth, unlockMonth, isDateLocked, loading: lockLoading, error: lockError } = useLockedMonths();
-  const { tintingLogs, setTintingLogs, importLogs, refetch: refetchTintingLogs } = useTintingLogs();
-  const { formulaVersions, refetch: refetchFormulaVersions } = useFormulaVersions();
+  const { tintingLogs, importLogs, refetch: refetchTintingLogs } = useTintingLogs();
 
   useEffect(() => {
     if (!user?.id || !isSupabaseConfigured) return undefined;
@@ -154,14 +144,13 @@ export default function App() {
       if (changedTables.has('repair_tickets')) refreshTasks.push(refetchRepairs());
       if (changedTables.has('audit_logs')) refreshTasks.push(refetchAuditLogs());
       if (changedTables.has('tinting_logs')) refreshTasks.push(refetchTintingLogs());
-      if (changedTables.has('formula_versions')) refreshTasks.push(refetchFormulaVersions());
       if (changedTables.has('locked_months')) window.dispatchEvent(new Event('nasun-locked-months-changed'));
       await Promise.allSettled(refreshTasks);
       await acknowledgeChangeFeedCursor(detail.nextCursor, detail.hasMore);
     };
     window.addEventListener('nasun-cloud-changes', handleCloudChanges);
     return () => window.removeEventListener('nasun-cloud-changes', handleCloudChanges);
-  }, [refetchNpps, refetchAssets, refetchRepairs, refetchAuditLogs, refetchTintingLogs, refetchFormulaVersions]);
+  }, [refetchNpps, refetchAssets, refetchRepairs, refetchAuditLogs, refetchTintingLogs]);
 
   useEffect(() => {
     let refreshTimer = null;
@@ -174,8 +163,7 @@ export default function App() {
           refetchAssets(),
           refetchRepairs(),
           refetchAuditLogs(),
-          refetchTintingLogs(),
-          refetchFormulaVersions()
+          refetchTintingLogs()
         ]);
       }, 200);
     };
@@ -191,7 +179,7 @@ export default function App() {
       window.removeEventListener('nasun-sync-completed', refreshAllData);
       document.removeEventListener('visibilitychange', refreshAllData);
     };
-  }, [refetchNpps, refetchAssets, refetchRepairs, refetchAuditLogs, refetchTintingLogs, refetchFormulaVersions]);
+  }, [refetchNpps, refetchAssets, refetchRepairs, refetchAuditLogs, refetchTintingLogs]);
 
   // Excel Import Modal state
   const [showImportModal, setShowImportModal] = useState(false);
@@ -752,10 +740,6 @@ export default function App() {
     }
   };
 
-  const handleTriggerRemotePush = (pushInfo) => {
-    console.log('Remote push triggered:', pushInfo);
-  };
-
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   const handleImportData = async (importedPackage) => {
@@ -978,34 +962,6 @@ export default function App() {
               onCompleteMaintenance={handleCompleteMaintenance}
               onUpdateSystemSet={updateSystemSet}
               onDeleteSystemSet={deleteSystemSet}
-            />
-          )}
-
-          {activeTab === 'remoteFormula' && (
-            <RemoteFormulaUpdates
-              formulaVersions={formulaVersions}
-              systemSets={systemSets}
-              onTriggerRemotePush={handleTriggerRemotePush}
-              onSyncLogs={setTintingLogs}
-            />
-          )}
-
-          {activeTab === 'tintingLogs' && (
-            <TintingAnalytics
-              tintingLogs={tintingLogs}
-              npps={npps}
-              onSyncLogs={setTintingLogs}
-            />
-          )}
-
-          {activeTab === 'serialLookup' && (
-            <SerialLookup
-              dispensers={dispensers}
-              mixers={mixers}
-              computers={computers}
-              printers={printers}
-              systemSets={systemSets}
-              auditLogs={auditLogs}
             />
           )}
 

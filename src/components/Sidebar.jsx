@@ -5,9 +5,6 @@ import {
   Cpu, 
   ArrowLeftRight, 
   CalendarClock, 
-  RefreshCw, 
-  BarChart3, 
-  Search, 
   FileText,
   Wrench,
   X,
@@ -27,7 +24,6 @@ export default function Sidebar({ activeTab, setActiveTab, maintenanceCount, pen
   const [expandedGroups, setExpandedGroups] = useState({
     partner_assets: true,
     tech_maint: true,
-    data_formula: false,
     system_settings: false
   });
 
@@ -51,16 +47,6 @@ export default function Sidebar({ activeTab, setActiveTab, maintenanceCount, pen
         { id: 'maintenance', label: 'Lịch Bảo Trì 1 Năm', icon: CalendarClock, badge: maintenanceCount },
         { id: 'techHandbook', label: 'Sổ Tay Kỹ Thuật (SOP)', icon: BookOpen, badgeText: 'SOPs' },
         { id: 'routeMap', label: 'Bản Đồ Tuyến Đường', icon: MapPin, badgeText: 'GPS' },
-      ]
-    },
-    {
-      id: 'data_formula',
-      label: 'Dữ Liệu & Công Thức',
-      icon: RefreshCw,
-      items: [
-        { id: 'tintingLogs', label: 'Lịch Sử Pha Màu', icon: BarChart3 },
-        { id: 'remoteFormula', label: 'Cập Nhật Công Thức', icon: RefreshCw, badgeText: '3 SW' },
-        { id: 'serialLookup', label: 'Tra Cứu Seri Thiết Bị', icon: Search },
       ]
     },
     {

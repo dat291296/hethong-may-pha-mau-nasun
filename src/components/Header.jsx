@@ -116,9 +116,6 @@ export default function Header({
       case 'assets': return 'Quản Lý Bộ Máy Pha Màu & Kho Thiết Bị Lẻ';
       case 'workflows': return 'Nghiệp Vụ Lắp Đặt, Thu Hồi & Điều Chuyển';
       case 'maintenance': return 'Lịch Bảo Trì Định Kỳ 1 Năm / Lần (Cảnh báo trước 1 tháng)';
-      case 'remoteFormula': return 'Cập Nhật Công Thức Màu Từ Xa (ColorExpert 2 / 3 & CorobTINT)';
-      case 'tintingLogs': return 'Nhật Ký Pha Màu & Giám Sát Năng Suất NPP';
-      case 'serialLookup': return 'Tra Cứu Lịch Sử Theo Số Seri Thiết Bị';
       case 'auditLogs': return 'Nhật Ký Tác Nghiệp & Lịch Sử Giao Dịch';
       default: return 'Hệ Thống Quản Lý Máy Pha Màu';
     }
