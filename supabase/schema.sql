@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS profiles (
   id             UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   full_name      TEXT NOT NULL DEFAULT '',
   role           TEXT NOT NULL DEFAULT 'viewer'
-                   CHECK (role IN ('admin', 'qc', 'viewer')),
+                   CHECK (role IN ('admin', 'manager', 'technician', 'qc', 'viewer')),
   managed_region TEXT DEFAULT 'Miền Bắc'
                    CHECK (managed_region IN ('Miền Bắc', 'Miền Trung', 'Miền Nam', 'Toàn Quốc')),
   is_active      BOOLEAN NOT NULL DEFAULT TRUE,
@@ -126,7 +126,7 @@ BEGIN
   IF caller_role IS DISTINCT FROM 'admin' THEN RAISE EXCEPTION 'ADMIN_REQUIRED'; END IF;
   IF target_user_id IS NULL THEN RAISE EXCEPTION 'TARGET_USER_REQUIRED'; END IF;
   IF target_user_id = caller_id THEN RAISE EXCEPTION 'CANNOT_CHANGE_OWN_ACCESS'; END IF;
-  IF normalized_role NOT IN ('admin', 'qc', 'viewer') THEN RAISE EXCEPTION 'INVALID_ROLE'; END IF;
+  IF normalized_role NOT IN ('admin', 'manager', 'technician', 'qc', 'viewer') THEN RAISE EXCEPTION 'INVALID_ROLE'; END IF;
 
   IF normalized_role = 'admin' THEN
     normalized_region := 'Toàn Quốc';

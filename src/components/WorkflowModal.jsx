@@ -17,7 +17,7 @@ export default function WorkflowModal({
 }) {
   useModalScrollLock(true);
   const { user } = useAuth();
-  const isRegionRestricted = user?.role === 'qc' && user?.managedRegion !== 'Toàn Quốc';
+  const isRegionRestricted = ['manager', 'technician', 'qc'].includes(user?.role) && user?.managedRegion !== 'Toàn Quốc';
   const myRegion = user?.managedRegion;
 
   // Filter lists based on region restriction

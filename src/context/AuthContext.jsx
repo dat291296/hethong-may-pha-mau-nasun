@@ -23,6 +23,8 @@ async function persistOfflineUser(user) {
 // Default dev user (used when Supabase not configured)
 const DEV_USERS = {
   [ROLES.ADMIN]:  { id: 'local-admin',  email: 'admin@local.invalid',  name: 'Local Admin',  role: ROLES.ADMIN,  managedRegion: 'Toàn Quốc'  },
+  [ROLES.MANAGER]: { id: 'local-manager', email: 'manager@local.invalid', name: 'Local Manager', role: ROLES.MANAGER, managedRegion: 'Toàn Quốc' },
+  [ROLES.TECHNICIAN]: { id: 'local-technician', email: 'technician@local.invalid', name: 'Local Technician', role: ROLES.TECHNICIAN, managedRegion: 'Miền Bắc' },
   [ROLES.QC]:     { id: 'local-qc',     email: 'qc@local.invalid',     name: 'Local QC',     role: ROLES.QC,     managedRegion: 'Miền Bắc'  },
   [ROLES.VIEWER]: { id: 'local-viewer', email: 'viewer@local.invalid', name: 'Local Viewer', role: ROLES.VIEWER, managedRegion: 'Miền Nam'  },
 };

@@ -15,7 +15,7 @@ test('workflow migration is transactional and idempotent', () => {
 
 test('workflow function validates authorization and supported operations', () => {
   assert.match(sql, /auth\.uid\(\) IS NULL/);
-  assert.match(sql, /get_my_role\(\) NOT IN \('admin', 'qc'\)/);
+  assert.match(sql, /get_my_role\(\) NOT IN \('admin', 'manager', 'technician', 'qc'\)/);
   assert.match(sql, /'INSTALL', 'WITHDRAW', 'TRANSFER'/);
 });
 

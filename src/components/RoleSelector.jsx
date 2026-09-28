@@ -8,7 +8,7 @@ import { ROLES, ROLE_LABELS, ROLE_COLORS } from '../security/rbac.js';
  * Automatically hidden when Supabase is connected (production mode).
  */
 export default function RoleSelector() {
-  const { role, switchDevRole, isDevMode, ROLES: R } = useAuth();
+  const { role, switchDevRole, isDevMode } = useAuth();
 
   // Only show in dev mode (no Supabase configured)
   if (!isDevMode) return null;
@@ -30,7 +30,7 @@ export default function RoleSelector() {
       </span>
 
       {/* Role buttons */}
-      {[ROLES.ADMIN, ROLES.QC, ROLES.VIEWER].map(r => (
+      {[ROLES.ADMIN, ROLES.MANAGER, ROLES.TECHNICIAN, ROLES.QC, ROLES.VIEWER].map(r => (
         <button
           key={r}
           onClick={() => switchDevRole(r)}

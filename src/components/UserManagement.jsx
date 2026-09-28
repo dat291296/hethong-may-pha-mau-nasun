@@ -156,9 +156,7 @@ export default function UserManagement({
         fetchProfiles();
         return;
       }
-      const nextRegion = newRole === 'admin'
-        ? 'Toàn Quốc'
-        : (profile?.managed_region === 'Toàn Quốc' ? 'Miền Bắc' : profile?.managed_region || 'Miền Bắc');
+      const nextRegion = profile?.managed_region || 'Miền Bắc';
       const { data: updateResult, error: updateErr } = await supabase.rpc('update_user_access', {
         target_user_id: profileId,
         target_role: newRole,
@@ -433,14 +431,16 @@ export default function UserManagement({
                             }}
                           >
                             <option value="admin">Quản Trị Viên (Admin)</option>
-                            <option value="qc">Kỹ Thuật Viên (QC)</option>
-                            <option value="viewer">Đại Lý / NPP (Viewer)</option>
+                            <option value="manager">Quản Lý</option>
+                            <option value="technician">Kỹ Thuật Viên</option>
+                            <option value="qc">QC</option>
+                            <option value="viewer">Chỉ Xem (Viewer)</option>
                           </select>
                         </td>
                         <td>
                           {p.role === 'admin' ? (
                             <span style={{ fontSize: '0.8rem', color: '#f59e0b', fontWeight: 'bold' }}>Toàn Quốc</span>
-                          ) : p.role === 'qc' ? (
+                          ) : ['manager', 'technician', 'qc'].includes(p.role) ? (
                             <select 
                               value={p.managed_region || 'Miền Bắc'} 
                               onChange={e => handleRegionChange(p.id, e.target.value)}

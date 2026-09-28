@@ -69,7 +69,7 @@ export default function App() {
           const { data, error } = await supabase
             .from('profiles')
             .select('id, full_name, role, managed_region')
-            .in('role', ['qc', 'admin']);
+            .in('role', ['technician', 'qc', 'manager', 'admin']);
 
           if (data && !error && data.length > 0) {
             const mapped = data.map(p => ({

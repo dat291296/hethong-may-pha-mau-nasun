@@ -77,7 +77,7 @@ export default function AssetManagement({
           const { data, error } = await supabase
             .from('profiles')
             .select('id, full_name, role, managed_region')
-            .in('role', ['qc', 'admin']);
+            .in('role', ['technician', 'qc', 'manager', 'admin']);
 
           if (data && !error && data.length > 0) {
             const mapped = data.map(p => ({
@@ -316,7 +316,7 @@ export default function AssetManagement({
   };
 
   const handleOpenAssembleModal = () => {
-    const defaultTech = (user && (user.role === 'qc' || user.role === 'admin')) ? (user.name || user.full_name) : (qcUsers[0]?.name || '');
+    const defaultTech = (user && ['admin', 'manager', 'technician', 'qc'].includes(user.role)) ? (user.name || user.full_name) : (qcUsers[0]?.name || '');
     const autoCode = generateNextSetCode(systemSets);
     setNppSearchTerm('');
     setNewSetData({
@@ -477,7 +477,7 @@ export default function AssetManagement({
       province: set.province || '',
       status: set.status || 'TRONG_KHO',
       stabilizer: set.stabilizer || 'Không dùng ổn áp',
-      technician: set.technician || ((user && (user.role === 'qc' || user.role === 'admin')) ? (user.name || user.full_name) : (qcUsers[0]?.name || '')),
+      technician: set.technician || ((user && ['admin', 'manager', 'technician', 'qc'].includes(user.role)) ? (user.name || user.full_name) : (qcUsers[0]?.name || '')),
       salesperson: set.salesperson || targetNpp?.salesperson || '',
       notes: set.notes || '',
       lastMaintenanceDate: set.lastMaintenanceDate || '',

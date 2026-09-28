@@ -90,7 +90,7 @@ export default function DeviceRepairProcessing({
   const isTicketAllowed = (ticketNppId) => {
     if (!user) return false;
     if (user.role === 'admin') return true;
-    if (user.role === 'qc') {
+    if (['manager', 'technician', 'qc'].includes(user.role)) {
       if (user.managedRegion === 'Toàn Quốc') return true;
       const targetNpp = npps.find(n => n.id === ticketNppId);
       return targetNpp ? user.managedRegion === targetNpp.region : false;
@@ -136,7 +136,7 @@ export default function DeviceRepairProcessing({
   }, [repairTickets]);
 
   // Form State
-  const defaultTechnician = (user && (user.role === 'qc' || user.role === 'admin')) 
+  const defaultTechnician = (user && ['admin', 'manager', 'technician', 'qc'].includes(user.role))
     ? (user.name || user.full_name) 
     : (qcUsers && qcUsers.length > 0 ? qcUsers[0].name : 'Nguyễn Văn Hùng');
 

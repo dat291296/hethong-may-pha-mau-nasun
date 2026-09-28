@@ -87,14 +87,14 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
   const isRegionAllowed = (nppRegion) => {
     if (!user) return false;
     if (user.role === 'admin') return true;
-    if (user.role === 'qc') {
+    if (['manager', 'qc'].includes(user.role)) {
       return user.managedRegion === 'Toàn Quốc' || user.managedRegion === nppRegion;
     }
     return false;
   };
 
   const handleOpenAdd = () => {
-    const defaultRegion = (user?.role === 'qc' && user?.managedRegion !== 'Toàn Quốc') ? user.managedRegion : 'Miền Bắc';
+    const defaultRegion = (['manager', 'qc'].includes(user?.role) && user?.managedRegion !== 'Toàn Quốc') ? user.managedRegion : 'Miền Bắc';
     setFormData({
       name: '',
       phone: '',
@@ -601,7 +601,7 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
                       <select 
                         className="form-select" 
                         value={formData.region} 
-                        disabled={user?.role === 'qc' && user?.managedRegion !== 'Toàn Quốc'}
+                        disabled={['manager', 'qc'].includes(user?.role) && user?.managedRegion !== 'Toàn Quốc'}
                         onChange={e => setFormData({ ...formData, region: e.target.value })}
                       >
                         <option value="Miền Bắc">Miền Bắc</option>

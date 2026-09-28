@@ -2,49 +2,65 @@
  * Role-Based Access Control (RBAC)
  * Paint Tinting & Stock Manager v2.0
  *
- * Roles:      ADMIN > QC > VIEWER
+ * Roles:      ADMIN > MANAGER > TECHNICIAN / QC > VIEWER
  * Enforcement: Frontend guard (UI) + Supabase RLS (backend DB).
  *              Never rely on frontend alone for security.
  */
 
 // ─── Role Constants ──────────────────────────────────────────────────────────
 export const ROLES = Object.freeze({
-  ADMIN:  'admin',
-  QC:     'qc',
-  VIEWER: 'viewer',
+  ADMIN:      'admin',
+  MANAGER:    'manager',
+  TECHNICIAN: 'technician',
+  QC:         'qc',
+  VIEWER:     'viewer',
 });
+
+export const ALL_ROLES = Object.freeze(Object.values(ROLES));
+export const OPERATIONAL_ROLES = Object.freeze([
+  ROLES.ADMIN,
+  ROLES.MANAGER,
+  ROLES.TECHNICIAN,
+  ROLES.QC,
+]);
+export const REGIONAL_ROLES = Object.freeze([
+  ROLES.MANAGER,
+  ROLES.TECHNICIAN,
+  ROLES.QC,
+  ROLES.VIEWER,
+]);
 
 // ─── Permission Matrix ───────────────────────────────────────────────────────
 // Maps action → minimum required role(s)
 export const PERMISSIONS = Object.freeze({
   // NPP Management
-  'npp:read':              [ROLES.VIEWER, ROLES.QC, ROLES.ADMIN],
-  'npp:create':            [ROLES.QC,     ROLES.ADMIN],
-  'npp:edit':              [ROLES.QC,     ROLES.ADMIN],
+  'npp:read':              ALL_ROLES,
+  'npp:create':            [ROLES.QC, ROLES.MANAGER, ROLES.ADMIN],
+  'npp:edit':              [ROLES.QC, ROLES.MANAGER, ROLES.ADMIN],
   'npp:delete':            [ROLES.ADMIN],
-  'npp:import_excel':      [ROLES.QC,     ROLES.ADMIN],
+  'npp:import_excel':      [ROLES.QC, ROLES.MANAGER, ROLES.ADMIN],
 
   // Asset Management (Máy chiết, lắc, tính, in)
-  'asset:read':            [ROLES.VIEWER, ROLES.QC, ROLES.ADMIN],
-  'asset:create':          [ROLES.QC,     ROLES.ADMIN],
-  'asset:edit':            [ROLES.QC,     ROLES.ADMIN],
+  'asset:read':            ALL_ROLES,
+  'asset:create':          OPERATIONAL_ROLES,
+  'asset:edit':            OPERATIONAL_ROLES,
   'asset:delete':          [ROLES.ADMIN],
-  'asset:import_excel':    [ROLES.QC,     ROLES.ADMIN],
+  'asset:import_excel':    [ROLES.QC, ROLES.MANAGER, ROLES.ADMIN],
 
   // Workflow (Lắp đặt, Thu hồi, Điều chuyển)
-  'workflow:install':      [ROLES.QC,     ROLES.ADMIN],
-  'workflow:withdraw':     [ROLES.QC,     ROLES.ADMIN],
-  'workflow:transfer':     [ROLES.QC,     ROLES.ADMIN],
+  'workflow:install':      OPERATIONAL_ROLES,
+  'workflow:withdraw':     OPERATIONAL_ROLES,
+  'workflow:transfer':     OPERATIONAL_ROLES,
 
   // Repair / Xử lý máy
-  'repair:read':           [ROLES.VIEWER, ROLES.QC, ROLES.ADMIN],
-  'repair:create':         [ROLES.QC,     ROLES.ADMIN],
-  'repair:edit':           [ROLES.QC,     ROLES.ADMIN],
+  'repair:read':           ALL_ROLES,
+  'repair:create':         OPERATIONAL_ROLES,
+  'repair:edit':           OPERATIONAL_ROLES,
   'repair:delete':         [ROLES.ADMIN],
 
   // Audit Logs
-  'audit:read':            [ROLES.QC,     ROLES.ADMIN],
-  'audit:export':          [ROLES.ADMIN],
+  'audit:read':            OPERATIONAL_ROLES,
+  'audit:export':          [ROLES.QC, ROLES.MANAGER, ROLES.ADMIN],
 
   // System (Lock month, config)
   'system:lock_month':     [ROLES.ADMIN],
@@ -56,7 +72,7 @@ export const PERMISSIONS = Object.freeze({
 /**
  * Check if a role has permission for an action.
  *
- * @param {string} role – user's role (ROLES.ADMIN | ROLES.QC | ROLES.VIEWER)
+ * @param {string} role – user's role from ROLES
  * @param {string} action – permission key from PERMISSIONS map
  * @returns {boolean}
  */
@@ -88,15 +104,19 @@ export function enforcePermission(role, action) {
 
 // ─── Role Display Helpers ────────────────────────────────────────────────────
 export const ROLE_LABELS = {
-  [ROLES.ADMIN]:  '🛡️ Admin',
-  [ROLES.QC]:     '🔬 QC / Kỹ Thuật',
-  [ROLES.VIEWER]: '👁️ Viewer',
+  [ROLES.ADMIN]:      '🛡️ Admin',
+  [ROLES.MANAGER]:    '📊 Quản lý',
+  [ROLES.TECHNICIAN]: '🔧 Kỹ thuật viên',
+  [ROLES.QC]:         '🔬 QC',
+  [ROLES.VIEWER]:     '👁️ Viewer',
 };
 
 export const ROLE_COLORS = {
-  [ROLES.ADMIN]:  '#f43f5e',
-  [ROLES.QC]:     '#f59e0b',
-  [ROLES.VIEWER]: '#6b7280',
+  [ROLES.ADMIN]:      '#f43f5e',
+  [ROLES.MANAGER]:    '#38bdf8',
+  [ROLES.TECHNICIAN]: '#10b981',
+  [ROLES.QC]:         '#f59e0b',
+  [ROLES.VIEWER]:     '#6b7280',
 };
 
 /**

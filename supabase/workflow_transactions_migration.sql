@@ -18,7 +18,7 @@ CREATE POLICY "sync_operations_select_own"
 DROP POLICY IF EXISTS "sync_operations_insert_own" ON public.sync_operations;
 CREATE POLICY "sync_operations_insert_own"
   ON public.sync_operations FOR INSERT TO authenticated
-  WITH CHECK (user_id = auth.uid() AND public.get_my_role() IN ('admin', 'qc'));
+  WITH CHECK (user_id = auth.uid() AND public.get_my_role() IN ('admin', 'manager', 'technician', 'qc'));
 
 CREATE OR REPLACE FUNCTION public.execute_equipment_workflow(
   p_operation_id TEXT,
@@ -45,7 +45,7 @@ BEGIN
   IF auth.uid() IS NULL THEN
     RAISE EXCEPTION 'AUTH_REQUIRED';
   END IF;
-  IF public.get_my_role() NOT IN ('admin', 'qc') THEN
+  IF public.get_my_role() NOT IN ('admin', 'manager', 'technician', 'qc') THEN
     RAISE EXCEPTION 'FORBIDDEN_WORKFLOW';
   END IF;
   IF p_operation_id IS NULL OR BTRIM(p_operation_id) = '' OR v_set_code IS NULL THEN
