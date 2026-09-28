@@ -24,7 +24,7 @@ jobs:
         run: npm ci
 
       - name: Run security regression tests
-        run: npm run test:security
+        run: npm run test:enterprise && npm run test:security
 
       - name: Block critical production dependency vulnerabilities
         run: npm audit --omit=dev --audit-level=critical

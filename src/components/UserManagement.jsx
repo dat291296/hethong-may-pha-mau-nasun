@@ -142,6 +142,20 @@ export default function UserManagement({
 
     try {
       const profile = profiles.find(item => item.id === profileId);
+      if (newRole === 'admin') {
+        const reason = window.prompt('Nhập lý do cấp quyền Admin (tối thiểu 10 ký tự):', 'Cấp quyền quản trị theo phê duyệt nội bộ');
+        if (reason === null) return;
+        if (reason.trim().length < 10) throw new Error('Lý do cấp quyền Admin phải có ít nhất 10 ký tự.');
+        const { data: grantResult, error: grantError } = await supabase.rpc('provision_admin_role', {
+          p_target_user_id: profileId,
+          p_reason: reason.trim(),
+        });
+        if (grantError) throw grantError;
+        if (grantResult?.role !== 'admin') throw new Error('Máy chủ không xác nhận quyền Admin.');
+        setSuccess('Đã cấp quyền Admin và ghi nhận nhật ký bảo mật!');
+        fetchProfiles();
+        return;
+      }
       const nextRegion = newRole === 'admin'
         ? 'Toàn Quốc'
         : (profile?.managed_region === 'Toàn Quốc' ? 'Miền Bắc' : profile?.managed_region || 'Miền Bắc');

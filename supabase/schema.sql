@@ -34,25 +34,18 @@ CREATE TABLE IF NOT EXISTS profiles (
   updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Auto-create profile on signup (auto-grants admin for master email)
+-- Auto-create every account with least privilege. Administrator access is
+-- provisioned separately by a server-side administrative workflow.
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
-DECLARE
-  v_role TEXT := 'viewer';
-  v_region TEXT := 'Miền Bắc';
 BEGIN
-  -- Auto-grant admin for master admin email
-  IF LOWER(NEW.email) = 'dat291219962.hust@gmail.com' THEN
-    v_role := 'admin';
-    v_region := 'Toàn Quốc';
-  END IF;
   INSERT INTO public.profiles (id, full_name, role, managed_region)
   VALUES (
     NEW.id,
     COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.email),
-    v_role,
-    v_region
-  ) ON CONFLICT (id) DO UPDATE SET role = v_role, managed_region = v_region;
+    'viewer',
+    'Miền Bắc'
+  ) ON CONFLICT (id) DO NOTHING;
   RETURN NEW;
 END;
 $$;
@@ -61,9 +54,7 @@ CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
--- ── Bootstrap admin helper (SECURITY DEFINER – bypasses RLS) ─────────────────
--- This function can be called from the client to fix the role of the master admin
--- even if their current role in the DB is 'viewer'.
+-- Legacy client bootstrap is retained as a fail-closed compatibility stub.
 DROP FUNCTION IF EXISTS public.bootstrap_admin_role(UUID, TEXT);
 CREATE OR REPLACE FUNCTION public.bootstrap_admin_role()
 RETURNS VOID
@@ -71,33 +62,14 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
 AS $$
-DECLARE
-  current_user_id UUID := auth.uid();
-  current_user_email TEXT;
 BEGIN
-  IF current_user_id IS NULL THEN
-    RAISE EXCEPTION 'AUTH_REQUIRED';
-  END IF;
-
-  SELECT email
-  INTO current_user_email
-  FROM auth.users
-  WHERE id = current_user_id;
-
-  IF LOWER(COALESCE(current_user_email, '')) <> 'dat291219962.hust@gmail.com' THEN
-    RAISE EXCEPTION 'FORBIDDEN_ADMIN_BOOTSTRAP';
-  END IF;
-
-  INSERT INTO public.profiles (id, full_name, role, managed_region)
-  VALUES (current_user_id, 'Admin Nasun', 'admin', 'Toàn Quốc')
-  ON CONFLICT (id) DO UPDATE
-  SET role = 'admin', managed_region = 'Toàn Quốc', updated_at = NOW();
+  RAISE EXCEPTION 'ADMIN_BOOTSTRAP_DISABLED';
 END;
 $$;
 
 REVOKE ALL ON FUNCTION public.bootstrap_admin_role() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.bootstrap_admin_role() FROM anon;
-GRANT EXECUTE ON FUNCTION public.bootstrap_admin_role() TO authenticated;
+REVOKE ALL ON FUNCTION public.bootstrap_admin_role() FROM authenticated;
 
 CREATE OR REPLACE FUNCTION public.has_privileged_aal()
 RETURNS BOOLEAN LANGUAGE SQL STABLE SECURITY DEFINER SET search_path = public AS $$
@@ -113,11 +85,6 @@ CREATE OR REPLACE FUNCTION public.check_role_update()
 RETURNS TRIGGER AS $$
 BEGIN
   IF OLD.role IS DISTINCT FROM NEW.role THEN
-    -- Bootstrap admin: always allow dat291219962.hust@gmail.com to get/keep admin role
-    IF LOWER((SELECT email FROM auth.users WHERE id = auth.uid())) = 'dat291219962.hust@gmail.com' THEN
-      RETURN NEW;
-    END IF;
-
     -- Only allow existing admins to modify user roles
     IF (SELECT role FROM public.profiles WHERE id = auth.uid()) IS DISTINCT FROM 'admin' THEN
       RAISE EXCEPTION 'SECURITY VIOLATION: Chỉ Admin mới có quyền thay đổi vai trò tài khoản!';

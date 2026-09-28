@@ -169,16 +169,6 @@ export function AuthProvider({ children }) {
   const loadUserProfile = async (authUser) => {
     try {
       await initializeOfflineStorage(authUser.id);
-      const isMasterAdmin = authUser.email?.toLowerCase() === 'dat291219962.hust@gmail.com';
-
-      // For master admin: first ensure their role is set in DB via SECURITY DEFINER RPC
-      // This bypasses RLS so it always works regardless of current DB role
-      if (isMasterAdmin) {
-        const { error: rpcErr } = await supabase.rpc('bootstrap_admin_role');
-        if (rpcErr) {
-          console.warn('[Auth] bootstrap_admin_role RPC warning:', rpcErr.message);
-        }
-      }
 
       const { data: profile, error } = await supabase
         .from('profiles')
@@ -194,16 +184,9 @@ export function AuthProvider({ children }) {
         throw disabledError;
       }
 
-      let finalRole = profile?.role || ROLES.VIEWER;
-      let finalRegion = profile?.managed_region || 'Miền Bắc';
-      
-      // Always force admin role for the master admin email in the UI
-      if (isMasterAdmin) {
-        finalRole = ROLES.ADMIN;
-        finalRegion = 'Toàn Quốc';
-      } else if (error) {
-        throw error;
-      }
+      if (error) throw error;
+      const finalRole = profile?.role || ROLES.VIEWER;
+      const finalRegion = profile?.managed_region || 'Miền Bắc';
 
       const resolvedUser = {
         id: authUser.id,
@@ -236,17 +219,16 @@ export function AuthProvider({ children }) {
         await clearOfflineStorage(authUser.id);
         return;
       }
-      const isSpecificAdmin = authUser.email?.toLowerCase() === 'dat291219962.hust@gmail.com';
       const fallbackUser = await getOfflineUser(authUser) || {
         id: authUser.id, 
         email: authUser.email, 
         name: authUser.email, 
-        role: isSpecificAdmin ? ROLES.ADMIN : ROLES.VIEWER,
-        managedRegion: isSpecificAdmin ? 'Toàn Quốc' : 'Miền Bắc'
+        role: ROLES.VIEWER,
+        managedRegion: 'Miền Bắc'
       };
       setUser(fallbackUser);
       await persistOfflineUser(fallbackUser);
-      setRole(fallbackUser.role || (isSpecificAdmin ? ROLES.ADMIN : ROLES.VIEWER));
+      setRole(fallbackUser.role || ROLES.VIEWER);
     } finally {
       setLoading(false);
     }
