@@ -11,18 +11,10 @@ import {
   Clock, 
   Camera, 
   X, 
-  MapPin, 
-  Check,
-  AlertTriangle,
   RefreshCw,
-  Building2,
-  BookOpen,
-  ClipboardCheck,
   ShieldAlert,
   PackageCheck,
   BarChart2,
-  PieChart as PieChartIcon,
-  Calendar,
   FileSpreadsheet
 } from 'lucide-react';
 import { 
@@ -38,7 +30,7 @@ import {
   Pie, 
   Legend 
 } from 'recharts';
-import { sanitizeFormData, validatePhone, validateSerial } from '../security/sanitize.js';
+import { sanitizeFormData, validateSerial } from '../security/sanitize.js';
 
 export const MACHINE_MODELS = [
   'AI88',
@@ -62,6 +54,28 @@ export const PRODUCT_CATEGORIES = [
   'Màn hình',
   'Khác / Linh kiện'
 ];
+
+const EMPTY_SERVICE_CHECKLIST = Object.freeze({
+  inspection: false,
+  cleaning: false,
+  functionalTest: false,
+  safetyCheck: false,
+  dataBackup: false
+});
+
+function createFieldWorkflowDefaults() {
+  return {
+    assetCode: '',
+    fieldVisitStatus: 'scheduled',
+    serviceChecklist: { ...EMPTY_SERVICE_CHECKLIST },
+    materialsUsed: [],
+    beforePhotos: [],
+    afterPhotos: [],
+    nppConfirmation: { confirmed: false, confirmedBy: '', confirmedAt: null },
+    slaDueAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 16),
+    completedAt: null
+  };
+}
 
 import { compressImage } from '../utils/imageCompressor.js';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -141,50 +155,58 @@ export default function DeviceRepairProcessing({
     : (qcUsers && qcUsers.length > 0 ? qcUsers[0].name : 'Nguyễn Văn Hùng');
 
   const getDeviceFromCombo = (assignedSet, category) => {
-    if (!assignedSet) return { model: '', serial: '' };
+    if (!assignedSet) return { model: '', serial: '', assetCode: '' };
     switch (category) {
       case 'Máy chiết':
       case 'Máy Chiết Sơn':
         return {
           model: assignedSet.dispenserModel || 'Satint A2',
-          serial: assignedSet.dispenserSerial || ''
+          serial: assignedSet.dispenserSerial || '',
+          assetCode: assignedSet.dispenserId || ''
         };
       case 'Máy lắc':
       case 'Máy Lắc Sơn':
         return {
           model: assignedSet.mixerModel || 'Satint ST-50',
-          serial: assignedSet.mixerSerial || ''
+          serial: assignedSet.mixerSerial || '',
+          assetCode: assignedSet.mixerId || ''
         };
       case 'Case':
         return {
           model: assignedSet.pcType === 'Case' ? (assignedSet.pcOs || 'Case PC') : 'Case PC',
-          serial: assignedSet.pcType === 'Case' ? (assignedSet.pcSerial || '') : (assignedSet.pcSerial || '')
+          serial: assignedSet.pcType === 'Case' ? (assignedSet.pcSerial || '') : (assignedSet.pcSerial || ''),
+          assetCode: assignedSet.computerId || ''
         };
       case 'AIO':
         return {
           model: assignedSet.pcType === 'AIO' ? (assignedSet.pcOs || 'AIO PC') : 'AIO PC',
-          serial: assignedSet.pcType === 'AIO' ? (assignedSet.pcSerial || '') : (assignedSet.pcSerial || '')
+          serial: assignedSet.pcType === 'AIO' ? (assignedSet.pcSerial || '') : (assignedSet.pcSerial || ''),
+          assetCode: assignedSet.computerId || ''
         };
       case 'QL700':
       case 'Máy In Tem QL700':
         return {
           model: assignedSet.printerModel || 'QL700',
-          serial: assignedSet.printerSerial || ''
+          serial: assignedSet.printerSerial || '',
+          assetCode: assignedSet.printerId || ''
         };
       case 'Màn hình':
         return {
           model: 'Màn hình',
-          serial: ''
+          serial: '',
+          assetCode: ''
         };
       default:
         return {
           model: '',
-          serial: ''
+          serial: '',
+          assetCode: ''
         };
     }
   };
 
   const [formData, setFormData] = useState({
+    ...createFieldWorkflowDefaults(),
     date: new Date().toISOString().split('T')[0],
     technician: defaultTechnician,
     nppId: '',
@@ -209,6 +231,7 @@ export default function DeviceRepairProcessing({
       setEditingTicket(null);
       setNppSearchTerm('');
       setFormData({
+        ...createFieldWorkflowDefaults(),
         date: new Date().toISOString().split('T')[0],
         technician: defaultTechnician,
         nppId: npps.length > 0 ? npps[0].id : '',
@@ -244,6 +267,7 @@ export default function DeviceRepairProcessing({
     setEditingTicket(null);
     setNppSearchTerm('');
     setFormData({
+      ...createFieldWorkflowDefaults(),
       date: new Date().toISOString().split('T')[0],
       technician: defaultTechnician,
       nppId: '',
@@ -270,7 +294,9 @@ export default function DeviceRepairProcessing({
       { key: 'nppName', label: 'Nhà Phân Phối' }, { key: 'productCategory', label: 'Loại Thiết Bị' },
       { key: 'machineModel', label: 'Model' }, { key: 'serialNumber', label: 'Số Seri' },
       { key: 'errorDescription', label: 'Diễn Giải Lỗi' }, { key: 'technician', label: 'Kỹ Thuật Viên' },
-      { key: 'processingStatus', label: 'Trạng Thái Xử Lý' }, { key: 'notes', label: 'Ghi Chú' }
+      { key: 'processingStatus', label: 'Trạng Thái Xử Lý' }, { key: 'assetCode', label: 'Mã QR / Mã QL' },
+      { key: 'fieldVisitStatus', label: 'Trạng Thái Công Tác' }, { key: 'slaDueAt', label: 'Hạn SLA' },
+      { key: 'notes', label: 'Ghi Chú' }
     ], 'Phieu_Sua_Chua', 'PhieuSuaChua');
   };
 
@@ -286,6 +312,7 @@ export default function DeviceRepairProcessing({
     setEditingTicket(ticket);
     setNppSearchTerm('');
     setFormData({
+      ...createFieldWorkflowDefaults(),
       ...ticket,
       exchangeType: ticket.exchangeType || (ticket.actionDirection === 'Xuất đổi' ? 'Xuất đổi máy mới 100%' : 'Không xuất đổi')
     });
@@ -310,12 +337,13 @@ export default function DeviceRepairProcessing({
 
   const handleCategoryChange = (newCat) => {
     const assignedSet = systemSets.find(s => s.nppId === formData.nppId);
-    const { model, serial } = getDeviceFromCombo(assignedSet, newCat);
+    const { model, serial, assetCode } = getDeviceFromCombo(assignedSet, newCat);
     setFormData(prev => ({
       ...prev,
       productCategory: newCat,
       machineModel: model !== undefined && model !== '' ? model : (newCat === 'Màn hình' ? 'Màn hình' : prev.machineModel),
       serialNumber: serial !== undefined ? serial : prev.serialNumber,
+      assetCode: assetCode || prev.assetCode,
       actionDirection: ['Máy chiết', 'Máy lắc'].includes(newCat) ? 'Sửa chữa' : prev.actionDirection,
       exchangeType: ['Máy chiết', 'Máy lắc'].includes(newCat) ? 'Không xuất đổi' : prev.exchangeType
     }));
@@ -325,14 +353,15 @@ export default function DeviceRepairProcessing({
     const targetNpp = npps.find(n => n.id === selectedId);
     const assignedSet = systemSets.find(s => s.nppId === selectedId);
     const currentCat = formData.productCategory || 'Máy chiết';
-    const { model, serial } = getDeviceFromCombo(assignedSet, currentCat);
+    const { model, serial, assetCode } = getDeviceFromCombo(assignedSet, currentCat);
 
     setFormData(prev => ({
       ...prev,
       nppId: selectedId,
       nppName: targetNpp ? targetNpp.name : '',
       machineModel: model || prev.machineModel,
-      serialNumber: serial !== undefined ? serial : prev.serialNumber
+      serialNumber: serial !== undefined ? serial : prev.serialNumber,
+      assetCode: assetCode || prev.assetCode
     }));
   };
 
@@ -343,7 +372,8 @@ export default function DeviceRepairProcessing({
         const compressedBase64 = await compressImage(file);
         setFormData(prev => ({
           ...prev,
-          photos: [...(prev.photos || []), compressedBase64]
+          photos: [...(prev.photos || []), compressedBase64],
+          beforePhotos: [...(prev.beforePhotos || prev.photos || []), compressedBase64]
         }));
       } catch (err) {
         console.error('Error compressing image:', err);
@@ -355,8 +385,25 @@ export default function DeviceRepairProcessing({
   const handleRemovePhoto = (index) => {
     setFormData(prev => ({
       ...prev,
-      photos: prev.photos.filter((_, i) => i !== index)
+      photos: prev.photos.filter((_, i) => i !== index),
+      beforePhotos: (prev.beforePhotos || []).filter((_, i) => i !== index)
     }));
+  };
+
+  const handleAfterPhotoUpload = async (event) => {
+    const files = Array.from(event.target.files || []);
+    for (const file of files) {
+      try {
+        const compressedBase64 = await compressImage(file);
+        setFormData(prev => ({
+          ...prev,
+          afterPhotos: [...(prev.afterPhotos || []), compressedBase64]
+        }));
+      } catch (err) {
+        console.error('Error compressing after-service image:', err);
+        alert(`Không thể thêm ảnh ${file.name}: ${err.message}`);
+      }
+    }
   };
 
   const handleSubmit = (e) => {
@@ -402,6 +449,38 @@ export default function DeviceRepairProcessing({
       return;
     }
 
+    if (sanitized.nppConfirmation?.confirmed && !sanitized.nppConfirmation.confirmedBy) {
+      alert('Vui lòng nhập tên người đại diện NPP xác nhận hoàn thành.');
+      return;
+    }
+
+    if (sanitized.nppConfirmation?.confirmed) {
+      sanitized.nppConfirmation = {
+        ...sanitized.nppConfirmation,
+        confirmedAt: sanitized.nppConfirmation.confirmedAt || new Date().toISOString()
+      };
+      sanitized.fieldVisitStatus = 'customer_confirmed';
+    }
+
+    const isCompleted = ['completed', 'customer_confirmed'].includes(sanitized.fieldVisitStatus);
+    const checklistComplete = Object.keys(EMPTY_SERVICE_CHECKLIST).every(key => sanitized.serviceChecklist?.[key]);
+    if (isCompleted && !checklistComplete) {
+      alert('Cần hoàn thành toàn bộ checklist trước khi kết thúc công tác.');
+      return;
+    }
+    if (isCompleted && !(sanitized.afterPhotos || []).length) {
+      alert('Cần ít nhất một ảnh sau khi hoàn thành công tác.');
+      return;
+    }
+    if (sanitized.fieldVisitStatus === 'customer_confirmed' && !sanitized.nppConfirmation?.confirmed) {
+      alert('Trạng thái NPP đã xác nhận yêu cầu thông tin người xác nhận.');
+      return;
+    }
+
+    if (isCompleted) {
+      sanitized.completedAt = sanitized.completedAt || new Date().toISOString();
+    }
+
     const selectedNppObj = npps.find(n => n.id === sanitized.nppId);
     const finalNppName = selectedNppObj ? selectedNppObj.name : sanitized.nppName || 'NPP Khác';
 
@@ -411,7 +490,13 @@ export default function DeviceRepairProcessing({
         nppName: finalNppName
       });
     } else {
-      const newTicketCode = `TICK-202607-00${repairTickets.length + 1}`;
+      const now = new Date();
+      const codePrefix = `TICK-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}-`;
+      const sequence = repairTickets.reduce((max, ticket) => {
+        const match = String(ticket.ticketCode || ticket.id || '').match(new RegExp(`^${codePrefix}(\\d+)$`));
+        return match ? Math.max(max, Number(match[1])) : max;
+      }, 0) + 1;
+      const newTicketCode = `${codePrefix}${String(sequence).padStart(3, '0')}`;
       onAddTicket({
         ...sanitized,
         id: newTicketCode,
@@ -980,7 +1065,8 @@ export default function DeviceRepairProcessing({
                                   ...prev,
                                   productCategory: 'Máy chiết',
                                   machineModel: currentAssignedSet.dispenserModel || 'Satint A2',
-                                  serialNumber: currentAssignedSet.dispenserSerial || ''
+                                  serialNumber: currentAssignedSet.dispenserSerial || '',
+                                  assetCode: currentAssignedSet.dispenserId || ''
                                 }));
                               }}
                             >
@@ -997,7 +1083,8 @@ export default function DeviceRepairProcessing({
                                   ...prev,
                                   productCategory: 'Máy lắc',
                                   machineModel: currentAssignedSet.mixerModel || 'Natos V1',
-                                  serialNumber: currentAssignedSet.mixerSerial || ''
+                                  serialNumber: currentAssignedSet.mixerSerial || '',
+                                  assetCode: currentAssignedSet.mixerId || ''
                                 }));
                               }}
                             >
@@ -1015,7 +1102,8 @@ export default function DeviceRepairProcessing({
                                   ...prev,
                                   productCategory: isAio ? 'AIO' : 'Case',
                                   machineModel: currentAssignedSet.pcOs || currentAssignedSet.pcType || 'Máy tính',
-                                  serialNumber: currentAssignedSet.pcSerial || ''
+                                  serialNumber: currentAssignedSet.pcSerial || '',
+                                  assetCode: currentAssignedSet.computerId || ''
                                 }));
                               }}
                             >
@@ -1032,7 +1120,8 @@ export default function DeviceRepairProcessing({
                                   ...prev,
                                   productCategory: 'QL700',
                                   machineModel: currentAssignedSet.printerModel || 'QL700',
-                                  serialNumber: currentAssignedSet.printerSerial || ''
+                                  serialNumber: currentAssignedSet.printerSerial || '',
+                                  assetCode: currentAssignedSet.printerId || ''
                                 }));
                               }}
                             >
@@ -1048,7 +1137,8 @@ export default function DeviceRepairProcessing({
                                 ...prev,
                                 productCategory: 'Màn hình',
                                 machineModel: 'Màn hình hiển thị',
-                                serialNumber: ''
+                                serialNumber: '',
+                                assetCode: ''
                               }));
                             }}
                           >
@@ -1170,6 +1260,78 @@ export default function DeviceRepairProcessing({
                     </div>
                   </div>
 
+                  <div style={{ marginTop: '16px', borderTop: '1px solid var(--border-color)', paddingTop: '14px' }}>
+                    <h4 style={{ marginBottom: '12px', color: 'var(--accent-cyan)' }}>📋 Quy Trình Công Tác Hiện Trường</h4>
+                    <div className="responsive-form-grid">
+                      <div className="form-group">
+                        <label className="form-label">Mã QR / Mã QL thiết bị</label>
+                        <input
+                          className="form-input"
+                          value={formData.assetCode || ''}
+                          maxLength={80}
+                          placeholder="Quét QR hoặc nhập mã QL"
+                          onChange={e => setFormData({ ...formData, assetCode: e.target.value })}
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">Hạn SLA xử lý *</label>
+                        <input
+                          type="datetime-local"
+                          className="form-input"
+                          required
+                          value={(formData.slaDueAt || '').slice(0, 16)}
+                          onChange={e => setFormData({ ...formData, slaDueAt: e.target.value })}
+                        />
+                      </div>
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Trạng thái công tác</label>
+                      <select className="form-select" value={formData.fieldVisitStatus || 'scheduled'} onChange={e => setFormData({ ...formData, fieldVisitStatus: e.target.value })}>
+                        <option value="scheduled">Đã lên lịch</option>
+                        <option value="on_site">Đang tại NPP</option>
+                        <option value="completed">Đã hoàn thành kỹ thuật</option>
+                        <option value="customer_confirmed">NPP đã xác nhận</option>
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Checklist bắt buộc</label>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '8px' }}>
+                        {[
+                          ['inspection', 'Kiểm tra tổng thể'],
+                          ['cleaning', 'Vệ sinh thiết bị'],
+                          ['functionalTest', 'Chạy thử chức năng'],
+                          ['safetyCheck', 'Kiểm tra an toàn'],
+                          ['dataBackup', 'Sao lưu dữ liệu PC']
+                        ].map(([key, label]) => (
+                          <label key={key} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                            <input
+                              type="checkbox"
+                              checked={Boolean(formData.serviceChecklist?.[key])}
+                              onChange={e => setFormData(prev => ({
+                                ...prev,
+                                serviceChecklist: { ...(prev.serviceChecklist || {}), [key]: e.target.checked }
+                              }))}
+                            />
+                            {label}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Vật tư sử dụng (mỗi dòng một mục)</label>
+                      <textarea
+                        className="form-input"
+                        rows={3}
+                        placeholder="Ví dụ: Dây nguồn x1"
+                        value={(formData.materialsUsed || []).join('\n')}
+                        onChange={e => setFormData({
+                          ...formData,
+                          materialsUsed: e.target.value.split('\n').map(item => item.trim()).filter(Boolean)
+                        })}
+                      />
+                    </div>
+                  </div>
+
                   {/* Photo Upload Section */}
                   <div style={{ marginTop: '16px', borderTop: '1px solid var(--border-color)', paddingTop: '14px' }}>
                     <label className="form-label">📸 Ảnh Chụp Hiện Trường / Thiết Bị Hỏng</label>
@@ -1195,6 +1357,53 @@ export default function DeviceRepairProcessing({
                           </div>
                         ))}
                       </div>
+                    )}
+                  </div>
+
+                  <div style={{ marginTop: '16px' }}>
+                    <label className="form-label">📸 Ảnh Sau Khi Hoàn Thành</label>
+                    <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer' }}>
+                      <Camera size={14} />
+                      <span>Chụp / Chọn Ảnh Sau</span>
+                      <input type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={handleAfterPhotoUpload} />
+                    </label>
+                    {(formData.afterPhotos || []).length > 0 && (
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: '8px', marginTop: '10px' }}>
+                        {formData.afterPhotos.map((url, idx) => (
+                          <div key={idx} style={{ position: 'relative', height: '65px', borderRadius: '6px', overflow: 'hidden', border: '1px solid var(--border-color)' }}>
+                            <img src={url} alt="after service" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            <button type="button" aria-label="Xóa ảnh sau" onClick={() => setFormData(prev => ({ ...prev, afterPhotos: prev.afterPhotos.filter((_, index) => index !== idx) }))} style={{ position: 'absolute', top: 2, right: 2, border: 0, borderRadius: '50%', background: 'rgba(0,0,0,.7)', color: '#fff' }}><X size={12} /></button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="form-group" style={{ marginTop: '16px', padding: '12px', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700 }}>
+                      <input
+                        type="checkbox"
+                        checked={Boolean(formData.nppConfirmation?.confirmed)}
+                        onChange={e => setFormData(prev => ({
+                          ...prev,
+                          nppConfirmation: { ...(prev.nppConfirmation || {}), confirmed: e.target.checked }
+                        }))}
+                      />
+                      Đại diện NPP xác nhận đã hoàn thành
+                    </label>
+                    {formData.nppConfirmation?.confirmed && (
+                      <input
+                        className="form-input"
+                        style={{ marginTop: '10px' }}
+                        maxLength={120}
+                        required
+                        placeholder="Họ tên người xác nhận"
+                        value={formData.nppConfirmation.confirmedBy || ''}
+                        onChange={e => setFormData(prev => ({
+                          ...prev,
+                          nppConfirmation: { ...(prev.nppConfirmation || {}), confirmedBy: e.target.value }
+                        }))}
+                      />
                     )}
                   </div>
 
@@ -1231,6 +1440,12 @@ export default function DeviceRepairProcessing({
                   <div><strong>Hướng Xử Lý:</strong> {selectedTicket.actionDirection}</div>
                   <div><strong>Tình Trạng Sửa:</strong> {selectedTicket.processingStatus}</div>
                   <div><strong>Gửi Trả Khách:</strong> {selectedTicket.customerReturnStatus}</div>
+                  <div><strong>Mã QR / Mã QL:</strong> {selectedTicket.assetCode || 'Chưa cập nhật'}</div>
+                  <div><strong>Trạng thái công tác:</strong> {selectedTicket.fieldVisitStatus || 'scheduled'}</div>
+                  <div><strong>Hạn SLA:</strong> {selectedTicket.slaDueAt ? new Date(selectedTicket.slaDueAt).toLocaleString('vi-VN') : 'Chưa đặt'}</div>
+                  <div><strong>Checklist:</strong> {Object.values(selectedTicket.serviceChecklist || {}).filter(Boolean).length}/{Object.keys(EMPTY_SERVICE_CHECKLIST).length} mục</div>
+                  <div><strong>Vật tư:</strong> {(selectedTicket.materialsUsed || []).join(', ') || 'Không sử dụng'}</div>
+                  <div><strong>NPP xác nhận:</strong> {selectedTicket.nppConfirmation?.confirmed ? `Đã xác nhận - ${selectedTicket.nppConfirmation.confirmedBy}` : 'Chưa xác nhận'}</div>
                 </div>
 
                 {selectedTicket.photos && selectedTicket.photos.length > 0 && (
@@ -1240,6 +1455,18 @@ export default function DeviceRepairProcessing({
                       {selectedTicket.photos.map((url, idx) => (
                         <a key={idx} href={url} target="_blank" rel="noreferrer" style={{ height: '90px', borderRadius: '6px', overflow: 'hidden', display: 'block', border: '1px solid var(--border-color)' }}>
                           <img src={url} alt="error photo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {selectedTicket.afterPhotos && selectedTicket.afterPhotos.length > 0 && (
+                  <div style={{ marginTop: '16px', borderTop: '1px solid var(--border-color)', paddingTop: '12px' }}>
+                    <h4 style={{ fontSize: '0.85rem', fontWeight: '700', marginBottom: '8px' }}>📸 Ảnh Sau Khi Hoàn Thành:</h4>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '8px' }}>
+                      {selectedTicket.afterPhotos.map((url, idx) => (
+                        <a key={idx} href={url} target="_blank" rel="noreferrer" style={{ height: '90px', borderRadius: '6px', overflow: 'hidden', display: 'block', border: '1px solid var(--border-color)' }}>
+                          <img src={url} alt="after service" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                         </a>
                       ))}
                     </div>

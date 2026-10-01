@@ -7,12 +7,11 @@ import {
   CheckCircle2, 
   AlertTriangle, 
   X, 
-  FileText, 
   HardDrive,
   Copy,
   Check
 } from 'lucide-react';
-import { getOfflineQueue, syncOfflineQueue } from '../lib/offlineSync.js';
+import { syncOfflineQueue } from '../lib/offlineSync.js';
 import { getSyncHealthSnapshot } from '../lib/syncHealth.js';
 import { createSecureBackup, parseAndValidateBackup, MAX_BACKUP_BYTES } from '../utils/secureBackup.js';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -46,14 +45,35 @@ export default function DataBackupSyncModal({
   const [queueCount, setQueueCount] = useState(0);
   const [syncHealth, setSyncHealth] = useState(null);
 
+  const refreshSyncHealth = React.useCallback(async () => {
+    const snapshot = await getSyncHealthSnapshot();
+    setSyncHealth(snapshot);
+    setQueueCount(snapshot.queueTotal);
+  }, []);
+
   // Check offline queue count on mount/tab change
   React.useEffect(() => {
     if (isOpen) {
-      getOfflineQueue().then(q => setQueueCount(q.length));
-      getSyncHealthSnapshot().then(setSyncHealth);
+      refreshSyncHealth();
       if (!canManageBackups) setActiveTab('sync');
     }
-  }, [isOpen, activeTab, canManageBackups]);
+  }, [isOpen, activeTab, canManageBackups, refreshSyncHealth]);
+
+  React.useEffect(() => {
+    if (!isOpen) return undefined;
+    const interval = window.setInterval(refreshSyncHealth, 5000);
+    window.addEventListener('offline-queue-updated', refreshSyncHealth);
+    window.addEventListener('nasun-sync-completed', refreshSyncHealth);
+    window.addEventListener('online', refreshSyncHealth);
+    window.addEventListener('offline', refreshSyncHealth);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('offline-queue-updated', refreshSyncHealth);
+      window.removeEventListener('nasun-sync-completed', refreshSyncHealth);
+      window.removeEventListener('online', refreshSyncHealth);
+      window.removeEventListener('offline', refreshSyncHealth);
+    };
+  }, [isOpen, refreshSyncHealth]);
 
   if (!isOpen) return null;
 
@@ -166,7 +186,7 @@ export default function DataBackupSyncModal({
       setSyncStatus('error');
       setSyncMsg(`Lỗi kết nối đồng bộ: ${err.message}`);
     } finally {
-      setSyncHealth(await getSyncHealthSnapshot());
+      await refreshSyncHealth();
     }
   };
 
@@ -334,6 +354,60 @@ export default function DataBackupSyncModal({
         {/* Tab 3: SYNC */}
         {activeTab === 'sync' && (
           <div className="modal-body">
+            {syncHealth && (
+              <div className="card" style={{ padding: '0.9rem', marginBottom: '1rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <div>
+                    <strong style={{ color: syncHealth.state === 'healthy' ? 'var(--accent-emerald)' : syncHealth.state === 'critical' ? 'var(--accent-rose)' : 'var(--accent-amber)' }}>
+                      {syncHealth.state === 'healthy' ? '● Đồng bộ ổn định' : syncHealth.state === 'critical' ? '● Cần xử lý lỗi' : syncHealth.state === 'offline' ? '● Thiết bị đang offline' : '● Đang chờ đồng bộ'}
+                    </strong>
+                    <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                      Engine v{syncHealth.engineVersion} · Realtime {syncHealth.transport.status} · hàng chờ cũ nhất {Math.floor(syncHealth.oldestQueueAgeSeconds / 60)} phút
+                    </div>
+                  </div>
+                  <button type="button" className="btn btn-secondary btn-sm" onClick={refreshSyncHealth}>
+                    <RefreshCw size={14} /> Làm mới
+                  </button>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(80px, 1fr))', gap: '8px', marginTop: '12px' }}>
+                  {[
+                    ['Chờ', (syncHealth.counts.pending || 0) + (syncHealth.counts.retry_wait || 0)],
+                    ['Cần duyệt', syncHealth.counts.needs_review || 0],
+                    ['Dừng retry', syncHealth.counts.dead_letter || 0],
+                    ['Tổng', syncHealth.queueTotal],
+                  ].map(([label, value]) => (
+                    <div key={label} style={{ background: 'var(--bg-secondary)', borderRadius: '8px', padding: '8px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '1.1rem', fontWeight: 800 }}>{value}</div>
+                      <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>{label}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {syncHealth.queueItems?.length > 0 && (
+                  <div style={{ marginTop: '12px', maxHeight: '180px', overflowY: 'auto', borderTop: '1px solid var(--border-color)' }}>
+                    {syncHealth.queueItems.map(item => (
+                      <div key={item.id} style={{ padding: '8px 2px', borderBottom: '1px solid var(--border-color)', fontSize: '0.76rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px' }}>
+                          <strong>{item.action} {item.entityId ? `· ${item.entityId}` : ''}</strong>
+                          <span className={`badge ${['needs_review', 'dead_letter'].includes(item.status) ? 'badge-danger' : 'badge-info'}`}>{item.status}</span>
+                        </div>
+                        <div style={{ color: 'var(--text-muted)', marginTop: '3px' }}>
+                          Thử {item.attempts} lần · chờ {Math.floor(item.ageSeconds / 60)} phút{item.nextRetryInSeconds ? ` · retry sau ${item.nextRetryInSeconds}s` : ''}
+                        </div>
+                        {item.lastError && <div style={{ color: 'var(--accent-rose)', marginTop: '3px', overflowWrap: 'anywhere' }}>{item.lastError}</div>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {syncHealth.serverError && (
+                  <div className="alert alert-warning" style={{ marginTop: '10px', marginBottom: 0, fontSize: '0.75rem' }}>
+                    Không đọc được trạng thái cloud: {syncHealth.serverError}
+                  </div>
+                )}
+              </div>
+            )}
             <div className="alert alert-info" style={{ marginBottom: '1rem' }}>
               <RefreshCw size={18} style={{ flexShrink: 0 }} />
               <span style={{ fontSize: '0.85rem' }}>

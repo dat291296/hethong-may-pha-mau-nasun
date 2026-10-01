@@ -135,7 +135,16 @@ export function useRepairs() {
       processingStatus: 'processing_status',
       customerReturnStatus: 'customer_return_status',
       notes: 'notes',
-      photos: 'photos'
+      photos: 'photos',
+      assetCode: 'asset_code',
+      fieldVisitStatus: 'field_visit_status',
+      serviceChecklist: 'service_checklist',
+      materialsUsed: 'materials_used',
+      beforePhotos: 'before_photos',
+      afterPhotos: 'after_photos',
+      nppConfirmation: 'npp_confirmation',
+      slaDueAt: 'sla_due_at',
+      completedAt: 'completed_at'
     };
 
     for (const key in updates) {
@@ -257,6 +266,15 @@ function mapDbToRepair(row) {
     customerReturnStatus: row.customer_return_status,
     notes:                 row.notes,
     photos:                row.photos || [],
+    assetCode:             row.asset_code || '',
+    fieldVisitStatus:      row.field_visit_status || 'scheduled',
+    serviceChecklist:      row.service_checklist || {},
+    materialsUsed:         row.materials_used || [],
+    beforePhotos:          row.before_photos || row.photos || [],
+    afterPhotos:           row.after_photos || [],
+    nppConfirmation:       row.npp_confirmation || {},
+    slaDueAt:              row.sla_due_at || '',
+    completedAt:           row.completed_at || null,
   };
 }
 
@@ -279,5 +297,14 @@ function mapRepairToDb(r) {
     customer_return_status: r.customerReturnStatus || 'Chưa gửi trả',
     notes:                  r.notes || '',
     photos:                 r.photos || [],
+    asset_code:             r.assetCode || '',
+    field_visit_status:     r.fieldVisitStatus || 'scheduled',
+    service_checklist:      r.serviceChecklist || {},
+    materials_used:         r.materialsUsed || [],
+    before_photos:          r.beforePhotos || r.photos || [],
+    after_photos:           r.afterPhotos || [],
+    npp_confirmation:       r.nppConfirmation || {},
+    sla_due_at:             r.slaDueAt || null,
+    completed_at:           r.completedAt || null,
   };
 }

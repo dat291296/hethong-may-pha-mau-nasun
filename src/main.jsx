@@ -4,6 +4,9 @@ import './index.css'
 import App from './App.jsx'
 import { AuthProvider } from './context/AuthContext.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
+import { startPerformanceMonitoring } from './lib/performanceMetrics.js'
+
+startPerformanceMonitoring()
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && node scripts/generate-sbom.mjs && node scripts/generate-service-worker.mjs && node scripts/verify-production-build.mjs",
+    "build": "vite build && node scripts/generate-sbom.mjs && node scripts/generate-service-worker.mjs && node scripts/verify-production-build.mjs && node scripts/verify-bundle-budget.mjs",
     "lint": "oxlint",
-    "test:enterprise": "node --test tests/enterpriseModule0.test.mjs tests/enterpriseModule1.test.mjs tests/enterpriseModule2.test.mjs tests/enterpriseModule3.test.mjs tests/enterpriseModule4.test.mjs tests/enterpriseModule5.test.mjs",
+    "test:enterprise": "node --test tests/enterpriseModule0.test.mjs tests/enterpriseModule1.test.mjs tests/enterpriseModule2.test.mjs tests/enterpriseModule3.test.mjs tests/enterpriseModule4.test.mjs tests/enterpriseModule5.test.mjs tests/enterpriseModule6.test.mjs tests/enterpriseModule7.test.mjs tests/enterpriseModule8.test.mjs tests/enterpriseModule9.test.mjs tests/enterpriseModule10.test.mjs",
     "verify:deployment": "node scripts/verify-deployment.mjs",
     "sbom": "node scripts/generate-sbom.mjs dist/sbom.cdx.json",
     "test:sync": "node --test tests/syncQueue.test.mjs",
@@ -17,9 +17,7 @@
     "test:rls": "node scripts/verify-rls.mjs",
     "preview": "vite preview",
     "deploy": "npm run build && wrangler deploy",
-    "backup": "node scripts/backup-database.js",
-    "electron:start": "node node_modules/electron/install.js && electron electron/main.cjs",
-    "electron:build": "vite build && electron-builder"
+    "backup": "node scripts/backup-database.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.9",
@@ -35,10 +33,8 @@
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.3",
-    "electron": "^31.0.0",
-    "electron-builder": "^24.13.3",
     "oxlint": "^1.71.0",
     "vite": "^8.1.1",
-    "wrangler": "^3.100.0"
+    "wrangler": "^4.145.0"
   }
 }

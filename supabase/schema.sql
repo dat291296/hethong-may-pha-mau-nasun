@@ -288,17 +288,28 @@ CREATE TABLE IF NOT EXISTS repair_tickets (
   replacement_condition  TEXT DEFAULT 'N/A'
                            CHECK (replacement_condition IN ('Mới','Cũ','N/A')),
   processing_status      TEXT DEFAULT 'Chưa xử lý'
-                           CHECK (processing_status IN ('Chưa xử lý','Đã xử lý')),
+                           CHECK (processing_status IN ('Chưa xử lý','Đang xử lý','Đã xử lý')),
   customer_return_status TEXT DEFAULT 'Chưa gửi trả'
                            CHECK (customer_return_status IN ('Chưa gửi trả','Đã gửi trả')),
   notes                  TEXT DEFAULT '',
   photos                 JSONB DEFAULT '[]',
+  asset_code             TEXT DEFAULT '',
+  field_visit_status     TEXT NOT NULL DEFAULT 'scheduled'
+                           CHECK (field_visit_status IN ('scheduled','on_site','completed','customer_confirmed')),
+  service_checklist      JSONB NOT NULL DEFAULT '{}',
+  materials_used         JSONB NOT NULL DEFAULT '[]',
+  before_photos          JSONB NOT NULL DEFAULT '[]',
+  after_photos           JSONB NOT NULL DEFAULT '[]',
+  npp_confirmation       JSONB NOT NULL DEFAULT '{}',
+  sla_due_at             TIMESTAMPTZ,
+  completed_at           TIMESTAMPTZ,
   created_by             UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_repairs_status ON repair_tickets (processing_status);
 CREATE INDEX IF NOT EXISTS idx_repairs_date   ON repair_tickets (date DESC);
+CREATE INDEX IF NOT EXISTS idx_repairs_field_sla ON repair_tickets (field_visit_status, sla_due_at);
 
 -- ── 9. Audit Logs (Append Only) ──────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS audit_logs (

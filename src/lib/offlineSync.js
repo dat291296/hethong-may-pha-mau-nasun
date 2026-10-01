@@ -171,12 +171,18 @@ function normalizeRepairPayload(payload, applyDefaults = false, queueItemId = nu
     errorDescription: 'error_description', errorCategory: 'error_category',
     actionDirection: 'action_direction', replacementCondition: 'replacement_condition',
     processingStatus: 'processing_status', customerReturnStatus: 'customer_return_status',
+    assetCode: 'asset_code', fieldVisitStatus: 'field_visit_status',
+    serviceChecklist: 'service_checklist', materialsUsed: 'materials_used',
+    beforePhotos: 'before_photos', afterPhotos: 'after_photos',
+    nppConfirmation: 'npp_confirmation', slaDueAt: 'sla_due_at', completedAt: 'completed_at',
     createdBy: 'created_by'
   };
   const allowed = new Set([
     'id', 'ticket_code', 'date', 'technician', 'npp_id', 'npp_name', 'product_category',
     'machine_model', 'serial_number', 'error_description', 'error_category', 'action_direction',
-    'replacement_condition', 'processing_status', 'customer_return_status', 'notes', 'photos', 'created_by'
+    'replacement_condition', 'processing_status', 'customer_return_status', 'notes', 'photos', 'created_by',
+    'asset_code', 'field_visit_status', 'service_checklist', 'materials_used', 'before_photos',
+    'after_photos', 'npp_confirmation', 'sla_due_at', 'completed_at'
   ]);
   const normalized = {};
   for (const [key, value] of Object.entries(source)) {
@@ -210,13 +216,25 @@ function normalizeRepairPayload(payload, applyDefaults = false, queueItemId = nu
   if (normalized.replacement_condition && !['Mới', 'Cũ', 'N/A'].includes(normalized.replacement_condition)) {
     normalized.replacement_condition = 'N/A';
   }
-  if (normalized.processing_status && !['Chưa xử lý', 'Đã xử lý'].includes(normalized.processing_status)) {
+  if (normalized.processing_status && !['Chưa xử lý', 'Đang xử lý', 'Đã xử lý'].includes(normalized.processing_status)) {
     normalized.processing_status = 'Chưa xử lý';
   }
   if (normalized.customer_return_status && !['Chưa gửi trả', 'Đã gửi trả'].includes(normalized.customer_return_status)) {
     normalized.customer_return_status = 'Chưa gửi trả';
   }
   if ('photos' in normalized && !Array.isArray(normalized.photos)) normalized.photos = [];
+  if (normalized.field_visit_status && !['scheduled', 'on_site', 'completed', 'customer_confirmed'].includes(normalized.field_visit_status)) {
+    normalized.field_visit_status = 'scheduled';
+  }
+  for (const key of ['materials_used', 'before_photos', 'after_photos']) {
+    if (key in normalized && !Array.isArray(normalized[key])) normalized[key] = [];
+  }
+  for (const key of ['service_checklist', 'npp_confirmation']) {
+    if (key in normalized && (!normalized[key] || Array.isArray(normalized[key]) || typeof normalized[key] !== 'object')) normalized[key] = {};
+  }
+  for (const key of ['sla_due_at', 'completed_at']) {
+    if (normalized[key] === '') normalized[key] = null;
+  }
   if (applyDefaults) {
     const fallbackId = `TICK-OFFLINE-${String(queueItemId || Date.now()).replace(/[^a-z0-9]/gi, '').slice(-12).toUpperCase()}`;
     normalized.id = normalized.id || normalized.ticket_code || fallbackId;
@@ -230,6 +248,12 @@ function normalizeRepairPayload(payload, applyDefaults = false, queueItemId = nu
     normalized.processing_status = normalized.processing_status || 'Chưa xử lý';
     normalized.customer_return_status = normalized.customer_return_status || 'Chưa gửi trả';
     normalized.photos = Array.isArray(normalized.photos) ? normalized.photos : [];
+    normalized.field_visit_status = normalized.field_visit_status || 'scheduled';
+    normalized.service_checklist = normalized.service_checklist || {};
+    normalized.materials_used = Array.isArray(normalized.materials_used) ? normalized.materials_used : [];
+    normalized.before_photos = Array.isArray(normalized.before_photos) ? normalized.before_photos : normalized.photos;
+    normalized.after_photos = Array.isArray(normalized.after_photos) ? normalized.after_photos : [];
+    normalized.npp_confirmation = normalized.npp_confirmation || {};
   }
   return normalized;
 }

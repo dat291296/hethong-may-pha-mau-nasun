@@ -1,0 +1,82 @@
+name: Deploy Staging
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-deploy
+  cancel-in-progress: true
+
+jobs:
+  staging:
+    name: Validate and deploy staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: staging
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Validate staging configuration
+        shell: bash
+        env:
+          VITE_SUPABASE_URL: ${{ vars.STAGING_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.STAGING_SUPABASE_ANON_KEY }}
+          PRODUCTION_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL || secrets.VITE_SUPABASE_URL }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          for variable in VITE_SUPABASE_URL VITE_SUPABASE_ANON_KEY CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID; do
+            if [ -z "${!variable}" ]; then
+              echo "::error::$variable is required by the staging environment."
+              exit 1
+            fi
+          done
+          if [ -n "$PRODUCTION_SUPABASE_URL" ] && [ "$VITE_SUPABASE_URL" = "$PRODUCTION_SUPABASE_URL" ]; then
+            echo "::error::Staging must not use the production Supabase project."
+            exit 1
+          fi
+
+      - name: Run release gates
+        run: npm run test:enterprise && npm run test:security && npm audit --omit=dev --audit-level=critical
+
+      - name: Build staging application
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ vars.STAGING_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.STAGING_SUPABASE_ANON_KEY }}
+
+      - name: Deploy isolated staging worker
+        id: deploy
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID }}
+          STAGING_URL: ${{ vars.STAGING_URL }}
+        run: |
+          set -euo pipefail
+          output="$(npx wrangler deploy --name kythuat-staging 2>&1)"
+          printf '%s\n' "$output"
+          detected_url="$(printf '%s\n' "$output" | grep -Eo 'https://[^[:space:]]+\.workers\.dev' | tail -n 1 || true)"
+          deployment_url="${STAGING_URL:-$detected_url}"
+          if [ -z "$deployment_url" ]; then
+            echo "::error::Could not detect staging URL. Configure STAGING_URL."
+            exit 1
+          fi
+          echo "url=$deployment_url" >> "$GITHUB_OUTPUT"
+
+      - name: Verify staging deployment
+        run: node scripts/verify-deployment.mjs "${{ steps.deploy.outputs.url }}"

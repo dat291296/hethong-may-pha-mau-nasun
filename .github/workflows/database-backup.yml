@@ -1,0 +1,122 @@
+name: Encrypted Database Backup
+
+on:
+  schedule:
+    - cron: '23 18 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: database-backup
+  cancel-in-progress: false
+
+jobs:
+  backup-and-restore-test:
+    name: Backup and restore verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: restore_admin
+          POSTGRES_PASSWORD: restore_test_only
+          POSTGRES_DB: nasun_restore_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U restore_admin -d nasun_restore_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Validate backup secrets
+        shell: bash
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          BACKUP_ENCRYPTION_PASSPHRASE: ${{ secrets.BACKUP_ENCRYPTION_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          if [ -z "$SUPABASE_DB_URL" ]; then echo "::error::SUPABASE_DB_URL is required."; exit 1; fi
+          if [ "${#BACKUP_ENCRYPTION_PASSPHRASE}" -lt 24 ]; then
+            echo "::error::BACKUP_ENCRYPTION_PASSPHRASE must contain at least 24 characters."
+            exit 1
+          fi
+
+      - name: Create public schema backup
+        env:
+          PGDATABASE: ${{ secrets.SUPABASE_DB_URL }}
+        run: pg_dump --schema=public --format=custom --compress=9 --no-owner --no-privileges --file=nasun-public.dump
+
+      - name: Verify backup can be restored
+        shell: bash
+        env:
+          PGHOST: 127.0.0.1
+          PGPORT: 5432
+          PGUSER: restore_admin
+          PGPASSWORD: restore_test_only
+          PGDATABASE: nasun_restore_test
+        run: |
+          set -euo pipefail
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE EXTENSION IF NOT EXISTS pgcrypto;
+          CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+          CREATE EXTENSION IF NOT EXISTS pg_trgm;
+          CREATE SCHEMA IF NOT EXISTS auth;
+          CREATE TABLE IF NOT EXISTS auth.users (id UUID PRIMARY KEY);
+          CREATE OR REPLACE FUNCTION auth.uid() RETURNS UUID LANGUAGE SQL STABLE AS 'SELECT NULL::UUID';
+          CREATE OR REPLACE FUNCTION auth.role() RETURNS TEXT LANGUAGE SQL STABLE AS 'SELECT ''authenticated''::TEXT';
+          CREATE OR REPLACE FUNCTION auth.jwt() RETURNS JSONB LANGUAGE SQL STABLE AS 'SELECT ''{}''::JSONB';
+          DO $$ BEGIN CREATE ROLE anon NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+          DO $$ BEGIN CREATE ROLE authenticated NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+          DO $$ BEGIN CREATE ROLE service_role NOLOGIN BYPASSRLS; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+          SQL
+          pg_restore --section=pre-data --no-owner --no-privileges --exit-on-error --dbname="$PGDATABASE" nasun-public.dump
+          pg_restore --section=data --no-owner --no-privileges --exit-on-error --dbname="$PGDATABASE" nasun-public.dump
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          DECLARE column_record RECORD;
+          BEGIN
+            FOR column_record IN
+              SELECT table_schema, table_name, column_name
+              FROM information_schema.columns
+              WHERE table_schema = 'public' AND data_type = 'uuid'
+            LOOP
+              EXECUTE format(
+                'INSERT INTO auth.users(id) SELECT DISTINCT %I FROM %I.%I WHERE %I IS NOT NULL ON CONFLICT DO NOTHING',
+                column_record.column_name, column_record.table_schema, column_record.table_name, column_record.column_name
+              );
+            END LOOP;
+          END;
+          $$;
+          SQL
+          pg_restore --section=post-data --no-owner --no-privileges --exit-on-error --dbname="$PGDATABASE" nasun-public.dump
+          psql -v ON_ERROR_STOP=1 -Atc "SELECT CASE WHEN to_regclass('public.distributors') IS NOT NULL AND to_regclass('public.system_sets') IS NOT NULL AND to_regclass('public.repair_tickets') IS NOT NULL THEN 'RESTORE_OK' ELSE 'RESTORE_INCOMPLETE' END" | grep -qx RESTORE_OK
+
+      - name: Encrypt verified backup
+        env:
+          BACKUP_ENCRYPTION_PASSPHRASE: ${{ secrets.BACKUP_ENCRYPTION_PASSPHRASE }}
+        run: |
+          openssl enc -aes-256-cbc -salt -pbkdf2 -iter 200000 \
+            -in nasun-public.dump -out nasun-public.dump.enc \
+            -pass env:BACKUP_ENCRYPTION_PASSPHRASE
+          sha256sum nasun-public.dump.enc > nasun-public.dump.enc.sha256
+          shred -u nasun-public.dump
+
+      - name: Upload encrypted backup
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: nasun-db-backup-${{ github.run_id }}
+          path: |
+            nasun-public.dump.enc
+            nasun-public.dump.enc.sha256
+          retention-days: 7
+          if-no-files-found: error
