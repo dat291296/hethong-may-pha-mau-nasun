@@ -6,10 +6,18 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
     name: Deploy to Cloudflare Workers
+    timeout-minutes: 20
     steps:
       - name: Checkout repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -47,14 +55,49 @@ jobs:
           VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY || secrets.VITE_SUPABASE_ANON_KEY }}
 
       - name: Validate Cloudflare Secret
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          if [ -z "${{ secrets.CLOUDFLARE_API_TOKEN }}" ]; then
-            echo "::error::CLOUDFLARE_API_TOKEN is not set in GitHub Secrets! Please configure it at https://github.com/${{ github.repository }}/settings/secrets/actions"
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::error::CLOUDFLARE_API_TOKEN is not set in GitHub Secrets."
+            exit 1
+          fi
+          if [ -z "$CLOUDFLARE_ACCOUNT_ID" ] && ! grep -Eq '"account_id"[[:space:]]*:[[:space:]]*"[^"]+"' wrangler.jsonc; then
+            echo "::error::Configure CLOUDFLARE_ACCOUNT_ID or account_id in wrangler.jsonc."
             exit 1
           fi
 
       - name: Deploy to Cloudflare Workers
-        run: npx wrangler deploy
+        id: deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          deploy_output="$(npx wrangler deploy 2>&1)"
+          printf '%s\n' "$deploy_output"
+          detected_url="$(printf '%s\n' "$deploy_output" | grep -Eo 'https://[^[:space:]]+\.workers\.dev' | tail -n 1 || true)"
+          deployment_url="${PRODUCTION_URL:-$detected_url}"
+          if [ -z "$deployment_url" ]; then
+            echo "::error::Could not detect deployment URL. Configure optional PRODUCTION_URL in GitHub Actions Variables."
+            exit 1
+          fi
+          echo "url=$deployment_url" >> "$GITHUB_OUTPUT"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PRODUCTION_URL: ${{ vars.PRODUCTION_URL }}
+
+      - name: Verify production deployment
+        run: node scripts/verify-deployment.mjs "${{ steps.deploy.outputs.url }}"
+
+      - name: Publish deployment summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "### Production deployment"
+            echo "- Commit: \`${GITHUB_SHA}\`"
+            echo "- URL: ${{ steps.deploy.outputs.url || 'not available' }}"
+            echo "- Result: ${{ job.status }}"
+          } >> "$GITHUB_STEP_SUMMARY"
