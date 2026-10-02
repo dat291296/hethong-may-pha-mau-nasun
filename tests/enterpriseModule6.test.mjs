@@ -8,6 +8,7 @@ test('ENT-6 uses an isolated manually approved staging environment', async () =>
   const workflow = await readFile(workflowUrl, 'utf8');
   assert.match(workflow, /workflow_dispatch:/);
   assert.match(workflow, /environment: staging/);
+  assert.match(workflow, /node-version: 22/);
   assert.match(workflow, /STAGING_SUPABASE_URL/);
   assert.match(workflow, /STAGING_SUPABASE_ANON_KEY/);
   assert.match(workflow, /PRODUCTION_SUPABASE_URL/);

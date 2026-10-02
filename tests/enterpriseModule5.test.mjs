@@ -13,6 +13,7 @@ test('ENT-5 deploy workflow serializes production releases and validates configu
   assert.match(workflow, /concurrency:/);
   assert.match(workflow, /cancel-in-progress: false/);
   assert.match(workflow, /timeout-minutes:/);
+  assert.match(workflow, /node-version: 22/);
   assert.match(workflow, /CLOUDFLARE_ACCOUNT_ID/);
   assert.match(workflow, /account_id.*wrangler\.jsonc/);
   assert.match(workflow, /Cloudflare deployment failed\. Review the Wrangler output above/);
