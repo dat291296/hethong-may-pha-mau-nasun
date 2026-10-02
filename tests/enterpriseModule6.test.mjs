@@ -13,6 +13,7 @@ test('ENT-6 uses an isolated manually approved staging environment', async () =>
   assert.match(workflow, /PRODUCTION_SUPABASE_URL/);
   assert.match(workflow, /must not use the production Supabase project/);
   assert.match(workflow, /wrangler deploy --name kythuat-staging/);
+  assert.match(workflow, /Cloudflare staging deployment failed\. Review the Wrangler output above/);
   assert.match(workflow, /verify-deployment\.mjs/);
   assert.doesNotMatch(workflow, /push:\s*\n\s*branches:\s*\[?main/);
 });

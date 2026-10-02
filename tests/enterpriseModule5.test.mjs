@@ -15,6 +15,7 @@ test('ENT-5 deploy workflow serializes production releases and validates configu
   assert.match(workflow, /timeout-minutes:/);
   assert.match(workflow, /CLOUDFLARE_ACCOUNT_ID/);
   assert.match(workflow, /account_id.*wrangler\.jsonc/);
+  assert.match(workflow, /Cloudflare deployment failed\. Review the Wrangler output above/);
 });
 
 test('ENT-5 performs a bounded HTTPS smoke test after deployment', async () => {

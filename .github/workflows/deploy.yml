@@ -74,7 +74,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          deploy_output="$(npx wrangler deploy 2>&1)"
+          if ! deploy_output="$(npx wrangler deploy 2>&1)"; then
+            printf '%s\n' "$deploy_output"
+            echo "::error::Cloudflare deployment failed. Review the Wrangler output above."
+            exit 1
+          fi
           printf '%s\n' "$deploy_output"
           detected_url="$(printf '%s\n' "$deploy_output" | grep -Eo 'https://[^[:space:]]+\.workers\.dev' | tail -n 1 || true)"
           deployment_url="${PRODUCTION_URL:-$detected_url}"
