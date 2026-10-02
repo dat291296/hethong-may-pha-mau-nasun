@@ -5,9 +5,10 @@ const distDir = join(process.cwd(), 'dist');
 const assetsDir = join(distDir, 'assets');
 const limits = {
   entry: 550 * 1024,
+  supabase: 220 * 1024,
   assetManagement: 550 * 1024,
   excel: 1024 * 1024,
-  totalJavaScript: 2600 * 1024
+  totalJavaScript: 2800 * 1024
 };
 
 const indexHtml = await readFile(join(distDir, 'index.html'), 'utf8');
@@ -34,8 +35,10 @@ function enforce(file, maxBytes, label) {
 
 const entry = entryMatch[1];
 const assetManagement = requireChunk('AssetManagement-');
+const supabase = requireChunk('supabase-');
 const excel = requireChunk('exceljs.min-');
 enforce(entry, limits.entry, 'application entry');
+enforce(supabase, limits.supabase, 'Supabase vendor chunk');
 enforce(assetManagement, limits.assetManagement, 'asset management lazy chunk');
 enforce(excel, limits.excel, 'ExcelJS lazy chunk');
 

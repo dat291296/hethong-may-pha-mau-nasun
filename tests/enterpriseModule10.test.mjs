@@ -26,6 +26,7 @@ test('ENT-10 starts monitoring and enforces lazy bundle budgets in production bu
   assert.match(main, /startPerformanceMonitoring\(\)/);
   assert.match(packageSource, /verify-bundle-budget\.mjs/);
   assert.match(budget, /AssetManagement-/);
+  assert.match(budget, /supabase-/);
   assert.match(budget, /exceljs\.min-/);
   assert.match(budget, /totalJavaScript/);
 });

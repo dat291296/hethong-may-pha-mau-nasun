@@ -9,6 +9,14 @@ export default defineConfig({
     sourcemap: false,
     minify: 'oxc',
     reportCompressedSize: true,
+    rolldownOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules/@supabase/')) return 'supabase';
+          return undefined;
+        },
+      },
+    },
   },
 })
 
