@@ -7,7 +7,8 @@ const workflowUrl = new URL('../.github/workflows/security-analysis.yml', import
 test('security CI scans production dependencies and source code', async () => {
   const workflow = await readFile(workflowUrl, 'utf8');
   assert.match(workflow, /npm audit --omit=dev --audit-level=critical/);
-  assert.match(workflow, /languages: javascript-typescript,python/);
+  assert.match(workflow, /languages: javascript-typescript/);
+  assert.doesNotMatch(workflow, /languages:.*python/);
   assert.match(workflow, /queries: security-extended/);
 });
 
