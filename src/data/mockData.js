@@ -171,7 +171,6 @@ export const INITIAL_SYSTEM_SETS = [
     technician: "Nguyễn Văn Hùng",
     tintingSoftware: "ColorExpert 3",
     softwareVersion: "v3.4.2",
-    agentStatus: "Online",
     installationPhotos: [
       "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80"
     ]
@@ -199,7 +198,6 @@ export const INITIAL_SYSTEM_SETS = [
     technician: "Lê Thanh Tùng",
     tintingSoftware: "ColorExpert 2",
     softwareVersion: "v2.9.1",
-    agentStatus: "Online",
     installationPhotos: []
   },
   {
@@ -225,7 +223,6 @@ export const INITIAL_SYSTEM_SETS = [
     technician: "Trần Đình Trọng",
     tintingSoftware: "CorobTINT",
     softwareVersion: "v1.14.0",
-    agentStatus: "Online",
     installationPhotos: []
   },
   {
@@ -252,7 +249,6 @@ export const INITIAL_SYSTEM_SETS = [
     technician: "Nguyễn Văn Hùng",
     tintingSoftware: "ColorExpert 2",
     softwareVersion: "v2.8.0",
-    agentStatus: "Offline",
     installationPhotos: []
   },
   {
@@ -278,7 +274,6 @@ export const INITIAL_SYSTEM_SETS = [
     technician: "Phạm Văn Minh",
     tintingSoftware: "ColorExpert 3",
     softwareVersion: "v3.1.0",
-    agentStatus: "Offline",
     installationPhotos: []
   },
   {
@@ -304,7 +299,6 @@ export const INITIAL_SYSTEM_SETS = [
     technician: "Trương Minh Tuấn",
     tintingSoftware: "CorobTINT",
     softwareVersion: "v1.15.2",
-    agentStatus: "Online",
     installationPhotos: []
   },
   {
@@ -330,7 +324,6 @@ export const INITIAL_SYSTEM_SETS = [
     technician: "Quản lý Kho",
     tintingSoftware: "ColorExpert 3",
     softwareVersion: "Standard Stock",
-    agentStatus: "Offline",
     installationPhotos: []
   },
 ];
@@ -452,47 +445,6 @@ export const INITIAL_REPAIR_TICKETS = [
     notes: "Đã thay phớt bơm số 3, vệ sinh sạch cụm van chiết và hiệu chuẩn lại định lượng màu.",
     photos: []
   }
-];
-
-export const INITIAL_FORMULA_VERSIONS = [
-  {
-    versionId: "VER-2026.02",
-    title: "Bộ Công Thức Thẻ Màu Xu Hướng 2026 (Mùa Hè)",
-    releaseDate: "2026-07-01",
-    author: "Kỹ Sư Nguyễn Hoàng Việt (R&D)",
-    notes: "Bổ sung 150 mã màu mới bộ thẻ Trendy 2026, tối ưu định mức gốc màu Vàng Oxide & Xanh Phthalo.",
-    files: {
-      colorExpert2: { filename: "Formula_CE2_v2026.2.mdb", size: "4.2 MB", checksum: "8f7a9d3e" },
-      colorExpert3: { filename: "Formula_CE3_v2026.2.db", size: "6.8 MB", checksum: "e4c112a9" },
-      corobTint: { filename: "Formula_Corob_v2026.2.xml", size: "3.5 MB", checksum: "b21098fc" },
-    },
-    syncStatus: [
-      { setCode: "SET-2024-001", nppName: "Nhà Phân Phối Sơn Minh Phát", software: "ColorExpert 3", status: "ĐÃ CẬP NHẬT", updatedTime: "2026-07-15 09:30", agent: "Online" },
-      { setCode: "SET-2024-002", nppName: "Đại Lý Sơn Hoàn Mỹ", software: "ColorExpert 2", status: "CHỜ CẬP NHẬT", updatedTime: null, agent: "Online" },
-      { setCode: "SET-2024-003", nppName: "Nhà Phân Phối Sơn Việt Trung", software: "CorobTINT", status: "ĐÃ CẬP NHẬT", updatedTime: "2026-07-20 14:15", agent: "Online" },
-      { setCode: "SET-2024-004", nppName: "Công Ty TNHH Vật Liệu Hải Phòng", software: "ColorExpert 2", status: "LỖI ĐỒNG BỘ", updatedTime: "2026-07-22 11:00", agent: "Offline" },
-      { setCode: "SET-2024-006", nppName: "Tổng Kho Sơn Sài Gòn Gold", software: "CorobTINT", status: "ĐÃ CẬP NHẬT", updatedTime: "2026-07-05 16:45", agent: "Online" },
-    ],
-  },
-  {
-    versionId: "VER-2026.01",
-    title: "Bộ Công Thức Sơn Tiêu Chuẩn 2026 Q1",
-    releaseDate: "2026-01-10",
-    author: "Phòng Công Nghệ Màu Hãng Sơn",
-    notes: "Cập nhật định mức quy đổi cho dung tích thùng 18L và lon 5L.",
-    files: {
-      colorExpert2: { filename: "Formula_CE2_v2026.1.mdb", size: "4.1 MB", checksum: "7a12bc90" },
-      colorExpert3: { filename: "Formula_CE3_v2026.1.db", size: "6.5 MB", checksum: "d5e67123" },
-      corobTint: { filename: "Formula_Corob_v2026.1.xml", size: "3.2 MB", checksum: "a11984bb" },
-    },
-    syncStatus: [
-      { setCode: "SET-2024-001", nppName: "Nhà Phân Phối Sơn Minh Phát", software: "ColorExpert 3", status: "ĐÃ CẬP NHẬT", updatedTime: "2026-01-12 10:00", agent: "Online" },
-      { setCode: "SET-2024-002", nppName: "Đại Lý Sơn Hoàn Mỹ", software: "ColorExpert 2", status: "ĐÃ CẬP NHẬT", updatedTime: "2026-01-15 08:45", agent: "Online" },
-      { setCode: "SET-2024-003", nppName: "Nhà Phân Phối Sơn Việt Trung", software: "CorobTINT", status: "ĐÃ CẬP NHẬT", updatedTime: "2026-01-11 15:20", agent: "Online" },
-      { setCode: "SET-2024-004", nppName: "Công Ty TNHH Vật Liệu Hải Phòng", software: "ColorExpert 2", status: "ĐÃ CẬP NHẬT", updatedTime: "2026-01-14 13:10", agent: "Offline" },
-      { setCode: "SET-2024-006", nppName: "Tổng Kho Sơn Sài Gòn Gold", software: "CorobTINT", status: "ĐÃ CẬP NHẬT", updatedTime: "2026-01-12 11:30", agent: "Online" },
-    ],
-  },
 ];
 
 export const INITIAL_TINTING_LOGS = [

@@ -24,7 +24,7 @@ export const ERROR_CODES_DATA = [
       'Vệ sinh kỹ zoăng cao su (seal) pít-tông, bôi mỡ màng thực phẩm/chịu nhiệt chuyên dụng.',
       'Bật máy, thực hiện chiết thử 50ml dung môi để kiểm tra độ trơn mượt.'
     ],
-    preventiveMaintenance: 'Cài đặt chế độ tự động khuấy sơn (Agitation) 15 phút/lần trong phần mềm pha màu Nasun Agent.',
+    preventiveMaintenance: 'Cài đặt chế độ tự động khuấy sơn (Agitation) 15 phút/lần trong phần mềm pha màu của hãng máy.',
     author: 'KTV. Nguyễn Văn Hùng'
   },
   {
@@ -75,12 +75,12 @@ export const ERROR_CODES_DATA = [
   {
     id: 'ERR-COM01',
     code: 'COM_TIMEOUT',
-    title: 'Lỗi mất kết nối Phần mềm Nasun Agent với Máy Chiết',
+    title: 'Lỗi mất kết nối Phần mềm pha màu của hãng máy với Máy Chiết',
     category: 'Phần mềm',
     machineModel: 'Case máy tính',
     severity: 'HIGH',
     symptoms: [
-      'Phần mềm Nasun Agent hiện thông báo "Cannot connect to Dispenser (COM Port Timeout)"',
+      'Phần mềm pha màu của hãng máy hiện thông báo "Cannot connect to Dispenser (COM Port Timeout)"',
       'Không bấm được nút "Chiết màu" từ máy tính',
       'Biểu tượng kết nối máy chiết trên thanh trạng thái báo màu đỏ 🔴'
     ],
@@ -89,7 +89,7 @@ export const ERROR_CODES_DATA = [
       'Mở Device Manager trên Windows (nhấn Win+X -> Device Manager).',
       'Kiểm tra mục "Ports (COM & LPT)", xác định số cổng COM hiện tại (VD: COM3 hoặc COM4).',
       'Nếu xuất hiện dấu chấm cảm vàng tại driver USB Serial, tải & cài lại Driver FTDI v2.12.',
-      'Vào Cài đặt trong Phần mềm Nasun Agent -> Chọn lại đúng tên Cổng COM -> Nhấn "Test Connect".',
+      'Vào Cài đặt trong Phần mềm pha màu của hãng máy -> Chọn lại đúng tên Cổng COM -> Nhấn "Test Connect".',
       'Thay cáp chuyển đổi USB-RS232 có bọc kim chống nhiễu nếu cổng nối chập chờn.'
     ],
     preventiveMaintenance: 'Cố định dây cáp RS232 vào thùng máy PC bằng dây thít, tránh co kéo dứt cáp.',
@@ -132,7 +132,7 @@ export const ERROR_CODES_DATA = [
     rootCause: 'Tỷ trọng sơn (Specific Gravity - SG) trong phần mềm khai báo sai, hoặc Pít-tông mòn cơ khí.',
     actionSteps: [
       'Dùng cân tiểu ly điện tử độ chính xác 0.01g.',
-      'Vào mục Calibration trên Nasun Agent Software.',
+      'Vào mục Calibration trên phần mềm pha màu của hãng máy.',
       'Thực hiện chiết mẫu 1/32 oz (hoặc 1ml) của từng hộp màu vào cốc nghiệm.',
       'Nhập khối lượng thực tế cân được vào phần mềm để tự động tính lại hệ số Pulses/mL.',
       'Cập nhật lại bảng Tỷ trọng sơn (SG g/ml) chuẩn theo tài liệu Nasun Paint.'
@@ -148,7 +148,7 @@ export const TECHNICAL_SOPS_DATA = [
     title: 'Quy trình Cân chỉnh Định lượng (Calibration) Máy Chiết Sơn',
     machineType: 'Máy chiết (Satint A2, AIO, Hero)',
     duration: '30 phút',
-    toolsRequired: ['Cân tiểu ly 0.01g', 'Cốc nghiệm nhựa', 'Máy tính cài Nasun Agent', 'Bảng Tỷ Trọng Sơn Nasun'],
+    toolsRequired: ['Cân tiểu ly 0.01g', 'Cốc nghiệm nhựa', 'Máy tính cài phần mềm pha màu của hãng máy', 'Bảng Tỷ Trọng Sơn Nasun'],
     steps: [
       {
         stepNumber: 1,
@@ -163,7 +163,7 @@ export const TECHNICAL_SOPS_DATA = [
       {
         stepNumber: 3,
         title: 'Phát lệnh chiết thử mẫu',
-        desc: 'Trên phần mềm Nasun Agent -> Chọn mục Kỹ thuật Calibration -> Chọn hộp màu (VD: Black/Red/Yellow) -> Chiết 1/32 oz (hoặc 1 Y).'
+        desc: 'Trên phần mềm pha màu của hãng máy -> Chọn mục Kỹ thuật Calibration -> Chọn hộp màu (VD: Black/Red/Yellow) -> Chiết 1/32 oz (hoặc 1 Y).'
       },
       {
         stepNumber: 4,
@@ -196,8 +196,8 @@ export const TECHNICAL_SOPS_DATA = [
       },
       {
         stepNumber: 3,
-        title: 'Kết nối Máy tính & Cài đặt Nasun Agent',
-        desc: 'Cắm cáp USB-RS232. Cài đặt bản phần mềm Nasun Agent mới nhất. Khai báo mã NPP và cập nhật cây công thức sơn.'
+        title: 'Kết nối Máy tính & Cài đặt phần mềm pha màu của hãng máy',
+        desc: 'Cắm cáp USB-RS232. Cài đặt bản phần mềm pha màu của hãng máy mới nhất. Khai báo mã NPP và cập nhật cây công thức sơn.'
       },
       {
         stepNumber: 4,

@@ -321,8 +321,6 @@ export default function App() {
             region: warehouseRegion,
             province: updatedNpp.province || set.province || '',
             status: 'TRONG_KHO',
-            agentStatus: 'Offline',
-            agent_status: 'Offline',
             notes: [set.notes, recallNote].filter(Boolean).join('\n')
           });
         }
@@ -494,7 +492,6 @@ export default function App() {
       notes: newCombo.notes || '',
       tinting_software: 'ColorExpert 3',
       software_version: 'Standard Stock',
-      agent_status: 'Offline',
       installation_photos: newCombo.installationPhotos || newCombo.installation_photos || []
     };
 
@@ -531,7 +528,6 @@ export default function App() {
               region: workflowData.region, province: workflowData.province,
               status: 'DA_LAP_DAT', installDate: data.installedDate,
               lastMaintenanceDate: data.installedDate, nextMaintenanceDue: data.nextMaintenanceDue,
-              agentStatus: 'Online'
             } : set);
             persistWorkflowCache('system_sets', updated);
             return updated;
@@ -553,7 +549,6 @@ export default function App() {
         next_maintenance_due: data.nextMaintenanceDue,
         stabilizer: data.stabilizer,
         technician: data.technician,
-        agent_status: 'Online',
         installation_photos: data.installationPhotos || []
       });
 
@@ -604,7 +599,7 @@ export default function App() {
               const sameNpp = isDistributorClosure && String(set.nppId || set.npp_id || '') === String(workflowData.sourceNppId || '');
               return sameSet || sameNpp ? {
                 ...set, nppId: null, npp_id: null, nppName: 'Tự do trong kho', npp_name: 'Tự do trong kho',
-                region: warehouseRegion, status: 'TRONG_KHO', agentStatus: 'Offline', agent_status: 'Offline'
+                region: warehouseRegion, status: 'TRONG_KHO'
               } : set;
             });
             persistWorkflowCache('system_sets', updated);
@@ -635,8 +630,6 @@ export default function App() {
           region: warehouseRegion,
           province: targetNpp?.province || targetSet?.province || '',
           status: 'TRONG_KHO',
-          agentStatus: 'Offline',
-          agent_status: 'Offline'
         });
       }
 

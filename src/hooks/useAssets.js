@@ -771,7 +771,6 @@ function mapSystemSetToDb(obj) {
 
   if ('tintingSoftware' in obj || 'tinting_software' in obj) dbObj.tinting_software = obj.tintingSoftware ?? obj.tinting_software ?? '';
   if ('softwareVersion' in obj || 'software_version' in obj) dbObj.software_version = obj.softwareVersion ?? obj.software_version ?? '';
-  if ('agentStatus' in obj || 'agent_status' in obj) dbObj.agent_status = obj.agentStatus ?? obj.agent_status ?? 'Offline';
 
   if ('installDate' in obj || 'installedDate' in obj || 'install_date' in obj) dbObj.install_date = obj.installDate ?? obj.installedDate ?? obj.install_date ?? null;
   if ('lastMaintenanceDate' in obj || 'last_maintenance_date' in obj) dbObj.last_maintenance_date = obj.lastMaintenanceDate ?? obj.last_maintenance_date ?? null;

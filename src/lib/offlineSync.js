@@ -295,7 +295,7 @@ function normalizeSystemSetPayload(payload, applyDefaults = true) {
     mixerId: 'mixer_id', mixerModel: 'mixer_model', mixerSerial: 'mixer_serial',
     computerId: 'computer_id', computerType: 'computer_type', computerSerial: 'computer_serial', pcType: 'computer_type',
     printerId: 'printer_id', printerSerial: 'printer_serial',
-    tintingSoftware: 'tinting_software', softwareVersion: 'software_version', agentStatus: 'agent_status',
+    tintingSoftware: 'tinting_software', softwareVersion: 'software_version',
     installDate: 'install_date', installedDate: 'install_date', lastMaintenanceDate: 'last_maintenance_date',
     nextMaintenanceDue: 'next_maintenance_due', installationPhotos: 'installation_photos'
   };
@@ -305,7 +305,7 @@ function normalizeSystemSetPayload(payload, applyDefaults = true) {
     'mixer_id', 'mixer_model', 'mixer_serial',
     'computer_id', 'computer_type', 'computer_serial',
     'printer_id', 'printer_serial', 'tinting_software', 'software_version',
-    'agent_status', 'install_date', 'last_maintenance_date', 'next_maintenance_due',
+    'install_date', 'last_maintenance_date', 'next_maintenance_due',
     'technician', 'salesperson', 'stabilizer', 'notes', 'installation_photos'
   ]);
   const normalized = {};
