@@ -68,14 +68,7 @@ jobs:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
           set -euo pipefail
-          pg_dump \
-            --dbname="$SUPABASE_DB_URL" \
-            --schema=public \
-            --format=custom \
-            --compress=9 \
-            --no-owner \
-            --no-privileges \
-            --file=nasun-public.dump
+          pg_dump --schema=public --format=custom --compress=9 --no-owner --no-privileges --file=nasun-public.dump --dbname="$SUPABASE_DB_URL"
 
       - name: Verify backup can be restored
         shell: bash
