@@ -46,15 +46,36 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "$SUPABASE_DB_URL" ]; then echo "::error::SUPABASE_DB_URL is required."; exit 1; fi
+          case "$SUPABASE_DB_URL" in
+            postgres://*|postgresql://*) ;;
+            *)
+              echo "::error::SUPABASE_DB_URL must be the complete Postgres URI copied from Supabase Connect > Session pooler."
+              exit 1
+              ;;
+          esac
+          if [[ "$SUPABASE_DB_URL" == *"[YOUR-PASSWORD]"* ]]; then
+            echo "::error::Replace [YOUR-PASSWORD] in SUPABASE_DB_URL with the URL-encoded database password."
+            exit 1
+          fi
           if [ "${#BACKUP_ENCRYPTION_PASSPHRASE}" -lt 24 ]; then
             echo "::error::BACKUP_ENCRYPTION_PASSPHRASE must contain at least 24 characters."
             exit 1
           fi
 
       - name: Create public schema backup
+        shell: bash
         env:
-          PGDATABASE: ${{ secrets.SUPABASE_DB_URL }}
-        run: pg_dump --schema=public --format=custom --compress=9 --no-owner --no-privileges --file=nasun-public.dump
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -euo pipefail
+          pg_dump \
+            --dbname="$SUPABASE_DB_URL" \
+            --schema=public \
+            --format=custom \
+            --compress=9 \
+            --no-owner \
+            --no-privileges \
+            --file=nasun-public.dump
 
       - name: Verify backup can be restored
         shell: bash
