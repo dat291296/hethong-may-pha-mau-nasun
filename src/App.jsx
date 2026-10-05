@@ -28,8 +28,6 @@ const DeviceRepairProcessing = lazy(() => import('./components/DeviceRepairProce
 const ExcelImportModal = lazy(() => import('./components/ExcelImportModal'));
 const UserManagement = lazy(() => import('./components/UserManagement'));
 const TechHandbook = lazy(() => import('./components/TechHandbook'));
-const TechnicalResources = lazy(() => import('./components/TechnicalResources'));
-const AccountCenter = lazy(() => import('./components/AccountCenter'));
 const FieldRouteMap = lazy(() => import('./components/FieldRouteMap'));
 
 function normalizeWarehouseRegion(region) {
@@ -48,7 +46,8 @@ export default function App() {
   const { user, isDevMode } = useAuth();
   const [activeTab, setActiveTab] = useState(() => {
     try {
-      return window.localStorage.getItem('nasun_active_tab') || 'dashboard';
+      const savedTab = window.localStorage.getItem('nasun_active_tab');
+      return ['documents', 'support', 'account'].includes(savedTab) ? 'techHandbook' : savedTab || 'dashboard';
     } catch {
       return 'dashboard';
     }
@@ -890,9 +889,6 @@ export default function App() {
             />
           )}
 
-          {activeTab === 'documents' && <TechnicalResources section="documents" />}
-          {activeTab === 'support' && <TechnicalResources section="support" />}
-          {activeTab === 'account' && <AccountCenter onNavigate={setActiveTab} />}
 
           {activeTab === 'routeMap' && (
             <FieldRouteMap

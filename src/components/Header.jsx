@@ -117,9 +117,6 @@ export default function Header({
       case 'workflows': return 'Nghiệp Vụ Lắp Đặt, Thu Hồi & Điều Chuyển';
       case 'maintenance': return 'Lịch Bảo Trì Định Kỳ 1 Năm / Lần (Cảnh báo trước 1 tháng)';
       case 'auditLogs': return 'Nhật Ký Tác Nghiệp & Lịch Sử Giao Dịch';
-      case 'account': return 'Tài Khoản & Trung Tâm Mở Rộng';
-      case 'documents': return 'Tài Liệu & Bản Vẽ';
-      case 'support': return 'Hỗ Trợ Kỹ Thuật Trực Tuyến';
       default: return 'Hệ Thống Quản Lý Máy Pha Màu';
     }
   };

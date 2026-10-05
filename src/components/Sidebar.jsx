@@ -46,8 +46,6 @@ export default function Sidebar({ activeTab, setActiveTab, maintenanceCount, pen
         { id: 'repairs', label: 'Xử Lý & Sửa Chữa Máy', icon: Wrench, badge: pendingRepairCount },
         { id: 'maintenance', label: 'Lịch Bảo Trì 1 Năm', icon: CalendarClock, badge: maintenanceCount },
         { id: 'techHandbook', label: 'Sổ Tay Kỹ Thuật (SOP)', icon: BookOpen, badgeText: 'SOPs' },
-        { id: 'documents', label: 'Tài Liệu & Bản Vẽ', icon: FileText },
-        { id: 'support', label: 'Hỗ Trợ Kỹ Thuật Trực Tuyến', icon: Wrench },
         { id: 'routeMap', label: 'Bản Đồ Tuyến Đường', icon: MapPin, badgeText: 'GPS' },
       ]
     },
@@ -56,7 +54,6 @@ export default function Sidebar({ activeTab, setActiveTab, maintenanceCount, pen
       label: 'Hệ Thống & Nhật Ký',
       icon: FileText,
       items: [
-        { id: 'account', label: 'Tài Khoản & Trung Tâm Mở Rộng', icon: UserCheck },
         { id: 'auditLogs', label: 'Nhật Ký Tác Nghiệp', icon: FileText },
         ...(role === 'admin' ? [{ id: 'users', label: 'Quản Lý Tài Khoản', icon: UserCheck }] : [])
       ]
