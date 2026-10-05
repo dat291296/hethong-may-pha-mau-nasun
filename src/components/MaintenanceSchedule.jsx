@@ -32,12 +32,13 @@ function isDateInYear(value, year) {
   return !Number.isNaN(date.getTime()) && date.getFullYear() === year;
 }
 
-export default function MaintenanceSchedule({ systemSets, onCompleteMaintenance, onUpdateSystemSet, onDeleteSystemSet }) {
+export default function MaintenanceSchedule({ globalSearch = '', systemSets, onCompleteMaintenance, onUpdateSystemSet, onDeleteSystemSet }) {
   const [filter, setFilter] = useState('ALL'); // ALL | DUE_SOON | OVERDUE | OK
   const [selectedSet, setSelectedSet] = useState(null);
   const [techNotes, setTechNotes] = useState('');
   const [maintDate, setMaintDate] = useState(new Date().toISOString().split('T')[0]);
   const [searchTerm, setSearchTerm] = useState('');
+  useEffect(() => { setSearchTerm(globalSearch); }, [globalSearch]);
   const [regionWorkFilter, setRegionWorkFilter] = useState('ALL');
 
   // Edit maintenance states
@@ -227,7 +228,7 @@ export default function MaintenanceSchedule({ systemSets, onCompleteMaintenance,
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+    <div className="workspace-screen maintenanceschedule-screen" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       
       {/* Header Info Panel */}
       <div className="glass-panel" style={{ padding: '20px', background: 'linear-gradient(135deg, rgba(30,41,59,1) 0%, rgba(15,23,42,1) 100%)' }}>

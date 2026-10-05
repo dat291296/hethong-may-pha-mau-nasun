@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import SafePortal from './SafePortal.jsx';
 import { formatDateVN } from '../utils/dateUtils.js';
 import {
@@ -82,7 +82,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { useModalScrollLock } from '../hooks/useModalScrollLock.js';
 import { exportExcel } from '../utils/excelExport.js';
 
-export default function DeviceRepairProcessing({
+export default function DeviceRepairProcessing({ globalSearch = '',
   repairTickets = [],
   npps = [],
   systemSets = [],
@@ -99,6 +99,7 @@ export default function DeviceRepairProcessing({
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('ALL'); // ALL | PENDING | NOT_RETURNED | REPLACED
   const [searchTerm, setSearchTerm] = useState('');
+  useEffect(() => { setSearchTerm(globalSearch); }, [globalSearch]);
   const [nppSearchTerm, setNppSearchTerm] = useState('');
 
   const isTicketAllowed = (ticketNppId) => {
@@ -547,7 +548,7 @@ export default function DeviceRepairProcessing({
   const replacedCount = repairTickets.filter(t => t.actionDirection === 'Xuất đổi').length;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+    <div className="workspace-screen devicerepairprocessing-screen" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       
       {/* 1-YEAR FAILURE ANALYSIS DASHBOARD CHARTS */}
       <div className="glass-panel" style={{ padding: '20px' }}>

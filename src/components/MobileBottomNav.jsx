@@ -1,7 +1,7 @@
 import React from 'react';
 import { 
   LayoutDashboard, 
-  Building2, 
+  BookOpen,
   Cpu, 
   Wrench,
   Menu
@@ -10,9 +10,9 @@ import {
 export default function MobileBottomNav({ activeTab, setActiveTab, maintenanceCount, pendingRepairCount, onOpenMobileSidebar }) {
   const mainItems = [
     { id: 'dashboard', label: 'Tổng Quan', icon: LayoutDashboard },
-    { id: 'npp',       label: 'NPP',       icon: Building2 },
     { id: 'assets',    label: 'Bộ Máy',    icon: Cpu },
     { id: 'repairs',   label: 'Sửa Chữa',  icon: Wrench, badge: pendingRepairCount },
+    { id: 'techHandbook', label: 'Sổ Tay', icon: BookOpen },
   ];
 
   return (
@@ -71,11 +71,11 @@ export default function MobileBottomNav({ activeTab, setActiveTab, maintenanceCo
           transform: scale(1);
         }
         .mnav-label {
-          font-size: 0.6rem;
+          font-size: 0.7rem;
           font-weight: 600;
           letter-spacing: 0.01em;
           margin-top: 2px;
-          line-height: 1;
+          line-height: 1.3;
           white-space: nowrap;
           transition: color 0.2s ease;
         }

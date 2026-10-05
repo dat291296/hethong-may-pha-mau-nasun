@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { FileText, Filter, Search, Calendar, UserCheck, Download, ShieldAlert, Edit3, Trash2 } from 'lucide-react';
 import { useDebounce } from '../security/useDebounce.js';
 import { sanitizeForSheet } from '../security/sanitize.js';
@@ -6,11 +6,12 @@ import { formatDateVN } from '../utils/dateUtils.js';
 import { downloadSpreadsheet } from '../utils/secureSpreadsheet.js';
 import { useAuth } from '../context/AuthContext.jsx';
 
-export default function AuditLogs({ auditLogs, onEditLog, onDeleteLog }) {
+export default function AuditLogs({ globalSearch = '', auditLogs, onEditLog, onDeleteLog }) {
   const { user } = useAuth();
   const canManageLogs = user?.role === 'admin';
   const [filterType, setFilterType]     = useState('ALL');
   const [rawSearch, setRawSearch]       = useState('');
+  useEffect(() => { setRawSearch(globalSearch); }, [globalSearch]);
   const [severityFilter, setSeverityFilter] = useState('ALL');
 
   // Edit states
@@ -131,7 +132,7 @@ export default function AuditLogs({ auditLogs, onEditLog, onDeleteLog }) {
   ];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+    <div className="workspace-screen" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
       <div className="glass-panel" style={{ padding: '20px' }}>
 

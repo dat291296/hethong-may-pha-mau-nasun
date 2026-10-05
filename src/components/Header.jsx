@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Bell, Search, PlusCircle, AlertTriangle, ShieldAlert, CheckCircle2, UserCheck, Wifi, WifiOff, RefreshCw, Menu, Database } from 'lucide-react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { Bell, Search, PlusCircle, AlertTriangle, ShieldAlert, CheckCircle2, UserCheck, Wifi, WifiOff, RefreshCw, Menu, Database, MoreHorizontal } from 'lucide-react';
 import RoleSelector from './RoleSelector.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { ROLE_LABELS, ROLE_COLORS } from '../security/rbac.js';
@@ -10,6 +10,7 @@ export default function Header({
   activeTab, 
   globalSearch, 
   setGlobalSearch, 
+  onNavigate,
   onOpenNewInstallation,
   maintenanceAlerts,
   unstabilizedAlerts,
@@ -27,6 +28,8 @@ export default function Header({
 }) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showBackupSyncModal, setShowBackupSyncModal] = useState(false);
+  const [showSearchResults, setShowSearchResults] = useState(false);
+  const utilityRef = useRef(null);
   const { role, user, isDevMode } = useAuth();
   
   // Connection and sync states
@@ -122,6 +125,32 @@ export default function Header({
   };
 
   const totalAlertsCount = maintenanceAlerts.length + unstabilizedAlerts.length;
+  const compactTitle = {
+    dashboard: 'Tổng quan', npp: 'Nhà phân phối', assets: 'Bộ máy & kho thiết bị',
+    workflows: 'Cấp phát / Thu hồi', repairs: 'Sửa chữa', maintenance: 'Bảo trì',
+    techHandbook: 'Sổ tay kỹ thuật', routeMap: 'Tuyến công tác', auditLogs: 'Nhật ký', users: 'Quản lý người dùng',
+  }[activeTab] || getTitle();
+  const searchResults = useMemo(() => {
+    const normalize = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[đĐ]/g, 'd').toLowerCase();
+    const term = normalize(globalSearch.trim());
+    if (!term) return [];
+    return [
+      ...npps.map(item => ({ id: item.id, tab: 'npp', label: item.name, kind: 'Nhà phân phối', query: item.name, fields: [item.id, item.name, item.phone, item.address, item.contactPerson] })),
+      ...systemSets.map(item => ({ id: item.id, tab: 'assets', label: `${item.setCode} · ${item.dispenserModel || ''}`, kind: 'Bộ máy', query: item.setCode, fields: [item.setCode, item.nppName, item.dispenserSerial, item.mixerSerial, item.pcSerial, item.printerSerial] })),
+      ...repairTickets.map(item => ({ id: item.id, tab: 'repairs', label: `${item.ticketCode} · ${item.machineModel || ''}`, kind: 'Phiếu sửa chữa', query: item.ticketCode, fields: [item.ticketCode, item.nppName, item.serialNumber, item.errorDescription] })),
+    ].filter(item => normalize(item.fields.join(' ')).includes(term)).slice(0, 8);
+  }, [globalSearch, npps, systemSets, repairTickets]);
+  useEffect(() => {
+    const close = event => {
+      if (event.key === 'Escape') {
+        setShowSearchResults(false);
+        setShowNotifications(false);
+        utilityRef.current?.removeAttribute('open');
+      }
+    };
+    window.addEventListener('keydown', close);
+    return () => window.removeEventListener('keydown', close);
+  }, []);
 
   return (
     <header className="no-print main-header">
@@ -136,7 +165,7 @@ export default function Header({
             <Menu size={20} />
           </button>
           <h1 className="header-title-text">
-            {getTitle()}
+            {compactTitle}
           </h1>
           
           {/* Connection Status & Offline Sync UI */}
@@ -172,17 +201,30 @@ export default function Header({
       {/* Header Actions */}
       <div className="header-actions-wrapper">
         {/* Global Search Bar */}
-        <div className="header-search-container">
+        <div className="header-search-container" onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setShowSearchResults(false); }}>
           <Search size={16} color="var(--text-muted)" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
           <input
             type="text"
+            aria-label="Tìm kiếm chung"
+            onFocus={() => setShowSearchResults(true)}
             placeholder="Tìm Seri máy, NPP, Mã bộ máy..."
             value={globalSearch}
-            onChange={(e) => setGlobalSearch(e.target.value)}
+            onChange={(e) => { setGlobalSearch(e.target.value); setShowSearchResults(true); }}
             className="form-input header-search-input"
           />
+          {showSearchResults && globalSearch.trim() && <div className="header-search-results" aria-label="Kết quả tìm kiếm">
+            {searchResults.map(item => <button key={`${item.tab}-${item.id}`} type="button" onClick={() => {
+              setGlobalSearch(item.query);
+              onNavigate?.(item.tab);
+              setShowSearchResults(false);
+            }}><small>{item.kind}</small><span>{item.label}</span></button>)}
+            {!searchResults.length && <p>Không tìm thấy NPP, bộ máy hoặc phiếu phù hợp.</p>}
+          </div>}
         </div>
 
+        <details className="header-utilities" ref={utilityRef}>
+          <summary aria-label="Tiện ích quản lý"><MoreHorizontal size={22}/></summary>
+          <div className="header-utilities-menu">
         {/* Quick New Installation Button */}
         <button className="btn btn-primary btn-sm header-action-btn" onClick={onOpenNewInstallation}>
           <PlusCircle size={16} />
@@ -207,6 +249,8 @@ export default function Header({
 
         {/* Role Selector (dev mode only) */}
         <RoleSelector />
+          </div>
+        </details>
 
         {/* Current User Role Badge (production) */}
         {!isDevMode && role && (
@@ -230,6 +274,8 @@ export default function Header({
           <button
             onClick={() => setShowNotifications(!showNotifications)}
             className="header-notify-btn"
+            aria-label={`Thông báo (${totalAlertsCount})`}
+            aria-expanded={showNotifications}
           >
             <Bell size={18} />
             {totalAlertsCount > 0 && (
@@ -255,7 +301,7 @@ export default function Header({
 
           {/* Notifications Popover */}
           {showNotifications && (
-            <div style={{
+            <div className="header-notifications" style={{
               position: 'absolute',
               right: 0,
               top: '48px',
@@ -312,8 +358,8 @@ export default function Header({
             <UserCheck size={20} />
           </div>
           <div className="header-profile-info">
-            <div style={{ fontSize: '0.825rem', fontWeight: '700', lineHeight: 1.2 }}>Quản Lý Kỹ Thuật</div>
-            <div style={{ fontSize: '0.7rem', color: 'var(--accent-emerald)' }}>● Admin System</div>
+            <div style={{ fontSize: '0.825rem', fontWeight: '700', lineHeight: 1.2 }}>{user?.name || user?.full_name || 'Tài khoản'}</div>
+            <div style={{ fontSize: '0.7rem', color: 'var(--accent-emerald)' }}>{ROLE_LABELS[role] || 'Người dùng'}</div>
           </div>
         </div>
 

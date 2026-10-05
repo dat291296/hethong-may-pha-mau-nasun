@@ -28,9 +28,10 @@ import SafePortal from './SafePortal.jsx';
 import { useModalScrollLock } from '../hooks/useModalScrollLock.js';
 import { exportExcel } from '../utils/excelExport.js';
 
-export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, onDeleteNpp, onOpenImportModal }) {
+export default function NppManagement({ globalSearch = '', npps, systemSets, onAddNpp, onEditNpp, onDeleteNpp, onOpenImportModal }) {
   const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
+  useEffect(() => { setSearchTerm(globalSearch); }, [globalSearch]);
   const [regionFilter, setRegionFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [brandFilter, setBrandFilter] = useState('ALL');
@@ -279,10 +280,11 @@ export default function NppManagement({ npps, systemSets, onAddNpp, onEditNpp, o
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+    <div className="workspace-screen nppmanagement-screen" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       
+      <div className="workspace-heading"><div><span className="workspace-eyebrow">ĐỐI TÁC / NHÀ PHÂN PHỐI</span><h2>Nhà phân phối</h2><p>Liên hệ, địa điểm và các bộ máy tại từng đại lý.</p></div></div>
       {/* Search & Action Bar */}
-      <div className="glass-panel" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
+      <div className="glass-panel workspace-toolbar" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
           <div style={{ position: 'relative', width: '260px' }}>
             <Search size={16} color="var(--text-muted)" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />

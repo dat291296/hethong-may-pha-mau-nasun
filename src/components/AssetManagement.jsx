@@ -39,7 +39,7 @@ import { useModalScrollLock } from '../hooks/useModalScrollLock.js';
 import { exportExcel } from '../utils/excelExport.js';
 import { getSystemSetMissingFields } from '../utils/systemSetValidation.js';
 
-export default function AssetManagement({
+export default function AssetManagement({ globalSearch = '',
   systemSets,
   npps = [],
   dispensers,
@@ -125,8 +125,17 @@ export default function AssetManagement({
     }
   }, [activeSubTab]);
   const [searchTerm, setSearchTerm] = useState('');
+  useEffect(() => { setSearchTerm(globalSearch); }, [globalSearch]);
   const [modelFilter, setModelFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const targetSetFound = !!globalSearch && systemSets.some(item => item.setCode === globalSearch);
+  useEffect(() => {
+    if (targetSetFound) {
+      setActiveSubTab('comboSets');
+      setModelFilter('ALL');
+      setStatusFilter('ALL');
+    }
+  }, [globalSearch, targetSetFound]);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [showAssembleModal, setShowAssembleModal] = useState(false);
@@ -594,7 +603,7 @@ export default function AssetManagement({
     const updatedCount = (isComputer ? computers : (categoryName === 'Máy Chiết' ? dispensers : (categoryName === 'Máy Lắc' ? mixers : printers))).filter(i => i.isUpdated || i.updatedAt).length;
 
     return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
+      <div className="workspace-toolbar" style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
         <div style={{ position: 'relative', width: '260px' }}>
           <input
             type="text"
@@ -777,7 +786,7 @@ export default function AssetManagement({
   }, [stockPrinters]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+    <div className="workspace-screen assetmanagement-screen" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       
       {/* 📦 BẢNG TỔNG HỢP TỒN KHO THIẾT BỊ HIỆN TẠI */}
       <div className="glass-panel" style={{ padding: '20px', background: 'linear-gradient(135deg, rgba(15,23,42,0.95) 0%, rgba(30,41,59,0.85) 100%)', border: '1px solid rgba(56,189,248,0.3)' }}>

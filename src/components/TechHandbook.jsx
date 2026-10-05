@@ -34,7 +34,7 @@ import {
   FIELD_TIPS_DATA
 } from '../data/troubleshootingData.js';
 
-export default function TechHandbook({ onSelectErrorForRepair }) {
+export default function TechHandbook({ globalSearch = '', onSelectErrorForRepair }) {
   const [activeSubTab, setActiveSubTab] = useState('ERRORS'); // 'ERRORS' | 'SOPS' | 'TIPS'
 
   const [errorCodes, setErrorCodes] = useState(ERROR_CODES_DATA);
@@ -52,6 +52,7 @@ export default function TechHandbook({ onSelectErrorForRepair }) {
 
   // Error Code Search & Filter States
   const [searchTerm, setSearchTerm] = useState('');
+  useEffect(() => { setSearchTerm(globalSearch); }, [globalSearch]);
   const [categoryFilter, setCategoryFilter] = useState('ALL');
   const [modelFilter, setModelFilter] = useState('ALL');
   const [severityFilter, setSeverityFilter] = useState('ALL');
@@ -279,7 +280,7 @@ export default function TechHandbook({ onSelectErrorForRepair }) {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+    <div className="workspace-screen techhandbook-screen" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       {/* Header Banner */}
       <div className="glass-panel" style={{ padding: '24px', background: 'linear-gradient(135deg, rgba(30,41,59,0.9) 0%, rgba(15,23,42,0.95) 100%)', borderLeft: '4px solid var(--accent-cyan)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
@@ -297,7 +298,8 @@ export default function TechHandbook({ onSelectErrorForRepair }) {
           </div>
 
           {/* Tab Switcher */}
-          <div style={{ display: 'flex', gap: '8px', background: 'rgba(0,0,0,0.3)', padding: '4px', borderRadius: '10px' }}>
+          <div className="handbook-tabs" style={{ display: 'flex', gap: '8px', background: 'rgba(0,0,0,0.3)', padding: '4px', borderRadius: '10px' }}>
+            <button type="button" className="handbook-document-tab" aria-pressed={activeSubTab === 'DOCUMENTS'} onClick={() => setActiveSubTab('DOCUMENTS')}><FileText size={16}/>Tài liệu & bản vẽ</button>
             <button
               onClick={() => setActiveSubTab('ERRORS')}
               style={{
@@ -1086,7 +1088,7 @@ export default function TechHandbook({ onSelectErrorForRepair }) {
         </div>
       )}
 
-      <TechnicalResources />
+      {activeSubTab === 'DOCUMENTS' && <TechnicalResources />}
 
       {/* Modal Đóng góp Mẹo thực địa */}
       {showAddTipModal && (

@@ -414,7 +414,7 @@ export default function FieldRouteMap({
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', paddingBottom: selectedTripNpps.length > 0 ? '90px' : '20px' }}>
+    <div className="workspace-screen" style={{ display: 'flex', flexDirection: 'column', gap: '20px', paddingBottom: selectedTripNpps.length > 0 ? '90px' : '20px' }}>
       {/* Top Banner & Main Actions */}
       <div
         className="glass-panel"

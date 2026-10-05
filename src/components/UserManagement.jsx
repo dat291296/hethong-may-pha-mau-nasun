@@ -251,7 +251,7 @@ export default function UserManagement({
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+    <div className="workspace-screen" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       {keycloakAccountUrl && (
         <div className="glass-panel" style={{ padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap', borderColor: 'rgba(6, 182, 212, 0.3)' }}>
           <div>
@@ -293,7 +293,7 @@ export default function UserManagement({
       </div>
 
       {activeSubTab === 'users' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        <div className="workspace-screen" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           {/* Overview stats */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }}>
             <div className="glass-panel" style={{ padding: '20px', display: 'flex', alignItems: 'center', gap: '16px' }}>
@@ -490,7 +490,7 @@ export default function UserManagement({
       )}
 
       {activeSubTab === 'locked_months' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        <div className="workspace-screen" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           {lockSuccess && (
             <div style={{ padding: '12px 16px', background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '8px', color: 'var(--accent-emerald)', fontSize: '0.825rem' }}>
               ✓ {lockSuccess}

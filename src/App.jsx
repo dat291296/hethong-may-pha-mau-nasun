@@ -799,6 +799,7 @@ export default function App() {
         {/* Top Header */}
         <Header
           activeTab={activeTab}
+          onNavigate={setActiveTab}
           globalSearch={globalSearch}
           setGlobalSearch={setGlobalSearch}
           onOpenNewInstallation={() => setWorkflowMode('INSTALL')}
@@ -818,7 +819,7 @@ export default function App() {
         />
 
         {/* Dynamic View Content */}
-        <main key={activeTab} className="page-transition" style={{ flex: 1, padding: '28px', overflowY: 'auto' }}>
+        <main key={activeTab} className="page-transition nasun-workspace" data-page={activeTab} style={{ flex: 1, padding: '28px', overflowY: 'auto' }}>
           <Suspense fallback={<div className="glass-panel" style={{ padding: '28px', color: 'var(--text-muted)' }}>Đang tải màn hình...</div>}>
           
           {activeTab === 'dashboard' && (
@@ -840,6 +841,7 @@ export default function App() {
 
           {activeTab === 'npp' && (
             <NppManagement
+              globalSearch={globalSearch}
               npps={npps}
               systemSets={systemSets}
               onAddNpp={handleAddNpp}
@@ -851,6 +853,7 @@ export default function App() {
 
           {activeTab === 'assets' && (
             <AssetManagement
+              globalSearch={globalSearch}
               systemSets={systemSets}
               npps={npps}
               dispensers={dispensers}
@@ -869,6 +872,7 @@ export default function App() {
 
           {activeTab === 'repairs' && (
             <DeviceRepairProcessing
+              globalSearch={globalSearch}
               repairTickets={repairTickets}
               npps={npps}
               systemSets={systemSets}
@@ -885,6 +889,7 @@ export default function App() {
 
           {activeTab === 'techHandbook' && (
             <TechHandbook
+              globalSearch={globalSearch}
               onSelectErrorForRepair={handleSelectErrorForRepair}
             />
           )}
@@ -901,7 +906,7 @@ export default function App() {
           )}
 
           {activeTab === 'workflows' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div className="workspace-screen workflow-screen" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
               <div className="glass-panel" style={{ padding: '24px' }}>
                 <h2 style={{ fontSize: '1.2rem', fontWeight: '800', marginBottom: '8px' }}>
                   Trung Tâm Nghiệp Vụ Cấp Phát, Thu Hồi & Điều Chuyển Thiết Bị
@@ -953,6 +958,7 @@ export default function App() {
 
           {activeTab === 'maintenance' && (
             <MaintenanceSchedule
+              globalSearch={globalSearch}
               systemSets={systemSets}
               onCompleteMaintenance={handleCompleteMaintenance}
               onUpdateSystemSet={updateSystemSet}
@@ -962,6 +968,7 @@ export default function App() {
 
           {activeTab === 'auditLogs' && (
             <AuditLogs 
+              globalSearch={globalSearch}
               auditLogs={auditLogs} 
               onEditLog={editAuditLog} 
               onDeleteLog={deleteAuditLog} 
