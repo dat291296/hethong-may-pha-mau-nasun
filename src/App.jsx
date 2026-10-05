@@ -28,6 +28,8 @@ const DeviceRepairProcessing = lazy(() => import('./components/DeviceRepairProce
 const ExcelImportModal = lazy(() => import('./components/ExcelImportModal'));
 const UserManagement = lazy(() => import('./components/UserManagement'));
 const TechHandbook = lazy(() => import('./components/TechHandbook'));
+const TechnicalResources = lazy(() => import('./components/TechnicalResources'));
+const AccountCenter = lazy(() => import('./components/AccountCenter'));
 const FieldRouteMap = lazy(() => import('./components/FieldRouteMap'));
 
 function normalizeWarehouseRegion(region) {
@@ -887,6 +889,10 @@ export default function App() {
               onSelectErrorForRepair={handleSelectErrorForRepair}
             />
           )}
+
+          {activeTab === 'documents' && <TechnicalResources section="documents" />}
+          {activeTab === 'support' && <TechnicalResources section="support" />}
+          {activeTab === 'account' && <AccountCenter onNavigate={setActiveTab} />}
 
           {activeTab === 'routeMap' && (
             <FieldRouteMap

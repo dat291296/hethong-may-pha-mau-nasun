@@ -25,6 +25,7 @@ import {
   RotateCcw
 } from 'lucide-react';
 import SafePortal from './SafePortal';
+import TechnicalResources from './TechnicalResources';
 import { cacheOfflineData, getCachedOfflineData } from '../lib/offlineSync.js';
 
 import {
@@ -1084,6 +1085,8 @@ export default function TechHandbook({ onSelectErrorForRepair }) {
           </div>
         </div>
       )}
+
+      <TechnicalResources />
 
       {/* Modal Đóng góp Mẹo thực địa */}
       {showAddTipModal && (
