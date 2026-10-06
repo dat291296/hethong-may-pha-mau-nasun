@@ -17,9 +17,10 @@ test('workflow page does not embed the operational audit-log component', async (
 
 test('all three workflows retain audit persistence and show an NPP result', async () => {
   const source = await readFile(appUrl, 'utf8');
-  assert.match(source, /type: 'LẮP ĐẶT MỚI'/);
-  assert.match(source, /type: 'THU HỒI'/);
-  assert.match(source, /type: 'ĐIỀU CHUYỂN NPP'/);
+  assert.match(source, /executeWorkflowTransaction\('INSTALL'/);
+  assert.match(source, /executeWorkflowTransaction\('WITHDRAW'/);
+  assert.match(source, /executeWorkflowTransaction\('TRANSFER'/);
+  assert.doesNotMatch(source, /fallbackRequired/);
   assert.match(source, /mode: 'INSTALL'[\s\S]{0,180}destinationNpp/);
   assert.match(source, /mode: 'WITHDRAW'[\s\S]{0,260}sourceNpp/);
   assert.match(source, /mode: 'TRANSFER'[\s\S]{0,260}sourceNpp/);

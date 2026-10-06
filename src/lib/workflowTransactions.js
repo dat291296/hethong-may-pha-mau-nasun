@@ -1,5 +1,6 @@
 import { isSupabaseConfigured, safeQuery } from './supabase.js';
 import { enqueueOfflineAction } from './offlineSync.js';
+import { isTransientMutationError } from './durableMutation.js';
 
 function createOperationId() {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
@@ -12,8 +13,7 @@ function isRpcUnavailable(error) {
 }
 
 function isRetryable(error) {
-  const message = String(error?.message || '').toLowerCase();
-  return !error?.code || error.code === 'QUERY_TIMEOUT' || /fetch|network|timeout|connection/.test(message);
+  return isTransientMutationError(error);
 }
 
 export async function executeWorkflowTransaction(workflow, data) {
@@ -35,7 +35,9 @@ export async function executeWorkflowTransaction(workflow, data) {
   );
 
   if (!error) return { queued: false, operationId, result };
-  if (isRpcUnavailable(error)) return { fallbackRequired: true, operationId, error };
+  if (isRpcUnavailable(error)) {
+    throw Object.assign(new Error('Chưa có RPC giao dịch trên Supabase. Cần áp dụng workflow_transactions_migration.sql trước khi thực hiện.'), { code: 'WORKFLOW_MIGRATION_REQUIRED' });
+  }
   if (isRetryable(error)) {
     await enqueueOfflineAction('EXECUTE_WORKFLOW', queuePayload);
     return { queued: true, operationId, error };

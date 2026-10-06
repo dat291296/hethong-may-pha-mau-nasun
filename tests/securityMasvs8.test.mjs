@@ -32,7 +32,9 @@ test('CI audits dependencies, generates an SBOM, and gates deployment on securit
   assert.match(securityWorkflow, /upload-artifact@[a-f0-9]{40} # v4/);
   assert.doesNotMatch(securityWorkflow, /uses: actions\/(?:checkout|setup-node|upload-artifact)@v\d/);
   assert.doesNotMatch(deployWorkflow, /uses: actions\/(?:checkout|setup-node)@v\d/);
-  assert.match(deployWorkflow, /npm run test:security/);
+  assert.match(deployWorkflow, /npm run test:all/);
+  const manifest = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
+  assert.equal(manifest.scripts['test:all'], 'node --test tests/*.test.mjs');
   assert.match(deployWorkflow, /npm audit --omit=dev --audit-level=critical/);
 });
 

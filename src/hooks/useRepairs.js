@@ -1,3 +1,4 @@
+import { fetchAllRows } from '../lib/paginatedQuery.js';
 import { useState, useEffect, useCallback } from 'react';
 import { supabase, isSupabaseConfigured, safeQuery } from '../lib/supabase.js';
 import { INITIAL_REPAIR_TICKETS } from '../data/mockData.js';
@@ -51,9 +52,9 @@ export function useRepairs() {
       return;
     }
     setLoading(true);
-    const { data, error } = await safeQuery(
-      sb => sb.from('repair_tickets').select('*').order('date', { ascending: false }),
-      'fetchRepairs'
+    const { data, error } = await fetchAllRows(
+      sb => sb.from('repair_tickets').select('*', { count: 'exact' }).order('date', { ascending: false }).order('id'),
+      safeQuery, 'fetchRepairs', { key: 'id' }
     );
     if (error) {
       const cached = await getCachedOfflineData('repair_tickets', null);

@@ -1,4 +1,7 @@
+import { fetchAllRows } from '../lib/paginatedQuery.js';
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { persistMutation } from '../lib/durableMutation.js';
+import { createOperationId } from '../lib/syncQueue.js';
 import { supabase, isSupabaseConfigured, safeQuery } from '../lib/supabase.js';
 import {
   INITIAL_DISPENSERS,
@@ -110,11 +113,11 @@ export function useAssets() {
     }
     setLoading(true);
     const [dRes, mRes, cRes, pRes, sRes] = await Promise.all([
-      safeQuery(sb => sb.from('dispensers').select('*'), 'fetchDispensers'),
-      safeQuery(sb => sb.from('mixers').select('*'), 'fetchMixers'),
-      safeQuery(sb => sb.from('computers').select('*'), 'fetchComputers'),
-      safeQuery(sb => sb.from('printers').select('*'), 'fetchPrinters'),
-      safeQuery(sb => sb.from('system_sets').select('*'), 'fetchSystemSets'),
+      fetchAllRows(sb => sb.from('dispensers').select('*', { count: 'exact' }).order('id'), safeQuery, 'fetchDispensers', { key: 'id' }),
+      fetchAllRows(sb => sb.from('mixers').select('*', { count: 'exact' }).order('id'), safeQuery, 'fetchMixers', { key: 'id' }),
+      fetchAllRows(sb => sb.from('computers').select('*', { count: 'exact' }).order('id'), safeQuery, 'fetchComputers', { key: 'id' }),
+      fetchAllRows(sb => sb.from('printers').select('*', { count: 'exact' }).order('id'), safeQuery, 'fetchPrinters', { key: 'id' }),
+      fetchAllRows(sb => sb.from('system_sets').select('*', { count: 'exact' }).order('set_code'), safeQuery, 'fetchSystemSets', { key: 'set_code' }),
     ]);
 
     if (Array.isArray(dRes.data)) {
@@ -510,43 +513,32 @@ export function useAssets() {
 
   // ── Delete system set ──────────────────────────────────────────────────────
   const deleteSystemSet = useCallback(async (setCode) => {
-    const setObj = systemSets.find(s => (s.setCode || s.set_code) === setCode) || null;
-    setSystemSets(prev => {
-      const filtered = prev.filter(s => (s.setCode || s.set_code) !== setCode);
-      persistAssetsLocal('system_sets', filtered);
-      return filtered;
+    const operationId = createOperationId();
+    const result = await persistMutation({
+      online: isSupabaseConfigured && navigator.onLine,
+      write: () => safeQuery(sb => sb.rpc('delete_system_set_atomic', {
+        p_operation_id: operationId, p_set_code: setCode
+      }), 'deleteSystemSet'),
+      queue: () => enqueueOfflineAction('DELETE_SYSTEM_SET', { set_code: setCode, operationId })
     });
-
-    if (setObj) {
-      await Promise.all([
-        setObj.dispenserId && editDevice('dispensers', setObj.dispenserId, { is_assigned: false, set_code: null }),
-        setObj.mixerId && editDevice('mixers', setObj.mixerId, { is_assigned: false, set_code: null }),
-        setObj.computerId && editDevice('computers', setObj.computerId, { is_assigned: false, set_code: null }),
-        setObj.printerId && editDevice('printers', setObj.printerId, { is_assigned: false, set_code: null })
-      ].filter(Boolean));
+    setSystemSets(prev => {
+      const updated = prev.filter(set => (set.setCode || set.set_code) !== setCode);
+      persistAssetsLocal('system_sets', updated);
+      return updated;
+    });
+    for (const [updateState, key] of [
+      [setDispensers, 'dispensers'], [setMixers, 'mixers'],
+      [setComputers, 'computers'], [setPrinters, 'printers']
+    ]) {
+      updateState(prev => {
+        const updated = prev.map(device => (device.setCode || device.set_code) === setCode
+          ? { ...device, setCode: null, set_code: null, isAssigned: false, is_assigned: false } : device);
+        persistAssetsLocal(key, updated);
+        return updated;
+      });
     }
-
-    if (isSupabaseConfigured && navigator.onLine) {
-      try {
-        const { data, error } = await safeQuery(
-          sb => sb.from('system_sets').delete().eq('set_code', setCode).select('set_code'),
-          'deleteSystemSet'
-        );
-        if (error) throw error;
-        if (!data || data.length === 0) throw createPersistenceError('Không có quyền xóa hoặc bộ máy không tồn tại trên Supabase');
-      } catch (err) {
-        console.warn('[Offline] Failed online deleteSystemSet. Queueing action.', err);
-        if (!canRetryOffline(err)) {
-          await fetchAssets();
-          throw err;
-        }
-        await enqueueOfflineAction('DELETE_SYSTEM_SET', { set_code: setCode });
-      }
-    } else if (isSupabaseConfigured && !navigator.onLine) {
-      await enqueueOfflineAction('DELETE_SYSTEM_SET', { set_code: setCode });
-    }
-  }, [editDevice, fetchAssets, systemSets]);
-
+    return result;
+  }, []);
   return {
     dispensers, setDispensers,
     mixers,     setMixers,

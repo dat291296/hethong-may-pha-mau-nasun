@@ -306,10 +306,13 @@ export default function App() {
   // NPP CRUD Handlers
   const handleAddNpp = async (newNpp) => {
     try {
-      await addNpp(newNpp);
+      if (!can('npp:create')) throw new Error('Bạn không có quyền thêm nhà phân phối.');
+      requireRegionEdit(user, newNpp.region);
+      return await addNpp(newNpp);
     } catch (err) {
       console.error(err);
       alert('Lỗi thêm NPP: ' + err.message);
+      throw err;
     }
   };
 
@@ -321,7 +324,7 @@ export default function App() {
       requireRegionEdit(user, updatedNpp.region);
       const wasInactive = String(previousNpp?.status || '').toLowerCase().includes('ngưng');
       const isNowInactive = String(updatedNpp.status || '').toLowerCase().includes('ngưng');
-      await editNpp(updatedNpp.id, updatedNpp);
+      const persistence = await editNpp(updatedNpp.id, updatedNpp);
 
       if (!wasInactive && isNowInactive) {
         const assignedSets = systemSets.filter(set => String(set.nppId || set.npp_id || '') === String(updatedNpp.id));
@@ -354,6 +357,7 @@ export default function App() {
           });
         }
       }
+      return persistence;
     } catch (err) {
       console.error(err);
       alert('Lỗi sửa NPP: ' + err.message);
@@ -368,10 +372,11 @@ export default function App() {
       return;
     }
     try {
-      await deleteNpp(nppId);
+      return await deleteNpp(nppId);
     } catch (err) {
       console.error(err);
       alert('Lỗi xóa NPP: ' + err.message);
+      throw err;
     }
   };
 
@@ -542,7 +547,7 @@ export default function App() {
 
     try {
       const transaction = await executeWorkflowTransaction('INSTALL', workflowData);
-      if (!transaction.fallbackRequired) {
+      {
         if (transaction.queued) {
           setSystemSets(prev => {
             const updated = prev.map(set => (set.setCode || set.set_code) === data.setCode ? {
@@ -561,35 +566,6 @@ export default function App() {
         setWorkflowResult({ mode: 'INSTALL', setCode: data.setCode, destinationNpp: workflowData.nppName, queued: Boolean(transaction.queued) });
         return;
       }
-
-      await updateSystemSet(data.setCode, {
-        npp_id: data.nppId,
-        npp_name: targetNpp ? targetNpp.name : 'NPP',
-        region: targetNpp ? targetNpp.region : 'Việt Nam',
-        status: 'DA_LAP_DAT',
-        install_date: data.installedDate,
-        last_maintenance_date: data.installedDate,
-        next_maintenance_due: data.nextMaintenanceDue,
-        stabilizer: data.stabilizer,
-        technician: data.technician,
-        installation_photos: data.installationPhotos || []
-      });
-
-      if (data.installationPhotos && data.installationPhotos.length > 0 && targetNpp) {
-        await editNpp(data.nppId, { photos: [...(targetNpp.photos || []), ...data.installationPhotos] });
-      }
-
-      await addAuditLog({
-        type: 'LẮP ĐẶT MỚI',
-        setCode: data.setCode,
-        nppId: data.nppId,
-        nppName: targetNpp ? targetNpp.name : 'NPP',
-        serialList: `Bộ máy ${data.setCode}`,
-        technician: data.technician,
-        reason: 'Lắp mới bộ máy pha màu cho NPP',
-        notes: data.notes || 'Bàn giao chạy thử tốt.'
-      });
-      setWorkflowResult({ mode: 'INSTALL', setCode: data.setCode, destinationNpp: workflowData.nppName, queued: false });
     } catch (err) {
       console.error(err);
       alert('Lỗi lắp đặt máy: ' + err.message);
@@ -614,7 +590,7 @@ export default function App() {
         notes: `${data.deviceCondition} | ${data.notes || ''}`
       };
       const transaction = await executeWorkflowTransaction('WITHDRAW', workflowData);
-      if (!transaction.fallbackRequired) {
+      {
         if (transaction.queued) {
           setSystemSets(prev => {
             const updated = prev.map(set => {
@@ -641,32 +617,6 @@ export default function App() {
         setWorkflowResult({ mode: 'WITHDRAW', setCode: data.setCode, sourceNpp: workflowData.sourceNppName || targetSet?.nppName || 'NPP', destinationNpp: `Tự do trong kho - ${warehouseRegion}`, queued: Boolean(transaction.queued) });
         return;
       }
-
-      if (isDistributorClosure && targetNpp) {
-        await handleEditNpp({ ...targetNpp, status: 'Đã ngưng hợp tác' });
-      } else {
-        await updateSystemSet(data.setCode, {
-          nppId: null,
-          npp_id: null,
-          nppName: 'Tự do trong kho',
-          npp_name: 'Tự do trong kho',
-          region: warehouseRegion,
-          province: targetNpp?.province || targetSet?.province || '',
-          status: 'TRONG_KHO',
-        });
-      }
-
-      await addAuditLog({
-        type: 'THU HỒI',
-        setCode: data.setCode,
-        nppId: targetSet?.nppId || 'NPP',
-        nppName: targetSet?.nppName || 'NPP',
-        serialList: `Bộ máy ${data.setCode}`,
-        technician: data.technician,
-        reason: data.reason,
-        notes: `${data.deviceCondition} | ${data.notes}${isDistributorClosure ? ' | NPP đã tự động chuyển sang Đã ngưng hợp tác; toàn bộ bộ máy liên kết đã về kho.' : ''}`
-      });
-      setWorkflowResult({ mode: 'WITHDRAW', setCode: data.setCode, sourceNpp: targetSet?.nppName || targetNpp?.name || 'NPP', destinationNpp: `Tự do trong kho - ${warehouseRegion}`, queued: false });
     } catch (err) {
       console.error(err);
       alert('Lỗi thu hồi máy: ' + err.message);
@@ -689,7 +639,7 @@ export default function App() {
         photos: data.photos || []
       };
       const transaction = await executeWorkflowTransaction('TRANSFER', workflowData);
-      if (!transaction.fallbackRequired) {
+      {
         if (transaction.queued) {
           setSystemSets(prev => {
             const updated = prev.map(set => (set.setCode || set.set_code) === data.setCode ? {
@@ -706,24 +656,6 @@ export default function App() {
         setWorkflowResult({ mode: 'TRANSFER', setCode: data.setCode, sourceNpp: workflowData.sourceNppName || targetSet?.nppName || 'NPP nguồn', destinationNpp: workflowData.nppName, queued: Boolean(transaction.queued) });
         return;
       }
-
-      await updateSystemSet(data.setCode, {
-        npp_id: data.newNppId,
-        npp_name: targetNpp ? targetNpp.name : 'NPP Mới',
-        region: targetNpp ? targetNpp.region : targetSet.region
-      });
-
-      await addAuditLog({
-        type: 'ĐIỀU CHUYỂN NPP',
-        setCode: data.setCode,
-        nppId: data.newNppId,
-        nppName: `Từ ${targetSet?.nppName} sang ${targetNpp?.name}`,
-        serialList: `Bộ máy ${data.setCode}`,
-        technician: data.technician,
-        reason: data.reason || 'Điều chuyển tối ưu',
-        notes: data.notes
-      });
-      setWorkflowResult({ mode: 'TRANSFER', setCode: data.setCode, sourceNpp: targetSet?.nppName || 'NPP nguồn', destinationNpp: targetNpp?.name || 'NPP đích', queued: false });
     } catch (err) {
       console.error(err);
       alert('Lỗi điều chuyển máy: ' + err.message);
@@ -1187,4 +1119,3 @@ export default function App() {
     </>
   );
 }
-

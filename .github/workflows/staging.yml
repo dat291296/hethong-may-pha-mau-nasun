@@ -11,7 +11,12 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  rls-gate:
+    uses: ./.github/workflows/rls-integration.yml
+    secrets: inherit
+
   staging:
+    needs: rls-gate
     name: Validate and deploy staging
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -51,7 +56,7 @@ jobs:
           fi
 
       - name: Run release gates
-        run: npm run test:enterprise && npm run test:security && npm audit --omit=dev --audit-level=critical
+        run: npm run lint && npm run test:all && npm audit --omit=dev --audit-level=critical
 
       - name: Build staging application
         run: npm run build

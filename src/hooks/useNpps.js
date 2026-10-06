@@ -1,5 +1,7 @@
+import { fetchAllRows } from '../lib/paginatedQuery.js';
 import { useState, useEffect, useCallback } from 'react';
 import { supabase, isSupabaseConfigured, safeQuery } from '../lib/supabase.js';
+import { persistMutation } from '../lib/durableMutation.js';
 import { INITIAL_NPPS } from '../data/mockData.js';
 import { cacheOfflineData, getCachedOfflineData, enqueueOfflineAction, getOfflineQueue } from '../lib/offlineSync.js';
 
@@ -37,9 +39,9 @@ export function useNpps() {
       return;
     }
     setLoading(true);
-    const { data, error: err } = await safeQuery(
-      (sb) => sb.from('distributors').select('*').order('created_at', { ascending: false }),
-      'fetchNpps'
+    const { data, error: err } = await fetchAllRows(
+      sb => sb.from('distributors').select('*', { count: 'exact' }).order('created_at', { ascending: false }).order('id'),
+      safeQuery, 'fetchNpps', { key: 'id' }
     );
     if (err) { 
       setError(err.message); 
@@ -75,41 +77,22 @@ export function useNpps() {
     const localNpp = { ...nppData, id: tempId, createdAt: new Date().toISOString().split('T')[0] };
     const mapped = { ...mapNppToDb(localNpp), id: tempId };
 
-    // Update local state instantly for latency compensation / offline availability
+    const result = await persistMutation({
+      online: isSupabaseConfigured && navigator.onLine,
+      write: () => safeQuery(sb => sb.from('distributors').insert(mapped).select('id'), 'addNpp'),
+      queue: () => enqueueOfflineAction('ADD_NPP', mapped)
+    });
     setNpps(prev => {
-      const updated = [localNpp, ...prev];
+      const updated = [localNpp, ...prev.filter(item => item.id !== tempId)];
       persistNpps(updated, setNpps, false);
       return updated;
     });
-
-    if (isSupabaseConfigured && navigator.onLine) {
-      try {
-        const { error: err } = await safeQuery(
-          (sb) => sb.from('distributors').insert(mapped),
-          'addNpp'
-        );
-        if (err) throw err;
-        await fetchNpps();
-      } catch (err) {
-        console.warn('[Offline] Failed online addNpp. Queueing action.', err);
-        enqueueOfflineAction('ADD_NPP', mapped);
-      }
-    } else {
-      console.log('[Offline] Network down or dev mode. Enqueueing addNpp.');
-      enqueueOfflineAction('ADD_NPP', mapped);
-    }
-
+    if (!result.queued) await fetchNpps();
+    localNpp.queued = result.queued;
     return localNpp;
   }, [fetchNpps]);
 
   const editNpp = useCallback(async (id, updates) => {
-    // Update local state immediately
-    setNpps(prev => {
-      const updated = prev.map(n => n.id === id ? { ...n, ...updates, isUpdated: true } : n);
-      persistNpps(updated, setNpps, false);
-      return updated;
-    });
-
     const mappedUpdates = {};
     if ('name' in updates) mappedUpdates.name = updates.name;
     if ('phone' in updates) mappedUpdates.phone = updates.phone;
@@ -127,74 +110,50 @@ export function useNpps() {
     if ('status' in updates) mappedUpdates.status = updates.status;
     if ('photos' in updates) mappedUpdates.photos = updates.photos;
 
-    if (isSupabaseConfigured && navigator.onLine) {
-      try {
-        const { error: err } = await safeQuery(
-          (sb) => sb.from('distributors').update(mappedUpdates).eq('id', id),
-          'editNpp'
-        );
-        if (err) throw err;
-      } catch (err) {
-        console.warn('[Offline] Failed online editNpp. Queueing action.', err);
-        enqueueOfflineAction('EDIT_NPP', { id, ...mappedUpdates });
-      }
-    } else {
-      console.log('[Offline] Network down or dev mode. Enqueueing editNpp.');
-      enqueueOfflineAction('EDIT_NPP', { id, ...mappedUpdates });
-    }
+    const result = await persistMutation({
+      online: isSupabaseConfigured && navigator.onLine,
+      write: () => safeQuery(sb => sb.from('distributors').update(mappedUpdates).eq('id', id).select('id'), 'editNpp'),
+      queue: () => enqueueOfflineAction('EDIT_NPP', { id, ...mappedUpdates })
+    });
+    setNpps(prev => {
+      const updated = prev.map(n => n.id === id ? { ...n, ...updates, isUpdated: true } : n);
+      persistNpps(updated, setNpps, false);
+      return updated;
+    });
+    return result;
   }, []);
 
   const deleteNpp = useCallback(async (id) => {
-    // Update local state immediately
+    const result = await persistMutation({
+      online: isSupabaseConfigured && navigator.onLine,
+      write: () => safeQuery(sb => sb.from('distributors').delete().eq('id', id).select('id'), 'deleteNpp'),
+      queue: () => enqueueOfflineAction('DELETE_NPP', { id })
+    });
     setNpps(prev => {
       const updated = prev.filter(n => n.id !== id);
       persistNpps(updated, setNpps, false);
       return updated;
     });
-
-    if (isSupabaseConfigured && navigator.onLine) {
-      try {
-        const { error: err } = await safeQuery(
-          (sb) => sb.from('distributors').delete().eq('id', id),
-          'deleteNpp'
-        );
-        if (err) throw err;
-      } catch (err) {
-        console.warn('[Offline] Failed online deleteNpp. Queueing action.');
-        enqueueOfflineAction('DELETE_NPP', { id });
-      }
-    } else {
-      console.log('[Offline] Network down or dev mode. Enqueueing deleteNpp.');
-      enqueueOfflineAction('DELETE_NPP', { id });
-    }
+    return result;
   }, []);
-
   const importNpps = useCallback(async (newNpps) => {
+    const mapped = newNpps.map(npp => ({ ...mapNppToDb(npp), id: npp.id || `NPP-${crypto.randomUUID()}` }));
+    const result = await persistMutation({
+      online: isSupabaseConfigured && navigator.onLine,
+      write: () => safeQuery(sb => sb.from('distributors').upsert(mapped, { onConflict: 'id' }).select('id'), 'importNpps'),
+      queue: async () => {
+        for (const item of mapped) await enqueueOfflineAction('ADD_NPP', item);
+      }
+    });
     setNpps(prev => {
-      const updated = [...newNpps, ...prev];
+      const importedIds = new Set(mapped.map(item => item.id));
+      const updated = [...newNpps.map((item, index) => ({ ...item, id: mapped[index].id })), ...prev.filter(item => !importedIds.has(item.id))];
       persistNpps(updated, setNpps, false);
       return updated;
     });
-
-    if (isSupabaseConfigured) {
-      const mapped = newNpps.map(mapNppToDb);
-      if (navigator.onLine) {
-        try {
-          const { error: err } = await safeQuery(
-            (sb) => sb.from('distributors').upsert(mapped, { onConflict: 'id' }),
-            'importNpps'
-          );
-          if (err) throw err;
-          await fetchNpps();
-        } catch (err) {
-          mapped.forEach(item => enqueueOfflineAction('ADD_NPP', item));
-        }
-      } else {
-        mapped.forEach(item => enqueueOfflineAction('ADD_NPP', item));
-      }
-    }
+    if (!result.queued) await fetchNpps();
+    return result;
   }, [fetchNpps]);
-
   return { npps, setNpps, loading, error, addNpp, editNpp, deleteNpp, importNpps, refetch: fetchNpps };
 }
 
