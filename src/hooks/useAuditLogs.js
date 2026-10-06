@@ -1,3 +1,4 @@
+import { fetchAllRows } from '../lib/paginatedQuery.js';
 import { useState, useEffect, useCallback } from 'react';
 import { supabase, isSupabaseConfigured, safeQuery } from '../lib/supabase.js';
 import { INITIAL_AUDIT_LOGS } from '../data/mockData.js';
@@ -23,20 +24,10 @@ function sanitizeAndRenumberAuditLogs(logs) {
   if (!Array.isArray(logs)) return [];
   if (logs.length === 0) return [];
 
-  // 1. Remove legacy sample audits 001 to 004
-  const legacyTimestamps = ['2025-08-15 10:00', '2025-08-01 14:30', '2025-02-10 16:00', '2026-05-20 09:15'];
-  const filtered = logs.filter(log => {
-    if (legacyTimestamps.includes(log.timestamp)) return false;
-    if (log.setCode === 'SET-2024-001' && log.reason?.includes('NPP độc quyền Hà Nội')) return false;
-    if (log.setCode === 'SET-2024-002' && log.reason?.includes('đại lý Cầu Giấy')) return false;
-    if (log.setCode === 'SET-2023-005' && log.reason?.includes('NPP ngưng hợp tác')) return false;
-    if (log.setCode === 'SET-2024-004' && log.reason?.includes('vệ sinh cụm pít-tông')) return false;
-    return true;
-  });
+  // Preserve every stored business record, including historical timestamps.
+  const baseLogs = [...logs];
 
-  const baseLogs = filtered;
-
-  // 2. Sort by timestamp descending (hiển thị audit gần nhất trên đầu)
+  // Sort by timestamp descending without changing persistent identifiers.
   baseLogs.sort((a, b) => {
     const timeA = a.timestamp || '';
     const timeB = b.timestamp || '';
@@ -78,9 +69,9 @@ export function useAuditLogs() {
   const fetchAuditLogs = useCallback(async () => {
     if (!isSupabaseConfigured) return;
     setLoading(true);
-    const { data, error } = await safeQuery(
-      sb => sb.from('audit_logs').select('*').order('timestamp', { ascending: false }),
-      'fetchAuditLogs'
+    const { data, error } = await fetchAllRows(
+      sb => sb.from('audit_logs').select('*', { count: 'exact' }).order('timestamp', { ascending: false }).order('id'),
+      safeQuery, 'fetchAuditLogs', { key: 'id' }
     );
     if (error) {
       const cached = await getCachedOfflineData('audit_logs', null);

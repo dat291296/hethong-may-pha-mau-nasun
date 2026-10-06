@@ -542,11 +542,11 @@ export async function enqueueOfflineAction(action, payload, category = null) {
   const queue = await getQueue();
   const previousItem = queue.at(-1);
   const newIdentity = getActionIdentity(newItem);
+  // Persist the replacement before removing the previous durable action.
+  await addToQueue(newItem);
   if (previousItem && newIdentity && getActionIdentity(previousItem) === newIdentity) {
     await removeFromQueue(previousItem.id);
   }
-  
-  await addToQueue(newItem);
   
   // Dispatch custom event to trigger sync warning badge or sync attempt
   emitQueueUpdated();
@@ -713,7 +713,10 @@ async function processOfflineQueue(onStatusChange) {
           {
             const setCode = item.payload.set_code || item.payload.setCode;
             if (!setCode) throw new Error('Invalid DELETE_SYSTEM_SET queue payload');
-            const { error: deleteSetErr } = await supabase.from('system_sets').delete().eq('set_code', setCode);
+            const { error: deleteSetErr } = await supabase.rpc('delete_system_set_atomic', {
+              p_operation_id: item.payload.operationId || item.operationId,
+              p_set_code: setCode
+            });
             error = deleteSetErr;
           }
           break;
@@ -873,6 +876,8 @@ const ATOMIC_SYNC_ACTIONS = new Set([
 ]);
 
 async function executeAtomicSyncMutation(item) {
+  // Set deletion must include device release and audit in the dedicated transaction.
+  if (item.action === 'DELETE_SYSTEM_SET') return { handled: false, error: null, deferredLink: null };
   if (!ATOMIC_SYNC_ACTIONS.has(item.action)) return { handled: false, error: null, deferredLink: null };
 
   const originalPayload = item.payload || {};

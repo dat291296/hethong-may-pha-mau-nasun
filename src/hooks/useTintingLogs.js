@@ -1,3 +1,4 @@
+import { fetchAllRows } from '../lib/paginatedQuery.js';
 import { useState, useEffect, useCallback } from 'react';
 import { supabase, isSupabaseConfigured, safeQuery } from '../lib/supabase.js';
 import { INITIAL_TINTING_LOGS } from '../data/mockData.js';
@@ -22,9 +23,9 @@ export function useTintingLogs() {
   const fetchLogs = useCallback(async () => {
     if (!isSupabaseConfigured) return;
     setLoading(true);
-    const { data, error } = await safeQuery(
-      sb => sb.from('tinting_logs').select('*').order('timestamp', { ascending: false }),
-      'fetchLogs'
+    const { data, error } = await fetchAllRows(
+      sb => sb.from('tinting_logs').select('*', { count: 'exact' }).order('timestamp', { ascending: false }).order('id'),
+      safeQuery, 'fetchLogs', { key: 'id' }
     );
     if (error) {
       const cached = await getCachedOfflineData('tinting_logs', null);

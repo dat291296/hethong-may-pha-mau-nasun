@@ -60,6 +60,8 @@ export default function NppManagement({ globalSearch = '', npps, systemSets, onA
 
   // Modal states
   const [showAddModal, setShowAddModal] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveNotice, setSaveNotice] = useState('');
   const [editingNpp, setEditingNpp] = useState(null); // NPP object being edited
 
   // Lock body scroll & reset modal-body scrollTop to 0 when modal opens
@@ -215,8 +217,9 @@ export default function NppManagement({ globalSearch = '', npps, systemSets, onA
     }
   };
 
-  const handleAddSubmit = (e) => {
+  const handleAddSubmit = async (e) => {
     e.preventDefault();
+    if (isSaving) return;
     if (!formData.name || !formData.phone) {
       alert('Vui lòng nhập tên NPP và Số điện thoại!');
       return;
@@ -228,26 +231,32 @@ export default function NppManagement({ globalSearch = '', npps, systemSets, onA
     }
 
     const regionCode = formData.region === 'Miền Bắc' ? 'MB' : formData.region === 'Miền Trung' ? 'MT' : 'MN';
-    const regionNpps = npps.filter(n => n.region === formData.region);
-    const seq = String(regionNpps.length + 1).padStart(3, '0');
-    const newId = `NPP-${regionCode}-${seq}`;
+    const newId = `NPP-${regionCode}-${crypto.randomUUID()}`;
     const mapsUrl = formData.locationCoordinates 
       ? `https://maps.google.com/?q=${encodeURIComponent(formData.locationCoordinates)}`
       : '';
 
-    onAddNpp({
+    setIsSaving(true);
+    try {
+    const result = await onAddNpp({
       ...formData,
       id: newId,
       googleMapsUrl: mapsUrl,
       createdAt: new Date().toISOString().split('T')[0]
     });
 
+    setSaveNotice(result?.queued ? 'Đã lưu trên thiết bị, đang chờ đồng bộ NPP.' : 'Đã lưu NPP trên hệ thống.');
     setShowAddModal(false);
+    } catch (error) {
+      console.error('[NppManagement] Create failed:', error.code || error.name);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleEditSubmit = async (e) => {
     e.preventDefault();
-    if (!editingNpp) return;
+    if (!editingNpp || isSaving) return;
 
     if (!isRegionAllowed(formData.region)) {
       alert(`Bạn không có quyền chuyển đổi NPP sang khu vực ${formData.region}!`);
@@ -262,30 +271,40 @@ export default function NppManagement({ globalSearch = '', npps, systemSets, onA
       ? `https://maps.google.com/?q=${encodeURIComponent(formData.locationCoordinates)}`
       : '';
 
+    setIsSaving(true);
     try {
-      await onEditNpp({
+      const result = await onEditNpp({
         ...editingNpp,
         ...formData,
         googleMapsUrl: mapsUrl
       });
+      setSaveNotice(result?.queued ? 'Đã lưu trên thiết bị, đang chờ đồng bộ NPP.' : 'Đã cập nhật NPP trên hệ thống.');
       setEditingNpp(null);
     } catch (err) {
       console.error('[NppManagement] Update failed:', err);
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  const handleDelete = (npp) => {
+  const handleDelete = async (npp) => {
     if (!isRegionAllowed(npp.region)) {
       alert(`Bạn không có quyền xóa NPP ở khu vực ${npp.region}!`);
       return;
     }
     if (confirm(`Bạn có chắc chắn muốn xóa Nhà Phân Phối "${npp.name}" (${npp.id}) khỏi hệ thống?`)) {
-      onDeleteNpp(npp.id);
+      try {
+        const result = await onDeleteNpp(npp.id);
+        if (result) setSaveNotice(result.queued ? 'Đã lưu yêu cầu xóa NPP, đang chờ đồng bộ.' : 'Đã xóa NPP trên hệ thống.');
+      } catch (error) {
+        console.error('[NppManagement] Delete failed:', error.code || error.name);
+      }
     }
   };
 
   return (
     <div className="workspace-screen nppmanagement-screen" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      {saveNotice && <div role="status" className="glass-panel" style={{ padding: '12px' }}>{saveNotice}</div>}
       
       <div className="workspace-heading"><div><span className="workspace-eyebrow">ĐỐI TÁC / NHÀ PHÂN PHỐI</span><h2>Nhà phân phối</h2><p>Liên hệ, địa điểm và các bộ máy tại từng đại lý.</p></div></div>
       <WorkspaceFilterBar search={searchTerm} onSearch={setSearchTerm} placeholder="Tìm mã, tên NPP, điện thoại…" count={filteredNpps.length} fields={[{key:'region',label:'Khu vực',value:regionFilter,onChange:setRegionFilter,options:uniqueOptions(REGIONS)},{key:'province',label:'Tỉnh / thành',value:provinceFilter,onChange:setProvinceFilter,options:uniqueOptions(npps.map(item=>item.province))},{key:'owner',label:'Kỹ thuật viên phụ trách bộ máy',value:ownerFilter,onChange:setOwnerFilter,options:uniqueOptions(systemSets.map(item=>item.technician))},{key:'brand',label:'Hãng',value:brandFilter,onChange:setBrandFilter,options:uniqueOptions(['Nasun','Natos'])},{key:'status',label:'Trạng thái',value:statusFilter,onChange:setStatusFilter,options:uniqueOptions(['Đang hợp tác','Đã ngưng hợp tác'])},{key:'from',label:'Ngày tạo NPP · từ',type:'date',defaultValue:'',value:dateFrom,onChange:setDateFrom},{key:'to',label:'Ngày tạo NPP · đến',type:'date',defaultValue:'',value:dateTo,onChange:setDateTo}]} onReset={() => { setSearchTerm(''); setRegionFilter('ALL'); setStatusFilter('ALL'); setBrandFilter('ALL'); setProvinceFilter('ALL'); setOwnerFilter('ALL'); setDateFrom(''); setDateTo(''); }} actions={<><details className="filter-more-actions"><summary>Thao tác khác</summary><div><button className="btn btn-secondary" onClick={onOpenImportModal}>Nhập Excel</button><button className="btn btn-secondary" onClick={exportNpps}>Xuất Excel</button></div></details><button className="btn btn-primary" onClick={handleOpenAdd}>Thêm NPP</button></>}/>
@@ -642,7 +661,7 @@ export default function NppManagement({ globalSearch = '', npps, systemSets, onA
                 </div>
                 <div className="modal-footer">
                   <button type="button" className="btn btn-secondary" onClick={() => { setShowAddModal(false); setEditingNpp(null); }}>Hủy Bỏ</button>
-                  <button type="submit" className="btn btn-primary">{editingNpp ? 'Cập Nhật NPP' : 'Lưu NPP Mới'}</button>
+                  <button type="submit" disabled={isSaving} className="btn btn-primary">{isSaving ? 'Đang lưu…' : editingNpp ? 'Cập Nhật NPP' : 'Lưu NPP Mới'}</button>
                 </div>
               </form>
             </div>

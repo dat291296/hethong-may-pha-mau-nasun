@@ -2,18 +2,21 @@ name: RLS Integration Test
 
 on:
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
 
 jobs:
   verify-access-control:
-    name: Verify Admin QC Viewer policies
+    name: Verify five roles on isolated staging
+    environment: staging
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      RLS_TEST_URL: ${{ vars.VITE_SUPABASE_URL }}
-      RLS_TEST_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+      RLS_TEST_URL: ${{ vars.STAGING_SUPABASE_URL }}
+      RLS_TEST_ANON_KEY: ${{ vars.STAGING_SUPABASE_ANON_KEY }}
+      RLS_PRODUCTION_URL: ${{ vars.VITE_SUPABASE_URL || secrets.VITE_SUPABASE_URL }}
       RLS_TEST_ADMIN_EMAIL: ${{ secrets.RLS_TEST_ADMIN_EMAIL }}
       RLS_TEST_ADMIN_PASSWORD: ${{ secrets.RLS_TEST_ADMIN_PASSWORD }}
       RLS_TEST_QC_EMAIL: ${{ secrets.RLS_TEST_QC_EMAIL }}
@@ -21,6 +24,13 @@ jobs:
       RLS_TEST_QC_REGION: ${{ vars.RLS_TEST_QC_REGION }}
       RLS_TEST_VIEWER_EMAIL: ${{ secrets.RLS_TEST_VIEWER_EMAIL }}
       RLS_TEST_VIEWER_PASSWORD: ${{ secrets.RLS_TEST_VIEWER_PASSWORD }}
+      RLS_TEST_VIEWER_REGION: ${{ vars.RLS_TEST_VIEWER_REGION }}
+      RLS_TEST_MANAGER_EMAIL: ${{ secrets.RLS_TEST_MANAGER_EMAIL }}
+      RLS_TEST_MANAGER_PASSWORD: ${{ secrets.RLS_TEST_MANAGER_PASSWORD }}
+      RLS_TEST_MANAGER_REGION: ${{ vars.RLS_TEST_MANAGER_REGION }}
+      RLS_TEST_TECHNICIAN_EMAIL: ${{ secrets.RLS_TEST_TECHNICIAN_EMAIL }}
+      RLS_TEST_TECHNICIAN_PASSWORD: ${{ secrets.RLS_TEST_TECHNICIAN_PASSWORD }}
+      RLS_TEST_TECHNICIAN_REGION: ${{ vars.RLS_TEST_TECHNICIAN_REGION }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4

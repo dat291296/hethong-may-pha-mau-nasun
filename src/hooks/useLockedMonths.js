@@ -1,3 +1,4 @@
+import { fetchAllRows } from '../lib/paginatedQuery.js';
 import { useState, useEffect, useCallback } from 'react';
 import { supabase, isSupabaseConfigured, safeQuery } from '../lib/supabase.js';
 import { cacheOfflineData, getCachedOfflineData } from '../lib/offlineSync.js';
@@ -30,9 +31,9 @@ export function useLockedMonths() {
     if (!isSupabaseConfigured) return;
     setLoading(true);
     setError(null);
-    const { data, error: err } = await safeQuery(
-      sb => sb.from('locked_months').select('*').order('month_key', { ascending: false }),
-      'fetchLockedMonths'
+    const { data, error: err } = await fetchAllRows(
+      sb => sb.from('locked_months').select('*', { count: 'exact' }).order('month_key', { ascending: false }),
+      safeQuery, 'fetchLockedMonths', { key: 'month_key' }
     );
     if (err) {
       setError(err.message);

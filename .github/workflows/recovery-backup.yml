@@ -1,0 +1,75 @@
+name: Auth and Storage recovery backup
+on:
+  schedule:
+    - cron: '43 18 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: recovery-backup
+  cancel-in-progress: false
+jobs:
+  recovery-export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Validate recovery configuration
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          BACKUP_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL || secrets.VITE_SUPABASE_URL }}
+          BACKUP_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.BACKUP_SUPABASE_SERVICE_ROLE_KEY }}
+          BACKUP_ENCRYPTION_PASSPHRASE: ${{ secrets.BACKUP_ENCRYPTION_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          for variable in SUPABASE_DB_URL BACKUP_SUPABASE_URL BACKUP_SUPABASE_SERVICE_ROLE_KEY; do
+            if [ -z "${!variable}" ]; then echo "::error::$variable is required."; exit 1; fi
+          done
+          case "$SUPABASE_DB_URL" in postgres://*|postgresql://*) ;; *) exit 1 ;; esac
+          if [ "${#BACKUP_ENCRYPTION_PASSPHRASE}" -lt 24 ]; then echo "::error::Backup passphrase requires 24 characters."; exit 1; fi
+          mkdir -p backup/recovery
+          chmod 700 backup/recovery
+      - name: Export database schemas, Auth, policies and grants
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -euo pipefail
+          umask 077
+          pg_dump --schema=public --schema=auth --schema=storage --format=custom --no-owner --file=backup/recovery/database.dump --dbname="$SUPABASE_DB_URL"
+          pg_dumpall --roles-only --no-role-passwords --file=backup/recovery/roles.sql --database="$SUPABASE_DB_URL"
+          pg_restore --list backup/recovery/database.dump > backup/recovery/database-toc.txt
+          grep -Eq 'TABLE DATA auth users' backup/recovery/database-toc.txt
+          grep -Eq 'TABLE DATA storage buckets' backup/recovery/database-toc.txt
+      - name: Export Storage file contents and verify inventory
+        env:
+          BACKUP_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL || secrets.VITE_SUPABASE_URL }}
+          BACKUP_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.BACKUP_SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/export-storage-backup.mjs backup/recovery/storage
+      - name: Encrypt recovery archive
+        env:
+          BACKUP_ENCRYPTION_PASSPHRASE: ${{ secrets.BACKUP_ENCRYPTION_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' 'Includes public/auth/storage, grants, role definitions without passwords, and Storage contents.' 'Full Supabase restore drill has not been performed by this export job.' > backup/recovery/coverage.txt
+          tar -czf backup/recovery.tar.gz -C backup recovery
+          node scripts/encrypt-recovery-backup.mjs backup/recovery.tar.gz backup/recovery.tar.gz.enc
+          sha256sum backup/recovery.tar.gz.enc > backup/recovery.tar.gz.enc.sha256
+      - name: Upload encrypted recovery archive
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: nasun-recovery-${{ github.run_id }}
+          path: |
+            backup/recovery.tar.gz.enc
+            backup/recovery.tar.gz.enc.sha256
+          retention-days: 30
+          if-no-files-found: error
+      - name: Remove plaintext exports from the runner
+        if: always()
+        run: rm -rf -- "$GITHUB_WORKSPACE/backup/recovery" "$GITHUB_WORKSPACE/backup/recovery.tar.gz"

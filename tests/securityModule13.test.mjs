@@ -17,10 +17,11 @@ test('RLS probe is invoker-scoped, authenticated-only, and non-persistent', asyn
 test('live verifier covers anonymous, vertical, and regional access boundaries', async () => {
   const verifier = await readFile(verifierUrl, 'utf8');
   assert.match(verifier, /Anonymous users must not execute the RLS probe/);
-  assert.match(verifier, /adminResult\.can_insert_target_region, true/);
-  assert.match(verifier, /qcOwnResult\.can_insert_target_region, true/);
-  assert.match(verifier, /qcForeignResult\.can_insert_target_region, false/);
-  assert.match(verifier, /viewerResult\.can_insert_target_region, false/);
+  assert.match(verifier, /\['admin', 'manager', 'technician', 'qc', 'viewer'\]/);
+  assert.match(verifier, /role === 'admin' \|\| \['manager', 'qc'\]\.includes\(role\) && targetRegion === region/);
+  assert.match(verifier, /result\.can_insert_target_region, permitted/);
+  assert.match(verifier, /data\.length, 0/);
+  assert.match(verifier, /RLS tests require an isolated staging project/);
 });
 
 test('RLS integration accounts authenticate without MFA secrets', async () => {
