@@ -6,6 +6,7 @@ import HandoverPrintModal from './components/HandoverPrintModal';
 import MobileBottomNav from './components/MobileBottomNav';
 import LoginModal from './components/LoginModal';
 import { useAuth } from './context/AuthContext';
+import { requireRegionEdit } from './lib/workspaceFilters.js';
 import { supabase, isSupabaseConfigured } from './lib/supabase';
 import { cacheOfflineData } from './lib/offlineSync.js';
 import { executeWorkflowTransaction } from './lib/workflowTransactions.js';
@@ -248,6 +249,7 @@ export default function App() {
   // Repair Tickets Handlers
   const handleAddTicket = async (newTicket) => {
     try {
+      requireRegionEdit(user, npps.find(item => item.id === newTicket.nppId)?.region);
       const added = await addTicket(newTicket);
 
       // Local status sync for offline mock dev mode
@@ -275,6 +277,9 @@ export default function App() {
 
   const handleEditTicket = async (updatedTicket) => {
     try {
+      const source = repairTickets.find(item => item.id === updatedTicket.id);
+      requireRegionEdit(user, npps.find(item => item.id === source?.nppId)?.region);
+      requireRegionEdit(user, npps.find(item => item.id === updatedTicket.nppId)?.region);
       const saved = await editTicket(updatedTicket.id, updatedTicket);
 
       // Local status sync for offline mock dev mode
@@ -311,6 +316,9 @@ export default function App() {
   const handleEditNpp = async (updatedNpp) => {
     try {
       const previousNpp = npps.find(npp => npp.id === updatedNpp.id);
+      if (!can('npp:edit')) throw new Error('Bạn không có quyền sửa nhà phân phối.');
+      requireRegionEdit(user, previousNpp?.region);
+      requireRegionEdit(user, updatedNpp.region);
       const wasInactive = String(previousNpp?.status || '').toLowerCase().includes('ngưng');
       const isNowInactive = String(updatedNpp.status || '').toLowerCase().includes('ngưng');
       await editNpp(updatedNpp.id, updatedNpp);
@@ -375,6 +383,11 @@ export default function App() {
       const sourceId = updatedData.sourceId || updatedData.id;
       const { sourceId: ignoredSourceId, ...deviceUpdates } = updatedData;
       const oldDevice = deviceList.find(d => d.id === sourceId);
+      if (!can('asset:edit')) throw new Error('Bạn không có quyền sửa thiết bị.');
+      if (user?.role === 'technician') {
+        requireRegionEdit(user, systemSets.find(item => item.setCode === oldDevice?.setCode)?.region);
+        if (updatedData.setCode) requireRegionEdit(user, systemSets.find(item => item.setCode === updatedData.setCode)?.region);
+      }
 
       await editDevice(pluralCat, sourceId, deviceUpdates);
 
@@ -458,6 +471,7 @@ export default function App() {
 
   const handleAddStockDevice = async (category, newDeviceData) => {
     try {
+      if (user?.role === 'technician') throw new Error('Thiết bị kho chưa gán khu vực cần quản trị viên hoặc quản lý thêm.');
       await addStockDevice(category, newDeviceData);
     } catch (err) {
       console.error(err);
@@ -466,6 +480,7 @@ export default function App() {
   };
 
   const handleAssembleSet = async (newCombo) => {
+    if (user?.role === 'technician') requireRegionEdit(user, newCombo.region);
     const disp = dispensers.find(d => d.id === newCombo.dispenserId);
     const mix = mixers.find(m => m.id === newCombo.mixerId);
     const pc = computers.find(c => c.id === newCombo.computerId);
@@ -716,10 +731,24 @@ export default function App() {
     }
   };
 
+  const handleUpdateRegionalSet = async (setCode, updates) => {
+    if (!can('asset:edit')) throw new Error('Bạn không có quyền sửa bộ máy.');
+    const source = systemSets.find(item => item.setCode === setCode);
+    if (!source) throw new Error('Không tìm thấy bộ máy.');
+    if (user?.role === 'technician') {
+      requireRegionEdit(user, source.region);
+      requireRegionEdit(user, updates.region ?? source.region);
+      const nppId = updates.nppId ?? updates.npp_id ?? source.nppId;
+      if (nppId) requireRegionEdit(user, npps.find(item => item.id === nppId)?.region);
+    }
+    return updateSystemSet(setCode, updates);
+  };
+
   const handleCompleteMaintenance = async (maintData) => {
     if (!can('asset:edit')) throw new Error('Bạn không có quyền ghi nhận bảo trì.');
     const targetSet = systemSets.find(s => s.setCode === maintData.setCode);
     if (!targetSet) throw new Error('Không tìm thấy bộ máy.');
+    requireRegionEdit(user, targetSet.region);
     if (isSupabaseConfigured) {
       if (!navigator.onLine) throw new Error('Kết nối mạng để lưu đồng thời checklist, ảnh và lịch bảo trì.');
       const { error } = await supabase.rpc('complete_machine_maintenance', {
@@ -893,7 +922,7 @@ export default function App() {
               onEditDevice={handleEditDevice}
               onDeleteDevice={handleDeleteDevice}
               onOpenImportModal={openImportModal}
-              onEditSet={updateSystemSet}
+              onEditSet={handleUpdateRegionalSet}
               onDeleteSet={deleteSystemSet}
             />
           )}
@@ -991,7 +1020,7 @@ export default function App() {
               initialFilter={workspaceFilter}
               systemSets={systemSets}
               onCompleteMaintenance={handleCompleteMaintenance}
-              onUpdateSystemSet={updateSystemSet}
+              onUpdateSystemSet={handleUpdateRegionalSet}
               onDeleteSystemSet={deleteSystemSet}
             />
           )}

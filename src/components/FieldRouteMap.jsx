@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useWorkspaceState } from '../hooks/useWorkspaceState';
+import { matchesSearch } from '../lib/workspaceFilters.js';
 import {
   Navigation,
   MapPin,
@@ -169,11 +170,7 @@ export default function FieldRouteMap({
   const filteredNpps = useMemo(() => {
     return enrichedNpps
       .filter((npp) => {
-        const matchesSearch =
-          npp.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          npp.address?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          npp.contactPerson?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          npp.phone?.includes(searchTerm);
+        const found = matchesSearch(searchTerm,[npp.id,npp.name,npp.address,npp.contactPerson,npp.phone,npp.province,npp.region]);
 
         const matchesProvince = provinceFilter === 'ALL' || npp.province === provinceFilter;
 
@@ -182,7 +179,7 @@ export default function FieldRouteMap({
         if (statusFilter === 'DUE') matchesStatus = npp.minDiffDays <= 30;
         if (statusFilter === 'OK') matchesStatus = npp.priority === 'OK';
 
-        return matchesSearch && matchesProvince && matchesStatus;
+        return found && matchesProvince && matchesStatus;
       })
       .sort((a, b) => {
         // Ưu tiên hiển thị nhà phân phối mới lắp gần nhất trên đầu

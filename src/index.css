@@ -1789,3 +1789,29 @@ body:has(.modal-backdrop) .mobile-bottom-nav,
 .route-planner label { display: block; max-width: 240px; margin: 12px 0; }
 .route-planner p, .data-quality p { color: var(--text-muted); font-size: .85rem; }
 @media (max-width: 768px) { .team-work, .route-planner { padding: 14px; } .team-work .workspace-task-row { align-items: flex-start; } .team-work h2, .route-planner h2 { font-size: 1.1rem; } .mobile-card-actions .btn, .workspace-tabs button { min-height: 42px; } .modal-footer { position: sticky; bottom: 0; background: var(--bg-card); z-index: 2; } }
+.workspace-filter-bar{padding:16px;border:1px solid var(--border-color);border-radius:14px;background:var(--bg-panel,#111e30);display:flex;flex-direction:column;gap:12px;min-width:0}
+.filter-search-row,.filter-options-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;min-width:0}
+.filter-search{display:flex;align-items:center;gap:8px;flex:1;min-width:200px;position:relative}
+.filter-search>svg{position:absolute;left:12px;color:var(--text-muted)}
+.filter-search .form-input{width:100%;min-width:0;padding-left:38px;padding-right:38px;min-height:44px}
+.filter-search>button{position:absolute;right:6px;background:none;border:0;color:var(--text-muted);padding:8px;display:flex}
+.filter-actions,.filter-quick,.filter-scan-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.workspace-filter-bar .btn{min-height:44px}
+.filter-quick{flex:1}
+.filter-quick button,.filter-selected button{display:flex;gap:6px;align-items:center;background:transparent;color:var(--text-secondary);border:1px solid var(--border-color);border-radius:10px;padding:10px 12px;font:inherit;font-size:.84rem;cursor:pointer;min-height:44px}
+.filter-quick button[aria-pressed=true]{background:rgba(56,189,248,.13);color:var(--accent-cyan);border-color:var(--accent-cyan)}
+.filter-quick button span{font-size:.75rem;opacity:.8}
+.filter-result-count{font-size:.8rem;color:var(--text-muted);white-space:nowrap}
+.filter-selected{display:flex;gap:8px;flex-wrap:wrap}
+.filter-selected button{font-size:.78rem;max-width:100%;overflow-wrap:anywhere}
+.filter-selected .filter-reset{border-color:transparent;color:var(--accent-cyan)}
+.filter-empty{display:flex;gap:12px;align-items:center;flex-wrap:wrap;color:var(--text-muted)}
+.filter-more-actions{position:relative}.filter-more-actions summary,.filter-accounting-note summary{cursor:pointer;color:var(--text-muted);padding:10px;font-size:.84rem}
+.filter-more-actions>div{position:absolute;right:0;top:100%;z-index:20;display:flex;flex-direction:column;gap:8px;padding:12px;min-width:160px;border:1px solid var(--border-color);border-radius:12px;background:var(--bg-panel,#111e30)}
+.filter-accounting-note p{font-size:.8rem;color:var(--text-muted);padding:8px 12px}
+.filter-sheet-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:1300;display:flex;align-items:center;justify-content:center;padding:20px}
+.filter-sheet{width:min(520px,100%);max-height:90dvh;overflow:auto;background:var(--bg-panel,#111e30);color:var(--text-main);border:1px solid var(--border-color);border-radius:18px;padding:20px;box-shadow:0 12px 60px #0008}
+.filter-sheet header{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}.filter-sheet header button{background:none;border:0;color:var(--text-main);padding:10px;display:flex}
+.filter-sheet-fields{display:grid;grid-template-columns:1fr 1fr;gap:16px}.filter-sheet-fields label{display:flex;flex-direction:column;gap:7px;font-size:.85rem;min-width:0}.filter-sheet-fields input,.filter-sheet-fields select{width:100%;min-height:44px;min-width:0}
+.filter-sheet footer{display:flex;justify-content:flex-end;gap:12px;padding-top:20px;position:sticky;bottom:-20px;background:var(--bg-panel,#111e30);padding-bottom:12px}.filter-error{color:var(--accent-rose);font-size:.85rem}
+@media(max-width:640px){.filter-search-row{align-items:stretch}.filter-search{flex-basis:100%;min-width:0}.filter-actions{width:100%;justify-content:flex-end}.filter-options-row{gap:10px}.filter-quick{flex-basis:100%;gap:6px}.filter-quick button{flex:1 0 auto;padding:9px 10px}.filter-result-count{margin-left:auto}.filter-sheet-backdrop{align-items:flex-end;padding:0}.filter-sheet{border-radius:20px 20px 0 0;max-height:88dvh;padding:18px 18px max(18px,env(safe-area-inset-bottom))}.filter-sheet-fields{grid-template-columns:1fr}.filter-sheet footer{bottom:-18px}.filter-sheet footer .btn{flex:1;justify-content:center;min-height:46px}}

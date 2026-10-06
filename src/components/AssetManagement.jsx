@@ -1,3 +1,5 @@
+import WorkspaceFilterBar from './WorkspaceFilterBar.jsx';
+import { matchesSearch, matchesDateRange, uniqueOptions, canEditRegion } from '../lib/workspaceFilters.js';
 import TechnicalResources from './TechnicalResources';
 import { resolveMachine } from '../lib/machineWorkspace';
 import { searchText, missingMachineFields } from '../lib/teamWorkspace';
@@ -129,11 +131,15 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
       console.warn('[AssetManagement] Failed to save active sub-tab:', err);
     }
   }, [activeSubTab]);
-  const [searchTerm, setSearchTerm] = useState('');
-  useEffect(() => { setSearchTerm(globalSearch); }, [globalSearch]);
+  const [searchTerm, setSearchTerm] = useWorkspaceState('assets:search', '');
+  useEffect(() => { if (globalSearch) setSearchTerm(globalSearch); }, [globalSearch, setSearchTerm]);
   useWorkspaceScroll('assets');
   const [modelFilter, setModelFilter] = useWorkspaceState('assets:model', 'ALL');
   const [statusFilter, setStatusFilter] = useWorkspaceState('assets:status', 'ALL');
+  const [provinceFilter, setProvinceFilter] = useWorkspaceState('assets:province', 'ALL');
+  const [ownerFilter, setOwnerFilter] = useWorkspaceState('assets:owner', 'ALL');
+  const [dateFrom, setDateFrom] = useWorkspaceState('assets:from', '');
+  const [dateTo, setDateTo] = useWorkspaceState('assets:to', '');
   const targetSetFound = !!globalSearch && systemSets.some(item => item.setCode === globalSearch);
   useEffect(() => {
     if (targetSetFound) {
@@ -153,13 +159,13 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
   const [deviceSort, setDeviceSort] = useState('DEFAULT'); // 'DEFAULT' | 'NEWEST'
 
   // Reset pagination on tab or filter change
-  const initialFilters = React.useRef(`${activeSubTab}:${modelFilter}:${statusFilter}:${searchTerm}:${deviceSort}`);
+  const initialFilters = React.useRef(`${activeSubTab}:${modelFilter}:${statusFilter}:${searchTerm}:${deviceSort}:${provinceFilter}:${ownerFilter}:${dateFrom}:${dateTo}`);
   useEffect(() => {
-    const signature = `${activeSubTab}:${modelFilter}:${statusFilter}:${searchTerm}:${deviceSort}`;
+    const signature = `${activeSubTab}:${modelFilter}:${statusFilter}:${searchTerm}:${deviceSort}:${provinceFilter}:${ownerFilter}:${dateFrom}:${dateTo}`;
     if (initialFilters.current === signature) return;
     initialFilters.current = signature;
     setCurrentPage(1);
-  }, [activeSubTab, modelFilter, statusFilter, searchTerm, deviceSort, setCurrentPage]);
+  }, [activeSubTab, modelFilter, statusFilter, searchTerm, deviceSort, provinceFilter, ownerFilter, dateFrom, dateTo, setCurrentPage]);
 
   // Helper to find assigned set & NPP info for any device item
   const getAssignedInfo = (item) => {
@@ -415,6 +421,8 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
   };
 
   const handleOpenEditDevice = (category, data) => {
+    const machine = systemSets.find(item=>item.setCode === data.setCode);
+    if (!can('asset:edit') || (user?.role === 'technician' && !canEditRegion(user,machine?.region))) { alert('Thiết bị chưa có khu vực hoặc thuộc miền khác cần quản trị viên xử lý.'); return; }
     setEditingDevice({ category, data });
     const cleanType = category === 'computer' 
       ? (data.type === 'Case' ? 'Case' : 'All In One')
@@ -502,6 +510,7 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
   };
 
   const handleOpenEditSet = (set) => {
+    if (!can('asset:edit') || !canEditRegion(user,set.region)) { alert('Bạn chỉ được sửa bộ máy thuộc khu vực được phân công.'); return; }
     const targetNpp = npps.find(n => n.id === set.nppId);
     setEditNppSearchTerm('');
     setEditingSet(set);
@@ -571,7 +580,7 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
       const matchesSearch = !searchTerm || searchText([s.setCode, s.nppName, s.dispenserSerial, s.mixerSerial, s.computerSerial, s.printerSerial, s.province, s.region, distributor?.phone].join(' ')).includes(searchText(searchTerm));
       const tickets = repairTickets.filter(ticket => ticket.nppId === s.nppId && [s.dispenserSerial, s.mixerSerial, s.computerSerial, s.printerSerial].filter(Boolean).includes(ticket.serialNumber));
       const matchesQuick = quickFilter === 'ALL' || (quickFilter === 'STOCK' && s.status === 'TRONG_KHO') || (quickFilter === 'PENDING' && tickets.some(ticket => ticket.processingStatus === 'Chưa xử lý')) || (quickFilter === 'RETURN' && tickets.some(ticket => ticket.processingStatus === 'Đã xử lý' && ticket.customerReturnStatus === 'Chưa gửi trả')) || (quickFilter === 'OVERDUE' && s.nextMaintenanceDue && s.nextMaintenanceDue < new Date().toLocaleDateString('en-CA'));
-      return matchesModel && matchesStatus && matchesSearch && matchesQuick;
+      return matchesModel && matchesStatus && matchesSearch && matchesQuick && (provinceFilter === 'ALL' || (s.province || distributor?.province) === provinceFilter) && (ownerFilter === 'ALL' || s.technician === ownerFilter) && matchesDateRange(s.installDate || s.installedDate,dateFrom,dateTo);
     })
     .sort((a, b) => naturalSortCode(a, b, 'setCode'));
 
@@ -596,16 +605,8 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
         matchesStatus = item.status === statusFilter;
       }
 
-      const matchesSearch = !searchTerm || (
-        (item.id && item.id.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (item.model && item.model.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (item.serial && item.serial !== '—' && item.serial.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (item.type && item.type.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (item.specs && item.specs.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (item.os && item.os.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (item.setCode && item.setCode.toLowerCase().includes(searchTerm.toLowerCase()))
-      );
-      return matchesStatus && matchesSearch;
+      const found = matchesSearch(searchTerm,[item.id,item.model,item.serial,item.type,item.specs,item.os,item.setCode]);
+      return matchesStatus && found;
     });
   };
 
@@ -627,69 +628,8 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
   const sortedPrinters = sortDeviceList(filterDevice(printers));
 
   const renderDeviceFilterBar = (categoryName, totalCount, isComputer = false) => {
-    const newCount = (isComputer ? computers : (categoryName === 'Máy Chiết' ? dispensers : (categoryName === 'Máy Lắc' ? mixers : printers))).filter(i => i.isNew || i.status === 'Mới 100%').length;
-    const updatedCount = (isComputer ? computers : (categoryName === 'Máy Chiết' ? dispensers : (categoryName === 'Máy Lắc' ? mixers : printers))).filter(i => i.isUpdated || i.updatedAt).length;
-
-    return (
-      <div className="workspace-toolbar" style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
-        <div style={{ position: 'relative', width: '260px' }}>
-          <input
-            type="text"
-            placeholder={`Tìm ${categoryName} (Mã, hệ máy...)...`}
-            value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
-            className="form-input"
-            style={{ height: '36px', fontSize: '0.825rem', paddingLeft: '32px' }}
-          />
-          <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', opacity: 0.6 }}>🔍</span>
-        </div>
-
-        <Filter size={16} color="var(--accent-cyan)" />
-        <span style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--accent-cyan)' }}>Lọc Danh Mục:</span>
-        <select 
-          className="form-select" 
-          value={statusFilter} 
-          onChange={e => setStatusFilter(e.target.value)} 
-          style={{ height: '36px', fontSize: '0.825rem', minWidth: '180px' }}
-        >
-          <option value="ALL">Tất Cả Danh Mục ({totalCount})</option>
-          <option value="NEW">🆕 Mới thêm ({newCount})</option>
-          <option value="UPDATED">✏️ Mới chỉnh sửa ({updatedCount})</option>
-          <option value="ASSIGNED">🟢 Đã gán bộ máy</option>
-          <option value="FREE">⚪ Tự do trong kho</option>
-          <option value="Mới 100%">Mới 100%</option>
-          <option value="Đang chạy tốt">Đang chạy tốt</option>
-          <option value="Cần bảo trì">Cần bảo trì</option>
-          {isComputer && (
-            <>
-              <option value="DOI_TRA_MOI">🔄 Đã đổi trả máy mới</option>
-              <option value="DOI_TRA_CU">🔁 Đổi trả máy cũ</option>
-            </>
-          )}
-        </select>
-
-        <span style={{ fontSize: '0.85rem', fontWeight: '600' }}>Sắp xếp:</span>
-        <select 
-          className="form-select" 
-          value={deviceSort} 
-          onChange={e => setDeviceSort(e.target.value)} 
-          style={{ height: '36px', fontSize: '0.825rem' }}
-        >
-          <option value="DEFAULT">Mã quản lý (A-Z)</option>
-          <option value="NEWEST">Mới cập nhật / thêm gần đây</option>
-        </select>
-
-        {(searchTerm || statusFilter !== 'ALL' || deviceSort !== 'DEFAULT') && (
-          <button 
-            className="btn btn-secondary btn-sm"
-            style={{ color: '#ef4444', borderColor: 'rgba(239, 68, 68, 0.4)', height: '36px' }}
-            onClick={() => { setSearchTerm(''); setStatusFilter('ALL'); setDeviceSort('DEFAULT'); }}
-          >
-            ✕ Xóa bộ lọc
-          </button>
-        )}
-      </div>
-    );
+    const rows = categoryName === 'Máy Chiết' ? sortedDispensers : categoryName === 'Máy Lắc' ? sortedMixers : isComputer ? sortedComputers : sortedPrinters;
+    return <WorkspaceFilterBar search={searchTerm} onSearch={setSearchTerm} placeholder={`Tìm ${categoryName.toLocaleLowerCase('vi')}, mã, seri…`} count={rows.length} fields={[{key:'status',label:'Tình trạng',value:statusFilter,onChange:setStatusFilter,options:uniqueOptions(['NEW','UPDATED','ASSIGNED','FREE','Mới 100%','Đang chạy tốt','Cần bảo trì',...(isComputer ? ['DOI_TRA_MOI','DOI_TRA_CU'] : [])]).map(option=>({...option,label:({NEW:'Mới thêm',UPDATED:'Mới chỉnh sửa',ASSIGNED:'Đã gán bộ máy',FREE:'Tự do trong kho',DOI_TRA_MOI:'Đã đổi trả máy mới',DOI_TRA_CU:'Đổi trả máy cũ'})[option.value] || option.label}))},{key:'sort',label:'Sắp xếp',defaultValue:'DEFAULT',allLabel:'Mã quản lý (A–Z)',value:deviceSort,onChange:setDeviceSort,options:[{value:'NEWEST',label:'Mới cập nhật'}]}]} onReset={()=>{setSearchTerm('');setStatusFilter('ALL');setDeviceSort('DEFAULT');}}/>;
   };
 
   const getPaginatedList = (list) => {
@@ -816,7 +756,8 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
   return (
     <div className="workspace-screen assetmanagement-screen" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       
-      <div className="workspace-tabs" aria-label="Bộ lọc nhanh thiết bị">{[['ALL','Tất cả'],['STOCK','Trong kho'],['PENDING','Chờ sửa chữa'],['RETURN','Chờ gửi trả'],['OVERDUE','Quá hạn bảo trì']].map(([key,label]) => <button key={key} aria-pressed={quickFilter === key} onClick={() => { setQuickFilter(key); setActiveSubTab('comboSets'); setStatusFilter('ALL'); setModelFilter('ALL'); }}>{label}</button>)}<button onClick={() => { setScanTargetField('profile'); setShowScanSerialModal(true); }}>Quét QR / Seri</button><button onClick={() => setShowManualScan(value => !value)}>Nhập mã bộ máy</button></div>
+      <div className="filter-scan-actions"><button className="btn btn-secondary" onClick={()=>{setScanTargetField('profile');setShowScanSerialModal(true);}}>Quét QR / Seri</button><button className="btn btn-secondary" onClick={()=>setShowManualScan(value=>!value)}>Nhập mã bộ máy</button></div>
+      {activeSubTab === 'comboSets' && <WorkspaceFilterBar search={searchTerm} onSearch={setSearchTerm} placeholder="Tìm mã bộ, NPP, seri…" count={filteredSets.length} fields={[{key:'province',label:'Tỉnh / thành',value:provinceFilter,onChange:setProvinceFilter,options:uniqueOptions([...systemSets.map(item=>item.province),...npps.map(item=>item.province)])},{key:'owner',label:'Kỹ thuật viên',value:ownerFilter,onChange:setOwnerFilter,options:uniqueOptions(systemSets.map(item=>item.technician))},{key:'model',label:'Máy chiết',value:modelFilter,onChange:setModelFilter,options:uniqueOptions(systemSets.map(item=>item.dispenserModel))},{key:'status',label:'Trạng thái bộ máy',value:statusFilter,onChange:setStatusFilter,options:[{value:'DA_LAP_DAT',label:'Đã lắp đặt'},{value:'TRONG_KHO',label:'Trong kho'},{value:'DA_THU_HOI',label:'Đã thu hồi'},{value:'BAO_THUONG_BAO_TRI',label:'Đang bảo trì'}]},{key:'from',label:'Ngày lắp đặt · từ',type:'date',defaultValue:'',value:dateFrom,onChange:setDateFrom},{key:'to',label:'Ngày lắp đặt · đến',type:'date',defaultValue:'',value:dateTo,onChange:setDateTo}]} quick={[{value:'ALL',label:'Tất cả'},{value:'STOCK',label:'Trong kho'},{value:'PENDING',label:'Chờ sửa'},{value:'RETURN',label:'Chờ trả'},{value:'OVERDUE',label:'Quá hạn'}]} quickValue={quickFilter} onQuick={setQuickFilter} onReset={() => { setSearchTerm(''); setModelFilter('ALL'); setStatusFilter('ALL'); setQuickFilter('ALL'); setProvinceFilter('ALL'); setOwnerFilter('ALL'); setDateFrom(''); setDateTo(''); }}/>}
       {showManualScan && <form className="machine-serial-form" onSubmit={event => { event.preventDefault(); openScannedMachine(scanInput); }}><label>Mã bộ máy hoặc seri<input className="form-input" required maxLength={160} value={scanInput} onChange={event => setScanInput(event.target.value)} placeholder="SET-... hoặc seri thiết bị" /></label><button className="btn btn-primary">Mở hồ sơ</button></form>}
       {scanError && <p role="alert" className="resource-error">{scanError}</p>}
       {/* 📦 BẢNG TỔNG HỢP TỒN KHO THIẾT BỊ HIỆN TẠI */}
@@ -1070,70 +1011,6 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
             </div>
           )}
           
-          {/* Filters Bar & Search Input */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px', flexWrap: 'wrap' }}>
-            <div style={{ position: 'relative', width: '240px' }}>
-              <input
-                type="text"
-                placeholder="Tìm Mã bộ, NPP, Seri..."
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-                className="form-input"
-                style={{ height: '36px', fontSize: '0.825rem', paddingLeft: '32px' }}
-              />
-              <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', opacity: 0.6 }}>🔍</span>
-            </div>
-
-            <Filter size={16} color="var(--text-muted)" />
-            <span style={{ fontSize: '0.85rem', fontWeight: '600' }}>Hệ Máy:</span>
-            <select className="form-select" value={modelFilter} onChange={e => setModelFilter(e.target.value)} style={{ height: '36px', fontSize: '0.825rem' }}>
-              <option value="ALL">Tất Cả Hệ Máy Chiết</option>
-              <option value="Satint A2">Satint A2</option>
-              <option value="Hero Eurotint">Hero Eurotint</option>
-              <option value="Corob F1">Corob F1</option>
-              <option value="Fast & Fluid HA480">Fast & Fluid HA480</option>
-            </select>
-
-            <span style={{ fontSize: '0.85rem', fontWeight: '600' }}>Trạng Thái:</span>
-            <select className="form-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{ height: '36px', fontSize: '0.825rem' }}>
-              <option value="ALL">Tất Cả Trạng Thái</option>
-              <option value="DA_LAP_DAT">🟢 Đã Lắp Đặt</option>
-              <option value="TRONG_KHO">⚪ Trong Kho</option>
-              <option value="DA_THU_HOI">🔴 Đã Thu Hồi</option>
-              <option value="BAO_THUONG_BAO_TRI">🟡 Đang Bảo Trì</option>
-            </select>
-          </div>
-
-          {/* Active Filter Chips */}
-          {(searchTerm || modelFilter !== 'ALL' || statusFilter !== 'ALL') && (
-            <div className="active-filter-chips">
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600' }}>Bộ lọc đang chọn:</span>
-              {searchTerm && (
-                <div className="filter-chip">
-                  <span>🔍 "{searchTerm}"</span>
-                  <span className="filter-chip-remove" onClick={() => setSearchTerm('')}>✕</span>
-                </div>
-              )}
-              {modelFilter !== 'ALL' && (
-                <div className="filter-chip">
-                  <span>⚙️ {modelFilter}</span>
-                  <span className="filter-chip-remove" onClick={() => setModelFilter('ALL')}>✕</span>
-                </div>
-              )}
-              {statusFilter !== 'ALL' && (
-                <div className="filter-chip">
-                  <span>⚡ {statusFilter}</span>
-                  <span className="filter-chip-remove" onClick={() => setStatusFilter('ALL')}>✕</span>
-                </div>
-              )}
-              <button 
-                style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline' }}
-                onClick={() => { setSearchTerm(''); setModelFilter('ALL'); setStatusFilter('ALL'); }}
-              >
-                Xóa tất cả bộ lọc
-              </button>
-            </div>
-          )}
 
           {/* Desktop View Table */}
           <div className="desktop-only data-table-container">
@@ -2428,14 +2305,7 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
                         {npps
                           .filter(npp => {
                             if (!nppSearchTerm.trim()) return true;
-                            const term = nppSearchTerm.toLowerCase();
-                            return (
-                              (npp.name && npp.name.toLowerCase().includes(term)) ||
-                              (npp.code && npp.code.toLowerCase().includes(term)) ||
-                              (npp.id && npp.id.toLowerCase().includes(term)) ||
-                              (npp.province && npp.province.toLowerCase().includes(term)) ||
-                              (npp.salesperson && npp.salesperson.toLowerCase().includes(term))
-                            );
+                            return matchesSearch(nppSearchTerm,[npp.name,npp.code,npp.id,npp.province,npp.salesperson,npp.phone]);
                           })
                           .map(npp => (
                             <option key={npp.id} value={npp.id}>
@@ -2729,14 +2599,7 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
                         {npps
                           .filter(npp => {
                             if (!editNppSearchTerm.trim()) return true;
-                            const term = editNppSearchTerm.toLowerCase();
-                            return (
-                              (npp.name && npp.name.toLowerCase().includes(term)) ||
-                              (npp.code && npp.code.toLowerCase().includes(term)) ||
-                              (npp.id && npp.id.toLowerCase().includes(term)) ||
-                              (npp.province && npp.province.toLowerCase().includes(term)) ||
-                              (npp.salesperson && npp.salesperson.toLowerCase().includes(term))
-                            );
+                            return matchesSearch(editNppSearchTerm,[npp.name,npp.code,npp.id,npp.province,npp.salesperson,npp.phone]);
                           })
                           .map(npp => (
                             <option key={npp.id} value={npp.id}>

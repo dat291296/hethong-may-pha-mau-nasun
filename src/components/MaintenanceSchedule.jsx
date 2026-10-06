@@ -1,3 +1,7 @@
+import WorkspaceFilterBar from './WorkspaceFilterBar.jsx';
+import { matchesSearch, matchesDateRange, uniqueOptions, REGIONS, canEditRegion } from '../lib/workspaceFilters.js';
+import { useAuth } from '../context/AuthContext.jsx';
+import { useWorkspaceState, useWorkspaceScroll } from '../hooks/useWorkspaceState.js';
 import { resolveMachine } from '../lib/machineWorkspace';
 import MaintenanceChecklist from './MaintenanceChecklist';
 import React, { useState, useMemo, useEffect } from 'react';
@@ -35,7 +39,9 @@ function isDateInYear(value, year) {
 }
 
 export default function MaintenanceSchedule({ globalSearch = '', initialFilter = 'ALL', systemSets, onCompleteMaintenance, onUpdateSystemSet, onDeleteSystemSet }) {
-  const [filter, setFilter] = useState(initialFilter); // ALL | DUE_SOON | OVERDUE | OK
+  const { user } = useAuth();
+  useWorkspaceScroll('maintenance');
+  const [filter, setFilter] = useWorkspaceState('maintenance:state', initialFilter); // ALL | DUE_SOON | OVERDUE | OK
   const [selectedSet, setSelectedSet] = useState(null);
   const openedSearch = React.useRef('');
   useEffect(() => {
@@ -44,16 +50,21 @@ export default function MaintenanceSchedule({ globalSearch = '', initialFilter =
     const machine = resolveMachine(systemSets, globalSearch);
     if (machine) { openedSearch.current = globalSearch; setSelectedSet(machine); }
   }, [globalSearch, systemSets]);
-  useEffect(() => { setFilter(initialFilter); }, [initialFilter]);
-  const [searchTerm, setSearchTerm] = useState('');
-  useEffect(() => { setSearchTerm(globalSearch); }, [globalSearch]);
-  const [regionWorkFilter, setRegionWorkFilter] = useState('ALL');
+  useEffect(() => { if (initialFilter !== 'ALL') setFilter(initialFilter); }, [initialFilter]);
+  const [searchTerm, setSearchTerm] = useWorkspaceState('maintenance:search', '');
+  useEffect(() => { if (globalSearch) setSearchTerm(globalSearch); }, [globalSearch, setSearchTerm]);
+  const [regionWorkFilter, setRegionWorkFilter] = useWorkspaceState('maintenance:region', 'ALL');
+  const [provinceFilter, setProvinceFilter] = useWorkspaceState('maintenance:province', 'ALL');
+  const [ownerFilter, setOwnerFilter] = useWorkspaceState('maintenance:owner', 'ALL');
+  const [dateFrom, setDateFrom] = useWorkspaceState('maintenance:from', '');
+  const [dateTo, setDateTo] = useWorkspaceState('maintenance:to', '');
 
   // Edit maintenance states
   const [editingMaint, setEditingMaint] = useState(null);
   const [editMaintFormData, setEditMaintFormData] = useState({});
 
   const handleOpenEditMaint = (set) => {
+    if (!canEditRegion(user,set.region)) { alert('Bạn chỉ được sửa dữ liệu trong khu vực được phân công.'); return; }
     setEditingMaint(set);
     setEditMaintFormData({
       lastMaintenanceDate: set.lastMaintenanceDate || '',
@@ -61,19 +72,21 @@ export default function MaintenanceSchedule({ globalSearch = '', initialFilter =
     });
   };
 
-  const handleEditMaintSubmit = (e) => {
+  const handleEditMaintSubmit = async (e) => {
     e.preventDefault();
     if (!editingMaint) return;
-    onUpdateSystemSet(editingMaint.setCode, editMaintFormData);
-    setEditingMaint(null);
+    try {
+      await onUpdateSystemSet(editingMaint.setCode, editMaintFormData);
+      setEditingMaint(null);
+    } catch (error) { console.error('[Maintenance] Edit rejected', error); alert(error.message); }
   };
 
-  const handleDeleteMaint = (setCode) => {
+  const handleDeleteMaint = async (setCode) => {
     if (window.confirm(`Bạn có chắc chắn muốn xóa lịch bảo trì của bộ máy [${setCode}] không? Ngày bảo trì gần nhất và hạn tiếp theo sẽ được đặt về trống.`)) {
-      onUpdateSystemSet(setCode, {
+      try { await onUpdateSystemSet(setCode, {
         lastMaintenanceDate: null,
         nextMaintenanceDue: null
-      });
+      }); } catch (error) { console.error('[Maintenance] Clear rejected', error); alert(error.message); }
     }
   };
 
@@ -142,8 +155,8 @@ export default function MaintenanceSchedule({ globalSearch = '', initialFilter =
       }
 
       return { ...set, dueDays: diffDays, statusType, missingFields };
-    }).filter(set => `${set.setCode} ${set.nppName} ${set.region} ${set.dispenserModel} ${set.dispenserSerial}`.toLowerCase().includes(searchTerm.toLowerCase()));
-  }, [systemSets, searchTerm]);
+    });
+  }, [systemSets]);
 
   // Monthly stats for 12 months chart
   const monthlyStats = useMemo(() => {
@@ -192,19 +205,24 @@ export default function MaintenanceSchedule({ globalSearch = '', initialFilter =
   }, [processedSets]);
 
   const filteredSets = processedSets.filter(s => {
+    if (!matchesSearch(searchTerm,[s.setCode,s.nppName,s.region,s.province,s.dispenserModel,s.dispenserSerial,s.technician])) return false;
+    if (provinceFilter !== 'ALL' && s.province !== provinceFilter) return false;
+    if (ownerFilter !== 'ALL' && s.technician !== ownerFilter) return false;
+    if (!matchesDateRange(s.nextMaintenanceDue,dateFrom,dateTo)) return false;
     if (regionWorkFilter !== 'ALL' && normalizeRegion(s.region) !== regionWorkFilter) return false;
     if (filter === 'DUE_SOON') return s.statusType === 'DUE_SOON';
     if (filter === 'OVERDUE') return s.statusType === 'OVERDUE';
     if (filter === 'OK') return s.statusType === 'OK';
+    if (filter === 'NO_DATE') return s.statusType === 'NO_DATE';
     return true;
   });
 
-  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPage, setCurrentPage] = useWorkspaceState('maintenance:page', 1);
   const [pageSize, setPageSize] = useState(10);
 
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [filter, regionWorkFilter, searchTerm]);
+  const filterSignature = [filter,regionWorkFilter,searchTerm,provinceFilter,ownerFilter,dateFrom,dateTo].join('|');
+  const previousFilters = React.useRef(filterSignature);
+  useEffect(() => { if (previousFilters.current !== filterSignature) { previousFilters.current = filterSignature; setCurrentPage(1); } }, [filterSignature,setCurrentPage]);
 
   // Sort strictly in natural ascending order from 1 to N, top to bottom
   const sortedSets = [...filteredSets].sort((a, b) => naturalSortCode(a, b, 'setCode'));
@@ -240,6 +258,8 @@ export default function MaintenanceSchedule({ globalSearch = '', initialFilter =
           <strong>⚠️ Nhắc việc cho kỹ thuật viên:</strong> Có {processedSets.filter(set => set.missingFields.length > 0).length} bộ máy thiếu thông tin. Khi đến NPP bảo dưỡng, kiểm tra và bổ sung các mục được cảnh báo trước khi hoàn tất lịch bảo trì.
         </div>
       )}
+
+      <WorkspaceFilterBar search={searchTerm} onSearch={setSearchTerm} placeholder="Tìm mã bộ, NPP, seri…" count={filteredSets.length} fields={[{key:'region',label:'Khu vực',value:regionWorkFilter,onChange:setRegionWorkFilter,options:uniqueOptions(REGIONS)},{key:'province',label:'Tỉnh / thành',value:provinceFilter,onChange:setProvinceFilter,options:uniqueOptions(systemSets.map(item=>item.province))},{key:'owner',label:'Kỹ thuật viên',value:ownerFilter,onChange:setOwnerFilter,options:uniqueOptions(systemSets.map(item=>item.technician))},{key:'from',label:'Hạn bảo trì · từ',type:'date',defaultValue:'',value:dateFrom,onChange:setDateFrom},{key:'to',label:'Hạn bảo trì · đến',type:'date',defaultValue:'',value:dateTo,onChange:setDateTo}]} quick={[{value:'ALL',label:'Tất cả',count:processedSets.length},{value:'DUE_SOON',label:'Sắp hạn',count:processedSets.filter(item=>item.statusType === 'DUE_SOON').length},{value:'OVERDUE',label:'Quá hạn',count:processedSets.filter(item=>item.statusType === 'OVERDUE').length},{value:'OK',label:'Bình thường',count:processedSets.filter(item=>item.statusType === 'OK').length},{value:'NO_DATE',label:'Chưa có lịch',count:processedSets.filter(item=>item.statusType === 'NO_DATE').length}]} quickValue={filter} onQuick={setFilter} onReset={() => { setSearchTerm(''); setFilter('ALL'); setRegionWorkFilter('ALL'); setProvinceFilter('ALL'); setOwnerFilter('ALL'); setDateFrom(''); setDateTo(''); }}/>
 
       {/* Annual regional work plan */}
       <div className="glass-panel" style={{ padding: '18px' }}>
@@ -370,38 +390,6 @@ export default function MaintenanceSchedule({ globalSearch = '', initialFilter =
         </div>
       </div>
 
-      {/* Filter Tabs */}
-      <div className="glass-panel" style={{ padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
-        <input className="form-input" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Tìm mã bộ, NPP, khu vực, máy chiết..." style={{ maxWidth: '300px' }} />
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <button 
-            className={`btn ${filter === 'ALL' ? 'btn-primary' : 'btn-secondary'} btn-sm`}
-            onClick={() => setFilter('ALL')}
-          >
-            Tất Cả ({processedSets.length})
-          </button>
-          <button 
-            className={`btn ${filter === 'DUE_SOON' ? 'btn-primary' : 'btn-secondary'} btn-sm`}
-            onClick={() => setFilter('DUE_SOON')}
-            style={filter === 'DUE_SOON' ? { background: '#f59e0b', color: '#000' } : {}}
-          >
-            ⚠️ Cảnh Báo Sắp Hạn (30 Ngày) ({processedSets.filter(s => s.statusType === 'DUE_SOON').length})
-          </button>
-          <button 
-            className={`btn ${filter === 'OVERDUE' ? 'btn-primary' : 'btn-secondary'} btn-sm`}
-            onClick={() => setFilter('OVERDUE')}
-            style={filter === 'OVERDUE' ? { background: '#f43f5e', color: '#fff' } : {}}
-          >
-            🚨 Đã Quá Hạn ({processedSets.filter(s => s.statusType === 'OVERDUE').length})
-          </button>
-          <button 
-            className={`btn ${filter === 'OK' ? 'btn-primary' : 'btn-secondary'} btn-sm`}
-            onClick={() => setFilter('OK')}
-          >
-            ✓ Bình Thường ({processedSets.filter(s => s.statusType === 'OK').length})
-          </button>
-        </div>
-      </div>
 
       {/* Table of Maintenance Items */}
       <div className="glass-panel" style={{ padding: '20px' }}>
@@ -449,14 +437,14 @@ export default function MaintenanceSchedule({ globalSearch = '', initialFilter =
                   </td>
                   <td>
                     <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                      <button className="btn btn-secondary btn-sm" style={{ display: 'flex', alignItems: 'center', gap: '4px' }} onClick={() => setSelectedSet(set)}>
+                      <button className="btn btn-secondary btn-sm" style={{ display: 'flex', alignItems: 'center', gap: '4px' }} disabled={!canEditRegion(user,set.region)} onClick={() => setSelectedSet(set)}>
                         <Wrench size={14} />
                         <span>Xác Nhận Bảo Trì</span>
                       </button>
-                      <button className="btn btn-secondary btn-sm" style={{ padding: '4px 8px' }} onClick={() => handleOpenEditMaint(set)}>
+                      <button className="btn btn-secondary btn-sm" style={{ padding: '4px 8px' }} disabled={!canEditRegion(user,set.region)} onClick={() => handleOpenEditMaint(set)}>
                         <Edit3 size={14} color="var(--accent-cyan)" />
                       </button>
-                      <button className="btn btn-danger btn-sm" style={{ padding: '4px 8px' }} onClick={() => handleDeleteMaint(set.setCode)}>
+                      <button className="btn btn-danger btn-sm" style={{ padding: '4px 8px' }} disabled={!canEditRegion(user,set.region)} onClick={() => handleDeleteMaint(set.setCode)}>
                         <Trash2 size={14} />
                       </button>
                     </div>
@@ -507,15 +495,15 @@ export default function MaintenanceSchedule({ globalSearch = '', initialFilter =
                 </div>
               </div>
               <div className="mobile-card-actions">
-                <button className="btn btn-secondary btn-sm" style={{ display: 'flex', alignItems: 'center', gap: '4px' }} onClick={() => setSelectedSet(set)}>
+                <button className="btn btn-secondary btn-sm" style={{ display: 'flex', alignItems: 'center', gap: '4px' }} disabled={!canEditRegion(user,set.region)} onClick={() => setSelectedSet(set)}>
                   <Wrench size={14} />
                   <span>Xác Nhận Bảo Trì</span>
                 </button>
-                <button className="btn btn-secondary btn-sm" onClick={() => handleOpenEditMaint(set)}>
+                <button className="btn btn-secondary btn-sm" disabled={!canEditRegion(user,set.region)} onClick={() => handleOpenEditMaint(set)}>
                   <Edit3 size={14} color="var(--accent-cyan)" />
                   <span>Sửa</span>
                 </button>
-                <button className="btn btn-danger btn-sm" onClick={() => handleDeleteMaint(set.setCode)}>
+                <button className="btn btn-danger btn-sm" disabled={!canEditRegion(user,set.region)} onClick={() => handleDeleteMaint(set.setCode)}>
                   <Trash2 size={14} />
                   <span>Xóa</span>
                 </button>

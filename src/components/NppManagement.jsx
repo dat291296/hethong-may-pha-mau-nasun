@@ -1,3 +1,6 @@
+import WorkspaceFilterBar from './WorkspaceFilterBar.jsx';
+import { matchesSearch, matchesDateRange, uniqueOptions, REGIONS } from '../lib/workspaceFilters.js';
+import { useWorkspaceState, useWorkspaceScroll } from '../hooks/useWorkspaceState.js';
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { 
@@ -30,15 +33,20 @@ import { exportExcel } from '../utils/excelExport.js';
 
 export default function NppManagement({ globalSearch = '', npps, systemSets, onAddNpp, onEditNpp, onDeleteNpp, onOpenImportModal }) {
   const { user } = useAuth();
-  const [searchTerm, setSearchTerm] = useState('');
-  useEffect(() => { setSearchTerm(globalSearch); }, [globalSearch]);
-  const [regionFilter, setRegionFilter] = useState('ALL');
-  const [statusFilter, setStatusFilter] = useState('ALL');
-  const [brandFilter, setBrandFilter] = useState('ALL');
+  const [searchTerm, setSearchTerm] = useWorkspaceState('npps:search', '');
+  useEffect(() => { if (globalSearch) setSearchTerm(globalSearch); }, [globalSearch, setSearchTerm]);
+  useWorkspaceScroll('npps');
+  const [regionFilter, setRegionFilter] = useWorkspaceState('npps:region', 'ALL');
+  const [statusFilter, setStatusFilter] = useWorkspaceState('npps:status', 'ALL');
+  const [brandFilter, setBrandFilter] = useWorkspaceState('npps:brand', 'ALL');
   const [selectedNpp, setSelectedNpp] = useState(null);
   
   // Pagination State
-  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPage, setCurrentPage] = useWorkspaceState('npps:page', 1);
+  const [provinceFilter, setProvinceFilter] = useWorkspaceState('npps:province', 'ALL');
+  const [ownerFilter, setOwnerFilter] = useWorkspaceState('npps:owner', 'ALL');
+  const [dateFrom, setDateFrom] = useWorkspaceState('npps:from', '');
+  const [dateTo, setDateTo] = useWorkspaceState('npps:to', '');
   const [pageSize, setPageSize] = useState(12);
   const exportNpps = () => exportExcel(npps, [
     { key: 'id', label: 'Mã NPP' }, { key: 'name', label: 'Tên Nhà Phân Phối' }, { key: 'phone', label: 'Số Điện Thoại' },
@@ -46,10 +54,9 @@ export default function NppManagement({ globalSearch = '', npps, systemSets, onA
     { key: 'province', label: 'Tỉnh Thành' }, { key: 'address', label: 'Địa Chỉ' }, { key: 'status', label: 'Trạng Thái' }
   ], 'Nha_Phan_Phoi', 'NPP');
 
-  // Reset pagination on filter change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, regionFilter, statusFilter, brandFilter]);
+  const filterSignature = [searchTerm,regionFilter,statusFilter,brandFilter,provinceFilter,ownerFilter,dateFrom,dateTo].join('|');
+  const previousFilters = React.useRef(filterSignature);
+  useEffect(() => { if (previousFilters.current !== filterSignature) { previousFilters.current = filterSignature; setCurrentPage(1); } }, [filterSignature, setCurrentPage]);
 
   // Modal states
   const [showAddModal, setShowAddModal] = useState(false);
@@ -74,15 +81,13 @@ export default function NppManagement({ globalSearch = '', npps, systemSets, onA
   });
 
   const filteredNpps = npps.filter(npp => {
-    const matchesSearch = npp.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          npp.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          npp.phone.includes(searchTerm) ||
-                          npp.address.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          (npp.salesperson && npp.salesperson.toLowerCase().includes(searchTerm.toLowerCase()));
+    const found = matchesSearch(searchTerm, [npp.name,npp.id,npp.phone,npp.address,npp.salesperson,npp.province,npp.region,npp.contactPerson]);
+    const owners = systemSets.filter(machine => machine.nppId === npp.id).map(machine => machine.technician);
+    const matchesExtra = (provinceFilter === 'ALL' || npp.province === provinceFilter) && (ownerFilter === 'ALL' || owners.includes(ownerFilter)) && matchesDateRange(npp.createdAt,dateFrom,dateTo);
     const matchesRegion = regionFilter === 'ALL' || npp.region === regionFilter;
     const matchesStatus = statusFilter === 'ALL' || npp.status === statusFilter;
     const matchesBrand = brandFilter === 'ALL' || (npp.brand || 'Nasun') === brandFilter;
-    return matchesSearch && matchesRegion && matchesStatus && matchesBrand;
+    return found && matchesExtra && matchesRegion && matchesStatus && matchesBrand;
   });
 
   const isRegionAllowed = (nppRegion) => {
@@ -283,93 +288,7 @@ export default function NppManagement({ globalSearch = '', npps, systemSets, onA
     <div className="workspace-screen nppmanagement-screen" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       
       <div className="workspace-heading"><div><span className="workspace-eyebrow">ĐỐI TÁC / NHÀ PHÂN PHỐI</span><h2>Nhà phân phối</h2><p>Liên hệ, địa điểm và các bộ máy tại từng đại lý.</p></div></div>
-      {/* Search & Action Bar */}
-      <div className="glass-panel workspace-toolbar" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-          <div style={{ position: 'relative', width: '260px' }}>
-            <Search size={16} color="var(--text-muted)" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
-            <input
-              type="text"
-              placeholder="Tìm theo Mã, Tên NPP, SĐT..."
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              className="form-input"
-              style={{ paddingLeft: '36px', height: '38px', fontSize: '0.85rem', width: '100%' }}
-            />
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-            <Filter size={16} color="var(--text-muted)" />
-            <select className="form-select" value={brandFilter} onChange={e => setBrandFilter(e.target.value)} style={{ height: '38px', fontSize: '0.85rem' }}>
-              <option value="ALL">Tất Cả Hãng (Nasun / Natos)</option>
-              <option value="Nasun">Hãng Nasun</option>
-              <option value="Natos">Hãng Natos</option>
-            </select>
-
-            <select className="form-select" value={regionFilter} onChange={e => setRegionFilter(e.target.value)} style={{ height: '38px', fontSize: '0.85rem' }}>
-              <option value="ALL">Tất Cả Khu Vực</option>
-              <option value="Miền Bắc">Miền Bắc</option>
-              <option value="Miền Trung">Miền Trung</option>
-              <option value="Miền Nam">Miền Nam</option>
-            </select>
-
-            <select className="form-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{ height: '38px', fontSize: '0.85rem' }}>
-              <option value="ALL">Tất Cả Trạng Thái</option>
-              <option value="Đang hợp tác">Đang hợp tác</option>
-              <option value="Đã ngưng hợp tác">Đã ngưng hợp tác</option>
-            </select>
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button className="btn btn-secondary" onClick={onOpenImportModal}>
-            <FileSpreadsheet size={18} color="var(--accent-emerald)" />
-            <span>📥 Import Từ Excel</span>
-          </button>
-          <button className="btn btn-secondary" onClick={exportNpps}>📤 Xuất Excel</button>
-          <button className="btn btn-primary" onClick={handleOpenAdd}>
-            <PlusCircle size={18} />
-            <span>Thêm Nhà Phân Phối Mới</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Active Filter Chips */}
-      {(searchTerm || regionFilter !== 'ALL' || statusFilter !== 'ALL' || brandFilter !== 'ALL') && (
-        <div className="active-filter-chips">
-          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600' }}>Bộ lọc đang chọn:</span>
-          {searchTerm && (
-            <div className="filter-chip">
-              <span>🔍 "{searchTerm}"</span>
-              <span className="filter-chip-remove" onClick={() => setSearchTerm('')}>✕</span>
-            </div>
-          )}
-          {brandFilter !== 'ALL' && (
-            <div className="filter-chip">
-              <span>🎨 {brandFilter}</span>
-              <span className="filter-chip-remove" onClick={() => setBrandFilter('ALL')}>✕</span>
-            </div>
-          )}
-          {regionFilter !== 'ALL' && (
-            <div className="filter-chip">
-              <span>📍 {regionFilter}</span>
-              <span className="filter-chip-remove" onClick={() => setRegionFilter('ALL')}>✕</span>
-            </div>
-          )}
-          {statusFilter !== 'ALL' && (
-            <div className="filter-chip">
-              <span>⚡ {statusFilter}</span>
-              <span className="filter-chip-remove" onClick={() => setStatusFilter('ALL')}>✕</span>
-            </div>
-          )}
-          <button 
-            style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline' }}
-            onClick={() => { setSearchTerm(''); setRegionFilter('ALL'); setStatusFilter('ALL'); setBrandFilter('ALL'); }}
-          >
-            Xóa tất cả bộ lọc
-          </button>
-        </div>
-      )}
+      <WorkspaceFilterBar search={searchTerm} onSearch={setSearchTerm} placeholder="Tìm mã, tên NPP, điện thoại…" count={filteredNpps.length} fields={[{key:'region',label:'Khu vực',value:regionFilter,onChange:setRegionFilter,options:uniqueOptions(REGIONS)},{key:'province',label:'Tỉnh / thành',value:provinceFilter,onChange:setProvinceFilter,options:uniqueOptions(npps.map(item=>item.province))},{key:'owner',label:'Kỹ thuật viên phụ trách bộ máy',value:ownerFilter,onChange:setOwnerFilter,options:uniqueOptions(systemSets.map(item=>item.technician))},{key:'brand',label:'Hãng',value:brandFilter,onChange:setBrandFilter,options:uniqueOptions(['Nasun','Natos'])},{key:'status',label:'Trạng thái',value:statusFilter,onChange:setStatusFilter,options:uniqueOptions(['Đang hợp tác','Đã ngưng hợp tác'])},{key:'from',label:'Ngày tạo NPP · từ',type:'date',defaultValue:'',value:dateFrom,onChange:setDateFrom},{key:'to',label:'Ngày tạo NPP · đến',type:'date',defaultValue:'',value:dateTo,onChange:setDateTo}]} onReset={() => { setSearchTerm(''); setRegionFilter('ALL'); setStatusFilter('ALL'); setBrandFilter('ALL'); setProvinceFilter('ALL'); setOwnerFilter('ALL'); setDateFrom(''); setDateTo(''); }} actions={<><details className="filter-more-actions"><summary>Thao tác khác</summary><div><button className="btn btn-secondary" onClick={onOpenImportModal}>Nhập Excel</button><button className="btn btn-secondary" onClick={exportNpps}>Xuất Excel</button></div></details><button className="btn btn-primary" onClick={handleOpenAdd}>Thêm NPP</button></>}/>
 
       {/* NPP Cards Grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}>

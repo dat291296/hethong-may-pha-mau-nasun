@@ -1,3 +1,5 @@
+import WorkspaceFilterBar from './WorkspaceFilterBar.jsx';
+import { matchesSearch, matchesDateRange, uniqueOptions, canEditRegion } from '../lib/workspaceFilters.js';
 import React, { useState, useMemo, useEffect } from 'react';
 import SafePortal from './SafePortal.jsx';
 import { formatDateVN } from '../utils/dateUtils.js';
@@ -105,24 +107,19 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
   const [saveError, setSaveError] = useState('');
   const [mineOnly, setMineOnly] = useState(false);
   const canAssign = ['admin', 'manager'].includes(user?.role);
-  const [activeTab, setActiveTab] = useState('ALL'); // ALL | PENDING | NOT_RETURNED | REPLACED
-  const [searchTerm, setSearchTerm] = useState('');
-  useEffect(() => { setSearchTerm(globalSearch); }, [globalSearch]);
+  const [activeTab, setActiveTab] = useWorkspaceState('repairs:state', 'ALL'); // ALL | PENDING | NOT_RETURNED | REPLACED
+  const [searchTerm, setSearchTerm] = useWorkspaceState('repairs:search', '');
+  useEffect(() => { if (globalSearch) setSearchTerm(globalSearch); }, [globalSearch, setSearchTerm]);
   const [nppSearchTerm, setNppSearchTerm] = useState('');
 
-  const isTicketAllowed = (ticketNppId) => {
-    if (!user) return false;
-    if (user.role === 'admin') return true;
-    if (['manager', 'technician', 'qc'].includes(user.role)) {
-      if (user.managedRegion === 'Toàn Quốc') return true;
-      const targetNpp = npps.find(n => n.id === ticketNppId);
-      return targetNpp ? user.managedRegion === targetNpp.region : false;
-    }
-    return false;
-  };
+  const isTicketAllowed = ticketNppId => canEditRegion(user, npps.find(item=>item.id === ticketNppId)?.region);
   useWorkspaceScroll('repairs');
   const [categoryFilter, setCategoryFilter] = useWorkspaceState('repairs:category', 'ALL');
   const [modelFilter, setModelFilter] = useWorkspaceState('repairs:model', 'ALL');
+  const [provinceFilter, setProvinceFilter] = useWorkspaceState('repairs:province', 'ALL');
+  const [ownerFilter, setOwnerFilter] = useWorkspaceState('repairs:owner', 'ALL');
+  const [dateFrom, setDateFrom] = useWorkspaceState('repairs:from', '');
+  const [dateTo, setDateTo] = useWorkspaceState('repairs:to', '');
 
   // Modal states
   const [showModal, setShowModal] = useState(false);
@@ -354,12 +351,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
 
   const filteredNpps = useMemo(() => {
     if (!nppSearchTerm.trim()) return npps;
-    const term = nppSearchTerm.toLowerCase();
-    return npps.filter(n => 
-      (n.name && n.name.toLowerCase().includes(term)) || 
-      (n.id && n.id.toLowerCase().includes(term)) || 
-      (n.region && n.region.toLowerCase().includes(term))
-    );
+    return npps.filter(n => matchesSearch(nppSearchTerm,[n.name,n.id,n.region,n.province,n.phone]));
   }, [npps, nppSearchTerm]);
 
   const handleCategoryChange = (newCat) => {
@@ -558,18 +550,15 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
     }
   };
 
-  const [quickFilter, setQuickFilter] = useState(initialFilter);
-  React.useEffect(() => { setQuickFilter(initialFilter); }, [initialFilter]);
+  React.useEffect(() => { if (initialFilter !== 'ALL') setActiveTab(initialFilter === 'RETURN' ? 'NOT_RETURNED' : initialFilter); }, [initialFilter]);
   // Filtered Tickets
   const filteredTickets = repairTickets.filter(t => {
     if (mineOnly && !isAssignedTo(t, user)) return false;
-    if (quickFilter === 'PENDING' && t.processingStatus !== 'Chưa xử lý') return false;
-    if (quickFilter === 'RETURN' && !(t.processingStatus === 'Đã xử lý' && t.customerReturnStatus === 'Chưa gửi trả')) return false;
-    const matchesSearch = t.ticketCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          t.nppName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          t.serialNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          t.technician.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          t.errorDescription.toLowerCase().includes(searchTerm.toLowerCase());
+    const distributor = npps.find(item => item.id === t.nppId);
+    const found = matchesSearch(searchTerm,[t.ticketCode,t.nppName,t.serialNumber,t.technician,t.errorDescription,distributor?.province,distributor?.region]);
+    if (provinceFilter !== 'ALL' && distributor?.province !== provinceFilter) return false;
+    if (ownerFilter !== 'ALL' && (t.assignedUserId || t.technician) !== ownerFilter) return false;
+    if (!matchesDateRange(t.date,dateFrom,dateTo)) return false;
 
     const matchesCategory = categoryFilter === 'ALL' || t.productCategory === categoryFilter;
     const matchesModel = modelFilter === 'ALL' || t.machineModel === modelFilter;
@@ -579,7 +568,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
     if (activeTab === 'NOT_RETURNED') matchesTab = t.customerReturnStatus === 'Chưa gửi trả';
     if (activeTab === 'REPLACED') matchesTab = t.actionDirection === 'Xuất đổi';
 
-    return matchesSearch && matchesCategory && matchesModel && matchesTab;
+    return found && matchesCategory && matchesModel && matchesTab;
   });
 
   // Calculate statistics
@@ -591,7 +580,8 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
     <div className="workspace-screen devicerepairprocessing-screen" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       <div className="workspace-tabs"><button aria-pressed={mineOnly} onClick={() => setMineOnly(value => !value)}>Việc của tôi</button><span className="resource-muted">Hạn xử lý và người nhận hiển thị trong chi tiết phiếu.</span></div>
       
-      <div className="workspace-tabs" aria-label="Bộ lọc nhanh sửa chữa">{[['ALL','Tất cả'],['PENDING','Chờ sửa'],['RETURN','Chờ gửi trả']].map(([key,label]) => <button key={key} aria-pressed={quickFilter === key} onClick={() => { setQuickFilter(key); setActiveTab('ALL'); }}>{label}</button>)}</div>
+      <WorkspaceFilterBar search={searchTerm} onSearch={setSearchTerm} placeholder="Tìm mã phiếu, NPP, seri…" count={filteredTickets.length} fields={[{key:'province',label:'Tỉnh / thành',value:provinceFilter,onChange:setProvinceFilter,options:uniqueOptions(npps.map(item=>item.province))},{key:'owner',label:'Người phụ trách',value:ownerFilter,onChange:setOwnerFilter,options:[...qcUsers.map(item=>({value:item.id,label:item.name || item.full_name || item.id})),...uniqueOptions(repairTickets.filter(item=>!item.assignedUserId).map(item=>item.technician))]},{key:'category',label:'Loại thiết bị',value:categoryFilter,onChange:setCategoryFilter,options:uniqueOptions(PRODUCT_CATEGORIES)},{key:'model',label:'Model',value:modelFilter,onChange:setModelFilter,options:uniqueOptions(MACHINE_MODELS)},{key:'from',label:'Ngày tiếp nhận · từ',type:'date',defaultValue:'',value:dateFrom,onChange:setDateFrom},{key:'to',label:'Ngày tiếp nhận · đến',type:'date',defaultValue:'',value:dateTo,onChange:setDateTo}]} quick={[{value:'ALL',label:'Tất cả',count:repairTickets.length},{value:'PENDING',label:'Chờ sửa',count:pendingCount},{value:'NOT_RETURNED',label:'Chờ trả',count:notReturnedCount},{value:'REPLACED',label:'Xuất đổi',count:replacedCount}]} quickValue={activeTab} onQuick={setActiveTab} onReset={() => { setSearchTerm(''); setActiveTab('ALL'); setMineOnly(false); setCategoryFilter('ALL'); setModelFilter('ALL'); setProvinceFilter('ALL'); setOwnerFilter('ALL'); setDateFrom(''); setDateTo(''); }} actions={<><details className="filter-more-actions"><summary>Thao tác khác</summary><div><button className="btn btn-secondary" onClick={()=>onOpenImportModal?.()}>Nhập Excel</button><button className="btn btn-secondary" onClick={exportRepairs}>Xuất Excel</button></div></details><button className="btn btn-primary" onClick={handleOpenAdd}>Tạo phiếu</button></>}/>
+
       {/* 1-YEAR FAILURE ANALYSIS DASHBOARD CHARTS */}
       <div className="glass-panel" style={{ padding: '20px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
@@ -701,91 +691,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
 
       </div>
 
-      {/* Main Filter & Action Bar */}
-      <div className="glass-panel" style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
-          
-          {/* Filter Sub-Tabs */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-            <button 
-              className={`btn ${activeTab === 'ALL' ? 'btn-primary' : 'btn-secondary'} btn-sm`}
-              onClick={() => setActiveTab('ALL')}
-            >
-              <span>Tất Cả Phiếu ({repairTickets.length})</span>
-            </button>
-
-            <button 
-              className={`btn ${activeTab === 'PENDING' ? 'btn-danger' : 'btn-secondary'} btn-sm`}
-              onClick={() => setActiveTab('PENDING')}
-            >
-              <span>⚠️ Chưa Xử Lý ({pendingCount})</span>
-            </button>
-
-            <button 
-              className={`btn ${activeTab === 'NOT_RETURNED' ? 'btn-secondary' : 'btn-secondary'} btn-sm`}
-              style={activeTab === 'NOT_RETURNED' ? { background: 'var(--accent-amber)', color: '#000', fontWeight: 'bold' } : {}}
-              onClick={() => setActiveTab('NOT_RETURNED')}
-            >
-              <span>📦 Chưa Gửi Trả Khách ({notReturnedCount})</span>
-            </button>
-
-            <button 
-              className={`btn ${activeTab === 'REPLACED' ? 'btn-primary' : 'btn-secondary'} btn-sm`}
-              onClick={() => setActiveTab('REPLACED')}
-            >
-              <span>🔄 Xuất Đổi ({replacedCount})</span>
-            </button>
-          </div>
-
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            <button className="btn btn-secondary btn-sm" onClick={() => onOpenImportModal?.()}><FileSpreadsheet size={16} /><span>📥 Nhập Excel</span></button>
-            <button className="btn btn-secondary btn-sm" onClick={exportRepairs}><FileSpreadsheet size={16} /><span>📤 Xuất Excel</span></button>
-            <button className="btn btn-primary" onClick={handleOpenAdd}>
-              <PlusCircle size={18} />
-              <span>+ Tạo Phiếu Xử Lý Máy Mới</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Warning Banner for Locked Month */}
-        <div style={{ padding: '10px 14px', background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: '8px', color: '#ef4444', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px' }}>
-          <ShieldAlert size={16} />
-          <span>Lưu ý: Hệ thống tự động khóa các thao tác Thêm/Sửa/Xóa đối với các phiếu phát sinh trong các tháng đã chốt sổ kế toán.</span>
-        </div>
-
-        {/* Search & Select Filters */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-          
-          <div style={{ position: 'relative', width: '280px' }}>
-            <Search size={16} color="var(--text-muted)" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
-            <input
-              type="text"
-              placeholder="Tìm Mã phiếu, NPP, Seri, KTV..."
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              className="form-input"
-              style={{ paddingLeft: '36px', height: '38px', fontSize: '0.85rem', width: '100%' }}
-            />
-          </div>
-
-          <select className="form-select" value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} style={{ height: '38px', fontSize: '0.85rem' }}>
-            <option value="ALL">Tất Cả Danh Mục</option>
-            {PRODUCT_CATEGORIES.map(cat => (
-              <option key={cat} value={cat}>{cat}</option>
-            ))}
-          </select>
-
-          <select className="form-select" value={modelFilter} onChange={e => setModelFilter(e.target.value)} style={{ height: '38px', fontSize: '0.85rem' }}>
-            <option value="ALL">Tất Cả Loại Máy / Model</option>
-            {MACHINE_MODELS.map(m => (
-              <option key={m} value={m}>{m}</option>
-            ))}
-          </select>
-
-        </div>
-
-      </div>
+      <details className="filter-accounting-note"><summary>Quy định phiếu đã chốt sổ</summary><p>Không thể thêm, sửa hoặc xóa phiếu trong tháng đã chốt sổ kế toán.</p></details>
 
       {/* Tickets Data Table */}
       <div className="glass-panel" style={{ padding: '20px' }}>
