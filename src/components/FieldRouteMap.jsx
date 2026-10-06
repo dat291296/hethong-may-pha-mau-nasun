@@ -1,4 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { useAuth } from '../context/AuthContext';
+import { useWorkspaceState } from '../hooks/useWorkspaceState';
 import {
   Navigation,
   MapPin,
@@ -41,6 +43,8 @@ export default function FieldRouteMap({
   onAddAuditLog,
   onNavigateTab
 }) {
+  const { user } = useAuth();
+  const [tripDate, setTripDate] = useWorkspaceState('route:date', new Date().toLocaleDateString('en-CA'));
   const [searchTerm, setSearchTerm] = useState('');
   const [provinceFilter, setProvinceFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
@@ -49,7 +53,7 @@ export default function FieldRouteMap({
   const pageSize = 10;
 
   // Selected Trip Route List (Array of NPP IDs)
-  const [selectedTripNpps, setSelectedTripNpps] = useState([]);
+  const [selectedTripNpps, setSelectedTripNpps] = useWorkspaceState('route:stops', []);
   const [checkInLogs, setCheckInLogs] = useState({});
 
   // GPS state
@@ -77,7 +81,7 @@ export default function FieldRouteMap({
   const enrichedNpps = useMemo(() => {
     return npps.map((npp) => {
       // Find system sets installed at this NPP
-      const setsAtNpp = systemSets.filter((s) => s.nppId === npp.id && s.status === 'DA_LAP_DAT');
+      const setsAtNpp = systemSets.filter((s) => s.nppId === npp.id && ['DA_LAP_DAT', 'BAO_THUONG_BAO_TRI'].includes(s.status));
 
       // Find active repair tickets for this NPP
       const activeRepairs = repairTickets.filter(
@@ -342,7 +346,7 @@ export default function FieldRouteMap({
         nppId: npp.id,
         nppName: npp.name,
         serialList: `Tọa độ GPS: ${npp.locationCoordinates || '—'}`,
-        technician: 'KTV. Nguyễn Văn Hùng',
+        technician: user?.name || user?.full_name || 'Kỹ thuật viên',
         reason: `Check-in thực địa có xác thực tọa độ tại ${npp.name} (${npp.province})`,
         notes: `Đã xác nhận có mặt lúc ${timestamp}. Cách vị trí GPS đại lý: ${
           currentLocation && nppCoords ? `${getDistanceKm(currentLocation[0], currentLocation[1], nppCoords[0] || 0, nppCoords[1] || 0).toFixed(3)} km` : 'Không xác định'
@@ -402,7 +406,7 @@ export default function FieldRouteMap({
         nppId: '—',
         nppName: 'Lộ trình công tác',
         serialList: `${optimized.length} điểm dừng`,
-        technician: 'KTV. Nguyễn Văn Hùng',
+        technician: user?.name || user?.full_name || 'Kỹ thuật viên',
         reason: 'Sắp xếp tuyến đường bảo trì tối ưu (Nearest Neighbor TSP)',
         notes: `Thứ tự tối ưu: ${optimized.map((n, idx) => `${idx + 1}. ${n.name}`).join(' -> ')}`
       });
@@ -415,6 +419,7 @@ export default function FieldRouteMap({
 
   return (
     <div className="workspace-screen" style={{ display: 'flex', flexDirection: 'column', gap: '20px', paddingBottom: selectedTripNpps.length > 0 ? '90px' : '20px' }}>
+      <section className="glass-panel route-planner"><h2>Gom việc theo tỉnh / thành</h2><p>Chọn tỉnh để thêm tối đa 10 NPP cần sửa hoặc bảo trì vào chuyến. Có thể điều chỉnh thứ tự trước khi mở bản đồ.</p><label>Ngày công tác<input type="date" className="form-input" value={tripDate} onChange={event => setTripDate(event.target.value)} /></label><div className="workspace-tabs">{provinces.map(province => { const pending = enrichedNpps.filter(item => item.province === province && item.priority !== 'OK').sort((a, b) => a.minDiffDays - b.minDiffDays); return pending.length > 0 && <button key={province} onClick={() => { setProvinceFilter(province); setSelectedTripNpps(previous => [...new Set([...previous, ...pending.map(item => item.id)])].slice(0, 10)); setViewMode('TRIP'); }}>{province} ({pending.length} NPP)</button>; })}</div>{!enrichedNpps.some(item => item.priority !== 'OK') && <p>Chưa có NPP cần sửa hoặc đến hạn bảo trì.</p>}</section>
       {/* Top Banner & Main Actions */}
       <div
         className="glass-panel"
@@ -589,7 +594,7 @@ export default function FieldRouteMap({
             </select>
           </div>
 
-          {/* View Mode Switcher */}
+      {/* View Mode Switcher */}
           <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
             <button
               onClick={() => setViewMode('GRID')}

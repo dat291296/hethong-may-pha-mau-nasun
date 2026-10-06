@@ -81,6 +81,10 @@ import { compressImage } from '../utils/imageCompressor.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useModalScrollLock } from '../hooks/useModalScrollLock.js';
 import { exportExcel } from '../utils/excelExport.js';
+import { useFormDraft } from '../hooks/useFormDraft';
+import DraftNotice from './DraftNotice';
+import { isAssignedTo } from '../lib/teamWorkspace';
+import { useWorkspaceState, useWorkspaceScroll } from '../hooks/useWorkspaceState';
 
 export default function DeviceRepairProcessing({ globalSearch = '', initialFilter = 'ALL',
   repairTickets = [],
@@ -97,6 +101,10 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
   isDateLocked = () => false
 }) {
   const { user } = useAuth();
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const [mineOnly, setMineOnly] = useState(false);
+  const canAssign = ['admin', 'manager'].includes(user?.role);
   const [activeTab, setActiveTab] = useState('ALL'); // ALL | PENDING | NOT_RETURNED | REPLACED
   const [searchTerm, setSearchTerm] = useState('');
   useEffect(() => { setSearchTerm(globalSearch); }, [globalSearch]);
@@ -112,8 +120,9 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
     }
     return false;
   };
-  const [categoryFilter, setCategoryFilter] = useState('ALL');
-  const [modelFilter, setModelFilter] = useState('ALL');
+  useWorkspaceScroll('repairs');
+  const [categoryFilter, setCategoryFilter] = useWorkspaceState('repairs:category', 'ALL');
+  const [modelFilter, setModelFilter] = useWorkspaceState('repairs:model', 'ALL');
 
   // Modal states
   const [showModal, setShowModal] = useState(false);
@@ -215,8 +224,10 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
 
   const [formData, setFormData] = useState({
     ...createFieldWorkflowDefaults(),
-    date: new Date().toISOString().split('T')[0],
+    date: new Date().toLocaleDateString('en-CA'),
     technician: defaultTechnician,
+    assignedUserId: user?.id || null,
+    assignmentDueDate: '',
     nppId: '',
     nppName: '',
     productCategory: 'Máy chiết',
@@ -232,6 +243,10 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
     customerReturnStatus: 'Chưa gửi trả',
     notes: ''
   });
+  const draft = useFormDraft(`${user.id}:repair:${editingTicket?.id || 'new'}`, formData, showModal, saved => setFormData(saved));
+  const closeForm = async () => { if (saving) return; await draft.flush(); setShowModal(false); };
+  const selectedNppRegion = npps.find(item => item.id === formData.nppId)?.region;
+  const assignableUsers = qcUsers.filter(item => item.role === 'admin' || (item.region || item.managedRegion) === 'Toàn Quốc' || (item.region || item.managedRegion) === selectedNppRegion);
 
   // Auto-fill from Handbook if prefilledTicket is provided
   React.useEffect(() => {
@@ -240,8 +255,10 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
       setNppSearchTerm('');
       setFormData({
         ...createFieldWorkflowDefaults(),
-        date: new Date().toISOString().split('T')[0],
+        date: new Date().toLocaleDateString('en-CA'),
         technician: defaultTechnician,
+    assignedUserId: user?.id || null,
+    assignmentDueDate: '',
         nppId: prefilledTicket.nppId || (npps.length > 0 ? npps[0].id : ''),
         nppName: prefilledTicket.nppName || (npps.length > 0 ? npps[0].name : ''),
         productCategory: prefilledTicket.productCategory || 'Máy chiết',
@@ -276,8 +293,10 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
     setNppSearchTerm('');
     setFormData({
       ...createFieldWorkflowDefaults(),
-      date: new Date().toISOString().split('T')[0],
+      date: new Date().toLocaleDateString('en-CA'),
       technician: defaultTechnician,
+    assignedUserId: user?.id || null,
+    assignmentDueDate: '',
       nppId: '',
       nppName: '',
       productCategory: 'Máy chiết',
@@ -414,8 +433,10 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    if (saving || draft.existing) return;
+    setSaveError('');
     
     // Sanitize input form data
     const sanitized = sanitizeFormData({
@@ -492,8 +513,10 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
     const selectedNppObj = npps.find(n => n.id === sanitized.nppId);
     const finalNppName = selectedNppObj ? selectedNppObj.name : sanitized.nppName || 'NPP Khác';
 
+    setSaving(true);
+    try {
     if (editingTicket) {
-      onEditTicket({
+      await onEditTicket({
         ...sanitized,
         nppName: finalNppName
       });
@@ -504,16 +527,21 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
         const match = String(ticket.ticketCode || ticket.id || '').match(new RegExp(`^${codePrefix}(\\d+)$`));
         return match ? Math.max(max, Number(match[1])) : max;
       }, 0) + 1;
-      const newTicketCode = `${codePrefix}${String(sequence).padStart(3, '0')}`;
-      onAddTicket({
+      const newTicketCode = sanitized.ticketCode || `${codePrefix}${String(sequence).padStart(3, '0')}-${crypto.randomUUID().slice(0, 8)}`;
+      const ticketId = sanitized.id || crypto.randomUUID();
+      setFormData(previous => ({ ...previous, id: ticketId, ticketCode: newTicketCode }));
+      await onAddTicket({
         ...sanitized,
-        id: newTicketCode,
+        id: ticketId,
         ticketCode: newTicketCode,
         nppName: finalNppName
       });
     }
 
+    await draft.clear().catch(() => console.warn('[Repair] Draft cleanup failed'));
     setShowModal(false);
+    } catch (error) { console.error('[Repair] Save failed', error.code || error.name); setSaveError(error.message || 'Chưa lưu được phiếu. Bản nháp vẫn được giữ.'); }
+    finally { setSaving(false); }
   };
 
   const handleDelete = (ticket) => {
@@ -534,6 +562,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
   React.useEffect(() => { setQuickFilter(initialFilter); }, [initialFilter]);
   // Filtered Tickets
   const filteredTickets = repairTickets.filter(t => {
+    if (mineOnly && !isAssignedTo(t, user)) return false;
     if (quickFilter === 'PENDING' && t.processingStatus !== 'Chưa xử lý') return false;
     if (quickFilter === 'RETURN' && !(t.processingStatus === 'Đã xử lý' && t.customerReturnStatus === 'Chưa gửi trả')) return false;
     const matchesSearch = t.ticketCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -560,6 +589,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
 
   return (
     <div className="workspace-screen devicerepairprocessing-screen" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      <div className="workspace-tabs"><button aria-pressed={mineOnly} onClick={() => setMineOnly(value => !value)}>Việc của tôi</button><span className="resource-muted">Hạn xử lý và người nhận hiển thị trong chi tiết phiếu.</span></div>
       
       <div className="workspace-tabs" aria-label="Bộ lọc nhanh sửa chữa">{[['ALL','Tất cả'],['PENDING','Chờ sửa'],['RETURN','Chờ gửi trả']].map(([key,label]) => <button key={key} aria-pressed={quickFilter === key} onClick={() => { setQuickFilter(key); setActiveTab('ALL'); }}>{label}</button>)}</div>
       {/* 1-YEAR FAILURE ANALYSIS DASHBOARD CHARTS */}
@@ -972,10 +1002,17 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
                 <h3 style={{ fontWeight: '800' }}>
                   {editingTicket ? `Chỉnh Sửa Phiếu Xử Lý Máy [${editingTicket.ticketCode}]` : 'Tạo Phiếu Xử Lý Máy & Sửa Chữa Mới'}
                 </h3>
-                <button className="btn btn-secondary btn-sm" onClick={() => setShowModal(false)}>✕</button>
+                <button className="btn btn-secondary btn-sm" disabled={saving} onClick={closeForm}>✕</button>
               </div>
               <form onSubmit={handleSubmit}>
+                <DraftNotice draft={draft} />
+                {saveError && <p className="resource-error" role="alert">{saveError}</p>}
+                <fieldset disabled={saving || Boolean(draft.existing)} className="form-fieldset">
                 <div className="modal-body" ref={el => { if (el) el.scrollTop = 0; }}>
+                  <div className="responsive-form-grid">
+                    <label>Người nhận công việc<select className="form-select" disabled={!canAssign} value={formData.assignedUserId || ''} onChange={event => setFormData(previous => ({ ...previous, assignedUserId: event.target.value || null }))}><option value="">Chưa phân công</option>{assignableUsers.map(item => <option key={item.id} value={item.id}>{item.name || item.full_name}</option>)}</select></label>
+                    <label>Hạn xử lý<input type="date" className="form-input" value={formData.assignmentDueDate || ''} onChange={event => setFormData(previous => ({ ...previous, assignmentDueDate: event.target.value || null }))} /></label>
+                  </div>
                   
                   {/* PRIMARY EDIT FIELDS - TOP OF FORM */}
                   {/* FIELD 1: NGÀY XỬ LÝ MÁY & KỸ THUẬT VIÊN */}
@@ -994,7 +1031,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
                     </div>
                     <div className="form-group">
                       <label className="form-label" style={{ fontWeight: '700' }}>
-                        👨‍🔧 Kỹ Thuật Viên Phụ Trách / Xử Lý *
+                        👨‍🔧 Kỹ Thuật Viên Xử Lý / Ghi Phiếu *
                       </label>
                       <select 
                         className="form-select" 
@@ -1422,9 +1459,10 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
 
                 </div>
                 <div className="modal-footer">
-                  <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>Hủy Bỏ</button>
-                  <button type="submit" className="btn btn-primary">{editingTicket ? 'Cập Nhật Phiếu' : 'Tạo Phiếu Mới'}</button>
+                  <button type="button" className="btn btn-secondary" onClick={closeForm}>Đóng · Giữ nháp</button>
+                  <button type="submit" className="btn btn-primary">{saving ? 'Đang xác nhận lưu...' : editingTicket ? 'Cập Nhật Phiếu' : 'Tạo Phiếu Mới'}</button>
                 </div>
+                </fieldset>
               </form>
             </div>
           </div>
@@ -1448,6 +1486,9 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
                   <div><strong>Nhà Phân Phối:</strong> {selectedTicket.nppName}</div>
                   <div><strong>Sản Phẩm & Seri:</strong> {selectedTicket.machineModel} ({selectedTicket.serialNumber})</div>
                   <div><strong>Kỹ Thuật Viên:</strong> {selectedTicket.technician}</div>
+                  <div><strong>Người nhận công việc:</strong> {qcUsers.find(item => item.id === selectedTicket.assignedUserId)?.name || (selectedTicket.assignedUserId ? 'Tài khoản được giao' : 'Chưa gán tài khoản')}</div>
+                  <div><strong>Hạn xử lý:</strong> {selectedTicket.assignmentDueDate || 'Chưa đặt'}</div>
+                  <div><strong>Cập nhật gần nhất:</strong> {selectedTicket.lastUpdatedAt ? new Date(selectedTicket.lastUpdatedAt).toLocaleString('vi-VN') : 'Chưa ghi nhận'} · {qcUsers.find(item => item.id === selectedTicket.lastUpdatedBy)?.name || 'Hệ thống'}</div>
                   <div><strong>Ngày Tạo:</strong> {formatDateVN(selectedTicket.date)}</div>
                   <div><strong>Diễn Giải Lỗi:</strong> {selectedTicket.errorDescription}</div>
                   <div><strong>Hướng Xử Lý:</strong> {selectedTicket.actionDirection}</div>

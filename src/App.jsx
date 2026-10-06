@@ -70,6 +70,7 @@ export default function App() {
           const { data, error } = await supabase
             .from('profiles')
             .select('id, full_name, role, managed_region')
+            .eq('is_active', true)
             .in('role', ['technician', 'qc', 'manager', 'admin']);
 
           if (data && !error && data.length > 0) {
@@ -264,25 +265,27 @@ export default function App() {
         technician: added.technician,
         reason: `Tạo phiếu xử lý máy [${added.ticketCode}]`,
         notes: added.errorDescription
-      });
+      }).catch(err => console.error('[Repair] Audit failed after confirmed save', err.code || err.name));
+      return added;
     } catch (err) {
       console.error(err);
-      alert('Lỗi tạo phiếu sửa chữa: ' + err.message);
+      throw err;
     }
   };
 
   const handleEditTicket = async (updatedTicket) => {
     try {
-      await editTicket(updatedTicket.id, updatedTicket);
+      const saved = await editTicket(updatedTicket.id, updatedTicket);
 
       // Local status sync for offline mock dev mode
       if (isDevMode) {
         const newStatus = updatedTicket.processingStatus === 'Đã xử lý' ? 'Đang chạy tốt' : 'Cần bảo trì';
         updateLocalDeviceStatus(updatedTicket.productCategory, updatedTicket.serialNumber, newStatus);
       }
+      return saved;
     } catch (err) {
       console.error(err);
-      alert('Lỗi cập nhật phiếu sửa chữa: ' + err.message);
+      throw err;
     }
   };
 
@@ -842,6 +845,7 @@ export default function App() {
           
           {activeTab === 'dashboard' && (
             <Dashboard
+              teamUsers={qcUsers}
               systemSets={systemSets}
               npps={npps}
               dispensers={dispensers}

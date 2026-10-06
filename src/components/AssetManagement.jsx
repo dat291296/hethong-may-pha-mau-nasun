@@ -1,5 +1,6 @@
 import TechnicalResources from './TechnicalResources';
 import { resolveMachine } from '../lib/machineWorkspace';
+import { searchText, missingMachineFields } from '../lib/teamWorkspace';
 import React, { useState, useEffect } from 'react';
 import SafePortal from './SafePortal.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -40,6 +41,7 @@ import {
 import { useModalScrollLock } from '../hooks/useModalScrollLock.js';
 import { exportExcel } from '../utils/excelExport.js';
 import { getSystemSetMissingFields } from '../utils/systemSetValidation.js';
+import { useWorkspaceState, useWorkspaceScroll } from '../hooks/useWorkspaceState';
 
 export default function AssetManagement({ globalSearch = '', initialFilter = 'ALL', repairTickets = [], auditLogs = [], onRequestRepair, onRequestMaintenance,
   systemSets,
@@ -129,8 +131,9 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
   }, [activeSubTab]);
   const [searchTerm, setSearchTerm] = useState('');
   useEffect(() => { setSearchTerm(globalSearch); }, [globalSearch]);
-  const [modelFilter, setModelFilter] = useState('ALL');
-  const [statusFilter, setStatusFilter] = useState('ALL');
+  useWorkspaceScroll('assets');
+  const [modelFilter, setModelFilter] = useWorkspaceState('assets:model', 'ALL');
+  const [statusFilter, setStatusFilter] = useWorkspaceState('assets:status', 'ALL');
   const targetSetFound = !!globalSearch && systemSets.some(item => item.setCode === globalSearch);
   useEffect(() => {
     if (targetSetFound) {
@@ -139,7 +142,7 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
       setStatusFilter('ALL');
     }
   }, [globalSearch, targetSetFound]);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPage, setCurrentPage] = useWorkspaceState('assets:page', 1);
   const [pageSize, setPageSize] = useState(10);
   const [showAssembleModal, setShowAssembleModal] = useState(false);
   const [showScanSerialModal, setShowScanSerialModal] = useState(false);
@@ -150,9 +153,13 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
   const [deviceSort, setDeviceSort] = useState('DEFAULT'); // 'DEFAULT' | 'NEWEST'
 
   // Reset pagination on tab or filter change
+  const initialFilters = React.useRef(`${activeSubTab}:${modelFilter}:${statusFilter}:${searchTerm}:${deviceSort}`);
   useEffect(() => {
+    const signature = `${activeSubTab}:${modelFilter}:${statusFilter}:${searchTerm}:${deviceSort}`;
+    if (initialFilters.current === signature) return;
+    initialFilters.current = signature;
     setCurrentPage(1);
-  }, [activeSubTab, modelFilter, statusFilter, searchTerm, deviceSort]);
+  }, [activeSubTab, modelFilter, statusFilter, searchTerm, deviceSort, setCurrentPage]);
 
   // Helper to find assigned set & NPP info for any device item
   const getAssignedInfo = (item) => {
@@ -184,7 +191,8 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
   const [scanError, setScanError] = useState('');
   const [scanInput, setScanInput] = useState('');
   const [showManualScan, setShowManualScan] = useState(false);
-  useEffect(() => { setCurrentPage(1); }, [quickFilter]);
+  const initialQuickFilter = React.useRef(quickFilter);
+  useEffect(() => { if (initialQuickFilter.current === quickFilter) return; initialQuickFilter.current = quickFilter; setCurrentPage(1); }, [quickFilter, setCurrentPage]);
   useEffect(() => {
     if (!globalSearch) { openedSearch.current = ''; return; }
     if (openedSearch.current === globalSearch) return;
@@ -509,6 +517,9 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
       salesperson: set.salesperson || targetNpp?.salesperson || '',
       notes: set.notes || '',
       lastMaintenanceDate: set.lastMaintenanceDate || '',
+      computerSerial: set.computerSerial || '',
+      tintingSoftware: set.tintingSoftware || '',
+      softwareVersion: set.softwareVersion || '',
       nextMaintenanceDue: set.nextMaintenanceDue || '',
       installationPhotos: set.installationPhotos || set.installation_photos || []
     });
@@ -554,14 +565,10 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
 
   const filteredSets = [...systemSets]
     .filter(s => {
+      const distributor = npps.find(item => item.id === s.nppId);
       const matchesModel = modelFilter === 'ALL' || s.dispenserModel === modelFilter;
       const matchesStatus = statusFilter === 'ALL' || s.status === statusFilter;
-      const matchesSearch = !searchTerm || (
-        (s.setCode && s.setCode.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (s.nppName && s.nppName.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (s.dispenserSerial && s.dispenserSerial.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (s.mixerSerial && s.mixerSerial.toLowerCase().includes(searchTerm.toLowerCase()))
-      );
+      const matchesSearch = !searchTerm || searchText([s.setCode, s.nppName, s.dispenserSerial, s.mixerSerial, s.computerSerial, s.printerSerial, s.province, s.region, distributor?.phone].join(' ')).includes(searchText(searchTerm));
       const tickets = repairTickets.filter(ticket => ticket.nppId === s.nppId && [s.dispenserSerial, s.mixerSerial, s.computerSerial, s.printerSerial].filter(Boolean).includes(ticket.serialNumber));
       const matchesQuick = quickFilter === 'ALL' || (quickFilter === 'STOCK' && s.status === 'TRONG_KHO') || (quickFilter === 'PENDING' && tickets.some(ticket => ticket.processingStatus === 'Chưa xử lý')) || (quickFilter === 'RETURN' && tickets.some(ticket => ticket.processingStatus === 'Đã xử lý' && ticket.customerReturnStatus === 'Chưa gửi trả')) || (quickFilter === 'OVERDUE' && s.nextMaintenanceDue && s.nextMaintenanceDue < new Date().toLocaleDateString('en-CA'));
       return matchesModel && matchesStatus && matchesSearch && matchesQuick;
@@ -1351,6 +1358,7 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
                       <span className="mobile-card-label">Máy Chiết:</span>
                       <span className="mobile-card-value">{set.dispenserModel} {missingDispenserInfo.length > 0 ? <span className="badge badge-danger">⚠️ {missingDispenserInfo.join(', ')}</span> : `(${set.dispenserSerial})`}</span>
                     </div>
+                    <details className="mobile-extra"><summary>Thông tin thiết bị & phụ trách</summary>
                     <div className="mobile-card-row">
                       <span className="mobile-card-label">Máy Lắc:</span>
                       <span className="mobile-card-value">{set.mixerModel} {missingMixerInfo.length > 0 ? <span className="badge badge-danger">⚠️ {missingMixerInfo.join(', ')}</span> : `(${set.mixerSerial})`}</span>
@@ -1431,6 +1439,7 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
                         </div>
                       </div>
                     )}
+                    </details>
                   </div>
                   <div className="mobile-card-actions">
                     <button className="btn btn-secondary btn-sm" onClick={() => setSelectedSetDetails(set)}>
@@ -2654,6 +2663,7 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
               </div>
               <form onSubmit={handleEditSetSubmit}>
                 <div className="modal-body" ref={el => { if (el) el.scrollTop = 0; }}>
+                  <div className="responsive-form-grid">{[['computerSerial','Seri máy tính'],['tintingSoftware','Phần mềm pha màu'],['softwareVersion','Phiên bản phần mềm']].map(([key,label]) => <label key={key}>{label}<input className="form-input" maxLength={120} value={editSetFormData[key] || ''} onChange={event => setEditSetFormData(previous => ({ ...previous, [key]: event.target.value.trimStart() }))} /></label>)}</div>
                   
                   {/* PRIMARY EDIT FIELDS - TOP OF FORM */}
                   <div className="responsive-form-grid" style={{ marginBottom: '12px' }}>
@@ -3112,6 +3122,9 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
                 {profileTab === 'history' && <section>{repairTickets.filter(ticket => ticket.nppId === selectedSetDetails.nppId && [selectedSetDetails.dispenserSerial, selectedSetDetails.mixerSerial, selectedSetDetails.computerSerial, selectedSetDetails.printerSerial].filter(Boolean).includes(ticket.serialNumber)).map(ticket => <article className="machine-history" key={ticket.id}><strong>{ticket.ticketCode} · {ticket.date}</strong><p>{ticket.errorDescription}</p><span className={ticket.processingStatus === 'Đã xử lý' ? 'badge badge-success' : 'badge badge-warning'}>{ticket.processingStatus} · {ticket.customerReturnStatus}</span></article>)}{auditLogs.filter(log => log.setCode === selectedSetDetails.setCode).map(log => <article className="machine-history" key={log.id}><strong>{log.type} · {log.timestamp}</strong><p>{log.technician}</p><p style={{ whiteSpace: 'pre-wrap' }}>{log.notes}</p></article>)}{!auditLogs.some(log => log.setCode === selectedSetDetails.setCode) && <p>Chưa có nhật ký cho bộ máy này.</p>}</section>}
                 {profileTab === 'documents' && <TechnicalResources machineModel={selectedSetDetails.dispenserModel} modelOptions={[...new Set(systemSets.map(machine => machine.dispenserModel).filter(Boolean))]} />}
                 <div hidden={profileTab !== 'equipment'}>
+                <p className="resource-muted">Cần bổ sung: {missingMachineFields(selectedSetDetails).join(' · ') || 'Đã có các trường seri và hạn bảo trì'}</p>
+                <div className="workspace-tabs">{[['dispenser','Máy chiết',dispensers,selectedSetDetails.dispenserId],['mixer','Máy lắc',mixers,selectedSetDetails.mixerId],['printer','Máy in',printers,selectedSetDetails.printerId]].map(([category,label,list,id]) => { const matches = list.filter(item => id ? item.id === id : item.setCode === selectedSetDetails.setCode); const device = matches.length === 1 ? matches[0] : null; return device && <button key={category} disabled={!can('asset:edit')} onClick={() => { setSelectedSetDetails(null); handleOpenEditDevice(category,device); }}>Bổ sung {label.toLocaleLowerCase('vi')}</button>; })}</div>
+                <div className="machine-profile-extra"><div><strong>Liên hệ NPP:</strong> {npps.find(item => item.id === selectedSetDetails.nppId)?.contactPerson || 'Chưa ghi nhận'} · {npps.find(item => item.id === selectedSetDetails.nppId)?.phone || 'Chưa có số điện thoại'}</div><div><strong>Địa chỉ:</strong> {npps.find(item => item.id === selectedSetDetails.nppId)?.address || 'Chưa ghi nhận'}</div></div>
                 {/* Machine Info Cards (4 devices) */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '10px', marginBottom: '16px' }}>
                   <div style={{ background: 'var(--bg-main)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '10px' }}>

@@ -34,6 +34,9 @@ jobs:
       - name: Run security regression tests
         run: npm run test:enterprise && npm run test:security
 
+      - name: Run team workspace regression tests
+        run: npm run test:team
+
       - name: Block critical production dependency vulnerabilities
         run: npm audit --omit=dev --audit-level=critical
 

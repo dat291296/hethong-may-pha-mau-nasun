@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase, isSupabaseConfigured, safeQuery } from '../lib/supabase.js';
 import { INITIAL_REPAIR_TICKETS } from '../data/mockData.js';
+import { matchesSavedRepair } from '../lib/teamWorkspace';
 import { cacheOfflineData, getCachedOfflineData, enqueueOfflineAction, getOfflineQueue } from '../lib/offlineSync.js';
 
 function normalizeProductCategory(category, machineModel = '') {
@@ -83,41 +84,24 @@ export function useRepairs() {
     const localTicket = { ...ticketData, id: tempId };
     const dbPayload = { ...mapRepairToDb(localTicket), id: tempId };
 
-    // Update local state immediately
-    setRepairTickets(prev => {
-      const updated = [localTicket, ...prev];
-      cacheOfflineData('repair_tickets', updated);
-      return updated;
-    });
-
-    if (isSupabaseConfigured && navigator.onLine) {
-      try {
-        const { error } = await safeQuery(
-          sb => sb.from('repair_tickets').insert(dbPayload),
-          'addTicket'
-        );
-        if (error) throw error;
-        await fetchRepairs();
-      } catch (err) {
-        console.warn('[Offline] Failed online addTicket. Queueing.', err);
-        enqueueOfflineAction('ADD_REPAIR', dbPayload);
+    if (isSupabaseConfigured) {
+      if (!navigator.onLine) throw new Error('Mất mạng. Phiếu được giữ ở bản nháp; kết nối lại rồi lưu.');
+      let { data, error } = await safeQuery(sb => sb.from('repair_tickets').insert(dbPayload).select('*').single(), 'addTicket');
+      if (error) {
+        const existing = await safeQuery(sb => sb.from('repair_tickets').select('*').eq('id', tempId).maybeSingle(), 'verifyRepairRetry');
+        if (!existing.error && matchesSavedRepair(existing.data, dbPayload)) data = existing.data;
+        else throw error;
       }
-    } else {
-      console.log('[Offline] Network down or dev mode. Enqueueing addTicket.');
-      enqueueOfflineAction('ADD_REPAIR', dbPayload);
+      const saved = mapDbToRepair(data);
+      setRepairTickets(previous => [saved, ...previous.filter(item => item.id !== saved.id)]);
+      await fetchRepairs();
+      return saved;
     }
-
+    setRepairTickets(previous => [localTicket, ...previous]);
     return localTicket;
-  }, []);
+  }, [fetchRepairs]);
 
   const editTicket = useCallback(async (id, updates) => {
-    // Update local state immediately
-    setRepairTickets(prev => {
-      const updated = prev.map(t => t.id === id ? { ...t, ...updates } : t);
-      cacheOfflineData('repair_tickets', updated);
-      return updated;
-    });
-
     const dbUpdates = {};
     const fieldMap = {
       ticketCode: 'ticket_code',
@@ -144,16 +128,21 @@ export function useRepairs() {
       afterPhotos: 'after_photos',
       nppConfirmation: 'npp_confirmation',
       slaDueAt: 'sla_due_at',
-      completedAt: 'completed_at'
+      completedAt: 'completed_at',
+      assignedUserId: 'assigned_user_id',
+      assignmentDueDate: 'assignment_due_date'
     };
 
     for (const key in updates) {
       if (key === 'exchangeType' || key === 'exchange_type') continue;
       if (fieldMap[key]) dbUpdates[fieldMap[key]] = updates[key];
-      else dbUpdates[key] = updates[key];
+      // Only explicitly mapped properties can be written by this form.
     }
     if ('product_category' in dbUpdates) {
       dbUpdates.product_category = normalizeProductCategory(dbUpdates.product_category, dbUpdates.machine_model);
+    }
+    for (const key of ['assignment_due_date', 'sla_due_at', 'completed_at', 'assigned_user_id']) {
+      if (key in dbUpdates && dbUpdates[key] === '') dbUpdates[key] = null;
     }
     const exchangeType = updates.exchangeType ?? updates.exchange_type;
     if (exchangeType !== undefined) {
@@ -164,22 +153,25 @@ export function useRepairs() {
         : (exchangeText.includes('mới') ? 'Mới' : 'N/A');
     }
 
-    if (isSupabaseConfigured && navigator.onLine) {
-      try {
-        const { error } = await safeQuery(
-          sb => sb.from('repair_tickets').update(dbUpdates).eq('id', id),
-          'editTicket'
-        );
-        if (error) throw error;
-      } catch (err) {
-        console.warn('[Offline] Failed online editTicket. Queueing.', err);
-        enqueueOfflineAction('EDIT_REPAIR', { id, ...dbUpdates });
+    if (isSupabaseConfigured) {
+      if (!navigator.onLine) throw new Error('Mất mạng. Bản sửa được giữ ở bản nháp; kết nối lại rồi lưu.');
+      if (!Number.isSafeInteger(updates.recordVersion)) throw new Error('Thiếu phiên bản phiếu. Mở lại phiếu trước khi sửa.');
+      const { data, error } = await safeQuery(
+        sb => sb.from('repair_tickets').update(dbUpdates).eq('id', id).eq('record_version', updates.recordVersion).select('*'), 'editTicket'
+      );
+      if (error) throw error;
+      if (!data?.length) {
+        await fetchRepairs();
+        throw new Error('Phiếu đã được người khác cập nhật hoặc bạn không còn quyền sửa. Bản nháp vẫn được giữ; đóng và mở lại phiếu để đối chiếu, không ghi đè.');
       }
-    } else if (isSupabaseConfigured && !navigator.onLine) {
-      console.log('[Offline] Network down. Enqueueing editTicket.');
-      enqueueOfflineAction('EDIT_REPAIR', { id, ...dbUpdates });
+      const saved = mapDbToRepair(data[0]);
+      setRepairTickets(previous => previous.map(ticket => ticket.id === id ? saved : ticket));
+      cacheOfflineData('repair_tickets', repairTickets.map(ticket => ticket.id === id ? saved : ticket));
+      return saved;
     }
-  }, []);
+    setRepairTickets(previous => previous.map(ticket => ticket.id === id ? { ...ticket, ...updates, recordVersion: (ticket.recordVersion || 0) + 1 } : ticket));
+    return updates;
+  }, [fetchRepairs, repairTickets]);
 
   const deleteTicket = useCallback(async (id) => {
     // Update local state immediately
@@ -275,6 +267,11 @@ function mapDbToRepair(row) {
     nppConfirmation:       row.npp_confirmation || {},
     slaDueAt:              row.sla_due_at || '',
     completedAt:           row.completed_at || null,
+    assignedUserId:        row.assigned_user_id || null,
+    assignmentDueDate:     row.assignment_due_date || '',
+    recordVersion:         Number(row.record_version || 0),
+    lastUpdatedAt:         row.last_updated_at || null,
+    lastUpdatedBy:         row.last_updated_by || null,
   };
 }
 
@@ -306,5 +303,7 @@ function mapRepairToDb(r) {
     npp_confirmation:       r.nppConfirmation || {},
     sla_due_at:             r.slaDueAt || null,
     completed_at:           r.completedAt || null,
+    ...(r.assignedUserId !== undefined ? { assigned_user_id: r.assignedUserId || null } : {}),
+    ...(r.assignmentDueDate !== undefined ? { assignment_due_date: r.assignmentDueDate || null } : {}),
   };
 }

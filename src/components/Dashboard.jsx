@@ -37,8 +37,10 @@ import {
   Pie 
 } from 'recharts';
 import SafePortal from './SafePortal.jsx';
+import TeamWorkPanel from './TeamWorkPanel';
 
-export default function Dashboard({ 
+export default function Dashboard({
+  teamUsers = [],
   systemSets = [], 
   npps = [], 
   dispensers = [], 
@@ -260,7 +262,8 @@ export default function Dashboard({
   return (
     <div className="workspace-screen dashboard-screen" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       <div className="workspace-heading"><div><span className="workspace-eyebrow">VẬN HÀNH / TỔNG QUAN</span><h2>Nắm việc cần xử lý</h2><p>Thống kê, cảnh báo và thông tin thiết bị trên cùng một màn hình.</p></div></div>
-      
+
+      <TeamWorkPanel teamUsers={teamUsers} repairTickets={repairTickets} systemSets={systemSets} npps={npps} onNavigate={(tab, query) => onNavigateWorkspace?.(tab, query)} />
       {/* Warning Banners */}
       {maintenanceAlerts.length > 0 && (
         <div className="dashboard-warning" style={{
@@ -293,8 +296,9 @@ export default function Dashboard({
       )}
 
       {/* Stat Cards Overview */}
+
       <div className="overview-stats" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '16px' }}>
-        
+
         {/* Total Sets */}
         <div className="glass-panel glass-panel-hover" style={{ padding: '20px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
@@ -399,6 +403,7 @@ export default function Dashboard({
       </div>
 
       <div className="workspace-tabs" aria-label="Thống kê nhanh">{[['assets','STOCK','Trong kho',systemSets.filter(set => set.status === 'TRONG_KHO').length],['repairs','PENDING','Chờ sửa',pendingTasks.length],['repairs','RETURN','Chờ gửi trả',returnTasks.length],['maintenance','OVERDUE','Quá hạn bảo trì',systemSets.filter(set => set.nextMaintenanceDue && set.nextMaintenanceDue < new Date().toLocaleDateString('en-CA')).length]].map(([tab,filter,label,count]) => <button key={filter} onClick={() => onNavigateWorkspace?.(tab, '', filter)}>{label} ({count})</button>)}</div>
+      <details className="dashboard-chart-group"><summary>Chi tiết cảnh báo theo nhóm ({actionTasks.length})</summary>
       <section className="glass-panel overview-tasks" aria-labelledby="task-heading">
         <div className="workspace-section-heading"><div><h2 id="task-heading">Việc cần xử lý ({actionTasks.length})</h2><p>Phiếu chưa xử lý, thiết bị chờ gửi trả và lịch bảo trì cần kiểm tra.</p></div></div>
         <div className="workspace-tabs" aria-label="Lọc việc cần xử lý">
@@ -413,10 +418,13 @@ export default function Dashboard({
         {!visibleTasks.length && <p className="workspace-empty">Không có công việc trong nhóm này.</p>}
         {visibleTasks.length > 6 && <button type="button" className="btn btn-secondary" onClick={() => setActiveTab(taskFilter === 'MAINTENANCE' ? 'maintenance' : 'repairs')}>Xem danh sách đầy đủ</button>}
       </section>
+      </details>
 
       {/* Charts Section */}
+      <details className="dashboard-chart-group" open>
+      <summary>Biểu đồ tổng quan</summary>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px' }}>
-        
+
         {/* Region Distribution Chart */}
         <div className="glass-panel" style={{ padding: '20px' }}>
           <h3 style={{ fontSize: '1rem', fontWeight: '700', marginBottom: '16px', color: 'var(--text-main)' }}>
@@ -473,6 +481,7 @@ export default function Dashboard({
       </div>
 
       {/* Installed System Sets Table */}
+      </details>
       <div className="glass-panel" style={{ padding: '20px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
           <div>
@@ -610,7 +619,7 @@ export default function Dashboard({
                       <div style={{ fontSize: '0.85rem' }}>{set.printerModel}</div>
                       <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{set.printerSerial}</div>
                     </td>
-                    
+
                     {/* Repair & Exchange History Summary Column */}
                     <td>
                       {nppTickets.length > 0 ? (
@@ -840,7 +849,7 @@ export default function Dashboard({
             >
               ‹ Trang Trước
             </button>
-            
+
             <span style={{ fontSize: '0.8rem', fontWeight: '700', color: 'var(--accent-cyan)', padding: '0 8px' }}>
               Trang {dashboardPage} / {totalAllocatedPages}
             </span>
@@ -859,7 +868,7 @@ export default function Dashboard({
 
       {/* DEDICATED SECTION: XỬ LÝ SỬA CHỮA, THAY LINH KIỆN & ĐỔI TRẢ THIẾT BỊ THEO NPP */}
       <div id="repair-tracking-section" className="glass-panel" style={{ padding: '24px' }}>
-        
+
         {/* Header of Section */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '16px' }}>
           <div>
@@ -1193,7 +1202,7 @@ export default function Dashboard({
             >
               ‹ Trước
             </button>
-            
+
             <span style={{ fontSize: '0.8rem', fontWeight: '700', color: 'var(--accent-cyan)', padding: '0 8px' }}>
               Trang {repairPage} / {totalRepairPages}
             </span>

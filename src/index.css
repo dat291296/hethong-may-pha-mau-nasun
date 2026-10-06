@@ -1772,3 +1772,20 @@ body:has(.modal-backdrop) .mobile-bottom-nav,
 
 .machine-serial-form { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; }
 .machine-serial-form label { flex: 1; min-width: 160px; }
+.form-fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+.draft-notice { padding: 12px 18px; color: var(--accent-cyan); background: var(--bg-tertiary); border-bottom: 1px solid var(--border-color); font-size: .85rem; }
+.draft-notice .workspace-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.team-work, .route-planner { padding: 20px; }
+.team-work .workspace-task-row > div { min-width: 0; }
+.team-work .workspace-task-row { grid-template-columns: minmax(0, 1fr) auto; }
+.team-work .workspace-tabs { display: grid; grid-template-columns: 1fr 1fr; overflow: visible; }
+.team-work .workspace-tabs button { white-space: normal; min-width: 0; }
+.team-work .workspace-tabs .form-select { grid-column: 1 / -1; width: 100%; }
+.team-work .workspace-task-row p { overflow-wrap: anywhere; }
+.team-work .form-select { width: auto; max-width: 100%; }
+.data-quality { margin-top: 18px; border-top: 1px solid var(--border-color); padding-top: 14px; }
+.data-quality summary, .dashboard-chart-group summary, .mobile-extra summary { cursor: pointer; font-weight: 700; padding: 10px 0; color: var(--accent-cyan); }
+.data-quality[open] { max-height: 440px; overflow: auto; }
+.route-planner label { display: block; max-width: 240px; margin: 12px 0; }
+.route-planner p, .data-quality p { color: var(--text-muted); font-size: .85rem; }
+@media (max-width: 768px) { .team-work, .route-planner { padding: 14px; } .team-work .workspace-task-row { align-items: flex-start; } .team-work h2, .route-planner h2 { font-size: 1.1rem; } .mobile-card-actions .btn, .workspace-tabs button { min-height: 42px; } .modal-footer { position: sticky; bottom: 0; background: var(--bg-card); z-index: 2; } }

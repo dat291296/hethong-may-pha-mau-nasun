@@ -135,8 +135,8 @@ export default function Header({
     const term = normalize(globalSearch.trim());
     if (!term) return [];
     return [
-      ...npps.map(item => ({ id: item.id, tab: 'npp', label: item.name, kind: 'Nhà phân phối', query: item.name, fields: [item.id, item.name, item.phone, item.address, item.contactPerson] })),
-      ...systemSets.map(item => ({ id: item.id, tab: 'assets', label: `${item.setCode} · ${item.dispenserModel || ''}`, kind: 'Bộ máy', query: item.setCode, fields: [item.setCode, item.nppName, item.dispenserSerial, item.mixerSerial, item.pcSerial, item.printerSerial] })),
+      ...npps.map(item => ({ id: item.id, tab: 'npp', label: `${item.name} · ${item.province || item.region || ''}`, kind: 'Nhà phân phối', query: item.name, fields: [item.id, item.name, item.phone, item.address, item.contactPerson, item.province, item.region] })),
+      ...systemSets.map(item => ({ id: item.setCode, tab: 'assets', label: `${item.nppName || 'Trong kho'} → ${item.setCode} · ${item.dispenserModel || ''}`, kind: 'Bộ máy', query: item.setCode, fields: [item.setCode, item.nppName, item.dispenserSerial, item.mixerSerial, item.computerSerial, item.pcSerial, item.printerSerial, item.province, item.region] })),
       ...repairTickets.map(item => ({ id: item.id, tab: 'repairs', label: `${item.ticketCode} · ${item.machineModel || ''}`, kind: 'Phiếu sửa chữa', query: item.ticketCode, fields: [item.ticketCode, item.nppName, item.serialNumber, item.errorDescription] })),
     ].filter(item => normalize(item.fields.join(' ')).includes(term)).slice(0, 8);
   }, [globalSearch, npps, systemSets, repairTickets]);
