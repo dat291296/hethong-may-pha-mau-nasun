@@ -1,3 +1,5 @@
+import { resolveMachine } from '../lib/machineWorkspace';
+import MaintenanceChecklist from './MaintenanceChecklist';
 import React, { useState, useMemo, useEffect } from 'react';
 import { CalendarClock, CheckCircle2, AlertTriangle, ShieldAlert, Wrench, Search, Edit3, Trash2, BarChart2, PieChart as PieChartIcon } from 'lucide-react';
 import { 
@@ -32,11 +34,17 @@ function isDateInYear(value, year) {
   return !Number.isNaN(date.getTime()) && date.getFullYear() === year;
 }
 
-export default function MaintenanceSchedule({ globalSearch = '', systemSets, onCompleteMaintenance, onUpdateSystemSet, onDeleteSystemSet }) {
-  const [filter, setFilter] = useState('ALL'); // ALL | DUE_SOON | OVERDUE | OK
+export default function MaintenanceSchedule({ globalSearch = '', initialFilter = 'ALL', systemSets, onCompleteMaintenance, onUpdateSystemSet, onDeleteSystemSet }) {
+  const [filter, setFilter] = useState(initialFilter); // ALL | DUE_SOON | OVERDUE | OK
   const [selectedSet, setSelectedSet] = useState(null);
-  const [techNotes, setTechNotes] = useState('');
-  const [maintDate, setMaintDate] = useState(new Date().toISOString().split('T')[0]);
+  const openedSearch = React.useRef('');
+  useEffect(() => {
+    if (!globalSearch) { openedSearch.current = ''; return; }
+    if (openedSearch.current === globalSearch) return;
+    const machine = resolveMachine(systemSets, globalSearch);
+    if (machine) { openedSearch.current = globalSearch; setSelectedSet(machine); }
+  }, [globalSearch, systemSets]);
+  useEffect(() => { setFilter(initialFilter); }, [initialFilter]);
   const [searchTerm, setSearchTerm] = useState('');
   useEffect(() => { setSearchTerm(globalSearch); }, [globalSearch]);
   const [regionWorkFilter, setRegionWorkFilter] = useState('ALL');
@@ -206,26 +214,6 @@ export default function MaintenanceSchedule({ globalSearch = '', systemSets, onC
     (currentPage - 1) * pageSize,
     currentPage * pageSize
   );
-
-  const handleCompleteSubmit = (e) => {
-    e.preventDefault();
-    if (!selectedSet) return;
-
-    // Calculate next 1 year date
-    const nextDateObj = new Date(maintDate);
-    nextDateObj.setFullYear(nextDateObj.getFullYear() + 1);
-    const nextDueStr = nextDateObj.toISOString().split('T')[0];
-
-    onCompleteMaintenance({
-      setCode: selectedSet.setCode,
-      lastMaintenanceDate: maintDate,
-      nextMaintenanceDue: nextDueStr,
-      notes: techNotes
-    });
-
-    setSelectedSet(null);
-    setTechNotes('');
-  };
 
   return (
     <div className="workspace-screen maintenanceschedule-screen" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -576,50 +564,7 @@ export default function MaintenanceSchedule({ globalSearch = '', systemSets, onC
         </div>
       </div>
 
-      {/* Maintenance Completion Modal */}
-      {selectedSet && (
-        <div className="modal-overlay">
-          <div className="modal-content">
-            <div className="modal-header">
-              <h3 style={{ fontWeight: '800' }}>Xác Nhận Đã Bảo Trì Bộ Máy [{selectedSet.setCode}]</h3>
-              <button className="btn btn-secondary btn-sm" onClick={() => setSelectedSet(null)}>✕</button>
-            </div>
-            <form onSubmit={handleCompleteSubmit}>
-              <div className="modal-body">
-                <div style={{ background: 'var(--bg-main)', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-color)', marginBottom: '16px', fontSize: '0.85rem' }}>
-                  <div><strong>Nhà Phân Phối:</strong> {selectedSet.nppName}</div>
-                  <div><strong>Máy Chiết:</strong> {selectedSet.dispenserModel} ({selectedSet.dispenserSerial})</div>
-                </div>
-
-                {getSystemSetMissingFields(selectedSet).length > 0 && (
-                  <div style={{ padding: '12px', borderRadius: '8px', marginBottom: '16px', background: 'rgba(239,68,68,0.10)', border: '1px solid rgba(239,68,68,0.45)', color: '#fecaca', fontSize: '0.82rem' }}>
-                    <strong>⚠️ Việc cần hoàn tất tại NPP:</strong><br />
-                    {getSystemSetMissingFields(selectedSet).map(field => <div key={field}>• Bổ sung {field}</div>)}
-                  </div>
-                )}
-
-                <div className="form-group">
-                  <label className="form-label">Ngày Thao Tác Bảo Trì *</label>
-                  <input type="date" className="form-input" required value={maintDate} onChange={e => setMaintDate(e.target.value)} />
-                </div>
-
-                <div style={{ padding: '10px', background: 'rgba(56, 189, 248, 0.1)', border: '1px solid var(--accent-blue)', borderRadius: '6px', marginBottom: '16px', fontSize: '0.8rem' }}>
-                  📅 Hạn bảo trì tiếp theo sẽ tự động đặt là <strong>1 năm sau</strong> ({new Date(new Date(maintDate).setFullYear(new Date(maintDate).getFullYear() + 1)).toISOString().split('T')[0]}).
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Ghi Chú Kỹ Thuật Bảo Trì</label>
-                  <textarea className="form-textarea" rows={3} placeholder="Đã kiểm tra 16 ống màu, vệ sinh cụm pít-tông chiết, tra mỡ trục máy lắc..." value={techNotes} onChange={e => setTechNotes(e.target.value)} />
-                </div>
-              </div>
-              <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setSelectedSet(null)}>Hủy Bỏ</button>
-                <button type="submit" className="btn btn-primary">Lưu Lịch Bảo Trì</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {selectedSet && <MaintenanceChecklist machine={selectedSet} onSave={onCompleteMaintenance} onClose={() => setSelectedSet(null)} />}
 
       {/* EDIT MAINTENANCE MODAL */}
       {editingMaint && (

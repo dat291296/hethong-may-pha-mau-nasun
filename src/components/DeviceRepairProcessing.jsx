@@ -82,7 +82,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { useModalScrollLock } from '../hooks/useModalScrollLock.js';
 import { exportExcel } from '../utils/excelExport.js';
 
-export default function DeviceRepairProcessing({ globalSearch = '',
+export default function DeviceRepairProcessing({ globalSearch = '', initialFilter = 'ALL',
   repairTickets = [],
   npps = [],
   systemSets = [],
@@ -119,6 +119,13 @@ export default function DeviceRepairProcessing({ globalSearch = '',
   const [showModal, setShowModal] = useState(false);
   const [editingTicket, setEditingTicket] = useState(null);
   const [selectedTicket, setSelectedTicket] = useState(null);
+  const openedSearch = React.useRef('');
+  React.useEffect(() => {
+    if (!globalSearch) { openedSearch.current = ''; return; }
+    if (openedSearch.current === globalSearch) return;
+    const ticket = repairTickets.find(item => item.ticketCode === globalSearch);
+    if (ticket) { openedSearch.current = globalSearch; setSelectedTicket(ticket); }
+  }, [globalSearch, repairTickets]);
 
   useModalScrollLock(showModal || !!editingTicket || !!selectedTicket);
 
@@ -235,8 +242,8 @@ export default function DeviceRepairProcessing({ globalSearch = '',
         ...createFieldWorkflowDefaults(),
         date: new Date().toISOString().split('T')[0],
         technician: defaultTechnician,
-        nppId: npps.length > 0 ? npps[0].id : '',
-        nppName: npps.length > 0 ? npps[0].name : '',
+        nppId: prefilledTicket.nppId || (npps.length > 0 ? npps[0].id : ''),
+        nppName: prefilledTicket.nppName || (npps.length > 0 ? npps[0].name : ''),
         productCategory: prefilledTicket.productCategory || 'Máy chiết',
         machineModel: prefilledTicket.machineModel || 'Satint A2',
         serialNumber: prefilledTicket.serialNumber || '',
@@ -523,8 +530,12 @@ export default function DeviceRepairProcessing({ globalSearch = '',
     }
   };
 
+  const [quickFilter, setQuickFilter] = useState(initialFilter);
+  React.useEffect(() => { setQuickFilter(initialFilter); }, [initialFilter]);
   // Filtered Tickets
   const filteredTickets = repairTickets.filter(t => {
+    if (quickFilter === 'PENDING' && t.processingStatus !== 'Chưa xử lý') return false;
+    if (quickFilter === 'RETURN' && !(t.processingStatus === 'Đã xử lý' && t.customerReturnStatus === 'Chưa gửi trả')) return false;
     const matchesSearch = t.ticketCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           t.nppName.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           t.serialNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -550,6 +561,7 @@ export default function DeviceRepairProcessing({ globalSearch = '',
   return (
     <div className="workspace-screen devicerepairprocessing-screen" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       
+      <div className="workspace-tabs" aria-label="Bộ lọc nhanh sửa chữa">{[['ALL','Tất cả'],['PENDING','Chờ sửa'],['RETURN','Chờ gửi trả']].map(([key,label]) => <button key={key} aria-pressed={quickFilter === key} onClick={() => { setQuickFilter(key); setActiveTab('ALL'); }}>{label}</button>)}</div>
       {/* 1-YEAR FAILURE ANALYSIS DASHBOARD CHARTS */}
       <div className="glass-panel" style={{ padding: '20px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>

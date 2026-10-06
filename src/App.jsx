@@ -43,7 +43,7 @@ function persistWorkflowCache(key, data) {
 }
 
 export default function App() {
-  const { user, isDevMode } = useAuth();
+  const { user, isDevMode, can } = useAuth();
   const [activeTab, setActiveTab] = useState(() => {
     try {
       const savedTab = window.localStorage.getItem('nasun_active_tab');
@@ -198,6 +198,10 @@ export default function App() {
 
   // Tech Handbook -> Repair Ticket Prefill State
   const [prefilledRepairData, setPrefilledRepairData] = useState(null);
+  const [workspaceFilter, setWorkspaceFilter] = useState('ALL');
+  const navigateMain = tab => { setWorkspaceFilter('ALL'); setGlobalSearch(''); setActiveTab(tab); };
+  const navigateWorkspace = (tab, query = '', filter = 'ALL') => { setGlobalSearch(query); setWorkspaceFilter(filter); setActiveTab(tab); };
+  const requestMachineRepair = machine => { setPrefilledRepairData({ nppId: machine.nppId, nppName: machine.nppName, machineModel: machine.dispenserModel, serialNumber: machine.dispenserSerial, productCategory: 'Máy chiết' }); navigateWorkspace('repairs'); };
 
   const handleSelectErrorForRepair = (errorObj) => {
     let cat = errorObj.category;
@@ -710,12 +714,26 @@ export default function App() {
   };
 
   const handleCompleteMaintenance = async (maintData) => {
+    if (!can('asset:edit')) throw new Error('Bạn không có quyền ghi nhận bảo trì.');
     const targetSet = systemSets.find(s => s.setCode === maintData.setCode);
+    if (!targetSet) throw new Error('Không tìm thấy bộ máy.');
+    if (isSupabaseConfigured) {
+      if (!navigator.onLine) throw new Error('Kết nối mạng để lưu đồng thời checklist, ảnh và lịch bảo trì.');
+      const { error } = await supabase.rpc('complete_machine_maintenance', {
+        p_operation_id: maintData.operationId, p_set_code: maintData.setCode,
+        p_date: maintData.lastMaintenanceDate, p_next_date: maintData.nextMaintenanceDue,
+        p_notes: maintData.notes, p_photos: maintData.photos || [], p_has_issues: !!maintData.hasIssues
+      });
+      if (error) { console.error('[Maintenance] Persistence rejected', error.code); throw new Error(error.code === 'PGRST202' ? 'Admin cần áp dụng maintenance_checklist_migration.sql trước khi lưu bảo trì.' : 'Không lưu được bảo trì. Kiểm tra quyền, khu vực và kết nối mạng.'); }
+      await Promise.all([refetchAssets(), refetchAuditLogs()]);
+      return;
+    }
     try {
       await updateSystemSet(maintData.setCode, {
         last_maintenance_date: maintData.lastMaintenanceDate,
-        next_maintenance_due: maintData.nextMaintenanceDue,
-        status: 'DA_LAP_DAT'
+        next_maintenance_due: maintData.hasIssues ? targetSet.nextMaintenanceDue : maintData.nextMaintenanceDue,
+        status: maintData.hasIssues ? 'BAO_THUONG_BAO_TRI' : targetSet.status === 'BAO_THUONG_BAO_TRI' ? 'DA_LAP_DAT' : targetSet.status,
+        ...(maintData.photos?.length ? { installationPhotos: [...(targetSet?.installationPhotos || []), ...maintData.photos] } : {})
       });
 
       await addAuditLog({
@@ -724,13 +742,13 @@ export default function App() {
         nppId: targetSet?.nppId,
         nppName: targetSet?.nppName,
         serialList: `Bảo trì bộ máy ${maintData.setCode}`,
-        technician: 'Kỹ thuật viên bảo trì',
+        technician: user?.name || user?.full_name || 'Kỹ thuật viên bảo trì',
         reason: 'Bảo trì định kỳ 1 năm / lần',
         notes: maintData.notes || 'Đã vệ sinh ống chiết và kiểm tra máy lắc.'
       });
     } catch (err) {
       console.error(err);
-      alert('Lỗi hoàn tất bảo trì: ' + err.message);
+      throw err;
     }
   };
 
@@ -778,7 +796,7 @@ export default function App() {
       {/* Sidebar Navigation for Desktop & Mobile sliding drawer */}
       <Sidebar 
         activeTab={activeTab} 
-        setActiveTab={setActiveTab} 
+        setActiveTab={navigateMain}
         maintenanceCount={maintenanceAlerts.length}
         pendingRepairCount={pendingRepairCount}
         isOpen={isMobileSidebarOpen}
@@ -834,7 +852,8 @@ export default function App() {
               auditLogs={auditLogs}
               maintenanceAlerts={maintenanceAlerts}
               unstabilizedAlerts={unstabilizedAlerts}
-              setActiveTab={setActiveTab}
+              setActiveTab={navigateMain}
+              onNavigateWorkspace={navigateWorkspace}
               onOpenNewInstallation={() => setWorkflowMode('INSTALL')}
             />
           )}
@@ -854,6 +873,11 @@ export default function App() {
           {activeTab === 'assets' && (
             <AssetManagement
               globalSearch={globalSearch}
+              initialFilter={workspaceFilter}
+              repairTickets={repairTickets}
+              auditLogs={auditLogs}
+              onRequestRepair={requestMachineRepair}
+              onRequestMaintenance={machine => navigateWorkspace('maintenance', machine.setCode)}
               systemSets={systemSets}
               npps={npps}
               dispensers={dispensers}
@@ -873,6 +897,7 @@ export default function App() {
           {activeTab === 'repairs' && (
             <DeviceRepairProcessing
               globalSearch={globalSearch}
+              initialFilter={workspaceFilter}
               repairTickets={repairTickets}
               npps={npps}
               systemSets={systemSets}
@@ -959,6 +984,7 @@ export default function App() {
           {activeTab === 'maintenance' && (
             <MaintenanceSchedule
               globalSearch={globalSearch}
+              initialFilter={workspaceFilter}
               systemSets={systemSets}
               onCompleteMaintenance={handleCompleteMaintenance}
               onUpdateSystemSet={updateSystemSet}
@@ -993,7 +1019,7 @@ export default function App() {
       {/* Mobile Bottom Navigation Bar for Mobile Phones */}
       <MobileBottomNav
         activeTab={activeTab}
-        setActiveTab={setActiveTab}
+        setActiveTab={navigateMain}
         maintenanceCount={maintenanceAlerts.length}
         pendingRepairCount={pendingRepairCount}
         onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}

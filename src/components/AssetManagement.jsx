@@ -1,3 +1,5 @@
+import TechnicalResources from './TechnicalResources';
+import { resolveMachine } from '../lib/machineWorkspace';
 import React, { useState, useEffect } from 'react';
 import SafePortal from './SafePortal.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -39,7 +41,7 @@ import { useModalScrollLock } from '../hooks/useModalScrollLock.js';
 import { exportExcel } from '../utils/excelExport.js';
 import { getSystemSetMissingFields } from '../utils/systemSetValidation.js';
 
-export default function AssetManagement({ globalSearch = '',
+export default function AssetManagement({ globalSearch = '', initialFilter = 'ALL', repairTickets = [], auditLogs = [], onRequestRepair, onRequestMaintenance,
   systemSets,
   npps = [],
   dispensers,
@@ -56,7 +58,7 @@ export default function AssetManagement({ globalSearch = '',
   onEditSet,
   onDeleteSet
 }) {
-  const { user } = useAuth();
+  const { user, can } = useAuth();
   const exportCurrentInventory = () => {
     const config = {
       dispensers: { rows: dispensers, name: 'Kho_May_Chiet', columns: [{ key: 'id', label: 'Mã QL' }, { key: 'model', label: 'Model' }, { key: 'serial', label: 'Số Seri' }, { key: 'status', label: 'Tình Trạng' }, { key: 'setCode', label: 'Mã Bộ Máy' }] },
@@ -111,6 +113,7 @@ export default function AssetManagement({ globalSearch = '',
 
   const [activeSubTab, setActiveSubTab] = useState(() => {
     try {
+      if (initialFilter !== 'ALL') return 'comboSets';
       return localStorage.getItem('nasun_assets_subtab') || 'comboSets';
     } catch {
       return 'comboSets';
@@ -174,6 +177,22 @@ export default function AssetManagement({ globalSearch = '',
 
   // Set Details & Full Photo Gallery Modal State
   const [selectedSetDetails, setSelectedSetDetails] = useState(null);
+  const openedSearch = React.useRef('');
+  const [profileTab, setProfileTab] = useState('equipment');
+  const [quickFilter, setQuickFilter] = useState(initialFilter);
+  useEffect(() => { setQuickFilter(initialFilter); }, [initialFilter]);
+  const [scanError, setScanError] = useState('');
+  const [scanInput, setScanInput] = useState('');
+  const [showManualScan, setShowManualScan] = useState(false);
+  useEffect(() => { setCurrentPage(1); }, [quickFilter]);
+  useEffect(() => {
+    if (!globalSearch) { openedSearch.current = ''; return; }
+    if (openedSearch.current === globalSearch) return;
+    const machine = resolveMachine(systemSets, globalSearch);
+    if (machine) { openedSearch.current = globalSearch; setSelectedSetDetails(machine); }
+  }, [globalSearch, systemSets]);
+  useEffect(() => { setProfileTab('equipment'); }, [selectedSetDetails?.setCode]);
+  const openScannedMachine = value => { const machine = resolveMachine(systemSets, value); if (!machine) { setScanError('Không tìm thấy bộ máy duy nhất. Nhập đúng mã bộ máy hoặc seri.'); return; } setScanError(''); setSelectedSetDetails(machine); };
 
   // Device Edit Modal state
   const [editingDevice, setEditingDevice] = useState(null); // { category: 'dispenser'|'mixer'|'computer'|'printer', data }
@@ -543,7 +562,9 @@ export default function AssetManagement({ globalSearch = '',
         (s.dispenserSerial && s.dispenserSerial.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (s.mixerSerial && s.mixerSerial.toLowerCase().includes(searchTerm.toLowerCase()))
       );
-      return matchesModel && matchesStatus && matchesSearch;
+      const tickets = repairTickets.filter(ticket => ticket.nppId === s.nppId && [s.dispenserSerial, s.mixerSerial, s.computerSerial, s.printerSerial].filter(Boolean).includes(ticket.serialNumber));
+      const matchesQuick = quickFilter === 'ALL' || (quickFilter === 'STOCK' && s.status === 'TRONG_KHO') || (quickFilter === 'PENDING' && tickets.some(ticket => ticket.processingStatus === 'Chưa xử lý')) || (quickFilter === 'RETURN' && tickets.some(ticket => ticket.processingStatus === 'Đã xử lý' && ticket.customerReturnStatus === 'Chưa gửi trả')) || (quickFilter === 'OVERDUE' && s.nextMaintenanceDue && s.nextMaintenanceDue < new Date().toLocaleDateString('en-CA'));
+      return matchesModel && matchesStatus && matchesSearch && matchesQuick;
     })
     .sort((a, b) => naturalSortCode(a, b, 'setCode'));
 
@@ -788,6 +809,9 @@ export default function AssetManagement({ globalSearch = '',
   return (
     <div className="workspace-screen assetmanagement-screen" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       
+      <div className="workspace-tabs" aria-label="Bộ lọc nhanh thiết bị">{[['ALL','Tất cả'],['STOCK','Trong kho'],['PENDING','Chờ sửa chữa'],['RETURN','Chờ gửi trả'],['OVERDUE','Quá hạn bảo trì']].map(([key,label]) => <button key={key} aria-pressed={quickFilter === key} onClick={() => { setQuickFilter(key); setActiveSubTab('comboSets'); setStatusFilter('ALL'); setModelFilter('ALL'); }}>{label}</button>)}<button onClick={() => { setScanTargetField('profile'); setShowScanSerialModal(true); }}>Quét QR / Seri</button><button onClick={() => setShowManualScan(value => !value)}>Nhập mã bộ máy</button></div>
+      {showManualScan && <form className="machine-serial-form" onSubmit={event => { event.preventDefault(); openScannedMachine(scanInput); }}><label>Mã bộ máy hoặc seri<input className="form-input" required maxLength={160} value={scanInput} onChange={event => setScanInput(event.target.value)} placeholder="SET-... hoặc seri thiết bị" /></label><button className="btn btn-primary">Mở hồ sơ</button></form>}
+      {scanError && <p role="alert" className="resource-error">{scanError}</p>}
       {/* 📦 BẢNG TỔNG HỢP TỒN KHO THIẾT BỊ HIỆN TẠI */}
       <div className="glass-panel" style={{ padding: '20px', background: 'linear-gradient(135deg, rgba(15,23,42,0.95) 0%, rgba(30,41,59,0.85) 100%)', border: '1px solid rgba(56,189,248,0.3)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
@@ -3084,6 +3108,10 @@ export default function AssetManagement({ globalSearch = '',
               </div>
 
               <div className="modal-body" style={{ maxHeight: '78vh', overflowY: 'auto' }}>
+<div className="workspace-tabs">{[['equipment','Thiết bị'],['history','Lịch sử'],['documents','Tài liệu & Ảnh']].map(([key,label]) => <button key={key} aria-pressed={profileTab === key} onClick={() => setProfileTab(key)}>{label}</button>)}<button disabled={!can('repair:create')} onClick={() => onRequestRepair?.(selectedSetDetails)}>Tạo phiếu sửa chữa</button><button disabled={!can('asset:edit')} onClick={() => onRequestMaintenance?.(selectedSetDetails)}>Bảo trì</button></div>
+                {profileTab === 'history' && <section>{repairTickets.filter(ticket => ticket.nppId === selectedSetDetails.nppId && [selectedSetDetails.dispenserSerial, selectedSetDetails.mixerSerial, selectedSetDetails.computerSerial, selectedSetDetails.printerSerial].filter(Boolean).includes(ticket.serialNumber)).map(ticket => <article className="machine-history" key={ticket.id}><strong>{ticket.ticketCode} · {ticket.date}</strong><p>{ticket.errorDescription}</p><span className={ticket.processingStatus === 'Đã xử lý' ? 'badge badge-success' : 'badge badge-warning'}>{ticket.processingStatus} · {ticket.customerReturnStatus}</span></article>)}{auditLogs.filter(log => log.setCode === selectedSetDetails.setCode).map(log => <article className="machine-history" key={log.id}><strong>{log.type} · {log.timestamp}</strong><p>{log.technician}</p><p style={{ whiteSpace: 'pre-wrap' }}>{log.notes}</p></article>)}{!auditLogs.some(log => log.setCode === selectedSetDetails.setCode) && <p>Chưa có nhật ký cho bộ máy này.</p>}</section>}
+                {profileTab === 'documents' && <TechnicalResources machineModel={selectedSetDetails.dispenserModel} modelOptions={[...new Set(systemSets.map(machine => machine.dispenserModel).filter(Boolean))]} />}
+                <div hidden={profileTab !== 'equipment'}>
                 {/* Machine Info Cards (4 devices) */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '10px', marginBottom: '16px' }}>
                   <div style={{ background: 'var(--bg-main)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '10px' }}>
@@ -3107,6 +3135,7 @@ export default function AssetManagement({ globalSearch = '',
                   </div>
                 </div>
 
+                <div className="machine-profile-extra">{[['computerSerial','Seri máy tính'],['tintingSoftware','Phần mềm pha màu'],['softwareVersion','Phiên bản'],['agentStatus','Trạng thái kết nối'],['lastMaintenanceDate','Bảo trì gần nhất'],['province','Tỉnh / Thành'],['region','Khu vực'],['notes','Ghi chú']].map(([key,label]) => <div key={key}><strong>{label}:</strong> {selectedSetDetails[key] || 'Chưa ghi nhận'}</div>)}</div>
                 {/* Additional details bar */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '10px', background: 'rgba(255,255,255,0.02)', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-color)', marginBottom: '18px', fontSize: '0.825rem' }}>
                   <div><strong>Trạng thái:</strong> {selectedSetDetails.status === 'DA_LAP_DAT' ? '🟢 Đã Lắp Đặt' : (selectedSetDetails.status === 'TRONG_KHO' ? '⚪ Trong Kho' : selectedSetDetails.status)}</div>
@@ -3117,6 +3146,8 @@ export default function AssetManagement({ globalSearch = '',
                   <div><strong>Hạn bảo trì:</strong> {selectedSetDetails.nextMaintenanceDue || 'Chưa ghi nhận'}</div>
                 </div>
 
+                </div>
+                <div hidden={profileTab !== 'documents'}>
                 {/* Full Photos Gallery */}
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
@@ -3207,6 +3238,7 @@ export default function AssetManagement({ globalSearch = '',
                   )}
                 </div>
               </div>
+              </div>
 
               <div className="modal-footer">
                 <button className="btn btn-secondary" onClick={() => setSelectedSetDetails(null)}>Đóng</button>
@@ -3230,7 +3262,7 @@ export default function AssetManagement({ globalSearch = '',
       {showScanSerialModal && (
         <QrScannerModal
           onScanSuccess={(scannedText) => {
-            if (scanTargetField === 'add') {
+            if (scanTargetField === 'profile') { openScannedMachine(scannedText); } else if (scanTargetField === 'add') {
               setAddFormData(prev => ({ ...prev, serial: scannedText }));
             } else if (scanTargetField === 'edit') {
               setEditFormData(prev => ({ ...prev, serial: scannedText }));

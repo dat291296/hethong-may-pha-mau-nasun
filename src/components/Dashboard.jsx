@@ -50,6 +50,7 @@ export default function Dashboard({
   maintenanceAlerts = [], 
   unstabilizedAlerts = [],
   setActiveTab,
+  onNavigateWorkspace,
   onOpenNewInstallation
 }) {
   // Stat calculations
@@ -397,16 +398,17 @@ export default function Dashboard({
 
       </div>
 
+      <div className="workspace-tabs" aria-label="Thống kê nhanh">{[['assets','STOCK','Trong kho',systemSets.filter(set => set.status === 'TRONG_KHO').length],['repairs','PENDING','Chờ sửa',pendingTasks.length],['repairs','RETURN','Chờ gửi trả',returnTasks.length],['maintenance','OVERDUE','Quá hạn bảo trì',systemSets.filter(set => set.nextMaintenanceDue && set.nextMaintenanceDue < new Date().toLocaleDateString('en-CA')).length]].map(([tab,filter,label,count]) => <button key={filter} onClick={() => onNavigateWorkspace?.(tab, '', filter)}>{label} ({count})</button>)}</div>
       <section className="glass-panel overview-tasks" aria-labelledby="task-heading">
         <div className="workspace-section-heading"><div><h2 id="task-heading">Việc cần xử lý ({actionTasks.length})</h2><p>Phiếu chưa xử lý, thiết bị chờ gửi trả và lịch bảo trì cần kiểm tra.</p></div></div>
         <div className="workspace-tabs" aria-label="Lọc việc cần xử lý">
           <button type="button" aria-pressed={taskFilter === 'ALL'} onClick={() => setTaskFilter('ALL')}>Tất cả ({actionTasks.length})</button>
           {taskGroups.map(group => <button type="button" key={group.key} aria-pressed={taskFilter === group.key} onClick={() => setTaskFilter(group.key)}>{group.label} ({group.items.length})</button>)}
         </div>
-        {visibleTasks.slice(0, 6).map(task => <div className="workspace-task-row" key={`${task.key}-${task.item.id}`}>
+        {visibleTasks.slice(0, 6).map(task => <div className="workspace-task-row" key={`${task.key}-${task.item.id || task.item.setCode || task.item.ticketCode}`}>
           <div className="workspace-task-icon">{task.key === 'MAINTENANCE' ? <CalendarClock size={20}/> : <Wrench size={20}/>}</div>
-          <div><strong>{task.item.machineModel || task.item.dispenserModel || task.item.setCode}</strong><p>{task.item.nppName} · {task.item.ticketCode || task.item.setCode}</p><span className={`badge ${task.key === 'MAINTENANCE' ? 'badge-warning' : 'badge-info'}`}>{task.label}{task.item.nextMaintenanceDue ? ` · ${task.item.nextMaintenanceDue}` : ''}</span></div>
-          <button type="button" className="btn btn-secondary btn-sm" onClick={() => setActiveTab(task.tab)}>Xem</button>
+          <div><strong>{task.item.machineModel || task.item.dispenserModel || task.item.setCode}</strong><p>{task.item.nppName} · {task.item.ticketCode || task.item.setCode}</p><span className={`badge ${task.item.nextMaintenanceDue && task.item.nextMaintenanceDue < new Date().toLocaleDateString('en-CA') ? 'badge-danger' : 'badge-warning'}`}>{task.label}{task.item.nextMaintenanceDue ? ` · ${task.item.nextMaintenanceDue}` : ''}</span></div>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => onNavigateWorkspace ? onNavigateWorkspace(task.key === 'MAINTENANCE' ? 'assets' : task.tab, task.item.ticketCode || task.item.setCode || task.item.serialNumber || '') : setActiveTab(task.tab)}>Xem</button>
         </div>)}
         {!visibleTasks.length && <p className="workspace-empty">Không có công việc trong nhóm này.</p>}
         {visibleTasks.length > 6 && <button type="button" className="btn btn-secondary" onClick={() => setActiveTab(taskFilter === 'MAINTENANCE' ? 'maintenance' : 'repairs')}>Xem danh sách đầy đủ</button>}

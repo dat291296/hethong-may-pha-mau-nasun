@@ -1,3 +1,4 @@
+import { matchesDocumentModel } from '../lib/machineWorkspace';
 import React, { useEffect, useState } from 'react';
 import { FileText, ExternalLink, Upload, Trash2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -5,13 +6,15 @@ import { supabase } from '../lib/supabase';
 import { DOCUMENT_BUCKET, resourceError, validateDocumentFile, validateDocumentUrl } from '../lib/technicalResources';
 import './technicalResources.css';
 const fields = 'id,title,category,machine_model,url,storage_path,file_name,file_size,created_at';
-export default function TechnicalResources() {
+export default function TechnicalResources({ machineModel = '', modelOptions = [] }) {
   const { user, role } = useAuth();
   const [documents, setDocuments] = useState([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('ALL');
+  const [modelFilter, setModelFilter] = useState('ALL');
   const [form, setForm] = useState(null);
   const [file, setFile] = useState(null);
   useEffect(() => {
@@ -81,20 +84,21 @@ export default function TechnicalResources() {
     } catch (err) { setError(resourceError(err)); } finally { setBusy(false); }
   }
   return <section className="technical-resources glass-panel resource-panel" aria-label="Tài liệu và bản vẽ">
-    <div className="resource-heading"><h3><FileText size={20} /> Tài liệu & Bản vẽ</h3>{role === 'admin' && <button className="btn btn-primary btn-sm" disabled={busy} onClick={() => { setFile(null); setForm({ title: '', category: 'Tài liệu', machine_model: '' }); }}><Upload size={16} /> Tải file lên</button>}</div>
+    <div className="resource-heading"><h3><FileText size={20} /> Tài liệu & Bản vẽ</h3>{role === 'admin' && <button className="btn btn-primary btn-sm" disabled={busy} onClick={() => { setFile(null); setForm({ title: '', category: 'Tài liệu', machine_model: machineModel }); }}><Upload size={16} /> Tải file lên</button>}</div>
     <p className="resource-muted">PDF, PNG, JPG, WEBP, GIF, BMP, TIFF · Tối đa 20 MB/file.</p>
     {error && <p role="alert" className="resource-error">{error}</p>}
     {!supabase && <p className="resource-muted">Cần kết nối Supabase để tải và xem tài liệu thật.</p>}
     {loading && <p role="status">Đang tải tài liệu...</p>}
     <input className="form-input" aria-label="Tìm tài liệu" placeholder="Tìm tên tài liệu, dòng máy..." value={search} onChange={event => setSearch(event.target.value)} />
+    <div className="resource-filters"><label>Loại tài liệu<select className="form-select" value={categoryFilter} onChange={event => setCategoryFilter(event.target.value)}><option value="ALL">Tất cả</option><option>Tài liệu</option><option>Bản vẽ</option></select></label>{!machineModel && <label>Dòng máy<select className="form-select" value={modelFilter} onChange={event => setModelFilter(event.target.value)}><option value="ALL">Tất cả dòng máy</option><option value="COMMON">Tài liệu dùng chung</option>{[...new Set([...modelOptions, ...documents.map(item => item.machine_model)].filter(Boolean))].sort().map(model => <option key={model}>{model}</option>)}</select></label>}</div>
     {form && <form className="resource-form" onSubmit={save}>
       <label>Tên tài liệu<input className="form-input" required maxLength={160} disabled={busy} value={form.title} onChange={event => setForm({ ...form, title: event.target.value })} /></label>
       <label>Phân loại<select className="form-select" disabled={busy} value={form.category} onChange={event => setForm({ ...form, category: event.target.value })}><option>Tài liệu</option><option>Bản vẽ</option></select></label>
-      <label>Dòng máy<input className="form-input" maxLength={120} disabled={busy} value={form.machine_model} onChange={event => setForm({ ...form, machine_model: event.target.value })} /></label>
-      <label>File PDF hoặc ảnh<input type="file" required disabled={busy} accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.bmp,.tif,.tiff" onChange={event => setFile(event.target.files?.[0] || null)} /></label>
+      <label>Dòng máy<input list="document-model-options" className="form-input" maxLength={120} disabled={busy} value={form.machine_model} onChange={event => setForm({ ...form, machine_model: event.target.value })} /></label>
+      <datalist id="document-model-options">{modelOptions.map(model => <option key={model} value={model} />)}</datalist><label>File PDF hoặc ảnh<input type="file" required disabled={busy} accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.bmp,.tif,.tiff" onChange={event => setFile(event.target.files?.[0] || null)} /></label>
       <div className="resource-actions"><button className="btn btn-primary" disabled={busy}>{busy ? 'Đang tải...' : 'Lưu tài liệu'}</button><button type="button" className="btn btn-secondary" disabled={busy} onClick={() => setForm(null)}>Hủy</button></div>
     </form>}
     {!loading && !documents.length && <p className="resource-muted">Chưa có tài liệu. Admin có thể tải file PDF hoặc ảnh bản vẽ lên.</p>}
-    {documents.filter(item => `${item.title} ${item.machine_model}`.toLocaleLowerCase('vi').includes(search.toLocaleLowerCase('vi'))).map(document => <div className="resource-row" key={document.id}><FileText size={22} /><div className="resource-content"><strong>{document.title}</strong><small>{document.category}{document.machine_model && ` · ${document.machine_model}`}</small>{document.file_name && <small>{document.file_name} · {(document.file_size / 1048576).toFixed(2)} MB</small>}</div><button className="btn btn-secondary btn-sm" onClick={() => open(document)}><ExternalLink size={16} /> Mở</button>{role === 'admin' && <button className="btn btn-secondary btn-sm" disabled={busy} onClick={() => remove(document)} aria-label={`Xóa ${document.title}`}><Trash2 size={16} /></button>}</div>)}
+    {documents.filter(item => (categoryFilter === 'ALL' || item.category === categoryFilter) && (modelFilter === 'ALL' || (modelFilter === 'COMMON' ? !item.machine_model : item.machine_model === modelFilter))).filter(item => (!machineModel || matchesDocumentModel(item.machine_model, machineModel))).filter(item => `${item.title} ${item.machine_model}`.toLocaleLowerCase('vi').includes(search.toLocaleLowerCase('vi'))).map(document => <div className="resource-row" key={document.id}><FileText size={22} /><div className="resource-content"><strong>{document.title}</strong><small>{document.category}{document.machine_model && ` · ${document.machine_model}`}</small>{document.file_name && <small>{document.file_name} · {(document.file_size / 1048576).toFixed(2)} MB</small>}</div><button className="btn btn-secondary btn-sm" onClick={() => open(document)}><ExternalLink size={16} /> Mở</button>{role === 'admin' && <button className="btn btn-secondary btn-sm" disabled={busy} onClick={() => remove(document)} aria-label={`Xóa ${document.title}`}><Trash2 size={16} /></button>}</div>)}
   </section>;
 }
