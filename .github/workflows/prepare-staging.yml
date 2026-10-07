@@ -22,8 +22,26 @@ jobs:
       - name: Validate approved staging destination
         run: |
           node --input-type=module <<'JS'
-          const target = new URL(process.env.STAGING_DB_URL);
-          const source = new URL(process.env.SUPABASE_DB_URL);
+          import { appendFileSync } from 'node:fs';
+          function readConnection(name) {
+            let value = (process.env[name] || '').trim();
+            if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'")) || (value.startsWith('`') && value.endsWith('`'))) value = value.slice(1, -1).trim();
+            const fail = message => { console.error(`::error::${name}: ${message}`); process.exit(1); };
+            if (!value) fail('Secret is empty or unavailable to this job.');
+            if (!/^postgres(?:ql)?:\/\//.test(value)) fail('Value must start with postgresql:// (no psql command, label, or markdown).');
+            if (/[\r\n]/.test(value)) fail('Value contains multiple lines. Paste only the connection URI.');
+            const separator = value.lastIndexOf('@');
+            const credentials = value.slice(value.indexOf('://') + 3, separator);
+            const password = credentials.slice(credentials.indexOf(':') + 1);
+            if (/[\s#?\/\[\]@]/.test(password)) fail('Password contains URI-reserved characters. URL-encode the password portion only. Do not send the password in chat.');
+            let parsed;
+            try { parsed = new URL(value); } catch { fail('Cannot parse URI. Check the colon before password and @ before pooler hostname. Secret value is not logged.'); }
+            if (!parsed.hostname || !parsed.password) fail('URI must include both hostname and database password.');
+            appendFileSync(process.env.GITHUB_ENV, `${name}=${value}\n`);
+            return parsed;
+          }
+          const target = readConnection('STAGING_DB_URL');
+          const source = readConnection('SUPABASE_DB_URL');
           const ref = 'kenznmtdfuexmfrtzypb';
           const approved = target.hostname === `db.${ref}.supabase.co` || target.hostname.endsWith('.pooler.supabase.com') && decodeURIComponent(target.username) === `postgres.${ref}`;
           if (!approved || !['postgres:', 'postgresql:'].includes(target.protocol) || target.href === source.href || target.password.includes('YOUR-PASSWORD')) throw new Error('Configure STAGING_DB_URL for the approved nasun-staging project');
