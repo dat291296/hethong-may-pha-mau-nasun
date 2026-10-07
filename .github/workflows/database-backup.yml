@@ -103,7 +103,8 @@ jobs:
           DO $$ BEGIN CREATE ROLE authenticated NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
           DO $$ BEGIN CREATE ROLE service_role NOLOGIN BYPASSRLS; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
           SQL
-          pg_restore --section=pre-data --no-owner --no-privileges --exit-on-error --dbname="$PGDATABASE" nasun-public.dump
+          pg_restore --list nasun-public.dump | grep -vE '^[0-9]+; [0-9]+ [0-9]+ SCHEMA - public ' > restore.list
+          pg_restore --section=pre-data --use-list=restore.list --no-owner --no-privileges --exit-on-error --dbname="$PGDATABASE" nasun-public.dump
           pg_restore --section=data --no-owner --no-privileges --exit-on-error --dbname="$PGDATABASE" nasun-public.dump
           psql -v ON_ERROR_STOP=1 <<'SQL'
           DO $$
