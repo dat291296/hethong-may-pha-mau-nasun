@@ -33,7 +33,11 @@ jobs:
             const separator = value.lastIndexOf('@');
             const credentials = value.slice(value.indexOf('://') + 3, separator);
             const password = credentials.slice(credentials.indexOf(':') + 1);
-            if (/[\s#?\/\[\]@]/.test(password)) fail('Password contains URI-reserved characters. URL-encode the password portion only. Do not send the password in chat.');
+            if (separator < 0 || credentials.indexOf(':') < 0) fail('URI must include username:password@hostname.');
+            try {
+              const encoded = encodeURIComponent(decodeURIComponent(password.replace(/%(?![0-9a-f]{2})/gi, '%25')));
+              value = value.slice(0, value.indexOf('://') + 3) + credentials.slice(0, credentials.indexOf(':') + 1) + encoded + value.slice(separator);
+            } catch { fail('Password encoding is invalid. Copy the original connection URI again.'); }
             let parsed;
             try { parsed = new URL(value); } catch { fail('Cannot parse URI. Check the colon before password and @ before pooler hostname. Secret value is not logged.'); }
             if (!parsed.hostname || !parsed.password) fail('URI must include both hostname and database password.');
