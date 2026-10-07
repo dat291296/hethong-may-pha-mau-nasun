@@ -69,7 +69,7 @@ jobs:
           table_count="$(psql --dbname="$STAGING_DB_URL" -Atc "SELECT count(*) FROM pg_tables WHERE schemaname = 'public'")"
           if [ "$table_count" != "0" ]; then echo "::error::Staging public schema must be empty. No existing records were changed."; exit 1; fi
           pg_dump --schema=public --schema-only --format=custom --no-owner --file=staging-schema.dump --dbname="$SUPABASE_DB_URL"
-          pg_restore --list staging-schema.dump | grep -vE '^[0-9]+; [0-9]+ [0-9]+ SCHEMA - public ' > staging-schema.list
+          pg_restore --list staging-schema.dump | grep -vE '^[0-9]+; [0-9]+ [0-9]+ (SCHEMA - public |DEFAULT ACL )' > staging-schema.list
           pg_restore --single-transaction --exit-on-error --no-owner --use-list=staging-schema.list --dbname="$STAGING_DB_URL" staging-schema.dump
       - name: Install synthetic fixtures
         run: |
