@@ -1,0 +1,60 @@
+name: Prepare isolated staging schema
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: staging-rls-fixtures
+  cancel-in-progress: false
+jobs:
+  prepare:
+    environment: staging
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      STAGING_DB_URL: ${{ secrets.STAGING_DB_URL }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+      - name: Validate approved staging destination
+        run: |
+          node --input-type=module <<'JS'
+          const target = new URL(process.env.STAGING_DB_URL);
+          const source = new URL(process.env.SUPABASE_DB_URL);
+          const ref = 'kenznmtdfuexmfrtzypb';
+          const approved = target.hostname === `db.${ref}.supabase.co` || target.hostname.endsWith('.pooler.supabase.com') && decodeURIComponent(target.username) === `postgres.${ref}`;
+          if (!approved || !['postgres:', 'postgresql:'].includes(target.protocol) || target.href === source.href || target.password.includes('YOUR-PASSWORD')) throw new Error('Configure STAGING_DB_URL for the approved nasun-staging project');
+          JS
+      - name: Install PostgreSQL 17 client
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y curl ca-certificates
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl --fail --show-error --silent -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt noble-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+      - name: Require empty staging and copy structure only
+        run: |
+          set -euo pipefail
+          umask 077
+          export PGSSLMODE=require
+          table_count="$(psql --dbname="$STAGING_DB_URL" -Atc "SELECT count(*) FROM pg_tables WHERE schemaname = 'public'")"
+          if [ "$table_count" != "0" ]; then echo "::error::Staging public schema must be empty. No existing records were changed."; exit 1; fi
+          pg_dump --schema=public --schema-only --format=custom --no-owner --file=staging-schema.dump --dbname="$SUPABASE_DB_URL"
+          pg_restore --list staging-schema.dump | grep -vE '^[0-9]+; [0-9]+ [0-9]+ SCHEMA - public ' > staging-schema.list
+          pg_restore --single-transaction --exit-on-error --no-owner --use-list=staging-schema.list --dbname="$STAGING_DB_URL" staging-schema.dump
+      - name: Install synthetic fixtures
+        run: |
+          set -euo pipefail
+          export PGSSLMODE=require
+          psql --dbname="$STAGING_DB_URL" -v ON_ERROR_STOP=1 -f supabase/security_module_13_rls_probe.sql
+          psql --dbname="$STAGING_DB_URL" -v ON_ERROR_STOP=1 -f supabase/staging_test_fixtures.sql
+      - name: Remove temporary schema files
+        if: always()
+        run: rm -f staging-schema.dump staging-schema.list

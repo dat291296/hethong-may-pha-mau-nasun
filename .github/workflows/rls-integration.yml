@@ -13,7 +13,11 @@ jobs:
     environment: staging
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    concurrency:
+      group: staging-rls-fixtures
+      cancel-in-progress: false
     env:
+      STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
       RLS_TEST_URL: ${{ vars.STAGING_SUPABASE_URL || secrets.STAGING_SUPABASE_URL }}
       RLS_TEST_ANON_KEY: ${{ vars.STAGING_SUPABASE_ANON_KEY || secrets.STAGING_SUPABASE_ANON_KEY }}
       RLS_PRODUCTION_URL: ${{ vars.VITE_SUPABASE_URL || secrets.VITE_SUPABASE_URL }}
@@ -37,7 +41,11 @@ jobs:
         run: |
           set -euo pipefail
           missing=0
-          for variable in RLS_TEST_URL RLS_TEST_ANON_KEY RLS_PRODUCTION_URL RLS_TEST_ADMIN_EMAIL RLS_TEST_ADMIN_PASSWORD RLS_TEST_QC_EMAIL RLS_TEST_QC_PASSWORD RLS_TEST_QC_REGION RLS_TEST_VIEWER_EMAIL RLS_TEST_VIEWER_PASSWORD RLS_TEST_VIEWER_REGION RLS_TEST_MANAGER_EMAIL RLS_TEST_MANAGER_PASSWORD RLS_TEST_MANAGER_REGION RLS_TEST_TECHNICIAN_EMAIL RLS_TEST_TECHNICIAN_PASSWORD RLS_TEST_TECHNICIAN_REGION; do
+          required="RLS_TEST_URL RLS_TEST_ANON_KEY RLS_PRODUCTION_URL"
+          if [ -z "$STAGING_SUPABASE_SERVICE_ROLE_KEY" ]; then
+            required="$required RLS_TEST_ADMIN_EMAIL RLS_TEST_ADMIN_PASSWORD RLS_TEST_QC_EMAIL RLS_TEST_QC_PASSWORD RLS_TEST_QC_REGION RLS_TEST_VIEWER_EMAIL RLS_TEST_VIEWER_PASSWORD RLS_TEST_VIEWER_REGION RLS_TEST_MANAGER_EMAIL RLS_TEST_MANAGER_PASSWORD RLS_TEST_MANAGER_REGION RLS_TEST_TECHNICIAN_EMAIL RLS_TEST_TECHNICIAN_PASSWORD RLS_TEST_TECHNICIAN_REGION"
+          fi
+          for variable in $required; do
             if [ -z "${!variable}" ]; then
               echo "::error::Missing $variable. Configure the corresponding variable or secret in Settings > Environments > staging."
               missing=1
@@ -58,4 +66,9 @@ jobs:
         run: npm ci --ignore-scripts
 
       - name: Run RLS integration checks
-        run: node scripts/verify-rls.mjs
+        run: |
+          if [ -n "$STAGING_SUPABASE_SERVICE_ROLE_KEY" ]; then
+            node scripts/run-staging-rls.mjs
+          else
+            node scripts/verify-rls.mjs
+          fi
