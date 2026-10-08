@@ -1,0 +1,82 @@
+name: Production additive safety migration
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/nasun-staging-integrity]
+    paths: [.github/workflows/production-safety.yml, scripts/apply-production-safety.mjs]
+permissions:
+  contents: read
+concurrency:
+  group: production-schema-update
+  cancel-in-progress: false
+jobs:
+  verify-staging:
+    runs-on: ubuntu-24.04
+    environment: staging
+    timeout-minutes: 20
+    concurrency:
+      group: staging-rls-fixtures
+      cancel-in-progress: false
+    env:
+      STAGING_DB_URL: ${{ secrets.STAGING_DB_URL }}
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+      RLS_TEST_URL: ${{ vars.STAGING_SUPABASE_URL || secrets.STAGING_SUPABASE_URL }}
+      RLS_TEST_ANON_KEY: ${{ vars.STAGING_SUPABASE_ANON_KEY || secrets.STAGING_SUPABASE_ANON_KEY }}
+      RLS_PRODUCTION_URL: ${{ vars.VITE_SUPABASE_URL || secrets.VITE_SUPABASE_URL }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: node scripts/apply-production-safety.mjs --staging
+      - run: node scripts/run-staging-rls.mjs
+  apply:
+    needs: verify-staging
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      PRODUCTION_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL || secrets.VITE_SUPABASE_URL }}
+      BACKUP_ENCRYPTION_PASSPHRASE: ${{ secrets.BACKUP_ENCRYPTION_PASSPHRASE }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+      - name: Install PostgreSQL 17 client
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl --fail --show-error --silent -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          . /etc/os-release
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update -qq
+          sudo apt-get install -y postgresql-client-17
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+      - name: Create and encrypt pre-migration database backup
+        run: |
+          set -euo pipefail
+          umask 077
+          node scripts/apply-production-safety.mjs --validate-only
+          if [ "${#BACKUP_ENCRYPTION_PASSPHRASE}" -lt 24 ]; then exit 1; fi
+          pg_dump --schema=public --schema=auth --schema=storage --format=custom --no-owner --file=release-before.dump --dbname="$SUPABASE_DB_URL" 2>/dev/null
+          pg_restore --list release-before.dump > release-before-toc.txt
+          grep -q 'TABLE DATA auth users' release-before-toc.txt
+          grep -q 'TABLE DATA storage objects' release-before-toc.txt
+          node scripts/encrypt-recovery-backup.mjs release-before.dump release-before.dump.enc
+      - name: Preserve encrypted backup before any schema changes
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: nasun-pre-release-${{ github.run_id }}
+          path: release-before.dump.enc
+          retention-days: 30
+          if-no-files-found: error
+      - name: Apply schema changes and verify existing records in one transaction
+        run: node scripts/apply-production-safety.mjs
+      - name: Remove plaintext backup
+        if: always()
+        run: rm -f -- release-before.dump release-before-toc.txt
