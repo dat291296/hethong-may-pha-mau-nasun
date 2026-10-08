@@ -1,9 +1,6 @@
 name: Production additive safety migration
 on:
   workflow_dispatch:
-  push:
-    branches: [codex/nasun-staging-integrity]
-    paths: [.github/workflows/production-safety.yml, scripts/apply-production-safety.mjs]
 permissions:
   contents: read
 concurrency:
