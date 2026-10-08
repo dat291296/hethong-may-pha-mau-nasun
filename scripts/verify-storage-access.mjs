@@ -13,7 +13,7 @@ export async function verifyStorageAccess(anonymous, clients) {
   let uploaded = false;
   try {
     const { error: uploadError } = await admin.storage.from(bucket).upload(path, bytes, { contentType: 'image/png', upsert: false });
-    assert.ok(!uploadError, 'Administrator must upload a synthetic private Storage object');
+    assert.ok(!uploadError, `Administrator must upload a synthetic private Storage object (${uploadError?.statusCode || uploadError?.code || 'NO_CODE'}; ${/row.level|policy|permission/i.test(uploadError?.message || '') ? 'ACCESS_POLICY' : /bucket/i.test(uploadError?.message || '') ? 'BUCKET' : 'STORAGE_RESPONSE'})`);
     uploaded = true;
     const { data: content, error: downloadError } = await admin.storage.from(bucket).download(path);
     assert.ok(!downloadError && content, 'Administrator must read the uploaded object');
