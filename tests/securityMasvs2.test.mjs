@@ -30,7 +30,8 @@ test('web keys are non-extractable and have lifecycle metadata', async () => {
   assert.match(source, /generateKey\([^)]*AES-GCM[^)]*false/s);
   assert.match(source, /keyLength: 256/);
   assert.match(source, /keyVersion: 1/);
-  assert.match(source, /deleteRecord\('crypto_keys', ownerId\)/);
+  assert.match(source, /transaction\.objectStore\('crypto_keys'\)\.delete\(ownerId\)/);
+  assert.match(source, /db\.transaction\(\['cached_data', 'offline_queue', 'crypto_keys'\], 'readwrite'\)/);
 });
 
 test('native runtime delegates cryptography to the platform keystore bridge', async () => {

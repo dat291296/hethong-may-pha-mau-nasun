@@ -3,14 +3,57 @@
   "standard": "OWASP MASVS",
   "application": "NASUN Paint Machine Management",
   "currentRuntime": "pwa",
-  "futureRuntimes": ["android", "ios"],
-  "targetProfiles": ["MAS-L1", "MAS-P"],
-  "advancedControls": ["MASVS-STORAGE", "MASVS-CRYPTO", "MASVS-AUTH", "MASVS-NETWORK"],
+  "futureRuntimes": [
+    "android",
+    "ios"
+  ],
+  "targetProfiles": [
+    "MAS-L1",
+    "MAS-P"
+  ],
+  "advancedControls": [
+    "MASVS-STORAGE",
+    "MASVS-CRYPTO",
+    "MASVS-AUTH",
+    "MASVS-NETWORK"
+  ],
   "dataClasses": [
-    { "id": "auth", "classification": "restricted", "examples": ["session", "refresh token", "account profile"] },
-    { "id": "business", "classification": "confidential", "examples": ["distributors", "equipment", "repair tickets", "audit logs"] },
-    { "id": "location", "classification": "sensitive", "examples": ["technician GPS", "distributor coordinates"] },
-    { "id": "public", "classification": "public", "examples": ["application shell", "logo", "static assets"] }
+    {
+      "id": "auth",
+      "classification": "restricted",
+      "examples": [
+        "session",
+        "refresh token",
+        "account profile"
+      ]
+    },
+    {
+      "id": "business",
+      "classification": "confidential",
+      "examples": [
+        "distributors",
+        "equipment",
+        "repair tickets",
+        "audit logs"
+      ]
+    },
+    {
+      "id": "location",
+      "classification": "sensitive",
+      "examples": [
+        "technician GPS",
+        "distributor coordinates"
+      ]
+    },
+    {
+      "id": "public",
+      "classification": "public",
+      "examples": [
+        "application shell",
+        "logo",
+        "static assets"
+      ]
+    }
   ],
   "trustBoundaries": [
     "User and device",
@@ -29,14 +72,107 @@
     "mfaMandatory": false
   },
   "modules": [
-    { "id": "MASVS-1", "status": "implemented", "scope": ["architecture", "threat-model", "mobile-bridge-contract"] },
-    { "id": "MASVS-2", "status": "implemented", "scope": ["storage", "cryptography", "key-lifecycle"] },
-    { "id": "MASVS-3", "status": "implemented", "scope": ["authentication", "session", "pkce", "native-secure-session-storage"] },
-    { "id": "MASVS-4", "status": "implemented", "scope": ["network", "endpoint-allowlist", "transport"] },
-    { "id": "MASVS-5", "status": "implemented", "scope": ["camera", "geolocation", "files", "clipboard"] },
-    { "id": "MASVS-6", "status": "implemented", "scope": ["code", "input-validation", "production-flags"] },
-    { "id": "MASVS-7", "status": "implemented", "scope": ["service-worker", "updates", "cache-integrity"] },
-    { "id": "MASVS-8", "status": "implemented", "scope": ["supply-chain", "sbom", "release"] },
-    { "id": "MASVS-9", "status": "implemented", "scope": ["privacy", "mastg-verification", "evidence"] }
-  ]
+    {
+      "id": "MASVS-1",
+      "status": "implemented",
+      "scope": [
+        "architecture",
+        "threat-model",
+        "mobile-bridge-contract"
+      ],
+      "verificationStatus": "source-only",
+      "nativeStatus": "not-verified"
+    },
+    {
+      "id": "MASVS-2",
+      "status": "implemented",
+      "scope": [
+        "storage",
+        "cryptography",
+        "key-lifecycle"
+      ],
+      "verificationStatus": "source-only",
+      "nativeStatus": "not-verified"
+    },
+    {
+      "id": "MASVS-3",
+      "status": "implemented",
+      "scope": [
+        "authentication",
+        "session",
+        "pkce",
+        "native-secure-session-storage"
+      ],
+      "verificationStatus": "source-only",
+      "nativeStatus": "not-verified"
+    },
+    {
+      "id": "MASVS-4",
+      "status": "implemented",
+      "scope": [
+        "network",
+        "endpoint-allowlist",
+        "transport"
+      ],
+      "verificationStatus": "source-only",
+      "nativeStatus": "not-verified"
+    },
+    {
+      "id": "MASVS-5",
+      "status": "implemented",
+      "scope": [
+        "camera",
+        "geolocation",
+        "files",
+        "clipboard"
+      ],
+      "verificationStatus": "source-only",
+      "nativeStatus": "not-verified"
+    },
+    {
+      "id": "MASVS-6",
+      "status": "implemented",
+      "scope": [
+        "code",
+        "input-validation",
+        "production-flags"
+      ],
+      "verificationStatus": "source-only",
+      "nativeStatus": "not-verified"
+    },
+    {
+      "id": "MASVS-7",
+      "status": "implemented",
+      "scope": [
+        "service-worker",
+        "updates",
+        "cache-integrity"
+      ],
+      "verificationStatus": "source-only",
+      "nativeStatus": "not-verified"
+    },
+    {
+      "id": "MASVS-8",
+      "status": "implemented",
+      "scope": [
+        "supply-chain",
+        "sbom",
+        "release"
+      ],
+      "verificationStatus": "source-only",
+      "nativeStatus": "not-verified"
+    },
+    {
+      "id": "MASVS-9",
+      "status": "implemented",
+      "scope": [
+        "privacy",
+        "mastg-verification",
+        "evidence"
+      ],
+      "verificationStatus": "source-only",
+      "nativeStatus": "not-verified"
+    }
+  ],
+  "statusMeaning": "implemented means source implementation only; not verified MASVS compliance"
 }

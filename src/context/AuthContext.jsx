@@ -276,6 +276,7 @@ export function AuthProvider({ children }) {
 
   // ── Sign out ───────────────────────────────────────────────────────────────
   const signOut = useCallback(async () => {
+    try {
     let pendingItems = await getQueue();
     if (pendingItems.length > 0 && navigator.onLine) {
       await syncOfflineQueue();
@@ -294,6 +295,10 @@ export function AuthProvider({ children }) {
     setRole(ROLES.VIEWER);
     trustedSessionRegistered.current = false;
     return true;
+    } catch {
+      window.alert('Chưa xác minh được dữ liệu chờ gửi. Hệ thống giữ nguyên dữ liệu và chưa đăng xuất.');
+      return false;
+    }
   }, [user]);
 
   const value = {

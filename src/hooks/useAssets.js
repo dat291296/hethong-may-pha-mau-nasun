@@ -1,3 +1,4 @@
+import { requireCompleteWrite } from '../lib/guardedWrite.js';
 import { fetchAllRows } from '../lib/paginatedQuery.js';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { persistMutation } from '../lib/durableMutation.js';
@@ -39,27 +40,14 @@ function createPersistenceError(message) {
   return error;
 }
 
-function getMissingSchemaColumn(error) {
-  const message = String(error?.message || '');
-  const match = message.match(/Could not find the '([^']+)' column/i);
-  return match?.[1] || null;
-}
-
-async function writeWithSchemaFallback(table, payload, mode = 'insert') {
-  const compatiblePayload = { ...payload };
-  while (true) {
-    const result = await safeQuery(
-      sb => mode === 'upsert'
-        ? sb.from(table).upsert(compatiblePayload, { onConflict: 'id' })
-        : sb.from(table).insert(compatiblePayload),
-      `${mode}Device:${table}`
-    );
-    if (!result.error) return;
-    const missingColumn = getMissingSchemaColumn(result.error);
-    if (!missingColumn || !(missingColumn in compatiblePayload)) throw result.error;
-    console.warn(`[Assets] ${table}.${missingColumn} is absent; retrying without it.`);
-    delete compatiblePayload[missingColumn];
-  }
+async function writeDeviceStrict(table, payload, mode = 'insert') {
+  const result = await safeQuery(
+    sb => mode === 'upsert'
+      ? sb.from(table).upsert(payload, { onConflict: 'id' }).select('id')
+      : sb.from(table).insert(payload).select('id'),
+    `${mode}Device:${table}`
+  );
+  requireCompleteWrite(result);
 }
 
 /**
@@ -232,7 +220,7 @@ export function useAssets() {
 
     if (isSupabaseConfigured && navigator.onLine) {
       try {
-        await writeWithSchemaFallback(cfg.table, dbPayload);
+        await writeDeviceStrict(cfg.table, dbPayload);
         await fetchAssets();
       } catch (err) {
         console.warn(`[Offline] Failed online addStockDevice for ${category}. Queueing action.`, err);
@@ -277,23 +265,11 @@ export function useAssets() {
 
     if (isSupabaseConfigured && navigator.onLine) {
       try {
-        const compatibleUpdates = { ...dbUpdates };
-        let data = null;
-        while (true) {
-          const result = await safeQuery(
-            sb => sb.from(targetTable).update(compatibleUpdates).eq('id', id).select('id'),
-            `editDevice:${targetTable}`
-          );
-          if (!result.error) {
-            data = result.data;
-            break;
-          }
-          const missingColumn = getMissingSchemaColumn(result.error);
-          if (!missingColumn || !(missingColumn in compatibleUpdates)) throw result.error;
-          console.warn(`[Assets] ${targetTable}.${missingColumn} is absent; retrying with the legacy schema.`);
-          delete compatibleUpdates[missingColumn];
-        }
-        if (!data || data.length === 0) throw createPersistenceError('Không có quyền cập nhật hoặc thiết bị không tồn tại trên Supabase');
+        const result = await safeQuery(
+          sb => sb.from(targetTable).update(dbUpdates).eq('id', id).select('id'),
+          `editDevice:${targetTable}`
+        );
+        requireCompleteWrite(result);
         await fetchAssets();
       } catch (err) {
         console.warn(`[Offline] Failed online editDevice for ${targetTable}. Queueing action.`, err);
@@ -383,7 +359,7 @@ export function useAssets() {
       if (navigator.onLine) {
         try {
           for (const item of dbItems) {
-            await writeWithSchemaFallback(cfg.table, item, 'upsert');
+            await writeDeviceStrict(cfg.table, item, 'upsert');
           }
           await fetchAssets();
         } catch (err) {

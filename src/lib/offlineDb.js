@@ -384,7 +384,8 @@ export async function getQueue() {
     return items.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
   } catch (error) {
     if (error.message !== 'OFFLINE_STORAGE_OWNER_REQUIRED') console.error('[offlineDb] Error reading encrypted queue:', error.message);
-    return [];
+    // A failed read must never be mistaken for an empty, safely disposable queue.
+    throw error;
   }
 }
 
@@ -425,18 +426,26 @@ export async function clearOfflineStorage(userId = activeOwnerId) {
   if (!userId) return true;
   const ownerId = String(userId);
   try {
-    await deleteOwnedRecords('cached_data', ownerId);
-    await deleteOwnedRecords('offline_queue', ownerId);
-    let nativeKeyDeleted = true;
-    if (usesNativeCrypto()) {
-      try {
-        await requireNativeSecurityBridge().deleteEncryptionKey({ keyAlias: getNativeKeyAlias(ownerId) });
-      } catch (error) {
-        nativeKeyDeleted = false;
-        console.error('[offlineDb] Native encryption key deletion failed:', error.message);
-      }
-    }
-    await deleteRecord('crypto_keys', ownerId);
+    const db = await openDb();
+    // Lock all affected stores together so a concurrent queue commit cannot
+    // occur between the pending-record check and browser-key deletion.
+    const transaction = db.transaction(['cached_data', 'offline_queue', 'crypto_keys'], 'readwrite');
+    const completed = transactionDone(transaction);
+    const queueRequest = transaction.objectStore('offline_queue').getAll();
+    queueRequest.onsuccess = () => {
+      const preservePending = queueRequest.result.some(record => record.ownerId === ownerId);
+      const cursorRequest = transaction.objectStore('cached_data').openCursor();
+      cursorRequest.onsuccess = () => {
+        const cursor = cursorRequest.result;
+        if (!cursor) return;
+        if (cursor.value.ownerId === ownerId) cursor.delete();
+        cursor.continue();
+      };
+      // Native key deletion cannot participate in the IndexedDB transaction.
+      // Retain that key to avoid destroying a concurrently queued native edit.
+      if (!preservePending && !usesNativeCrypto()) transaction.objectStore('crypto_keys').delete(ownerId);
+    };
+    await completed;
     encryptionKeyPromises.delete(ownerId);
     initializationPromises.delete(ownerId);
     for (const storageKey of Object.keys(LEGACY_CACHE_KEYS)) localStorage.removeItem(storageKey);
@@ -445,9 +454,17 @@ export async function clearOfflineStorage(userId = activeOwnerId) {
       localStorage.removeItem(OWNER_STORAGE_KEY);
     }
     window.dispatchEvent(new CustomEvent('nasun-offline-storage-cleared', { detail: { userId: ownerId } }));
-    return nativeKeyDeleted;
+    return true;
   } catch (error) {
     console.error('[offlineDb] Failed to clear offline data:', error.message);
     return false;
+  } finally {
+    // Detach the revoked session even when IndexedDB cleanup fails.
+    if (activeOwnerId === ownerId) {
+      activeOwnerId = null;
+      try { localStorage.removeItem(OWNER_STORAGE_KEY); } catch { /* Storage may be unavailable. */ }
+    }
+    encryptionKeyPromises.delete(ownerId);
+    initializationPromises.delete(ownerId);
   }
 }

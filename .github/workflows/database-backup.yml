@@ -19,7 +19,7 @@ jobs:
     timeout-minutes: 30
     services:
       postgres:
-        image: postgres:16-alpine
+        image: postgres:17-alpine
         env:
           POSTGRES_USER: restore_admin
           POSTGRES_PASSWORD: restore_test_only
@@ -36,7 +36,17 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Install PostgreSQL client
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y curl ca-certificates
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl --fail --show-error --silent -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          . /etc/os-release
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
 
       - name: Validate backup secrets
         shell: bash
@@ -93,7 +103,8 @@ jobs:
           DO $$ BEGIN CREATE ROLE authenticated NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
           DO $$ BEGIN CREATE ROLE service_role NOLOGIN BYPASSRLS; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
           SQL
-          pg_restore --section=pre-data --no-owner --no-privileges --exit-on-error --dbname="$PGDATABASE" nasun-public.dump
+          pg_restore --list nasun-public.dump | grep -vE '^[0-9]+; [0-9]+ [0-9]+ SCHEMA - public ' > restore.list
+          pg_restore --section=pre-data --use-list=restore.list --no-owner --no-privileges --exit-on-error --dbname="$PGDATABASE" nasun-public.dump
           pg_restore --section=data --no-owner --no-privileges --exit-on-error --dbname="$PGDATABASE" nasun-public.dump
           psql -v ON_ERROR_STOP=1 <<'SQL'
           DO $$

@@ -281,7 +281,8 @@ export default function NppManagement({ globalSearch = '', npps, systemSets, onA
       setSaveNotice(result?.queued ? 'Đã lưu trên thiết bị, đang chờ đồng bộ NPP.' : 'Đã cập nhật NPP trên hệ thống.');
       setEditingNpp(null);
     } catch (err) {
-      console.error('[NppManagement] Update failed:', err);
+      console.error('[NppManagement] Update failed:', err.code || 'WRITE_FAILED');
+      setSaveNotice(err.message || 'Không lưu được. Nội dung đang nhập được giữ lại.');
     } finally {
       setIsSaving(false);
     }

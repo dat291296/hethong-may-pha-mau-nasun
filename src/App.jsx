@@ -5,6 +5,7 @@ import WorkflowModal from './components/WorkflowModal';
 import HandoverPrintModal from './components/HandoverPrintModal';
 import MobileBottomNav from './components/MobileBottomNav';
 import LoginModal from './components/LoginModal';
+import { useSensitiveActionGate } from './components/SensitiveActionGate.jsx';
 import { useAuth } from './context/AuthContext';
 import { requireRegionEdit } from './lib/workspaceFilters.js';
 import { supabase, isSupabaseConfigured } from './lib/supabase';
@@ -45,9 +46,15 @@ function persistWorkflowCache(key, data) {
 
 export default function App() {
   const { user, isDevMode, can } = useAuth();
+  const { requireAuthentication, dialog: authenticationDialog } = useSensitiveActionGate();
+  const handleSensitiveSetDeletion = async setCode => {
+    await requireAuthentication();
+    return deleteSystemSet(setCode);
+  };
   const [activeTab, setActiveTab] = useState(() => {
     try {
       const savedTab = window.localStorage.getItem('nasun_active_tab');
+      if (savedTab === 'technicianWork') return 'dashboard';
       return ['documents', 'support', 'account'].includes(savedTab) ? 'techHandbook' : savedTab || 'dashboard';
     } catch {
       return 'dashboard';
@@ -755,6 +762,7 @@ export default function App() {
 
   return (
     <>
+    {authenticationDialog}
     <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg-main)' }}>
       
       {/* Sidebar Navigation for Desktop & Mobile sliding drawer */}
@@ -855,7 +863,7 @@ export default function App() {
               onDeleteDevice={handleDeleteDevice}
               onOpenImportModal={openImportModal}
               onEditSet={handleUpdateRegionalSet}
-              onDeleteSet={deleteSystemSet}
+              onDeleteSet={handleSensitiveSetDeletion}
             />
           )}
 
@@ -953,7 +961,7 @@ export default function App() {
               systemSets={systemSets}
               onCompleteMaintenance={handleCompleteMaintenance}
               onUpdateSystemSet={handleUpdateRegionalSet}
-              onDeleteSystemSet={deleteSystemSet}
+              onDeleteSystemSet={handleSensitiveSetDeletion}
             />
           )}
 

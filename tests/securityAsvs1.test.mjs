@@ -40,9 +40,10 @@ test('logout clears encrypted user data and protects pending offline changes', a
   const offlineDb = await readFile(offlineDbUrl, 'utf8');
   const authContext = await readFile(authContextUrl, 'utf8');
   assert.match(offlineDb, /clearOfflineStorage/);
-  assert.match(offlineDb, /deleteOwnedRecords\('cached_data', ownerId\)/);
-  assert.match(offlineDb, /deleteOwnedRecords\('offline_queue', ownerId\)/);
-  assert.match(offlineDb, /deleteRecord\('crypto_keys', ownerId\)/);
+  assert.match(offlineDb, /transaction\.objectStore\('cached_data'\)\.openCursor\(\)/);
+  assert.match(offlineDb, /preservePending = queueRequest\.result\.some/);
+  assert.doesNotMatch(offlineDb.slice(offlineDb.indexOf('export async function clearOfflineStorage')), /deleteOwnedRecords\('offline_queue'/);
+  assert.match(offlineDb, /transaction\.objectStore\('crypto_keys'\)\.delete\(ownerId\)/);
   assert.match(authContext, /pendingItems\.length > 0/);
   assert.match(authContext, /syncOfflineQueue\(\)/);
   assert.match(authContext, /await clearOfflineStorage\(signedOutUserId\)/);

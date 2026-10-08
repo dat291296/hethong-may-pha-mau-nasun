@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase.js';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useSensitiveActionGate } from './SensitiveActionGate.jsx';
 import { UserCheck, ShieldAlert, Trash2, Key, RefreshCw, Award, Lock, Unlock, Calendar, ExternalLink } from 'lucide-react';
 
 const keycloakAccountUrl = import.meta.env.VITE_KEYCLOAK_ACCOUNT_URL;
@@ -13,6 +14,7 @@ export default function UserManagement({
   lockError = null
 }) {
   const { user: currentUser } = useAuth();
+  const { requireAuthentication, dialog: authenticationDialog } = useSensitiveActionGate();
   const [profiles, setProfiles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -142,6 +144,7 @@ export default function UserManagement({
 
     try {
       const profile = profiles.find(item => item.id === profileId);
+      await requireAuthentication();
       if (newRole === 'admin') {
         const reason = window.prompt('Nhập lý do cấp quyền Admin (tối thiểu 10 ký tự):', 'Cấp quyền quản trị theo phê duyệt nội bộ');
         if (reason === null) return;
@@ -189,6 +192,7 @@ export default function UserManagement({
     try {
       const profile = profiles.find(item => item.id === profileId);
       if (!profile) throw new Error('Không tìm thấy tài khoản cần cập nhật.');
+      await requireAuthentication();
       const { data: updateResult, error: updateErr } = await supabase.rpc('update_user_access', {
         target_user_id: profileId,
         target_role: profile.role,
@@ -232,6 +236,7 @@ export default function UserManagement({
     }
 
     try {
+      await requireAuthentication();
       const { data: statusResult, error: delErr } = await supabase.rpc('set_user_account_active', {
         target_user_id: profileId,
         target_active: nextActive,
@@ -252,6 +257,7 @@ export default function UserManagement({
 
   return (
     <div className="workspace-screen" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      {authenticationDialog}
       {keycloakAccountUrl && (
         <div className="glass-panel" style={{ padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap', borderColor: 'rgba(6, 182, 212, 0.3)' }}>
           <div>

@@ -1,0 +1,89 @@
+name: Prepare isolated staging schema
+on:
+  workflow_dispatch:
+    inputs:
+      fixtures_only:
+        description: Refresh synthetic fixture initialization on existing staging
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: staging-rls-fixtures
+  cancel-in-progress: false
+jobs:
+  prepare:
+    environment: staging
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      STAGING_DB_URL: ${{ secrets.STAGING_DB_URL }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+      - name: Validate approved staging destination
+        run: |
+          node --input-type=module <<'JS'
+          import { appendFileSync } from 'node:fs';
+          function readConnection(name) {
+            let value = (process.env[name] || '').trim();
+            if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'")) || (value.startsWith('`') && value.endsWith('`'))) value = value.slice(1, -1).trim();
+            const fail = message => { console.error(`::error::${name}: ${message}`); process.exit(1); };
+            if (!value) fail('Secret is empty or unavailable to this job.');
+            if (!/^postgres(?:ql)?:\/\//.test(value)) fail('Value must start with postgresql:// (no psql command, label, or markdown).');
+            if (/[\r\n]/.test(value)) fail('Value contains multiple lines. Paste only the connection URI.');
+            const separator = value.lastIndexOf('@');
+            const credentials = value.slice(value.indexOf('://') + 3, separator);
+            const password = credentials.slice(credentials.indexOf(':') + 1);
+            if (separator < 0 || credentials.indexOf(':') < 0) fail('URI must include username:password@hostname.');
+            try {
+              const encoded = encodeURIComponent(decodeURIComponent(password.replace(/%(?![0-9a-f]{2})/gi, '%25')));
+              value = value.slice(0, value.indexOf('://') + 3) + credentials.slice(0, credentials.indexOf(':') + 1) + encoded + value.slice(separator);
+            } catch { fail('Password encoding is invalid. Copy the original connection URI again.'); }
+            let parsed;
+            try { parsed = new URL(value); } catch { fail('Cannot parse URI. Check the colon before password and @ before pooler hostname. Secret value is not logged.'); }
+            if (!parsed.hostname || !parsed.password) fail('URI must include both hostname and database password.');
+            appendFileSync(process.env.GITHUB_ENV, `${name}=${value}\n`);
+            return parsed;
+          }
+          const target = readConnection('STAGING_DB_URL');
+          const source = readConnection('SUPABASE_DB_URL');
+          const ref = 'kenznmtdfuexmfrtzypb';
+          const approved = target.hostname === `db.${ref}.supabase.co` || target.hostname.endsWith('.pooler.supabase.com') && decodeURIComponent(target.username) === `postgres.${ref}`;
+          if (!approved || !['postgres:', 'postgresql:'].includes(target.protocol) || target.href === source.href || target.password.includes('YOUR-PASSWORD')) throw new Error('Configure STAGING_DB_URL for the approved nasun-staging project');
+          JS
+      - name: Install PostgreSQL 17 client
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y curl ca-certificates
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl --fail --show-error --silent -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt noble-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+      - name: Require empty staging and copy structure only
+        if: ${{ !inputs.fixtures_only }}
+        run: |
+          set -euo pipefail
+          umask 077
+          export PGSSLMODE=require
+          table_count="$(psql --dbname="$STAGING_DB_URL" -Atc "SELECT count(*) FROM pg_tables WHERE schemaname = 'public'")"
+          if [ "$table_count" != "0" ]; then echo "::error::Staging public schema must be empty. No existing records were changed."; exit 1; fi
+          pg_dump --schema=public --schema-only --format=custom --no-owner --file=staging-schema.dump --dbname="$SUPABASE_DB_URL"
+          pg_restore --list staging-schema.dump | grep -vE '^[0-9]+; [0-9]+ [0-9]+ (SCHEMA - public |DEFAULT ACL )' > staging-schema.list
+          pg_restore --single-transaction --exit-on-error --no-owner --use-list=staging-schema.list --dbname="$STAGING_DB_URL" staging-schema.dump
+      - name: Install synthetic fixtures
+        run: |
+          set -euo pipefail
+          export PGSSLMODE=require
+          psql --dbname="$STAGING_DB_URL" -v ON_ERROR_STOP=1 -f supabase/security_module_13_rls_probe.sql
+          psql --dbname="$STAGING_DB_URL" -v ON_ERROR_STOP=1 -f supabase/staging_test_fixtures.sql
+          psql --dbname="$STAGING_DB_URL" -v ON_ERROR_STOP=1 -c "SELECT pg_get_triggerdef(t.oid), pg_get_functiondef(t.tgfoid) FROM pg_trigger t WHERE NOT t.tgisinternal AND t.tgrelid IN ('public.profiles'::regclass, 'auth.users'::regclass) ORDER BY t.tgname"
+      - name: Remove temporary schema files
+        if: always()
+        run: rm -f staging-schema.dump staging-schema.list

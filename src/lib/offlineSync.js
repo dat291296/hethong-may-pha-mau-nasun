@@ -3,6 +3,7 @@ import { addToQueue, getQueue, removeFromQueue, clearQueue, setCache, getCache }
 import { createOperationId, migrateQueueItem, classifySyncError, resolveFailureState } from './syncQueue';
 import { buildSyncEnvelope, resolveSyncEntity } from './syncContract.js';
 import { getTrustedDeviceId } from '../security/trustedDevice.js';
+import { persistQueueReplacement } from './durableMutation.js';
 
 let activeSyncPromise = null;
 const deviceIdPools = new Map();
@@ -328,7 +329,7 @@ function normalizeSystemSetPayload(payload, applyDefaults = true) {
   return normalized;
 }
 
-async function writeSystemSetWithSchemaFallback(payload, targetSetCode = null) {
+async function writeSystemSetStrict(payload, targetSetCode = null) {
   const compatiblePayload = normalizeSystemSetPayload(payload, !targetSetCode);
   const setCode = targetSetCode || compatiblePayload.set_code;
   if (!setCode) return new Error('Thiếu mã bộ máy khi đồng bộ system_sets');
@@ -361,11 +362,9 @@ async function writeSystemSetWithSchemaFallback(payload, targetSetCode = null) {
       return canonicalError;
     }
 
-    const match = String(error.message || '').match(/Could not find the '([^']+)' column/i);
-    const missingColumn = match?.[1];
-    if (!missingColumn || !(missingColumn in compatiblePayload)) return error;
-    console.warn(`[OfflineSync] system_sets.${missingColumn} is absent; retrying without it.`);
-    delete compatiblePayload[missingColumn];
+    // Preserve the complete queued payload when the schema is incompatible.
+    // The failed item remains available for review instead of losing fields.
+    return error;
   }
 }
 
@@ -543,10 +542,10 @@ export async function enqueueOfflineAction(action, payload, category = null) {
   const previousItem = queue.at(-1);
   const newIdentity = getActionIdentity(newItem);
   // Persist the replacement before removing the previous durable action.
-  await addToQueue(newItem);
-  if (previousItem && newIdentity && getActionIdentity(previousItem) === newIdentity) {
-    await removeFromQueue(previousItem.id);
-  }
+  await persistQueueReplacement({
+    save: addToQueue, remove: removeFromQueue, newItem,
+    previousId: previousItem && newIdentity && getActionIdentity(previousItem) === newIdentity ? previousItem.id : null,
+  });
   
   // Dispatch custom event to trigger sync warning badge or sync attempt
   emitQueueUpdated();
@@ -679,7 +678,7 @@ async function processOfflineQueue(onStatusChange) {
           error = delDevErr;
           break;
         case 'ASSEMBLE_SET':
-          error = await writeSystemSetWithSchemaFallback(item.payload);
+          error = await writeSystemSetStrict(item.payload);
           break;
         case 'EXECUTE_WORKFLOW':
           {
@@ -706,7 +705,7 @@ async function processOfflineQueue(onStatusChange) {
               item.payload = { targetSetCode, data: updatePayload };
               await addToQueue(item);
             }
-            error = await writeSystemSetWithSchemaFallback(updatePayload, targetSetCode);
+            error = await writeSystemSetStrict(updatePayload, targetSetCode);
           }
           break;
         case 'DELETE_SYSTEM_SET':

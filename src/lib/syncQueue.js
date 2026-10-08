@@ -35,8 +35,9 @@ export function migrateQueueItem(item, now = Date.now()) {
 export function classifySyncError(error) {
   const code = String(error?.code || '');
   const message = String(error?.message || error || '').toLowerCase();
-  const needsReviewCodes = new Set(['23502', '23503', '23505', '23514', '22P02', 'PGRST204']);
-  if (needsReviewCodes.has(code) || /schema cache|constraint|invalid input syntax|duplicate key|sync_conflict/.test(message)) {
+  const needsReviewCodes = new Set(['23502', '23503', '23505', '23514', '22P02', 'PGRST204', '42501', 'PGRST301', 'PGRST302', '401', '403', '409', '422']);
+  if ([400, 401, 403, 409, 422].includes(Number(error?.status))) return 'needs_review';
+  if (needsReviewCodes.has(code) || /schema cache|constraint|invalid input syntax|duplicate key|sync_conflict|permission denied|jwt expired|account_disabled|reauthentication_required/.test(message)) {
     return 'needs_review';
   }
   return 'retry_wait';

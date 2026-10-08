@@ -1,0 +1,170 @@
+{
+  "schemaVersion": 1,
+  "scope": "PWA source review; live Supabase and native packages not verified",
+  "groups": [
+    {
+      "id": "MASVS-STORAGE",
+      "title": "Lưu trữ",
+      "state": "source-only",
+      "evidence": [
+        "src/lib/offlineDb.js"
+      ],
+      "implemented": "Cache mã hóa theo tài khoản",
+      "next": "Kiểm thử đổi tài khoản, logout và giới hạn cache; bảo toàn hàng đợi chưa gửi",
+      "nativeState": "not-verified"
+    },
+    {
+      "id": "MASVS-CRYPTO",
+      "title": "Mã hóa",
+      "state": "source-only",
+      "evidence": [
+        "scripts/encrypt-recovery-backup.mjs"
+      ],
+      "implemented": "AES-GCM và xác thực backup",
+      "next": "Kiểm thử vòng đời khóa, chuyển khóa và khôi phục",
+      "nativeState": "not-verified"
+    },
+    {
+      "id": "MASVS-AUTH",
+      "title": "Xác thực và phân quyền",
+      "state": "source-only",
+      "evidence": [
+        "scripts/verify-rls.mjs"
+      ],
+      "implemented": "PKCE, kiểm tra phiên, RLS verifier",
+      "next": "Hoàn thiện staging; test quyền server, Storage và thao tác nhạy cảm",
+      "nativeState": "not-verified"
+    },
+    {
+      "id": "MASVS-NETWORK",
+      "title": "Kết nối",
+      "state": "source-only",
+      "evidence": [
+        "src/security/networkPolicy.js"
+      ],
+      "implemented": "HTTPS, allowlist và timeout",
+      "next": "Kiểm tra HTTPS, upload, download và Realtime trên môi trường chạy",
+      "nativeState": "not-verified"
+    },
+    {
+      "id": "MASVS-PLATFORM",
+      "title": "Quyền thiết bị",
+      "state": "source-only",
+      "evidence": [
+        "src/security/permissionPolicy.js"
+      ],
+      "implemented": "Quyền camera và định vị có chính sách",
+      "next": "Test từ chối quyền, thu hồi quyền và cleanup camera",
+      "nativeState": "not-verified"
+    },
+    {
+      "id": "MASVS-CODE",
+      "title": "Chất lượng code",
+      "state": "source-only",
+      "evidence": [
+        "tests/securityMasvs6.test.mjs"
+      ],
+      "implemented": "CI, validation và kiểm tra production build",
+      "next": "Bổ sung test hành vi và test luồng nghiệp vụ thực tế",
+      "nativeState": "not-verified"
+    },
+    {
+      "id": "MASVS-RESILIENCE",
+      "title": "Cập nhật và toàn vẹn",
+      "state": "source-only",
+      "evidence": [
+        "scripts/generate-service-worker.mjs"
+      ],
+      "implemented": "Integrity manifest và cập nhật PWA",
+      "next": "Test cập nhật khi có bản nháp, rollback và cache hỏng",
+      "nativeState": "not-verified"
+    },
+    {
+      "id": "MASVS-PRIVACY",
+      "title": "Quyền riêng tư",
+      "state": "source-only",
+      "evidence": [
+        "security/masvs/privacy-inventory.json"
+      ],
+      "implemented": "Danh mục dữ liệu và thông báo quyền riêng tư",
+      "next": "Chốt thời hạn lưu; luồng quản lý dữ liệu cá nhân và sự đồng ý",
+      "nativeState": "not-verified"
+    }
+  ],
+  "priorities": [
+    {
+      "id": "rls",
+      "priority": "P1",
+      "title": "Cấu hình staging và xác minh quyền",
+      "state": "partial",
+      "done": "GitHub CI đã kiểm thử anonymous và năm vai trò, đọc khác vùng và insert probe rollback-only trên staging tại commit 176d8aa. Preflight mã nguồn chặn nhầm production.",
+      "remaining": "Chưa nghiệm thu Storage, RPC xác thực gần đây và kiểm tra chống ghi đè mới trên staging.",
+      "acceptance": "Anonymous và năm vai trò được kiểm thử; quyền sai bị từ chối; Storage và RPC có bằng chứng.",
+      "evidence": [
+        "scripts/rls-preflight.mjs",
+        ".github/workflows/rls-integration.yml"
+      ],
+      "verification": {
+        "commit": "176d8aa84896ad384e3f0d653b88bb87f0b3dedd",
+        "workflowRun": "https://github.com/dat291296/hethong-may-pha-mau-nasun/actions/runs/37715597095",
+        "scope": "anonymous + five roles; regional read and rollback-only insert probes"
+      }
+    },
+    {
+      "id": "restore",
+      "priority": "P1",
+      "title": "Backup và diễn tập khôi phục",
+      "state": "partial",
+      "done": "Đã thêm verifier độc lập: đọc file qua một handle, kiểm tra tên file, kích thước và SHA-256 trước khi đóng gói backup.",
+      "remaining": "Staging đã được cấu hình, nhưng chưa có bằng chứng diễn tập khôi phục đầy đủ database/Auth/Storage.",
+      "acceptance": "Phục hồi vào môi trường riêng và đối chiếu database, Auth, Storage, quyền.",
+      "evidence": [
+        "scripts/verify-storage-archive.mjs",
+        ".github/workflows/recovery-backup.yml",
+        "tests/storageArchive.test.mjs"
+      ]
+    },
+    {
+      "id": "sync",
+      "priority": "P1",
+      "title": "Chống mất dữ liệu và xung đột",
+      "state": "partial",
+      "done": "Đã chặn báo thành công khi lưu hàng đợi thất bại; lỗi quyền/xung đột dừng retry; đọc hàng đợi lỗi không coi là rỗng; giữ hàng đợi và khóa khi phiên bị vô hiệu hóa.",
+      "remaining": "Cần nghiệm thu IndexedDB trên trình duyệt và cập nhật đồng thời trên staging.",
+      "acceptance": "Không mất bản nháp, không ghi trùng và không âm thầm ghi đè.",
+      "evidence": [
+        "src/lib/offlineDb.js",
+        "src/lib/offlineSync.js",
+        "src/lib/syncQueue.js",
+        "tests/syncQueue.test.mjs"
+      ]
+    },
+    {
+      "id": "session",
+      "priority": "P1",
+      "title": "Phiên và thao tác nhạy cảm",
+      "state": "partial",
+      "done": "Đã bổ sung gate kiểm tra xác thực gần đây phía server và hộp nhập mật khẩu cho thao tác quản trị, xuất/nhập backup và xóa bộ máy.",
+      "remaining": "Migration chưa áp dụng; cần kiểm thử AMR token thật và kiểm tra phiên thu hồi trên staging.",
+      "acceptance": "Thu hồi phiên có hiệu lực khi reconnect; xuất dữ liệu và đổi quyền được kiểm soát.",
+      "evidence": [
+        "supabase/sensitive_action_reauthentication.sql",
+        "src/security/sensitiveAction.js",
+        "tests/sensitiveAction.test.mjs"
+      ]
+    },
+    {
+      "id": "evidence",
+      "priority": "P2",
+      "title": "Bằng chứng nghiệm thu MASVS",
+      "state": "partial",
+      "done": "Đã ghi rõ phạm vi mã nguồn, bằng chứng và giới hạn xác minh; bỏ màn hình Quyền riêng tư theo yêu cầu.",
+      "remaining": "Cần bằng chứng từ staging, trình duyệt và gói native; chưa thể kết luận đạt MASVS hay đủ điều kiện App Store.",
+      "acceptance": "Mỗi kiểm soát có phạm vi, bằng chứng và trạng thái xác minh rõ ràng.",
+      "evidence": [
+        "security/masvs/profile.json",
+        "security/masvs/readiness.json"
+      ]
+    }
+  ]
+}

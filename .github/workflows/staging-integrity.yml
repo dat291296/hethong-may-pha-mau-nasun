@@ -1,0 +1,34 @@
+name: Staging data integrity
+on:
+  push:
+    branches: [codex/nasun-staging-integrity]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: staging-rls-fixtures
+  cancel-in-progress: false
+jobs:
+  verify:
+    environment: staging
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      STAGING_DB_URL: ${{ secrets.STAGING_DB_URL }}
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+      RLS_TEST_URL: ${{ vars.STAGING_SUPABASE_URL || secrets.STAGING_SUPABASE_URL }}
+      RLS_TEST_ANON_KEY: ${{ vars.STAGING_SUPABASE_ANON_KEY || secrets.STAGING_SUPABASE_ANON_KEY }}
+      RLS_PRODUCTION_URL: ${{ vars.VITE_SUPABASE_URL || secrets.VITE_SUPABASE_URL }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run test:all
+      - name: Apply additive safety migration to approved staging only
+        run: node scripts/apply-staging-safety.mjs
+      - name: Verify role access, recent authentication and concurrent updates
+        run: node scripts/run-staging-rls.mjs

@@ -1,3 +1,4 @@
+import { updateWithRevision } from '../lib/guardedWrite.js';
 import { fetchAllRows } from '../lib/paginatedQuery.js';
 import { useState, useEffect, useCallback } from 'react';
 import { supabase, isSupabaseConfigured, safeQuery } from '../lib/supabase.js';
@@ -112,11 +113,14 @@ export function useNpps() {
 
     const result = await persistMutation({
       online: isSupabaseConfigured && navigator.onLine,
-      write: () => safeQuery(sb => sb.from('distributors').update(mappedUpdates).eq('id', id).select('id'), 'editNpp'),
+      write: () => updateWithRevision({
+        runQuery: query => safeQuery(query, 'editNpp'), table: 'distributors', id,
+        updates: mappedUpdates, expectedRevision: updates.dbRevision
+      }),
       queue: () => enqueueOfflineAction('EDIT_NPP', { id, ...mappedUpdates })
     });
     setNpps(prev => {
-      const updated = prev.map(n => n.id === id ? { ...n, ...updates, isUpdated: true } : n);
+      const updated = prev.map(n => n.id === id ? { ...n, ...updates, dbRevision: result.data?.[0]?.updated_at || n.dbRevision, isUpdated: true } : n);
       persistNpps(updated, setNpps, false);
       return updated;
     });
@@ -166,6 +170,7 @@ function persistNpps(nextNpps, setNpps, shouldSetState = true) {
 function mapDbToNpp(row) {
   return {
     id:                   row.id,
+    dbRevision:           row.updated_at || null,
     name:                 row.name,
     phone:                row.phone,
     contactPerson:        row.contact_person,

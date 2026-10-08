@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { persistMutation } from '../src/lib/durableMutation.js';
+import { persistMutation, persistQueueReplacement } from '../src/lib/durableMutation.js';
 
 test('permission and validation failures never become queued successes', async () => {
   for (const error of [{ code: '42501', message: 'permission denied' }, { code: '23505', message: 'duplicate key' }]) {
@@ -8,6 +8,17 @@ test('permission and validation failures never become queued successes', async (
     await assert.rejects(persistMutation({ online: true, write: async () => ({ error }), queue: async () => { queued = true; } }));
     assert.equal(queued, false);
   }
+});
+
+test('replacement failure preserves the previous edit and successful commit precedes removal', async () => {
+  const stored = new Map([['old', { note: 'preserved edit' }]]);
+  const remove = async id => { stored.delete(id); return true; };
+  await assert.rejects(persistQueueReplacement({ save: async () => false, remove, newItem: { id: 'new' }, previousId: 'old' }), /PERSIST_FAILED/);
+  assert.deepEqual(stored.get('old'), { note: 'preserved edit' });
+  await persistQueueReplacement({ save: async item => { stored.set(item.id, item); return true; },
+    remove: async id => { assert.ok(stored.has('new')); return remove(id); }, newItem: { id: 'new', note: 'updated edit' }, previousId: 'old' });
+  assert.equal(stored.has('old'), false);
+  assert.equal(stored.get('new').note, 'updated edit');
 });
 
 test('zero affected rows report a rejected write', async () => {
