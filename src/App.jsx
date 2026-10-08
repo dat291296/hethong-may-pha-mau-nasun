@@ -393,7 +393,7 @@ export default function App() {
       const pluralCat = category === 'computer' ? 'computers' : category === 'dispenser' ? 'dispensers' : category === 'mixer' ? 'mixers' : 'printers';
       const deviceList = category === 'dispenser' ? dispensers : category === 'mixer' ? mixers : category === 'computer' ? computers : printers;
       const sourceId = updatedData.sourceId || updatedData.id;
-      const { sourceId: ignoredSourceId, ...deviceUpdates } = updatedData;
+      const { sourceId: _ignoredSourceId, expectedRevision, ...deviceUpdates } = updatedData;
       const oldDevice = deviceList.find(d => d.id === sourceId);
       if (!can('asset:edit')) throw new Error('Bạn không có quyền sửa thiết bị.');
       if (user?.role === 'technician') {
@@ -402,7 +402,7 @@ export default function App() {
       }
 
       if (!oldDevice) throw new Error('Thiết bị không còn tồn tại. Vui lòng tải lại dữ liệu.');
-      await editDeviceDetails(pluralCat, sourceId, { ...deviceUpdates, id: sourceId }, oldDevice.updatedAt);
+      await editDeviceDetails(pluralCat, sourceId, { ...deviceUpdates, id: sourceId }, expectedRevision);
     } catch (err) {
       console.error(err);
       throw err;

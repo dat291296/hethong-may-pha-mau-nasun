@@ -1589,7 +1589,7 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
           <div style={{ marginBottom: '14px' }}>
             <h3 style={{ fontSize: '1rem', fontWeight: '800', marginBottom: '4px' }}>Danh Mục Máy Tính (Case & AIO)</h3>
             <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '10px' }}>
-              *Lưu ý: Đã bỏ quản lý số seri máy tính. Ổn áp do NPP tự trang bị.
+              *Lưu ý: Mã quản lý được giữ nguyên khi chỉnh sửa. Ổn áp do NPP tự trang bị.
             </span>
             {renderDeviceFilterBar('Máy Tính', computers.length, true)}
           </div>
@@ -2042,7 +2042,7 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
                 <h3 style={{ fontWeight: '800' }}>
                   Chỉnh Sửa Thông Tin {editingDevice.category === 'computer' ? `Máy Tính [Mã: ${editFormData.id}]` : `Thiết Bị [${editFormData.serial || 'Không seri'}]`}
                 </h3>
-                <button className="btn btn-secondary btn-sm" onClick={() => setEditingDevice(null)}>✕</button>
+                <button className="btn btn-secondary btn-sm" disabled={isSavingDevice} onClick={() => setEditingDevice(null)}>✕</button>
               </div>
               <form onSubmit={handleEditSubmit}>
                 <div className="modal-body" ref={el => { if (el) el.scrollTop = 0; }}>
@@ -2079,7 +2079,7 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
                       </div>
                     )}
 
-                    {editingDevice && (
+                    {editingDevice.category !== 'computer' && (
                       <div className="form-group">
                         <label className="form-label">⚙️ Model / Hệ Máy *</label>
                         <input type="text" className="form-input" required value={editFormData.model || editFormData.type || ''} onChange={e => setEditFormData({ ...editFormData, model: e.target.value })} />

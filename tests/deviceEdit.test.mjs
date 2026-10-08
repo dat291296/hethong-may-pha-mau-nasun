@@ -34,3 +34,9 @@ test('atomic edit sends the original revision and never falls back to partial wr
   assert.equal(calls, 7);
   await assert.rejects(saveDeviceEdit(() => assert.fail('must not send a stale draft'), 'computers', 'PC', {}, null), { code: 'REVISION_REQUIRED' });
 });
+
+test('form revision is captured when opened rather than replaced by refreshed state', () => {
+  const opened = { id: 'PC', serial: 'SERIAL', updatedAt: '2026-10-08T00:00:00Z' };
+  const result = prepareDeviceEdit('computer', { expectedRevision: '2026-10-08T01:00:00Z' }, opened);
+  assert.equal(result.expectedRevision, opened.updatedAt);
+});
