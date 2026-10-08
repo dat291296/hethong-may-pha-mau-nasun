@@ -20,14 +20,18 @@ BEGIN
 END;
 $$;
 REVOKE ALL ON FUNCTION public.initialize_staging_test_profile() FROM PUBLIC, anon, authenticated;
-CREATE TRIGGER staging_test_profile BEFORE INSERT ON public.profiles
+DROP TRIGGER IF EXISTS staging_test_profile ON public.profiles;
+DROP TRIGGER IF EXISTS zzzz_staging_test_profile ON public.profiles;
+CREATE TRIGGER zzzz_staging_test_profile BEFORE INSERT ON public.profiles
 FOR EACH ROW EXECUTE FUNCTION public.initialize_staging_test_profile();
 
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created AFTER INSERT ON auth.users
 FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
 INSERT INTO public.distributors (id, name, phone, brand, region, status) VALUES
 ('STAGING-NORTH', 'Synthetic staging north', '', 'Nasun', 'Miền Bắc', 'Đang hợp tác'),
 ('STAGING-CENTRAL', 'Synthetic staging central', '', 'Nasun', 'Miền Trung', 'Đang hợp tác'),
-('STAGING-SOUTH', 'Synthetic staging south', '', 'Nasun', 'Miền Nam', 'Đang hợp tác');
+('STAGING-SOUTH', 'Synthetic staging south', '', 'Nasun', 'Miền Nam', 'Đang hợp tác')
+ON CONFLICT (id) DO NOTHING;
 COMMIT;

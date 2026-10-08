@@ -34,10 +34,6 @@ async function main() {
     });
     if (error || !data.user) throw new Error(`Cannot create staging ${role} fixture (${error?.code || 'AUTH_FAILED'})`);
     users.push(data.user.id);
-    const { error: fixtureUpdateError } = await client.from('profiles').update({
-      role, managed_region: region, is_active: true, mfa_required: false,
-    }).eq('id', data.user.id);
-    if (fixtureUpdateError) throw new Error(`Cannot assign staging ${role} fixture profile (${fixtureUpdateError.code})`);
     const { data: profile, error: profileError } = await client.from('profiles').select('role,managed_region,is_active,mfa_required').eq('id', data.user.id).single();
     if (profileError || profile?.role !== role || profile?.managed_region !== region || profile?.is_active !== true) {
       throw new Error(`Staging ${role} profile initialization failed (${profileError?.code || `role=${profile?.role}; region=${profile?.managed_region}; active=${profile?.is_active}`})`);

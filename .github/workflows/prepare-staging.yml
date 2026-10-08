@@ -1,6 +1,11 @@
 name: Prepare isolated staging schema
 on:
   workflow_dispatch:
+    inputs:
+      fixtures_only:
+        description: Refresh synthetic fixture initialization on existing staging
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -62,6 +67,7 @@ jobs:
           sudo apt-get install -y postgresql-client-17
           echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
       - name: Require empty staging and copy structure only
+        if: ${{ !inputs.fixtures_only }}
         run: |
           set -euo pipefail
           umask 077
