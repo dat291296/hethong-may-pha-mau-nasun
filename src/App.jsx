@@ -121,7 +121,7 @@ export default function App() {
   const { npps, setNpps, addNpp, editNpp, deleteNpp, importNpps, refetch: refetchNpps } = useNpps();
   const {
     dispensers, setDispensers, mixers, setMixers, computers, setComputers, printers, setPrinters, systemSets, setSystemSets,
-    addStockDevice, editDevice, deleteDevice, deleteSystemSet, assembleSet, updateSystemSet, importDevices, importSystemSets, refetch: refetchAssets
+    addStockDevice, editDevice, editDeviceDetails, deleteDevice, deleteSystemSet, assembleSet, updateSystemSet, importDevices, importSystemSets, refetch: refetchAssets
   } = useAssets();
   const { repairTickets, addTicket, editTicket, deleteTicket, importTickets, refetch: refetchRepairs } = useRepairs();
   const { auditLogs, addAuditLog, editAuditLog, deleteAuditLog, importAuditLogs, refetch: refetchAuditLogs } = useAuditLogs();
@@ -401,52 +401,10 @@ export default function App() {
         if (updatedData.setCode) requireRegionEdit(user, systemSets.find(item => item.setCode === updatedData.setCode)?.region);
       }
 
-      await editDevice(pluralCat, sourceId, deviceUpdates);
-
-      const oldSetCode = oldDevice?.setCode;
-      const newSetCode = updatedData.isAssigned ? updatedData.setCode : null;
-
-      if (oldSetCode && oldSetCode !== newSetCode) {
-        const oldSet = systemSets.find(s => s.setCode === oldSetCode);
-        if (oldSet) {
-          const updates = {};
-          if (category === 'dispenser') { updates.dispenserId = null; updates.dispenserSerial = null; updates.dispenserModel = null; }
-          if (category === 'mixer') { updates.mixerId = null; updates.mixerSerial = null; updates.mixerModel = null; }
-          if (category === 'computer') { updates.computerId = null; updates.computerType = null; updates.pcType = null; updates.pcOs = null; }
-          if (category === 'printer') { updates.printerId = null; updates.printerSerial = null; }
-          await updateSystemSet(oldSetCode, updates);
-        }
-      }
-
-      if (newSetCode) {
-        const newSet = systemSets.find(s => s.setCode === newSetCode);
-        if (newSet) {
-          const updates = {};
-          if (category === 'dispenser') {
-            updates.dispenserId = updatedData.id;
-            updates.dispenserSerial = updatedData.serial;
-            updates.dispenserModel = updatedData.model;
-          } else if (category === 'mixer') {
-            updates.mixerId = updatedData.id;
-            updates.mixerSerial = updatedData.serial;
-            updates.mixerModel = updatedData.model;
-          } else if (category === 'computer') {
-            updates.computerId = updatedData.id;
-            updates.computerType = updatedData.type;
-            updates.pcType = updatedData.type;
-            updates.pcOs = updatedData.os;
-            updates.pcSpecs = updatedData.specs;
-            updates.computerStatus = updatedData.status;
-          } else if (category === 'printer') {
-            updates.printerId = updatedData.id;
-            updates.printerSerial = updatedData.serial;
-          }
-          await updateSystemSet(newSetCode, updates);
-        }
-      }
+      if (!oldDevice) throw new Error('Thiết bị không còn tồn tại. Vui lòng tải lại dữ liệu.');
+      await editDeviceDetails(pluralCat, sourceId, { ...deviceUpdates, id: sourceId }, oldDevice.updatedAt);
     } catch (err) {
       console.error(err);
-      alert('Lỗi sửa thiết bị: ' + err.message);
       throw err;
     }
   };

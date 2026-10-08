@@ -1,3 +1,4 @@
+import { saveDeviceEdit } from '../lib/deviceEdit.js';
 import { requireCompleteWrite } from '../lib/guardedWrite.js';
 import { fetchAllRows } from '../lib/paginatedQuery.js';
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -233,6 +234,52 @@ export function useAssets() {
   }, [fetchAssets]);
 
   // ── Generic edit device ────────────────────────────────────────────────────
+  const editDeviceDetails = useCallback(async (category, id, updates, revision) => {
+    const tableMap = {
+      dispensers: { setter: setDispensers, cacheKey: 'dispensers', table: 'dispensers', singular: 'dispenser' },
+      mixers:     { setter: setMixers,     cacheKey: 'mixers',     table: 'mixers',     singular: 'mixer' },
+      computers:  { setter: setComputers,  cacheKey: 'computers',  table: 'computers',  singular: 'computer' },
+      printers:   { setter: setPrinters,   cacheKey: 'printers',   table: 'printers',   singular: 'printer' },
+      dispenser:  { setter: setDispensers, cacheKey: 'dispensers', table: 'dispensers', singular: 'dispenser' },
+      mixer:      { setter: setMixers,     cacheKey: 'mixers',     table: 'mixers',     singular: 'mixer' },
+      computer:   { setter: setComputers,  cacheKey: 'computers',  table: 'computers',  singular: 'computer' },
+      printer:    { setter: setPrinters,   cacheKey: 'printers',   table: 'printers',   singular: 'printer' },
+    };
+
+    const cfg = tableMap[category];
+    const targetTable = cfg ? cfg.table : category;
+    const singularCat = cfg ? cfg.singular : category;
+
+    const { id: _ignoredId, ...dbUpdates } = mapDeviceToDb({ ...updates, id }, singularCat);
+    const appUpdates = { ...updates, id, isUpdated: true, updatedAt: new Date().toISOString() };
+
+    if ('is_assigned' in updates) appUpdates.isAssigned = updates.is_assigned;
+    if ('set_code' in updates) appUpdates.setCode = updates.set_code;
+
+    if (!cfg) throw createPersistenceError('Loại thiết bị không hợp lệ.');
+    if (isSupabaseConfigured) {
+      if (!navigator.onLine) throw createPersistenceError('Cần kết nối mạng để lưu thiết bị và bộ máy đồng thời. Nội dung đang nhập được giữ nguyên.');
+      await saveDeviceEdit(query => safeQuery(query, `editDevice:${targetTable}`), targetTable, id, dbUpdates, revision);
+      await fetchAssets();
+    } else {
+      cfg.setter(prev => {
+        const updated = prev.map(d => d.id === id ? { ...d, ...appUpdates } : d);
+        persistAssetsLocal(cfg.cacheKey, updated);
+        return updated;
+      });
+      setSystemSets(prev => prev.map(set => {
+        const fields = singularCat === 'dispenser' ? { dispenserId: id, dispenserModel: updates.model, dispenserSerial: updates.serial }
+          : singularCat === 'mixer' ? { mixerId: id, mixerModel: updates.model, mixerSerial: updates.serial }
+          : singularCat === 'computer' ? { computerId: id, computerType: updates.type, computerSerial: updates.serial }
+          : { printerId: id, printerSerial: updates.serial };
+        const key = `${singularCat}Id`;
+        if (set.setCode === updates.setCode && updates.isAssigned) return { ...set, ...fields };
+        if (set[key] === id) return { ...set, ...Object.fromEntries(Object.keys(fields).map(field => [field, field === key ? null : ''])) };
+        return set;
+      }));
+    }
+  }, [fetchAssets]);
+
   const editDevice = useCallback(async (category, id, updates) => {
     const tableMap = {
       dispensers: { setter: setDispensers, cacheKey: 'dispensers', table: 'dispensers', singular: 'dispenser' },
@@ -524,6 +571,7 @@ export function useAssets() {
     loading,
     addStockDevice,
     editDevice,
+    editDeviceDetails,
     deleteDevice,
     deleteSystemSet,
     importDevices,
@@ -622,7 +670,7 @@ function mapDeviceToDb(obj, category) {
 
   // Basic identification & PK
   if (obj.id !== undefined) dbObj.id = obj.id;
-  if (cat !== 'computer' && cat !== 'computers' && obj.serial !== undefined && obj.serial !== '') dbObj.serial = obj.serial;
+  if (obj.serial !== undefined && obj.serial !== '' && obj.serial !== '—') dbObj.serial = obj.serial;
 
   // Assignment status & system set link
   if (obj.isAssigned !== undefined || obj.is_assigned !== undefined) {
