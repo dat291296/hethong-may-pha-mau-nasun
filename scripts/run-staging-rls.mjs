@@ -34,6 +34,16 @@ async function main() {
     });
     if (error || !data.user) throw new Error(`Cannot create staging ${role} fixture (${error?.code || 'AUTH_FAILED'})`);
     users.push(data.user.id);
+    const { data: fixtureIdentity, error: fixtureIdentityError } = await client.auth.admin.getUserById(data.user.id);
+    if (fixtureIdentityError || fixtureIdentity.user?.app_metadata?.nasun_rls_fixture !== true) {
+      throw new Error('Generated staging account is missing its trusted fixture marker');
+    }
+    const { error: removeProfileError } = await client.from('profiles').delete().eq('id', data.user.id);
+    if (removeProfileError) throw new Error(`Cannot initialize generated staging profile (${removeProfileError.code})`);
+    const { error: insertProfileError } = await client.from('profiles').insert({
+      id: data.user.id, full_name: `Synthetic staging ${role}`, role, managed_region: region, is_active: true, mfa_required: false,
+    });
+    if (insertProfileError) throw new Error(`Cannot insert generated staging profile (${insertProfileError.code})`);
     const { data: profile, error: profileError } = await client.from('profiles').select('role,managed_region,is_active,mfa_required').eq('id', data.user.id).single();
     if (profileError || profile?.role !== role || profile?.managed_region !== region || profile?.is_active !== true) {
       throw new Error(`Staging ${role} profile initialization failed (${profileError?.code || `role=${profile?.role}; region=${profile?.managed_region}; active=${profile?.is_active}`})`);
