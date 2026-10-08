@@ -17,6 +17,10 @@ async function main() {
   }
   if (!key) throw new Error('STAGING_SUPABASE_SERVICE_ROLE_KEY is required');
   client = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+  for (const region of ['Miền Bắc', 'Miền Trung', 'Miền Nam']) {
+    const { count, error } = await client.from('distributors').select('id', { count: 'exact', head: true }).eq('region', region);
+    if (error || !count) throw new Error(`Staging fixture storage check failed for ${region} (${error?.code || 'NO_FIXTURES'})`);
+  }
   const env = { ...process.env };
   delete env.STAGING_SUPABASE_SERVICE_ROLE_KEY;
   for (const role of ['admin', 'manager', 'technician', 'qc', 'viewer']) {
@@ -30,6 +34,10 @@ async function main() {
     });
     if (error || !data.user) throw new Error(`Cannot create staging ${role} fixture (${error?.code || 'AUTH_FAILED'})`);
     users.push(data.user.id);
+    const { data: profile, error: profileError } = await client.from('profiles').select('role,managed_region,is_active,mfa_required').eq('id', data.user.id).single();
+    if (profileError || profile?.role !== role || profile?.managed_region !== region || profile?.is_active !== true) {
+      throw new Error(`Staging ${role} profile initialization failed (${profileError?.code || `role=${profile?.role}; region=${profile?.managed_region}; active=${profile?.is_active}`})`);
+    }
     env[`RLS_TEST_${role.toUpperCase()}_EMAIL`] = email;
     env[`RLS_TEST_${role.toUpperCase()}_PASSWORD`] = password;
     env[`RLS_TEST_${role.toUpperCase()}_REGION`] = region;
