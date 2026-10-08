@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 
-export async function verifyDeviceEdit(admin, viewer) {
+export async function verifyDeviceEdit(admin, viewer, reauthenticate) {
   const tag = `NASUN-STAGING-EDIT-${crypto.randomUUID()}`;
   const sets = [tag + '-A', tag + '-B'];
   const tables = ['dispensers', 'mixers', 'computers', 'printers'];
   const ids = [];
+  let primaryFailure;
   const check = result => { assert.ifError(result.error); return result.data; };
   const read = async (table, id) => check(await admin.from(table).select('*').eq('id', id).single());
   const edit = (client, table, row, updates) => client.rpc('edit_device_atomic', {
@@ -50,8 +51,20 @@ export async function verifyDeviceEdit(admin, viewer) {
       assert.equal(secondSet[prefix + '_id'], null);
       console.log(`Verified synthetic device edits: ${table}`);
     }
+  } catch (error) {
+    primaryFailure = error;
+    throw error;
   } finally {
-    for (const { table, id } of ids) check(await admin.from(table).delete().eq('id', id));
-    for (const set_code of sets) check(await admin.from('system_sets').delete().eq('set_code', set_code));
+    let cleanupFailure;
+    const cleanup = async action => {
+      try { await action(); } catch (error) { cleanupFailure ||= error; }
+    };
+    await cleanup(() => reauthenticate());
+    for (const { table, id } of ids) await cleanup(async () => check(await admin.from(table).delete().eq('id', id)));
+    for (const set_code of sets) await cleanup(async () => check(await admin.from('system_sets').delete().eq('set_code', set_code)));
+    if (cleanupFailure) {
+      console.error('Synthetic device fixture cleanup did not complete. Existing business records were not targeted.');
+      if (!primaryFailure) throw cleanupFailure;
+    }
   }
 }

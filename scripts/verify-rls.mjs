@@ -59,7 +59,12 @@ async function main() {
   try {
     for (const role of roles) clients.push({ role, client: await signIn(role) });
     const admin = clients[0].client;
-    await verifyDeviceEdit(admin, clients.find(item => item.role === 'viewer').client);
+    await verifyDeviceEdit(admin, clients.find(item => item.role === 'viewer').client, async () => {
+      const result = await admin.auth.signInWithPassword({
+        email: requireEnvironment('RLS_TEST_ADMIN_EMAIL'), password: requireEnvironment('RLS_TEST_ADMIN_PASSWORD'),
+      });
+      assert.ifError(result.error);
+    });
     console.log('Staging device edits verified: four categories, stock, assignment, move, stale-write rejection and rollback.');
     await verifyWriteIntegrity(admin);
     console.log('Staging recent authentication and stale-write rejection verified.');
