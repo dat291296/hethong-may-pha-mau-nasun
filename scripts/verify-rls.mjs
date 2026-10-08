@@ -18,6 +18,7 @@ function requireEnvironment(name) {
 function newClient() {
   return createClient(url, anonKey, {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    global: { fetch: (input, options = {}) => fetch(input, { ...options, signal: AbortSignal.any([options.signal, AbortSignal.timeout(30000)].filter(Boolean)) }) },
   });
 }
 

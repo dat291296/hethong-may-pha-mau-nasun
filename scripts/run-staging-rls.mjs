@@ -16,7 +16,9 @@ async function main() {
     throw new Error('Staging must be isolated from production');
   }
   if (!key) throw new Error('STAGING_SUPABASE_SERVICE_ROLE_KEY is required');
-  client = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+  client = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false },
+    global: { fetch: (input, options = {}) => fetch(input, { ...options, signal: AbortSignal.any([options.signal, AbortSignal.timeout(30000)].filter(Boolean)) }) },
+  });
   for (const region of ['Miền Bắc', 'Miền Trung', 'Miền Nam']) {
     const { count, error } = await client.from('distributors').select('id', { count: 'exact', head: true }).eq('region', region);
     if (error || !count) throw new Error(`Staging fixture storage check failed for ${region} (${error?.code || 'NO_FIXTURES'})`);
@@ -24,6 +26,7 @@ async function main() {
   const env = { ...process.env };
   delete env.STAGING_SUPABASE_SERVICE_ROLE_KEY;
   for (const role of ['admin', 'manager', 'technician', 'qc', 'viewer']) {
+    console.log(`Preparing synthetic staging role: ${role}`);
     const email = `nasun-rls-${role}-${randomUUID()}@example.invalid`;
     const password = randomBytes(32).toString('base64url');
     if (process.env.GITHUB_ACTIONS === 'true') console.log(`::add-mask::${password}`);

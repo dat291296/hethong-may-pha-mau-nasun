@@ -13,6 +13,7 @@ export async function verifyDeviceEdit(admin, viewer) {
   try {
     check(await admin.from('system_sets').insert(sets.map(set_code => ({ set_code, region: 'Miền Bắc', status: 'TRONG_KHO' }))));
     for (const table of tables) {
+      console.log(`Checking synthetic device edits: ${table}`);
       const id = tag + '-' + table;
       ids.push({ table, id });
       check(await admin.from(table).insert({ id, serial: id, ...(table === 'computers' ? { type: 'Case', network: 'Có mạng LAN' } : { model: 'STAGING-ONLY' }) }));
@@ -40,6 +41,7 @@ export async function verifyDeviceEdit(admin, viewer) {
       assert.equal((await read(table, id)).set_code, null);
       const secondSet = check(await admin.from('system_sets').select('*').eq('set_code', sets[1]).single());
       assert.equal(secondSet[prefix + '_id'], null);
+      console.log(`Verified synthetic device edits: ${table}`);
     }
   } finally {
     for (const { table, id } of ids) check(await admin.from(table).delete().eq('id', id));
