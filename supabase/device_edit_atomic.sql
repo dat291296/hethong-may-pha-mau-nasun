@@ -5,6 +5,7 @@ ALTER TABLE public.computers ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'Đang
 CREATE OR REPLACE FUNCTION public.edit_device_atomic(
   p_table TEXT, p_id TEXT, p_updates JSONB, p_expected_updated_at TIMESTAMPTZ
 ) RETURNS SETOF JSONB LANGUAGE plpgsql SECURITY INVOKER SET search_path = public
+SET lock_timeout = '5s' SET statement_timeout = '10s'
 AS $$
 DECLARE
   allowed TEXT[];

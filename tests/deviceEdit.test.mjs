@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { prepareDeviceEdit, saveDeviceEdit, findAssignedDevice } from '../src/lib/deviceEdit.js';
+import { verifyDeviceEdit } from '../scripts/verify-device-edit.mjs';
 
 test('all device categories preserve identity and explicit assignments', () => {
   for (const category of ['computer', 'dispenser', 'mixer', 'printer']) {
@@ -46,4 +47,20 @@ test('machine profile resolves the edited device by immutable id and rejects amb
   assert.equal(findAssignedDevice('printer', devices, { printerId: 'PR-1', setCode: 'SET-1' }).model, 'Updated model');
   assert.equal(findAssignedDevice('printer', devices, { printerId: 'missing', setCode: 'SET-1' }), null);
   assert.equal(findAssignedDevice('printer', [...devices, { id: 'PR-3', setCode: 'SET-1' }], { setCode: 'SET-1' }), null);
+});
+
+test('staging cleanup reauthenticates, attempts all synthetic sets and preserves the original failure', async () => {
+  const removed = [];
+  let refreshed = false;
+  const admin = { from: () => ({
+    insert: async () => ({ error: new Error('ORIGINAL_FAILURE') }),
+    delete: () => ({ eq: async (_field, id) => {
+      assert.equal(refreshed, true);
+      removed.push(id);
+      return { error: new Error('CLEANUP_FAILURE') };
+    } }),
+  }) };
+  await assert.rejects(verifyDeviceEdit(admin, {}, async () => { refreshed = true; }), /ORIGINAL_FAILURE/);
+  assert.equal(removed.length, 2);
+  assert.ok(removed.every(id => id.startsWith('NASUN-STAGING-EDIT-')));
 });

@@ -40,5 +40,30 @@ async function main() {
   });
   }
   console.log('Staging safety migration applied; existing business records were not updated or deleted.');
+  const healthQuery = `SELECT jsonb_build_object(
+    'active_sessions', COUNT(*) FILTER (WHERE state = 'active'),
+    'waiting_on_locks', COUNT(*) FILTER (WHERE wait_event_type = 'Lock'),
+    'long_running_device_edits', COUNT(*) FILTER (WHERE state = 'active' AND query LIKE '%edit_device_atomic%' AND query_start < NOW() - INTERVAL '30 seconds')
+  ) FROM pg_stat_activity WHERE datname = current_database() AND pid <> pg_backend_pid()`;
+  const health = spawn('psql', ['--dbname=' + destination.href, '-At', '-v', 'ON_ERROR_STOP=1', '-c', healthQuery], {
+    env: { ...process.env, PGSSLMODE: 'require', PGOPTIONS: '-c statement_timeout=10000' }, stdio: ['ignore', 'pipe', 'ignore'],
+  });
+  let output = '';
+  health.stdout.on('data', chunk => { if (output.length < 4096) output += chunk; });
+  await new Promise(resolveHealth => {
+    health.on('error', () => resolveHealth());
+    health.on('exit', code => {
+      if (code === 0) {
+        try {
+          const value = JSON.parse(output);
+          const keys = ['active_sessions', 'waiting_on_locks', 'long_running_device_edits'];
+          if (keys.every(key => Number.isSafeInteger(value[key]) && value[key] >= 0)) {
+            console.log('Staging DB health: ' + JSON.stringify(Object.fromEntries(keys.map(key => [key, value[key]]))));
+          }
+        } catch { console.log('Staging health metadata unavailable.'); }
+      }
+      resolveHealth();
+    });
+  });
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main().catch(error => { console.error(error.message); process.exitCode = 1; });

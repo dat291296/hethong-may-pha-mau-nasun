@@ -21,7 +21,10 @@ async function main() {
   });
   for (const region of ['Miền Bắc', 'Miền Trung', 'Miền Nam']) {
     const { count, error } = await client.from('distributors').select('id', { count: 'exact', head: true }).eq('region', region);
-    if (error || !count) throw new Error(`Staging fixture storage check failed for ${region} (${error?.code || 'NO_FIXTURES'})`);
+    if (error || !count) {
+      const reason = error ? (error.code || (/timeout|abort/i.test(error.message) ? 'REQUEST_TIMEOUT' : 'QUERY_FAILED')) : 'NO_FIXTURES';
+      throw new Error(`Staging fixture storage check failed for ${region} (${reason})`);
+    }
   }
   const env = { ...process.env };
   delete env.STAGING_SUPABASE_SERVICE_ROLE_KEY;

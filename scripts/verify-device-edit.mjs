@@ -17,14 +17,18 @@ export async function verifyDeviceEdit(admin, viewer, reauthenticate) {
       console.log(`Checking synthetic device edits: ${table}`);
       const id = tag + '-' + table;
       ids.push({ table, id });
+      console.log(`Inserting synthetic device: ${table}`);
       check(await admin.from(table).insert({ id, serial: id, ...(table === 'computers' ? { type: 'Case', network: 'Có mạng LAN' } : { model: 'STAGING-ONLY' }) }));
+      console.log(`Reading synthetic device: ${table}`);
       const original = await read(table, id);
+      console.log(`Saving synthetic stock edit: ${table}`);
       check(await edit(admin, table, original, { status: 'Cần bảo trì' }));
       const stock = await read(table, id);
       assert.equal(stock.status, 'Cần bảo trì');
       assert.equal(stock.serial, original.serial);
       assert.ok((await edit(admin, table, original, { status: 'Đang chạy tốt' })).error, 'Stale writes must fail');
       assert.ok((await edit(viewer, table, stock, { status: 'Đang chạy tốt' })).error, 'Viewer must not edit');
+      console.log(`Assigning synthetic device: ${table}`);
       check(await edit(admin, table, stock, { is_assigned: true, set_code: sets[0] }));
       const assigned = await read(table, id);
       const prefix = table === 'computers' ? 'computer' : table.slice(0, -1);
