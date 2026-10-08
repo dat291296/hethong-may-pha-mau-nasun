@@ -17,7 +17,18 @@ async function main() {
   }
   if (!key) throw new Error('STAGING_SUPABASE_SERVICE_ROLE_KEY is required');
   client = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false },
-    global: { fetch: (input, options = {}) => fetch(input, { ...options, signal: AbortSignal.any([options.signal, AbortSignal.timeout(30000)].filter(Boolean)) }) },
+    global: { fetch: async (input, options = {}) => {
+      try {
+        const response = await fetch(input, { ...options, signal: AbortSignal.any([options.signal, AbortSignal.timeout(30000)].filter(Boolean)) });
+        if (response.status >= 400) console.error(`Staging setup HTTP status: ${response.status}`);
+        return response;
+      } catch (error) {
+        const codes = ['ENOTFOUND', 'EAI_AGAIN', 'ECONNRESET', 'ECONNREFUSED', 'UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_HEADERS_TIMEOUT', 'ERR_INVALID_ARG_TYPE'];
+        const code = codes.includes(error.cause?.code) ? error.cause.code : codes.includes(error.code) ? error.code : 'NETWORK_REQUEST_FAILED';
+        console.error(`Staging setup network error: ${code}`);
+        throw error;
+      }
+    } },
   });
   for (const region of ['Miền Bắc', 'Miền Trung', 'Miền Nam']) {
     const { count, error } = await client.from('distributors').select('id', { count: 'exact', head: true }).eq('region', region);
