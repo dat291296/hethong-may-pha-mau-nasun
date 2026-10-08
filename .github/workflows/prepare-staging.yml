@@ -83,6 +83,7 @@ jobs:
           export PGSSLMODE=require
           psql --dbname="$STAGING_DB_URL" -v ON_ERROR_STOP=1 -f supabase/security_module_13_rls_probe.sql
           psql --dbname="$STAGING_DB_URL" -v ON_ERROR_STOP=1 -f supabase/staging_test_fixtures.sql
+          psql --dbname="$STAGING_DB_URL" -v ON_ERROR_STOP=1 -c "SELECT pg_get_triggerdef(t.oid), pg_get_functiondef(t.tgfoid) FROM pg_trigger t WHERE NOT t.tgisinternal AND t.tgrelid IN ('public.profiles'::regclass, 'auth.users'::regclass) ORDER BY t.tgname"
       - name: Remove temporary schema files
         if: always()
         run: rm -f staging-schema.dump staging-schema.list
