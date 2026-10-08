@@ -30,6 +30,13 @@ export async function verifyDeviceEdit(admin, viewer) {
       const firstSet = check(await admin.from('system_sets').select('*').eq('set_code', sets[0]).single());
       assert.equal(firstSet[prefix + '_id'], id);
       assert.equal(firstSet[prefix + '_serial'], original.serial);
+      if (table === 'computers') {
+        const legacySerial = tag + '-LEGACY-PC';
+        check(await admin.from('system_sets').update({ computer_serial: legacySerial }).eq('set_code', sets[0]));
+        check(await edit(admin, table, assigned, { os: 'Windows 11 Pro' }));
+        const retained = check(await admin.from('system_sets').select('computer_serial').eq('set_code', sets[0]).single());
+        assert.equal(retained.computer_serial, legacySerial, 'Editing OS must preserve existing profile serial');
+      }
       if (table !== 'computers') assert.ok((await edit(admin, table, assigned, { status: 'INVALID-STATUS', set_code: sets[1] })).error);
       // An inaccessible/nonexistent target must roll back the device update too.
       const current = await read(table, id);

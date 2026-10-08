@@ -17,6 +17,7 @@ DECLARE
   prefix TEXT;
   set_payload JSONB;
   affected INTEGER;
+  profile_serial TEXT;
 BEGIN
   IF auth.uid() IS NULL THEN RAISE EXCEPTION 'AUTH_REQUIRED' USING ERRCODE = '42501'; END IF;
   allowed := CASE p_table
@@ -56,6 +57,13 @@ BEGIN
   EXECUTE format('UPDATE public.%I SET %s, updated_at = clock_timestamp() WHERE id = $2 RETURNING to_jsonb(%I.*)', p_table, fields, p_table)
     INTO revised USING p_updates, p_id;
   IF revised IS NULL THEN RAISE EXCEPTION 'DEVICE_WRITE_DENIED' USING ERRCODE = '42501'; END IF;
+  -- Legacy computer profiles may hold a physical serial while inventory uses
+  -- an administrative serial. Preserve that value unless serial was edited.
+  IF prefix = 'computer' AND old_code IS NOT NULL
+    AND revised->>'serial' IS NOT DISTINCT FROM original->>'serial' THEN
+    SELECT NULLIF(computer_serial, '') INTO profile_serial FROM public.system_sets
+      WHERE set_code = old_code AND computer_id = p_id;
+  END IF;
   IF old_code IS NOT NULL AND old_code IS DISTINCT FROM new_code THEN
     set_payload := jsonb_build_object(prefix || '_id', NULL, prefix || '_serial', '');
     IF prefix IN ('dispenser','mixer') THEN set_payload := set_payload || jsonb_build_object(prefix || '_model', ''); END IF;
@@ -68,7 +76,7 @@ BEGIN
     IF affected <> 1 THEN RAISE EXCEPTION 'OLD_SET_WRITE_DENIED' USING ERRCODE = '42501'; END IF;
   END IF;
   IF new_code IS NOT NULL THEN
-    set_payload := jsonb_build_object(prefix || '_id', p_id, prefix || '_serial', revised->>'serial');
+    set_payload := jsonb_build_object(prefix || '_id', p_id, prefix || '_serial', COALESCE(profile_serial, revised->>'serial'));
     IF prefix IN ('dispenser','mixer') THEN set_payload := set_payload || jsonb_build_object(prefix || '_model', revised->>'model'); END IF;
     IF prefix = 'computer' THEN set_payload := set_payload || jsonb_build_object('computer_type', revised->>'type'); END IF;
     SELECT string_agg(format('%I = (jsonb_populate_record(NULL::public.system_sets, $1)).%I', key, key), ', ')
