@@ -30,13 +30,15 @@ export function validateStagingDestination(environment) {
 }
 async function main() {
   const destination = validateStagingDestination(process.env);
-  const child = spawn('psql', ['--dbname=' + destination.href, '-v', 'ON_ERROR_STOP=1', '-f', 'supabase/sensitive_action_reauthentication.sql'], {
+  for (const migration of ['supabase/sensitive_action_reauthentication.sql', 'supabase/technical_document_uploads_migration.sql']) {
+  const child = spawn('psql', ['--dbname=' + destination.href, '-v', 'ON_ERROR_STOP=1', '-f', migration], {
     env: { ...process.env, PGSSLMODE: 'require' }, stdio: ['ignore', 'ignore', 'ignore']
   });
   await new Promise((accept, reject) => {
     child.on('error', () => reject(new Error('PostgreSQL client could not start')));
     child.on('exit', code => code === 0 ? accept() : reject(new Error('Staging safety migration failed; production was not targeted')));
   });
+  }
   console.log('Staging safety migration applied; existing business records were not updated or deleted.');
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main().catch(error => { console.error(error.message); process.exitCode = 1; });

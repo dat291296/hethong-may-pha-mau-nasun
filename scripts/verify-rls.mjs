@@ -1,3 +1,4 @@
+import { verifyStorageAccess } from './verify-storage-access.mjs';
 import assert from 'node:assert/strict';
 import { createClient } from '@supabase/supabase-js';
 import { verifyWriteIntegrity } from './verify-write-integrity.mjs';
@@ -58,6 +59,8 @@ async function main() {
     const admin = clients[0].client;
     await verifyWriteIntegrity(admin);
     console.log('Staging recent authentication and stale-write rejection verified.');
+    await verifyStorageAccess(anonymous, clients);
+    console.log('Staging private Storage read, upload, delete and synthetic cleanup verified.');
     for (const region of REQUIRED_REGIONS) {
       const { count, error } = await admin.from('distributors').select('id', { count: 'exact', head: true }).eq('region', region);
       assert.ifError(error);
