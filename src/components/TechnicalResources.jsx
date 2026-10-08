@@ -1,3 +1,4 @@
+import { useSensitiveActionGate } from './SensitiveActionGate.jsx';
 import { matchesDocumentModel } from '../lib/machineWorkspace';
 import React, { useEffect, useState } from 'react';
 import { FileText, ExternalLink, Upload, Trash2 } from 'lucide-react';
@@ -8,6 +9,7 @@ import './technicalResources.css';
 const fields = 'id,title,category,machine_model,url,storage_path,file_name,file_size,created_at';
 export default function TechnicalResources({ machineModel = '', modelOptions = [] }) {
   const { user, role } = useAuth();
+  const { requireAuthentication, dialog } = useSensitiveActionGate();
   const [documents, setDocuments] = useState([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -33,6 +35,7 @@ export default function TechnicalResources({ machineModel = '', modelOptions = [
     setBusy(true); setError('');
     let uploadedPath;
     try {
+      await requireAuthentication();
       if (!supabase) throw new Error('Cần kết nối Supabase để tải file.');
       if (!file) throw new Error('Vui lòng chọn file PDF hoặc ảnh.');
       const { extension, mime } = await validateDocumentFile(file);
@@ -73,6 +76,7 @@ export default function TechnicalResources({ machineModel = '', modelOptions = [
     if (role !== 'admin' || busy || !window.confirm(`Xóa "${document.title}" khỏi thư viện?`)) return;
     setBusy(true); setError('');
     try {
+      await requireAuthentication();
       const { error: deleteError, data } = await supabase.from('technical_documents').delete().eq('id', document.id).select('id');
       if (deleteError) throw deleteError;
       if (!data?.length) throw new Error('Không có quyền xóa tài liệu.');
@@ -100,5 +104,6 @@ export default function TechnicalResources({ machineModel = '', modelOptions = [
     </form>}
     {!loading && !documents.length && <p className="resource-muted">Chưa có tài liệu. Admin có thể tải file PDF hoặc ảnh bản vẽ lên.</p>}
     {documents.filter(item => (categoryFilter === 'ALL' || item.category === categoryFilter) && (modelFilter === 'ALL' || (modelFilter === 'COMMON' ? !item.machine_model : item.machine_model === modelFilter))).filter(item => (!machineModel || matchesDocumentModel(item.machine_model, machineModel))).filter(item => `${item.title} ${item.machine_model}`.toLocaleLowerCase('vi').includes(search.toLocaleLowerCase('vi'))).map(document => <div className="resource-row" key={document.id}><FileText size={22} /><div className="resource-content"><strong>{document.title}</strong><small>{document.category}{document.machine_model && ` · ${document.machine_model}`}</small>{document.file_name && <small>{document.file_name} · {(document.file_size / 1048576).toFixed(2)} MB</small>}</div><button className="btn btn-secondary btn-sm" onClick={() => open(document)}><ExternalLink size={16} /> Mở</button>{role === 'admin' && <button className="btn btn-secondary btn-sm" disabled={busy} onClick={() => remove(document)} aria-label={`Xóa ${document.title}`}><Trash2 size={16} /></button>}</div>)}
+    {dialog}
   </section>;
 }
