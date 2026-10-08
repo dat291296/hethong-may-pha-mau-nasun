@@ -34,7 +34,7 @@ BEGIN
   EXECUTE format('SELECT to_jsonb(d) FROM public.%I d WHERE id = $1 FOR UPDATE', p_table)
     INTO original USING p_id;
   IF original IS NULL OR (original->>'updated_at')::TIMESTAMPTZ <> p_expected_updated_at THEN
-    RAISE EXCEPTION 'WRITE_CONFLICT: tải lại thiết bị trước khi lưu' USING ERRCODE = '40001';
+    RAISE EXCEPTION 'WRITE_CONFLICT: tải lại thiết bị trước khi lưu' USING ERRCODE = 'PT409';
   END IF;
   revised := original || p_updates;
   old_code := original->>'set_code';

@@ -27,7 +27,7 @@ test('atomic edit sends the original revision and never falls back to partial wr
     return result;
   } });
   await saveDeviceEdit(run({ data: [{ id: 'PC' }], error: null }), 'computers', 'PC', { os: 'Windows 11' }, revision);
-  for (const code of ['42501', '23505', '40001', 'QUERY_TIMEOUT']) {
+  for (const code of ['42501', '23505', 'PT409', 'QUERY_TIMEOUT']) {
     await assert.rejects(saveDeviceEdit(run({ error: { code } }), 'computers', 'PC', {}, revision), { code });
   }
   await assert.rejects(saveDeviceEdit(run({ error: { code: 'PGRST202' } }), 'computers', 'PC', {}, revision), { code: 'SCHEMA_MIGRATION_REQUIRED' });
