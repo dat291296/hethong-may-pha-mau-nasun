@@ -1,4 +1,4 @@
-import { prepareDeviceEdit } from '../lib/deviceEdit.js';
+import { prepareDeviceEdit, findAssignedDevice } from '../lib/deviceEdit.js';
 import WorkspaceFilterBar from './WorkspaceFilterBar.jsx';
 import { matchesSearch, matchesDateRange, uniqueOptions, canEditRegion } from '../lib/workspaceFilters.js';
 import TechnicalResources from './TechnicalResources';
@@ -3012,7 +3012,7 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
                   </div>
                   <div style={{ background: 'var(--bg-main)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '10px' }}>
                     <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)', fontWeight: '700' }}>MÁY IN</div>
-                    <div style={{ fontWeight: '700', fontSize: '0.875rem', marginTop: '2px' }}>{selectedSetDetails.printerModel || 'QL700'}</div>
+                    <div style={{ fontWeight: '700', fontSize: '0.875rem', marginTop: '2px' }}>{findAssignedDevice('printer', printers, selectedSetDetails)?.model || selectedSetDetails.printerModel || 'Chưa ghi nhận'}</div>
                     <div style={{ fontSize: '0.75rem', color: 'var(--accent-cyan)', fontFamily: 'var(--font-mono)' }}>Seri: {selectedSetDetails.printerSerial || 'N/A'}</div>
                   </div>
                 </div>

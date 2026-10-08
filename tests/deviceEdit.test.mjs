@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { prepareDeviceEdit, saveDeviceEdit } from '../src/lib/deviceEdit.js';
+import { prepareDeviceEdit, saveDeviceEdit, findAssignedDevice } from '../src/lib/deviceEdit.js';
 
 test('all device categories preserve identity and explicit assignments', () => {
   for (const category of ['computer', 'dispenser', 'mixer', 'printer']) {
@@ -39,4 +39,11 @@ test('form revision is captured when opened rather than replaced by refreshed st
   const opened = { id: 'PC', serial: 'SERIAL', updatedAt: '2026-10-08T00:00:00Z' };
   const result = prepareDeviceEdit('computer', { expectedRevision: '2026-10-08T01:00:00Z' }, opened);
   assert.equal(result.expectedRevision, opened.updatedAt);
+});
+
+test('machine profile resolves the edited device by immutable id and rejects ambiguous legacy links', () => {
+  const devices = [{ id: 'PR-1', model: 'Updated model', setCode: 'SET-1' }, { id: 'PR-2', model: 'Other model', setCode: 'SET-2' }];
+  assert.equal(findAssignedDevice('printer', devices, { printerId: 'PR-1', setCode: 'SET-1' }).model, 'Updated model');
+  assert.equal(findAssignedDevice('printer', devices, { printerId: 'missing', setCode: 'SET-1' }), null);
+  assert.equal(findAssignedDevice('printer', [...devices, { id: 'PR-3', setCode: 'SET-1' }], { setCode: 'SET-1' }), null);
 });

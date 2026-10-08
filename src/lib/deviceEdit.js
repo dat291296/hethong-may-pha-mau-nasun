@@ -1,5 +1,12 @@
 import { requireCompleteWrite } from './guardedWrite.js';
 
+export function findAssignedDevice(category, devices, machine) {
+  if (!machine) return null;
+  const id = machine[`${category}Id`];
+  const matches = devices.filter(device => id ? device.id === id : device.setCode === machine.setCode);
+  return matches.length === 1 ? matches[0] : null;
+}
+
 export function prepareDeviceEdit(category, form, original) {
   if (!original?.id) throw new Error('Không tìm thấy mã thiết bị gốc.');
   const serial = category === 'computer' ? (form.serial?.trim() || original.serial) : form.serial?.trim();
