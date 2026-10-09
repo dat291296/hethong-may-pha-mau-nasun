@@ -106,10 +106,18 @@ createRoot(document.getElementById('root')).render(<AuthProvider><Probe/></AuthP
   console.log(`Starting ${engine} UI reconnect with real staging JWT and disposable accounts.`);
   await cli('open', `${origin}/${directory}/index.html`, `--browser=${engine}`, ...(engine === 'webkit' ? ['--device=iphone 15'] : []));
   await cli('run-code', `async (page) => {
+    async function waitProbe(method, argument) {
+      const deadline = Date.now() + 45000;
+      while (Date.now() < deadline) {
+        if (await page.evaluate(async ({method,argument}) => await window.uiProbe[method](argument), {method,argument})) return;
+        await page.waitForTimeout(150);
+      }
+      throw Error('PROBE_NOT_READY');
+    }
     await page.waitForFunction(()=>window.uiProbe);
     await page.evaluate(()=>window.uiProbe.login());
     await page.locator('main[data-auth="signed-in"]').waitFor();
-    await page.waitForFunction(()=>window.uiProbe.ready(),{},{timeout:45000});
+    await waitProbe('ready');
     await page.context().setOffline(true);
     await page.evaluate(()=>window.uiProbe.queue());
     await page.context().setOffline(false);
@@ -121,12 +129,13 @@ createRoot(document.getElementById('root')).render(<AuthProvider><Probe/></AuthP
     await page.evaluate(async()=>{if(await window.uiProbe.replay()!==false)throw Error('REVOKED_REPLAY_ALLOWED');await window.uiProbe.resumeOwner();if(await window.uiProbe.pending()!==1)throw Error('PENDING_LOST');});
     await page.evaluate(()=>window.uiProbe.login());
     await page.locator('main[data-auth="signed-in"]').waitFor();
+    await waitProbe('ownerIs', 'A');
     await page.evaluate(async()=>{if(await window.uiProbe.pending()!==1)throw Error('FRESH_LOGIN_LOST_PENDING');});
     await page.evaluate(()=>window.uiProbe.login('B'));
-    await page.waitForFunction(()=>window.uiProbe.ownerIs('B'),{},{timeout:45000});
+    await waitProbe('ownerIs', 'B');
     await page.evaluate(async()=>{if(await window.uiProbe.pending()!==0)throw Error('ACCOUNT_QUEUE_LEAK');});
     await page.evaluate(()=>window.uiProbe.login());
-    await page.waitForFunction(()=>window.uiProbe.ownerIs('A'),{},{timeout:45000});
+    await waitProbe('ownerIs', 'A');
     await page.evaluate(async()=>{if(await window.uiProbe.pending()!==1)throw Error('RETURN_LOGIN_LOST_PENDING');await window.uiProbe.cleanup();});
   }`);
   const evidence = { engine, device: engine==='webkit'?'iPhone 15 emulation':'desktop', realJwt:true,
