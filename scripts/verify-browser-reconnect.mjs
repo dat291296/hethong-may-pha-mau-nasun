@@ -27,7 +27,7 @@ async function cli(...args) {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     let output = '';
-    const timeout = setTimeout(() => { child.kill('SIGTERM'); reject(new Error('BROWSER_STEP_FAILED: TIMEOUT')); }, 150000);
+    const timeout = setTimeout(() => { child.kill('SIGTERM'); reject(new Error('BROWSER_STEP_FAILED: TIMEOUT')); }, args[0] === 'close' ? 10000 : 150000);
     child.stdout.on('data', chunk => { if (output.length < 100000) output += chunk; });
     child.stderr.on('data', () => {});
     child.on('error', () => reject(new Error('BROWSER_CLI_UNAVAILABLE')));

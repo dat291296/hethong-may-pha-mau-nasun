@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { createAuthEventScheduler } from '../security/authEventScheduler.js';
 import { ROLES, ROLE_LABELS, hasPermission } from '../security/rbac.js';
 import { supabase, isSupabaseConfigured, isDevelopmentFallback } from '../lib/supabase.js';
 import { clearOfflineStorage, getCache, getQueue, initializeOfflineStorage, setCache } from '../lib/offlineDb.js';
@@ -114,7 +115,7 @@ export function AuthProvider({ children }) {
         setLoading(false);
       });
 
-      const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      const authEvents = createAuthEventScheduler(
         async (event, session) => {
           const currentUrlParams = new URLSearchParams(window.location.search);
           const currentIsVerified = currentUrlParams.get('verified') === 'true';
@@ -149,9 +150,11 @@ export function AuthProvider({ children }) {
             setRole(ROLES.VIEWER);
             setLoading(false);
           }
-        }
+        },
+        () => { console.warn('[Auth] Deferred auth event failed'); setLoading(false); }
       );
-      return () => subscription.unsubscribe();
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(authEvents.listener);
+      return () => { subscription.unsubscribe(); authEvents.dispose(); };
     } else if (isDevelopmentFallback) {
       // Development: use mock user (dropdown role selector in Header)
       initializeOfflineStorage(DEV_USERS[ROLES.ADMIN].id).finally(() => {
