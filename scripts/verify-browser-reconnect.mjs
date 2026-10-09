@@ -106,6 +106,7 @@ createRoot(document.getElementById('root')).render(<AuthProvider><Probe/></AuthP
   console.log(`Starting ${engine} UI reconnect with real staging JWT and disposable accounts.`);
   await cli('open', `${origin}/${directory}/index.html`, `--browser=${engine}`, ...(engine === 'webkit' ? ['--device=iphone 15'] : []));
   await cli('run-code', `async (page) => {
+    page.on('dialog', dialog => dialog.dismiss());
     async function waitProbe(method, argument) {
       const deadline = Date.now() + 45000;
       while (Date.now() < deadline) {
