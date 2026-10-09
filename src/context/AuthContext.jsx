@@ -219,6 +219,7 @@ export function AuthProvider({ children }) {
       if (navigator.onLine && !trustedSessionRegistered.current) {
         try {
           const { supported, state } = await registerTrustedDeviceSession();
+          if (sessionOwner.current !== authUser.id) return;
           trustedSessionRegistered.current = supported;
           if (supported && state?.valid === false) {
             await supabase.auth.signOut({ scope: 'local' });
@@ -361,7 +362,7 @@ export function AuthProvider({ children }) {
       } catch (error) {
         console.warn('[Auth] Local session cleanup failed:', error.message);
       }
-      if (cancelled) return;
+      if (cancelled || (sessionOwner.current && sessionOwner.current !== user.id)) return;
       setUser(null);
       setRole(ROLES.VIEWER);
       await clearOfflineStorage(user.id);
@@ -390,6 +391,7 @@ export function AuthProvider({ children }) {
         const trustedResult = trustedSessionRegistered.current
           ? await validateTrustedDeviceSession()
           : await registerTrustedDeviceSession();
+        if (cancelled || sessionOwner.current !== user.id) return;
         trustedSessionRegistered.current = trustedResult.supported;
         if (trustedResult.supported && trustedResult.state?.valid === false) {
           await clearInvalidSession(trustedResult.state.reason || 'TRUSTED_SESSION_REJECTED');
@@ -399,6 +401,7 @@ export function AuthProvider({ children }) {
         const expiresIn = Number(state.token_expires_at || 0) - Math.floor(Date.now() / 1000);
         if (expiresIn <= TOKEN_REFRESH_WINDOW_SECONDS) {
           const { error: refreshError } = await supabase.auth.refreshSession();
+          if (cancelled || sessionOwner.current !== user.id) return;
           if (refreshError) {
             await clearInvalidSession('TOKEN_REFRESH_FAILED');
             return;
@@ -407,6 +410,7 @@ export function AuthProvider({ children }) {
 
         if (state.role !== user.role || state.managed_region !== user.managedRegion) {
           const { data: authData, error: userError } = await supabase.auth.getUser();
+          if (cancelled || sessionOwner.current !== user.id) return;
           if (userError || !authData.user) {
             await clearInvalidSession('USER_VALIDATION_FAILED');
             return;
