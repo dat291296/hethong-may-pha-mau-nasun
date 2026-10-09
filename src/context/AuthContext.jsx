@@ -41,6 +41,7 @@ export function AuthProvider({ children }) {
   const [authRedirectError, setAuthRedirectError] = useState('');
   const sessionValidationRunning = useRef(false);
   const trustedSessionRegistered = useRef(false);
+  const sessionOwner = useRef(undefined);
 
   // ── Initialize auth ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -117,6 +118,7 @@ export function AuthProvider({ children }) {
 
       const authEvents = createAuthEventScheduler(
         async (event, session) => {
+          if ((session?.user?.id || null) !== sessionOwner.current) return;
           const currentUrlParams = new URLSearchParams(window.location.search);
           const currentIsVerified = currentUrlParams.get('verified') === 'true';
           const currentIsRecovery = currentUrlParams.get('recovery') === 'true';
@@ -153,7 +155,12 @@ export function AuthProvider({ children }) {
         },
         () => { console.warn('[Auth] Deferred auth event failed'); setLoading(false); }
       );
-      const { data: { subscription } } = supabase.auth.onAuthStateChange(authEvents.listener);
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+        const owner = session?.user?.id || null;
+        if (sessionOwner.current !== owner) trustedSessionRegistered.current = false;
+        sessionOwner.current = owner;
+        authEvents.listener(event, session);
+      });
       return () => { subscription.unsubscribe(); authEvents.dispose(); };
     } else if (isDevelopmentFallback) {
       // Development: use mock user (dropdown role selector in Header)
@@ -173,6 +180,8 @@ export function AuthProvider({ children }) {
   // ── Load user profile + role from Supabase ──────────────────────────────────
   const loadUserProfile = async (authUser) => {
     try {
+      if (sessionOwner.current !== undefined && sessionOwner.current !== authUser.id) return;
+      sessionOwner.current = authUser.id;
       await initializeOfflineStorage(authUser.id);
 
       const { data: profile, error } = await supabase
@@ -180,6 +189,8 @@ export function AuthProvider({ children }) {
         .select('id, full_name, role, avatar_url, managed_region, is_active')
         .eq('id', authUser.id)
         .single();
+
+      if (sessionOwner.current !== authUser.id) return;
 
       if (profile?.is_active === false) {
         await clearOfflineStorage(authUser.id);
@@ -203,6 +214,7 @@ export function AuthProvider({ children }) {
       };
       setUser(resolvedUser);
       await persistOfflineUser(resolvedUser);
+      if (sessionOwner.current !== authUser.id) return;
       setRole(finalRole);
       if (navigator.onLine && !trustedSessionRegistered.current) {
         try {
@@ -224,6 +236,7 @@ export function AuthProvider({ children }) {
         }
       }
     } catch (err) {
+      if (sessionOwner.current !== authUser.id) return;
       console.error('[Auth] Failed to load user profile:', err.message);
       if (err?.code === 'ACCOUNT_DISABLED' || err?.message === 'ACCOUNT_DISABLED') {
         setUser(null);
@@ -238,6 +251,7 @@ export function AuthProvider({ children }) {
         role: ROLES.VIEWER,
         managedRegion: 'Miền Bắc'
       };
+      if (sessionOwner.current !== authUser.id) return;
       setUser(fallbackUser);
       await persistOfflineUser(fallbackUser);
       setRole(fallbackUser.role || ROLES.VIEWER);
@@ -340,6 +354,7 @@ export function AuthProvider({ children }) {
     let cancelled = false;
 
     const clearInvalidSession = async (reason) => {
+      if (cancelled || sessionOwner.current !== user.id) return;
       console.warn(`[Auth] Session invalidated: ${reason}`);
       try {
         await supabase.auth.signOut({ scope: 'local' });
@@ -357,6 +372,7 @@ export function AuthProvider({ children }) {
       sessionValidationRunning.current = true;
       try {
         const { data: state, error } = await supabase.rpc('get_session_security_state');
+        if (cancelled || sessionOwner.current !== user.id) return;
         if (error) {
           if ([401, 403].includes(error.status) || ['PGRST301', '28000'].includes(error.code)) {
             await clearInvalidSession(error.code || 'AUTH_REJECTED');

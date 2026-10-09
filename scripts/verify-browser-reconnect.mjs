@@ -54,8 +54,11 @@ import {AuthProvider,useAuth} from '/src/context/AuthContext.jsx';
 import {supabase} from '/src/lib/supabase.js';
 import * as db from '/src/lib/offlineDb.js';
 import {syncOfflineQueue} from '/src/lib/offlineSync.js';
+import {validateTrustedDeviceSession} from '/src/security/trustedDevice.js';
 async function control(action,account='A'){const r=await fetch('/__nasun_ui/'+action,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({account})});if(!r.ok)throw Error('CONTROL_FAILED');return r.json();}
 window.uiProbe={
+ async ready(){try{const result=await validateTrustedDeviceSession();return result.supported&&result.state?.valid===true;}catch{return false;}},
+ async ownerIs(account){const identity=await control('identity',account);return db.getOfflineOwner()===identity.id&&document.querySelector('main')?.dataset.owner===identity.id;},
  async login(account='A'){const session=await control('session',account);const result=await supabase.auth.setSession(session);if(result.error)throw Error('LOGIN_FAILED');},
  async queue(){if(!await db.addToQueue({id:'UI-SYNTHETIC-PENDING',operationId:'UI-SYNTHETIC-OP',action:'EDIT_NPP',payload:{id:'UI-SYNTHETIC-ONLY'},status:'pending'}))throw Error('QUEUE_FAILED');},
  async pending(){return (await db.getQueue()).length;},
@@ -64,7 +67,7 @@ window.uiProbe={
  async cleanup(){await db.clearQueue();},
  async replay(){return syncOfflineQueue();}
 };
-function Probe(){const auth=useAuth();return <main data-auth={auth.loading?'loading':auth.user?'signed-in':'signed-out'} data-role={auth.role}><h1>Nasun — staging reconnect</h1><p>{auth.user?'Đã đăng nhập':'Đã đăng xuất'}</p></main>;}
+function Probe(){const auth=useAuth();return <main data-owner={auth.user?.id||''} data-auth={auth.loading?'loading':auth.user?'signed-in':'signed-out'} data-role={auth.role}><h1>Nasun — staging reconnect</h1><p>{auth.user?'Đã đăng nhập':'Đã đăng xuất'}</p></main>;}
 createRoot(document.getElementById('root')).render(<AuthProvider><Probe/></AuthProvider>);
 `);
   process.env.VITE_SUPABASE_URL = url;
@@ -102,7 +105,7 @@ createRoot(document.getElementById('root')).render(<AuthProvider><Probe/></AuthP
     await page.waitForFunction(()=>window.uiProbe);
     await page.evaluate(()=>window.uiProbe.login());
     await page.locator('main[data-auth="signed-in"]').waitFor();
-    await page.waitForTimeout(1500);
+    await page.waitForFunction(()=>window.uiProbe.ready(),{},{timeout:45000});
     await page.context().setOffline(true);
     await page.evaluate(()=>window.uiProbe.queue());
     await page.context().setOffline(false);
@@ -116,10 +119,10 @@ createRoot(document.getElementById('root')).render(<AuthProvider><Probe/></AuthP
     await page.locator('main[data-auth="signed-in"]').waitFor();
     await page.evaluate(async()=>{if(await window.uiProbe.pending()!==1)throw Error('FRESH_LOGIN_LOST_PENDING');});
     await page.evaluate(()=>window.uiProbe.login('B'));
-    await page.waitForTimeout(1500);
+    await page.waitForFunction(()=>window.uiProbe.ownerIs('B'),{},{timeout:45000});
     await page.evaluate(async()=>{if(await window.uiProbe.pending()!==0)throw Error('ACCOUNT_QUEUE_LEAK');});
     await page.evaluate(()=>window.uiProbe.login());
-    await page.waitForTimeout(1500);
+    await page.waitForFunction(()=>window.uiProbe.ownerIs('A'),{},{timeout:45000});
     await page.evaluate(async()=>{if(await window.uiProbe.pending()!==1)throw Error('RETURN_LOGIN_LOST_PENDING');await window.uiProbe.cleanup();});
   }`);
   const evidence = { engine, device: engine==='webkit'?'iPhone 15 emulation':'desktop', realJwt:true,
