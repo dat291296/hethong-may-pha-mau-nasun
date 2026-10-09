@@ -205,6 +205,13 @@ export function AuthProvider({ children }) {
         try {
           const { supported, state } = await registerTrustedDeviceSession();
           trustedSessionRegistered.current = supported;
+          if (supported && state?.valid === false) {
+            await supabase.auth.signOut({ scope: 'local' });
+            await clearOfflineStorage(authUser.id);
+            setUser(null);
+            setRole(ROLES.VIEWER);
+            return;
+          }
           if (state?.anomaly_detected && !sessionStorage.getItem('nasun-device-alert-shown')) {
             sessionStorage.setItem('nasun-device-alert-shown', 'true');
             window.alert('Phát hiện đăng nhập từ thiết bị hoặc vị trí mới. Sự kiện đã được ghi lại để quản trị viên kiểm tra.');
@@ -237,8 +244,9 @@ export function AuthProvider({ children }) {
   };
 
   // ── Dev-only: switch role via dropdown ─────────────────────────────────────
-  const switchDevRole = useCallback((newRole) => {
+  const switchDevRole = useCallback(async (newRole) => {
     if (!isDevelopmentFallback) return;
+    await initializeOfflineStorage((DEV_USERS[newRole] || DEV_USERS[ROLES.VIEWER]).id);
     setRole(newRole);
     setUser(DEV_USERS[newRole] || DEV_USERS[ROLES.VIEWER]);
   }, []);
@@ -288,7 +296,8 @@ export function AuthProvider({ children }) {
     }
     const signedOutUserId = user?.id;
     if (isSupabaseConfigured && supabase) {
-      await supabase.auth.signOut();
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
     }
     await clearOfflineStorage(signedOutUserId);
     setUser(null);

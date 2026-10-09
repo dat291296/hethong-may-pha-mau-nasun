@@ -52,6 +52,14 @@ function requireOwner() {
   return activeOwnerId;
 }
 
+export function getOfflineOwner() {
+  return activeOwnerId;
+}
+
+function assertCurrentOwner(ownerId) {
+  if (activeOwnerId !== ownerId) throw new Error('OFFLINE_OWNER_CHANGED');
+}
+
 function waitForOwner() {
   if (activeOwnerId) return Promise.resolve(activeOwnerId);
   return new Promise(resolve => ownerWaiters.push(resolve));
@@ -326,6 +334,7 @@ export async function setCache(key, data) {
     const ownerId = requireOwner();
     const encrypted = await encryptValue(ownerId, data, 'cached_data', key);
     const db = await openDb();
+    assertCurrentOwner(ownerId);
     const transaction = db.transaction('cached_data', 'readwrite');
     transaction.objectStore('cached_data').put({
       key: scopedKey(ownerId, key), logicalKey: key, ownerId, encrypted: true,
@@ -345,7 +354,9 @@ export async function getCache(key, fallback = []) {
     const db = await openDb();
     const record = await requestResult(db.transaction('cached_data', 'readonly').objectStore('cached_data').get(scopedKey(ownerId, key)));
     if (!record) return fallback;
-    return await decryptValue(ownerId, record, 'cached_data', key);
+    const value = await decryptValue(ownerId, record, 'cached_data', key);
+    assertCurrentOwner(ownerId);
+    return value;
   } catch (error) {
     if (error.message !== 'OFFLINE_STORAGE_OWNER_REQUIRED') console.error('[offlineDb] Error reading encrypted cache:', error.message);
     return fallback;
@@ -357,6 +368,7 @@ export async function addToQueue(actionItem) {
     const ownerId = requireOwner();
     const encrypted = await encryptValue(ownerId, actionItem, 'offline_queue', actionItem.id);
     const db = await openDb();
+    assertCurrentOwner(ownerId);
     const transaction = db.transaction('offline_queue', 'readwrite');
     transaction.objectStore('offline_queue').put({
       id: scopedKey(ownerId, actionItem.id), itemId: actionItem.id, ownerId, encrypted: true,
@@ -381,6 +393,7 @@ export async function getQueue() {
     const records = await requestResult(db.transaction('offline_queue', 'readonly').objectStore('offline_queue').getAll());
     const ownedRecords = (records || []).filter(record => record.ownerId === ownerId && record.encrypted);
     const items = await Promise.all(ownedRecords.map(record => decryptValue(ownerId, record, 'offline_queue', record.itemId)));
+    assertCurrentOwner(ownerId);
     return items.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
   } catch (error) {
     if (error.message !== 'OFFLINE_STORAGE_OWNER_REQUIRED') console.error('[offlineDb] Error reading encrypted queue:', error.message);

@@ -74,6 +74,8 @@ async function main() {
     child.on('error', reject);
     child.on('exit', code => code === 0 ? resolve() : reject(new Error('Staging RLS verification failed')));
   });
+  const { verifySessionRevocation } = await import('./verify-session-revocation.mjs');
+  await verifySessionRevocation(client, env);
 }
 
 try {

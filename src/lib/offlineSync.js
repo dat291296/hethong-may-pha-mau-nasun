@@ -1,8 +1,9 @@
 import { supabase, isSupabaseConfigured } from './supabase';
-import { addToQueue, getQueue, removeFromQueue, clearQueue, setCache, getCache } from './offlineDb';
+import { addToQueue, getQueue, removeFromQueue, clearQueue, setCache, getCache, getOfflineOwner } from './offlineDb';
 import { createOperationId, migrateQueueItem, classifySyncError, resolveFailureState } from './syncQueue';
 import { buildSyncEnvelope, resolveSyncEntity } from './syncContract.js';
-import { getTrustedDeviceId } from '../security/trustedDevice.js';
+import { getTrustedDeviceId, validateTrustedDeviceSession } from '../security/trustedDevice.js';
+import { requireReplaySession } from '../security/replaySession.js';
 import { persistQueueReplacement } from './durableMutation.js';
 
 let activeSyncPromise = null;
@@ -26,7 +27,7 @@ async function saveQueueState(item, status, error = null) {
   } else {
     Object.assign(item, resolveFailureState(item, error));
   }
-  await addToQueue(item);
+  if (!await addToQueue(item)) throw new Error('OFFLINE_QUEUE_WRITE_FAILED');
 }
 
 const DEVICE_PREFIXES = {
@@ -571,7 +572,7 @@ export async function getOfflineQueue() {
  * Remove an action from the queue by ID
  */
 export async function dequeueOfflineAction(id) {
-  await removeFromQueue(id);
+  if (!await removeFromQueue(id)) throw new Error('OFFLINE_QUEUE_REMOVE_FAILED');
   emitQueueUpdated();
 }
 
@@ -592,7 +593,19 @@ async function processOfflineQueue(onStatusChange) {
     return false;
   }
 
+  const ownerId = getOfflineOwner();
+  const assertOwner = () => {
+    if (!ownerId || getOfflineOwner() !== ownerId) throw Object.assign(new Error('OFFLINE_OWNER_CHANGED'), { code: 'OFFLINE_OWNER_CHANGED' });
+  };
+  try {
+    await requireReplaySession(supabase, ownerId, getOfflineOwner, validateTrustedDeviceSession);
+  } catch {
+    onStatusChange?.('error', 0, 'Chưa xác minh được phiên. Dữ liệu chờ gửi được giữ nguyên; hãy đăng nhập lại hoặc kiểm tra kết nối.');
+    return false;
+  }
+
   let queue = await getOfflineQueue();
+  assertOwner();
   queue = await compactDuplicateCreates(queue);
   queue = sortQueueByDependency(queue);
   if (queue.length === 0) {
@@ -621,10 +634,14 @@ async function processOfflineQueue(onStatusChange) {
 
   for (const item of queue) {
     try {
+      assertOwner();
+      await requireReplaySession(supabase, ownerId, getOfflineOwner, validateTrustedDeviceSession);
+      assertOwner();
       await saveQueueState(item, 'syncing');
+      assertOwner();
       if (import.meta.env.DEV) console.debug(`[OfflineSync] Syncing action ${item.action}...`);
       let error = null;
-      const atomicResult = await executeAtomicSyncMutation(item);
+      const atomicResult = await executeAtomicSyncMutation(item, assertOwner);
 
       if (atomicResult.handled) {
         error = atomicResult.error;
@@ -771,6 +788,7 @@ async function processOfflineQueue(onStatusChange) {
       if (error) {
         throw error;
       }
+      assertOwner();
 
       // A device whose system set is not created yet stays queued until the
       // second pass links it after ASSEMBLE_SET actions have completed.
@@ -781,6 +799,7 @@ async function processOfflineQueue(onStatusChange) {
       }
       
     } catch (err) {
+      if (getOfflineOwner() !== ownerId) return false;
       console.error(`[OfflineSync] Failed to sync action ${item.id}:`, err);
       await saveQueueState(item, classifySyncError(err), err);
       syncErrors.push(describeQueueError(item, err));
@@ -789,6 +808,7 @@ async function processOfflineQueue(onStatusChange) {
   }
 
   for (const link of deferredDeviceLinks) {
+    assertOwner();
     let resolvedSetCode = null;
     let linkError = null;
     try {
@@ -874,7 +894,7 @@ const ATOMIC_SYNC_ACTIONS = new Set([
   'ADD_AUDIT_LOG', 'UPDATE_AUDIT_LOG', 'DELETE_AUDIT_LOG'
 ]);
 
-async function executeAtomicSyncMutation(item) {
+async function executeAtomicSyncMutation(item, assertOwner = () => {}) {
   // Set deletion must include device release and audit in the dedicated transaction.
   if (item.action === 'DELETE_SYSTEM_SET') return { handled: false, error: null, deferredLink: null };
   if (!ATOMIC_SYNC_ACTIONS.has(item.action)) return { handled: false, error: null, deferredLink: null };
@@ -922,11 +942,17 @@ async function executeAtomicSyncMutation(item) {
   item.payload = payload;
   const resolvedId = entityId || payload.id || payload.set_code || payload.setCode || item.entityId;
   const envelope = buildSyncEnvelope({ ...item, entityId: resolvedId }, await getTrustedDeviceId());
-  await addToQueue(item);
+  assertOwner();
+  if (!await addToQueue(item)) throw new Error('OFFLINE_QUEUE_WRITE_FAILED');
+  assertOwner();
   let { data, error } = await supabase.rpc('execute_sync_operation_v2', { p_envelope: envelope });
   const v2Unavailable = ['42883', 'PGRST202'].includes(String(error?.code || '')) ||
     /execute_sync_operation_v2.*does not exist|schema cache/i.test(String(error?.message || ''));
-  if (v2Unavailable) ({ data, error } = await supabase.rpc('execute_sync_operation', { p_envelope: envelope }));
+  if (v2Unavailable) {
+    assertOwner();
+    ({ data, error } = await supabase.rpc('execute_sync_operation', { p_envelope: envelope }));
+  }
+  assertOwner();
   const unavailable = ['42883', 'PGRST202'].includes(String(error?.code || '')) ||
     /execute_sync_operation.*does not exist|schema cache/i.test(String(error?.message || ''));
   if (unavailable) {
