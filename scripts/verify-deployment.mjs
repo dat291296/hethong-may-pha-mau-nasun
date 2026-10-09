@@ -49,6 +49,19 @@ async function verify() {
     const actual = appResponse.headers.get(header) || '';
     if (!expected.test(actual)) throw new Error(`SECURITY_HEADER_INVALID:${header}`);
   }
+  const manifestResponse = await request('/build-manifest.json');
+  if (!manifestResponse.ok) throw new Error('BUILD_MANIFEST_UNAVAILABLE');
+  const manifest = await manifestResponse.json();
+  const modules = Object.keys(manifest.assets || {}).filter(path => path.endsWith('.js'));
+  if (!modules.length) throw new Error('JAVASCRIPT_MANIFEST_EMPTY');
+  for (const path of modules) {
+    const response = await request(path);
+    if (!response.ok || !/(?:javascript|ecmascript)/i.test(response.headers.get('content-type') || '')) {
+      throw new Error('JAVASCRIPT_ASSET_INVALID:' + path);
+    }
+  }
+  const missing = await request('/assets/deployment-missing-probe.js');
+  if (missing.status !== 404) throw new Error('MISSING_ASSET_MUST_RETURN_404');
 }
 
 let lastError;

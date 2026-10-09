@@ -93,3 +93,9 @@ jobs:
 
       - name: Verify staging deployment
         run: node scripts/verify-deployment.mjs "${{ steps.deploy.outputs.url }}"
+
+      - name: Install isolated WebKit runtime
+        run: npx --yes --package @playwright/cli@0.1.22 playwright-cli install-browser webkit --with-deps
+
+      - name: Verify full application shell on WebKit
+        run: node scripts/verify-staging-shell.mjs "${{ steps.deploy.outputs.url }}"
