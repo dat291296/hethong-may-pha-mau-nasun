@@ -1,0 +1,115 @@
+{
+  "assessedAt": "2026-10-09",
+  "standard": "https://mas.owasp.org/MASVS/",
+  "scope": "Web source and isolated synthetic-data browser preview; not native iOS certification",
+  "productionDataMutated": false,
+  "stage1": {
+    "status": "partially-verified-not-fully-accepted",
+    "implemented": [
+      "Bounded in-memory operational diagnostics with allowlisted metadata",
+      "Read-only manual backup workflow freshness audit"
+    ],
+    "remaining": [
+      "Full Database/Auth/Storage restore into a separate empty project",
+      "Verify one release authority including external Cloudflare Git integration",
+      "Choose and validate remote alert delivery",
+      "Production authorization acceptance"
+    ],
+    "backupEvidence": [
+      {
+        "runId": 37859301416,
+        "job": "Database backup",
+        "conclusion": "success"
+      },
+      {
+        "runId": 37860040521,
+        "job": "Auth and Storage recovery backup",
+        "conclusion": "success"
+      }
+    ],
+    "acceptanceLimit": "Successful backup jobs do not establish restorable archives. No separate empty restore project is available."
+  },
+  "stage2": {
+    "status": "source-and-synthetic-preview-verified",
+    "implemented": [
+      "Machine equipment and distributor summary",
+      "Return to the same machine after device editing",
+      "Combined chronological repair and audit history",
+      "Reject ambiguous legacy serial history",
+      "Stable profile frame across tab switches",
+      "Machine code scanner inside lookup form; device serial is not accepted as machine code",
+      "Existing repair and maintenance components wired in synthetic preview",
+      "Validated NPP contact links and Vietnamese history timestamps"
+    ],
+    "remaining": [
+      "Physical Safari acceptance of the changed flows",
+      "User acceptance before release"
+    ]
+  },
+  "verification": {
+    "commands": {
+      "npm run test:all": "234 passed, 0 failed",
+      "npm run build": "Passed with large chunk warning",
+      "npm run lint": "Exit 0 with warnings"
+    },
+    "browser": "Chromium synthetic preview: device edit return, repair prefill, maintenance context, exact machine-code lookup and scanner modal; stable tab frame and no horizontal overflow at 320/375/390/768/1280 pixels. Physical camera/Safari pending.",
+    "preview": "http://127.0.0.1:5198/output/internal-preview/app.html",
+    "liveRestore": "not verified",
+    "liveBackupFreshness": "Latest completed main backup jobs read through GitHub API: both success and approximately 9 hours old; source audit evaluator passed. New workflow itself not dispatched.",
+    "nativeIOS": "not implemented or assessed"
+  },
+  "groups": {
+    "MASVS-STORAGE": {
+      "status": "partial",
+      "evidence": [
+        "src/lib/operationalDiagnostics.js",
+        "tests/machineProfile.test.mjs"
+      ],
+      "gap": "Native secure storage and backup exclusions unverified"
+    },
+    "MASVS-CRYPTO": {
+      "status": "insufficient-native-evidence",
+      "gap": "iOS key lifecycle and platform cryptography have no native artifact"
+    },
+    "MASVS-AUTH": {
+      "status": "partial",
+      "evidence": [
+        "security/masvs/real-jwt-browser.json"
+      ],
+      "gap": "Prior selected staging JWT evidence does not prove all production permissions or native authentication"
+    },
+    "MASVS-NETWORK": {
+      "status": "partial",
+      "evidence": [
+        "scripts/verify-deployment.mjs"
+      ],
+      "gap": "Source verifier does not establish current deployment or native certificate validation"
+    },
+    "MASVS-PLATFORM": {
+      "status": "insufficient-native-evidence",
+      "gap": "Native WebView boundaries, deep links, clipboard and device permission tests pending"
+    },
+    "MASVS-CODE": {
+      "status": "partial",
+      "evidence": [
+        "tests/machineProfile.test.mjs",
+        "tests/internalReadiness.test.mjs",
+        "src/lib/machineProfile.js"
+      ],
+      "gap": "Passing source tests and build do not establish full runtime or native platform security"
+    },
+    "MASVS-RESILIENCE": {
+      "status": "insufficient-native-evidence",
+      "gap": "Reverse engineering, tampering and native runtime protection not assessed"
+    },
+    "MASVS-PRIVACY": {
+      "status": "partial",
+      "evidence": [
+        "src/components/ErrorBoundary.jsx",
+        "src/lib/operationalDiagnostics.js"
+      ],
+      "gap": "Data retention, deletion and future native disclosures require acceptance; no privacy UI added"
+    }
+  },
+  "conclusion": "Internal pilot candidate after operational and user acceptance gates; not production acceptance or App Store readiness proof"
+}

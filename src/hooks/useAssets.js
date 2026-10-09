@@ -1,3 +1,4 @@
+import { recordOperationalError } from '../lib/operationalDiagnostics.js';
 import { saveDeviceEdit } from '../lib/deviceEdit.js';
 import { requireCompleteWrite } from '../lib/guardedWrite.js';
 import { fetchAllRows } from '../lib/paginatedQuery.js';
@@ -224,7 +225,8 @@ export function useAssets() {
         await writeDeviceStrict(cfg.table, dbPayload);
         await fetchAssets();
       } catch (err) {
-        console.warn(`[Offline] Failed online addStockDevice for ${category}. Queueing action.`, err);
+        recordOperationalError('device', err);
+        console.warn(`[Offline] Failed online addStockDevice for ${category}. Queueing action.`);
         enqueueOfflineAction('ADD_DEVICE', dbPayload, cfg.table);
       }
     } else if (isSupabaseConfigured && !navigator.onLine) {
@@ -319,7 +321,8 @@ export function useAssets() {
         requireCompleteWrite(result);
         await fetchAssets();
       } catch (err) {
-        console.warn(`[Offline] Failed online editDevice for ${targetTable}. Queueing action.`, err);
+        recordOperationalError('device', err);
+        console.warn(`[Offline] Failed online editDevice for ${targetTable}. Queueing action.`);
         if (!canRetryOffline(err)) {
           await fetchAssets();
           throw err;
@@ -364,7 +367,8 @@ export function useAssets() {
         if (error) throw error;
         if (!data || data.length === 0) throw createPersistenceError('Không có quyền xóa hoặc thiết bị không tồn tại trên Supabase');
       } catch (err) {
-        console.warn(`[Offline] Failed online deleteDevice for ${targetTable}. Queueing action.`, err);
+        recordOperationalError('device', err);
+        console.warn(`[Offline] Failed online deleteDevice for ${targetTable}. Queueing action.`);
         if (!canRetryOffline(err)) {
           await fetchAssets();
           throw err;

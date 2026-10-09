@@ -1,3 +1,10 @@
+export function resolveMachineCode(sets, value) {
+  const code = String(value || '').trim().toLocaleLowerCase('vi');
+  if (!code || code.length > 160) return null;
+  const matches = sets.filter(machine => String(machine.setCode || '').trim().toLocaleLowerCase('vi') === code);
+  return matches.length === 1 ? matches[0] : null;
+}
+
 export function resolveMachine(sets, value) {
   const query = String(value || '').trim().toLocaleLowerCase('vi');
   if (!query || query.length > 160) return null;

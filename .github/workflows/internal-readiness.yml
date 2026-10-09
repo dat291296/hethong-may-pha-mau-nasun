@@ -1,0 +1,19 @@
+name: Read-only internal operations audit
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+      - name: Verify backup job health without accessing database
+        run: node scripts/verify-internal-readiness.mjs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}

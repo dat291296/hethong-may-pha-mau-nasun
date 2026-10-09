@@ -9,7 +9,7 @@ import { Camera, X } from 'lucide-react';
  * @param {Function} onScanSuccess - Callback function returning decoded text (e.g. Serial Number)
  * @param {Function} onClose - Callback function to close the modal
  */
-export default function QrScannerModal({ onScanSuccess, onClose }) {
+export default function QrScannerModal({ onScanSuccess, onClose, title = 'Quét Mã Vạch / QR Seri Thiết Bị' }) {
   const scannerRef = useRef(null);
   const [cameraStarted, setCameraStarted] = useState(false);
 
@@ -105,13 +105,14 @@ export default function QrScannerModal({ onScanSuccess, onClose }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Camera size={20} color="var(--accent-cyan)" />
             <h3 style={{ fontSize: '1.05rem', fontWeight: '800', margin: 0 }}>
-              Quét Mã Vạch / QR Seri Thiết Bị
+              {title}
             </h3>
           </div>
           <button 
             type="button" 
             className="btn btn-secondary btn-sm" 
             onClick={onClose}
+            aria-label="Đóng cửa sổ quét"
             style={{ borderRadius: '50%', width: '32px', height: '32px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
           >
             <X size={16} />
