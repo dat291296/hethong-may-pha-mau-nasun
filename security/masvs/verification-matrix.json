@@ -1,21 +1,255 @@
 {
   "schemaVersion": 1,
+  "standard": "OWASP MASVS",
+  "profile": [
+    "MAS-L1",
+    "MAS-P"
+  ],
+  "verificationBoundary": "Automated source and build verification for the PWA. Native Android and iOS items remain release requirements until native packages exist.",
+  "modules": [
+    {
+      "id": "MASVS-1",
+      "areas": [
+        "architecture",
+        "threat model"
+      ],
+      "tests": [
+        "tests/securityMasvs1.test.mjs"
+      ],
+      "evidence": [
+        "security/masvs/threat-register.json",
+        "security/masvs/threat-dragon.json"
+      ]
+    },
+    {
+      "id": "MASVS-2",
+      "areas": [
+        "storage",
+        "cryptography"
+      ],
+      "tests": [
+        "tests/securityMasvs2.test.mjs"
+      ],
+      "evidence": [
+        "src/lib/offlineDb.js",
+        "src/platform/mobileSecurityBridge.js"
+      ]
+    },
+    {
+      "id": "MASVS-3",
+      "areas": [
+        "authentication",
+        "session"
+      ],
+      "tests": [
+        "tests/securityMasvs3.test.mjs"
+      ],
+      "evidence": [
+        "src/security/authRuntime.js",
+        "src/context/AuthContext.jsx"
+      ]
+    },
+    {
+      "id": "MASVS-4",
+      "areas": [
+        "network",
+        "transport"
+      ],
+      "tests": [
+        "tests/securityMasvs4.test.mjs"
+      ],
+      "evidence": [
+        "security/masvs/network-policy.json",
+        "src/security/networkPolicy.js"
+      ]
+    },
+    {
+      "id": "MASVS-5",
+      "areas": [
+        "platform permissions"
+      ],
+      "tests": [
+        "tests/securityMasvs5.test.mjs"
+      ],
+      "evidence": [
+        "security/masvs/platform-permissions.json",
+        "src/security/permissionPolicy.js"
+      ]
+    },
+    {
+      "id": "MASVS-6",
+      "areas": [
+        "code quality",
+        "production flags",
+        "input validation"
+      ],
+      "tests": [
+        "tests/securityMasvs6.test.mjs"
+      ],
+      "evidence": [
+        "scripts/verify-production-build.mjs",
+        "vite.config.js"
+      ]
+    },
+    {
+      "id": "MASVS-7",
+      "areas": [
+        "resilience",
+        "updates",
+        "cache integrity"
+      ],
+      "tests": [
+        "tests/securityMasvs7.test.mjs"
+      ],
+      "evidence": [
+        "scripts/generate-service-worker.mjs",
+        "dist/build-manifest.json"
+      ]
+    },
+    {
+      "id": "MASVS-8",
+      "areas": [
+        "supply chain",
+        "release"
+      ],
+      "tests": [
+        "tests/securityMasvs8.test.mjs"
+      ],
+      "evidence": [
+        "scripts/generate-sbom.mjs",
+        ".github/workflows/security-analysis.yml",
+        ".github/workflows/deploy.yml"
+      ]
+    },
+    {
+      "id": "MASVS-9",
+      "areas": [
+        "privacy",
+        "verification evidence"
+      ],
+      "tests": [
+        "tests/securityMasvs9.test.mjs"
+      ],
+      "evidence": [
+        "security/masvs/privacy-inventory.json",
+        "security/masvs/verification-matrix.json"
+      ]
+    }
+  ],
+  "nativeReleaseChecks": [
+    "Run OWASP MASTG tests against signed Android and iOS packages",
+    "Verify platform keystore and backup exclusion",
+    "Verify ATS or Network Security Config",
+    "Verify application signing, integrity, and store privacy declarations"
+  ],
   "scope": "Web/PWA source plus selected staging/browser controls. Native MASVS assessment requires the final iOS package and device evidence.",
-  "references": ["https://mas.owasp.org/MASVS/04-Assessment_and_Certification/", "https://mas.owasp.org/MASTG/"],
+  "references": [
+    "https://mas.owasp.org/MASVS/04-Assessment_and_Certification/",
+    "https://mas.owasp.org/MASTG/"
+  ],
   "groups": [
-    {"id":"MASVS-STORAGE","source":["src/lib/offlineDb.js"],"evidence":["security/masvs/offline-session-browser.json"],"remaining":"Real Safari persistence, app termination, account switch and native Keychain lifecycle"},
-    {"id":"MASVS-CRYPTO","source":["src/lib/offlineDb.js","scripts/encrypt-recovery-backup.mjs"],"evidence":["security/masvs/offline-session-browser.json"],"remaining":"Native key storage and full restore drill"},
-    {"id":"MASVS-AUTH","source":["src/context/AuthContext.jsx","src/security/replaySession.js","supabase/revoked_session_write_guard.sql"],"evidence":["scripts/verify-session-revocation.mjs","scripts/verify-browser-reconnect.mjs"],"remaining":"Real Safari JWT reconnect and full application sensitive-action UI"},
-    {"id":"MASVS-NETWORK","source":["src/security/networkPolicy.js"],"evidence":["scripts/verify-storage-access.mjs"],"remaining":"On-device HTTPS/upload/download/Realtime and native transport configuration"},
-    {"id":"MASVS-PLATFORM","source":["src/security/permissionPolicy.js"],"evidence":[],"remaining":"iOS camera/location denial, revocation, lifecycle and native integration"},
-    {"id":"MASVS-CODE","source":[".github/workflows/quality.yml",".github/workflows/security-analysis.yml"],"evidence":["tests/replaySession.test.mjs"],"remaining":"Final iOS package dependency and build assessment; complete business UI coverage"},
-    {"id":"MASVS-RESILIENCE","source":["scripts/generate-service-worker.mjs"],"evidence":[],"remaining":"Real PWA upgrade with pending drafts, rollback and final native integrity controls"},
-    {"id":"MASVS-PRIVACY","source":["security/masvs/privacy-inventory.json"],"evidence":[],"remaining":"Confirm actual data handling and App Store disclosures for final iOS package; no Privacy Center UI added"}
+    {
+      "id": "MASVS-STORAGE",
+      "source": [
+        "src/lib/offlineDb.js"
+      ],
+      "evidence": [
+        "security/masvs/offline-session-browser.json"
+      ],
+      "remaining": "Real Safari persistence, app termination, account switch and native Keychain lifecycle"
+    },
+    {
+      "id": "MASVS-CRYPTO",
+      "source": [
+        "src/lib/offlineDb.js",
+        "scripts/encrypt-recovery-backup.mjs"
+      ],
+      "evidence": [
+        "security/masvs/offline-session-browser.json"
+      ],
+      "remaining": "Native key storage and full restore drill"
+    },
+    {
+      "id": "MASVS-AUTH",
+      "source": [
+        "src/context/AuthContext.jsx",
+        "src/security/replaySession.js",
+        "supabase/revoked_session_write_guard.sql"
+      ],
+      "evidence": [
+        "scripts/verify-session-revocation.mjs",
+        "scripts/verify-browser-reconnect.mjs"
+      ],
+      "remaining": "Real Safari JWT reconnect and full application sensitive-action UI"
+    },
+    {
+      "id": "MASVS-NETWORK",
+      "source": [
+        "src/security/networkPolicy.js"
+      ],
+      "evidence": [
+        "scripts/verify-storage-access.mjs"
+      ],
+      "remaining": "On-device HTTPS/upload/download/Realtime and native transport configuration"
+    },
+    {
+      "id": "MASVS-PLATFORM",
+      "source": [
+        "src/security/permissionPolicy.js"
+      ],
+      "evidence": [],
+      "remaining": "iOS camera/location denial, revocation, lifecycle and native integration"
+    },
+    {
+      "id": "MASVS-CODE",
+      "source": [
+        ".github/workflows/quality.yml",
+        ".github/workflows/security-analysis.yml"
+      ],
+      "evidence": [
+        "tests/replaySession.test.mjs"
+      ],
+      "remaining": "Final iOS package dependency and build assessment; complete business UI coverage"
+    },
+    {
+      "id": "MASVS-RESILIENCE",
+      "source": [
+        "scripts/generate-service-worker.mjs"
+      ],
+      "evidence": [],
+      "remaining": "Real PWA upgrade with pending drafts, rollback and final native integrity controls"
+    },
+    {
+      "id": "MASVS-PRIVACY",
+      "source": [
+        "security/masvs/privacy-inventory.json"
+      ],
+      "evidence": [],
+      "remaining": "Confirm actual data handling and App Store disclosures for final iOS package; no Privacy Center UI added"
+    }
   ],
   "realIosAcceptance": {
-    "state":"awaiting-device-test",
-    "requiredMetadata":["device model","iOS version","Safari version","staging URL","tested commit","timestamp"],
-    "checks":["HTTPS preview targets only approved staging","Login using a dedicated staging account","Offline draft survives closing and reopening Safari","Reconnect after server revocation signs out and preserves pending changes","Fresh login recovers the same pending changes","Second account cannot see first-account drafts","Machine and warehouse edits retain correct id/serial/NPP context","Sensitive actions require fresh authentication","Camera/location denial does not crash the app"],
-    "limits":"WebKit iPhone emulation cannot be recorded as real Safari or native iOS verification. Never attach JWTs, keys, passwords or customer screenshots."
-  }
+    "state": "awaiting-device-test",
+    "requiredMetadata": [
+      "device model",
+      "iOS version",
+      "Safari version",
+      "staging URL",
+      "tested commit",
+      "timestamp"
+    ],
+    "checks": [
+      "HTTPS preview targets only approved staging",
+      "Login using a dedicated staging account",
+      "Offline draft survives closing and reopening Safari",
+      "Reconnect after server revocation signs out and preserves pending changes",
+      "Fresh login recovers the same pending changes",
+      "Second account cannot see first-account drafts",
+      "Machine and warehouse edits retain correct id/serial/NPP context",
+      "Sensitive actions require fresh authentication",
+      "Camera/location denial does not crash the app"
+    ],
+    "limits": "WebKit iPhone emulation cannot be recorded as real Safari or native iOS verification. Never attach JWTs, keys, passwords or customer screenshots."
+  },
+  "internalModuleLabels": "MASVS-1 through MASVS-9 are repository module labels, not official MASVS control identifiers"
 }
