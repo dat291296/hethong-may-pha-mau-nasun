@@ -31,7 +31,11 @@ async function cli(...args) {
     child.stdout.on('data', chunk => { if (output.length < 100000) output += chunk; });
     child.stderr.on('data', () => {});
     child.on('error', () => reject(new Error('BROWSER_CLI_UNAVAILABLE')));
-    child.on('exit', code => { clearTimeout(timeout); code === 0 && !output.includes('### Error') ? resolve() : reject(new Error('BROWSER_STEP_FAILED: ' + args[0])); });
+    child.on('exit', code => {
+      clearTimeout(timeout);
+      const safeFailure = output.match(/REVOKED_REPLAY_ALLOWED|PENDING_LOST|FRESH_LOGIN_LOST_PENDING|ACCOUNT_QUEUE_LEAK|RETURN_LOGIN_LOST_PENDING|QUEUE_FAILED|CONTROL_FAILED|LOGIN_FAILED|TimeoutError|TypeError|ReferenceError/);
+      code === 0 && !output.includes('### Error') ? resolve() : reject(new Error('BROWSER_STEP_FAILED: ' + args[0] + (safeFailure ? ' ' + safeFailure[0] : '')));
+    });
   });
 }
 
