@@ -1,0 +1,27 @@
+{
+  "verifiedOn": "2026-10-09",
+  "sourceCommit": "2716a30",
+  "runner": "Playwright CLI / Chromium on Windows",
+  "scope": "Actual offlineDb modules, IndexedDB and WebCrypto on isolated localhost origin; synthetic records only; no backend configured",
+  "passed": [
+    "Queued payload absent from plaintext IndexedDB records",
+    "Account B cannot read account A cache or queue",
+    "Session cleanup removes cache but retains pending queue and its decryption key",
+    "Original account can recover pending queue after reinitialization",
+    "Reload retains the original operation identifier",
+    "Unconfigured backend rejects replay without deleting queue",
+    "Browser context offline preserves queued writes",
+    "Injected QuotaExceededError returns failure and retains existing queue",
+    "Account switch during encryption rejects stale cache commit",
+    "Corrupted ciphertext throws instead of reporting an empty queue",
+    "Restoring original synthetic ciphertext recovers the intact queue",
+    "Actual AuthProvider blocks sign-out with pending edits in isolated development mode",
+    "Actual development role switch changes offline owner without exposing other queues"
+  ],
+  "limits": [
+    "Does not prove end-to-end AuthProvider reconnect UI behavior with a real JWT",
+    "Does not prove all form drafts survive navigation or PWA upgrades",
+    "Safari, iOS native packages and production were not tested",
+    "Live revocation evidence is recorded separately in staging CI"
+  ]
+}

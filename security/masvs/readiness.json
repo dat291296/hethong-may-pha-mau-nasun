@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "scope": "PWA source review; live Supabase and native packages not verified",
+  "scope": "PWA source, selected Chromium/IndexedDB checks and isolated Supabase staging; production and native packages not verified",
   "groups": [
     {
       "id": "MASVS-STORAGE",
@@ -97,17 +97,17 @@
       "priority": "P1",
       "title": "Cấu hình staging và xác minh quyền",
       "state": "partial",
-      "done": "GitHub CI đã kiểm thử anonymous và năm vai trò, đọc khác vùng và insert probe rollback-only trên staging tại commit 176d8aa. Preflight mã nguồn chặn nhầm production.",
-      "remaining": "Chưa nghiệm thu Storage, RPC xác thực gần đây và kiểm tra chống ghi đè mới trên staging.",
+      "done": "Staging đã nghiệm thu anonymous, 5 vai trò, phạm vi vùng, recent authentication, Storage riêng tư, sửa 4 loại thiết bị và rollback.",
+      "remaining": "Chưa áp dụng hoặc nghiệm thu bản sửa mới trên production.",
       "acceptance": "Anonymous và năm vai trò được kiểm thử; quyền sai bị từ chối; Storage và RPC có bằng chứng.",
       "evidence": [
         "scripts/rls-preflight.mjs",
         ".github/workflows/rls-integration.yml"
       ],
       "verification": {
-        "commit": "176d8aa84896ad384e3f0d653b88bb87f0b3dedd",
-        "workflowRun": "https://github.com/dat291296/hethong-may-pha-mau-nasun/actions/runs/37715597095",
-        "scope": "anonymous + five roles; regional read and rollback-only insert probes"
+        "commit": "7edcea2",
+        "workflowRun": "https://github.com/dat291296/hethong-may-pha-mau-nasun/actions/runs/37873269081",
+        "scope": "anonymous + five roles, private Storage, device transactions, recent authentication"
       }
     },
     {
@@ -129,29 +129,44 @@
       "priority": "P1",
       "title": "Chống mất dữ liệu và xung đột",
       "state": "partial",
-      "done": "Đã chặn báo thành công khi lưu hàng đợi thất bại; lỗi quyền/xung đột dừng retry; đọc hàng đợi lỗi không coi là rỗng; giữ hàng đợi và khóa khi phiên bị vô hiệu hóa.",
-      "remaining": "Cần nghiệm thu IndexedDB trên trình duyệt và cập nhật đồng thời trên staging.",
+      "done": "Đã kiểm thử Chromium/IndexedDB thật với dữ liệu tổng hợp: hàng đợi mã hóa, cách ly tài khoản, giữ hàng đợi và khóa khi thu hồi phiên, reload, mất mạng, hết dung lượng, race đổi tài khoản và dữ liệu mã hóa hỏng. RPC sửa 4 loại thiết bị và chống ghi đè đã nghiệm thu staging.",
+      "remaining": "Chưa nghiệm thu đầy đủ mọi màn hình có bản nháp và vòng đời PWA trên Safari/iOS; production chưa áp dụng.",
       "acceptance": "Không mất bản nháp, không ghi trùng và không âm thầm ghi đè.",
       "evidence": [
         "src/lib/offlineDb.js",
         "src/lib/offlineSync.js",
         "src/lib/syncQueue.js",
-        "tests/syncQueue.test.mjs"
-      ]
+        "tests/syncQueue.test.mjs",
+        "security/masvs/offline-session-browser.json"
+      ],
+      "verification": {
+        "commit": "7edcea2",
+        "workflowRun": "https://github.com/dat291296/hethong-may-pha-mau-nasun/actions/runs/37873269081",
+        "browserEvidence": "security/masvs/offline-session-browser.json"
+      }
     },
     {
       "id": "session",
       "priority": "P1",
       "title": "Phiên và thao tác nhạy cảm",
       "state": "partial",
-      "done": "Đã bổ sung gate kiểm tra xác thực gần đây phía server và hộp nhập mật khẩu cho thao tác quản trị, xuất/nhập backup và xóa bộ máy.",
-      "remaining": "Migration chưa áp dụng; cần kiểm thử AMR token thật và kiểm tra phiên thu hồi trên staging.",
+      "done": "Đã chặn replay khi chưa xác minh phiên, khi đổi tài khoản và khi thiếu RPC; giữ hàng đợi, kiểm tra từng mục và chặn logout còn pending. Staging xác nhận JWT thu hồi không ghi được ở server, không đăng ký lại được, và đăng nhập mới khôi phục quyền ghi hợp lệ.",
+      "remaining": "Chưa nghiệm thu UI reconnect với JWT thật trên Safari/iOS; chưa áp dụng production. Không khẳng định toàn bộ nhóm MASVS đã đạt.",
       "acceptance": "Thu hồi phiên có hiệu lực khi reconnect; xuất dữ liệu và đổi quyền được kiểm soát.",
       "evidence": [
         "supabase/sensitive_action_reauthentication.sql",
         "src/security/sensitiveAction.js",
-        "tests/sensitiveAction.test.mjs"
-      ]
+        "tests/sensitiveAction.test.mjs",
+        "src/security/replaySession.js",
+        "supabase/trusted_session_revocation.sql",
+        "scripts/verify-session-revocation.mjs",
+        "supabase/revoked_session_write_guard.sql"
+      ],
+      "verification": {
+        "commit": "7edcea2",
+        "workflowRun": "https://github.com/dat291296/hethong-may-pha-mau-nasun/actions/runs/37873269081",
+        "scope": "disposable account: valid replay, revoked replay denial, server write denial with unchanged synthetic NPP, re-registration rejection, fresh-login recovery"
+      }
     },
     {
       "id": "evidence",
