@@ -10,6 +10,7 @@ test('replay requires a matching server user, active profile and trusted session
   await assert.rejects(requireReplaySession(client, 'A', () => 'B', async () => ({})), /OFFLINE_OWNER_CHANGED/);
   await assert.rejects(requireReplaySession(client, 'B', () => 'B', async () => ({})), /SESSION_REJECTED/);
   await assert.rejects(requireReplaySession(client, 'A', () => 'A', async () => ({ supported: true, state: { valid: false } })), /SESSION_REJECTED/);
+  await assert.rejects(requireReplaySession(client, 'A', () => 'A', async () => ({ supported: false, state: null })), /SESSION_REJECTED/);
   client.rpc = async () => ({ data: { profile_found: true, is_active: false } });
   await assert.rejects(requireReplaySession(client, 'A', () => 'A', async () => ({})), /SESSION_REJECTED/);
 });

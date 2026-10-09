@@ -15,7 +15,7 @@ export async function requireReplaySession(client, ownerId, getOwner, checkTrust
   }
   const trusted = await checkTrustedSession();
   assertOwner();
-  if (trusted.supported && trusted.state?.valid === false) {
+  if (!trusted.supported || trusted.state?.valid !== true) {
     throw Object.assign(new Error('SESSION_REJECTED'), { code: 'SESSION_REJECTED' });
   }
   return true;
