@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 const rawBaseUrl = process.argv[2] || process.env.DEPLOYMENT_URL;
 
 if (!rawBaseUrl) {
@@ -58,11 +60,13 @@ async function verify() {
   const manifest = await manifestResponse.json();
   const modules = Object.keys(manifest.assets || {}).filter(path => path.endsWith('.js'));
   if (!modules.length) throw new Error('JAVASCRIPT_MANIFEST_EMPTY');
-  for (const path of modules) {
+  for (const [path, expectedHash] of Object.entries(manifest.assets)) {
     const response = await request(path);
-    if (!response.ok || !/(?:javascript|ecmascript)/i.test(response.headers.get('content-type') || '')) {
+    if (!response.ok || (path.endsWith('.js') && !/(?:javascript|ecmascript)/i.test(response.headers.get('content-type') || ''))) {
       throw new Error('JAVASCRIPT_ASSET_INVALID:' + path);
     }
+    const actualHash = createHash('sha256').update(Buffer.from(await response.arrayBuffer())).digest('hex');
+    if (actualHash !== expectedHash) throw new Error('DEPLOYED_ASSET_HASH_MISMATCH:' + path);
   }
   const missing = await request('/assets/deployment-missing-probe.js');
   if (missing.status !== 404) throw new Error('MISSING_ASSET_MUST_RETURN_404');

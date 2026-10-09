@@ -10,7 +10,7 @@ async function collectFiles(directory, prefix = '') {
   for (const entry of entries) {
     const relativePath = path.posix.join(prefix, entry.name);
     if (entry.isDirectory()) files.push(...await collectFiles(path.join(directory, entry.name), relativePath));
-    else if (entry.name !== 'sw.js' && entry.name !== '_headers' && !entry.name.endsWith('.map')) files.push(`/${relativePath}`);
+    else if (!['sw.js', '_headers', '_redirects'].includes(entry.name) && !entry.name.endsWith('.map')) files.push(`/${relativePath}`);
   }
   return files.sort();
 }
