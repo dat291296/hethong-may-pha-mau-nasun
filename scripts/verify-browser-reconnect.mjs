@@ -33,7 +33,7 @@ async function cli(...args) {
     child.on('error', () => reject(new Error('BROWSER_CLI_UNAVAILABLE')));
     child.on('exit', code => {
       clearTimeout(timeout);
-      const safeFailure = output.match(/REVOKED_REPLAY_ALLOWED|PENDING_LOST|FRESH_LOGIN_LOST_PENDING|ACCOUNT_QUEUE_LEAK|RETURN_LOGIN_LOST_PENDING|QUEUE_FAILED|CONTROL_FAILED|LOGIN_FAILED|TimeoutError|TypeError|ReferenceError/);
+      const safeFailure = output.match(/PROBE_NOT_READY_(?:ready|ownerIs)_[ABX]|REVOKED_REPLAY_ALLOWED|PENDING_LOST|FRESH_LOGIN_LOST_PENDING|ACCOUNT_QUEUE_LEAK|RETURN_LOGIN_LOST_PENDING|QUEUE_FAILED|CONTROL_FAILED|LOGIN_FAILED|TimeoutError|TypeError|ReferenceError/);
       code === 0 && !output.includes('### Error') ? resolve() : reject(new Error('BROWSER_STEP_FAILED: ' + args[0] + (safeFailure ? ' ' + safeFailure[0] : '')));
     });
   });
@@ -112,7 +112,7 @@ createRoot(document.getElementById('root')).render(<AuthProvider><Probe/></AuthP
         if (await page.evaluate(async ({method,argument}) => await window.uiProbe[method](argument), {method,argument})) return;
         await page.waitForTimeout(150);
       }
-      throw Error('PROBE_NOT_READY');
+      throw Error('PROBE_NOT_READY_' + method + '_' + (argument || 'X'));
     }
     await page.waitForFunction(()=>window.uiProbe);
     await page.evaluate(()=>window.uiProbe.login());
