@@ -49,3 +49,9 @@ test('caps exponential retry delays', () => {
   assert.equal(getRetryDelay(1), 4000);
   assert.equal(getRetryDelay(99), 5 * 60 * 1000);
 });
+
+test('permission, authentication and conflict failures stop automatic replay', () => {
+  for (const status of [401, 403, 409, 422]) assert.equal(classifySyncError({ status, message: 'rejected' }), 'needs_review');
+  for (const code of ['42501', 'PGRST301']) assert.equal(classifySyncError({ code }), 'needs_review');
+  assert.equal(classifySyncError({ status: 503 }), 'retry_wait');
+});

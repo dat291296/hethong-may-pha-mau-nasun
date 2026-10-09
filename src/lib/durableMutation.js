@@ -19,3 +19,9 @@ export async function persistMutation({ online, write, queue }) {
   await queue();
   return { queued: true };
 }
+
+export async function persistQueueReplacement({ save, remove, newItem, previousId }) {
+  if (!await save(newItem)) throw new Error('OFFLINE_QUEUE_PERSIST_FAILED');
+  // Never delete the previous durable edit until its replacement is committed.
+  if (previousId) await remove(previousId);
+}

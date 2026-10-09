@@ -1,3 +1,5 @@
+import { saveDeviceEdit } from '../lib/deviceEdit.js';
+import { requireCompleteWrite } from '../lib/guardedWrite.js';
 import { fetchAllRows } from '../lib/paginatedQuery.js';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { persistMutation } from '../lib/durableMutation.js';
@@ -39,27 +41,14 @@ function createPersistenceError(message) {
   return error;
 }
 
-function getMissingSchemaColumn(error) {
-  const message = String(error?.message || '');
-  const match = message.match(/Could not find the '([^']+)' column/i);
-  return match?.[1] || null;
-}
-
-async function writeWithSchemaFallback(table, payload, mode = 'insert') {
-  const compatiblePayload = { ...payload };
-  while (true) {
-    const result = await safeQuery(
-      sb => mode === 'upsert'
-        ? sb.from(table).upsert(compatiblePayload, { onConflict: 'id' })
-        : sb.from(table).insert(compatiblePayload),
-      `${mode}Device:${table}`
-    );
-    if (!result.error) return;
-    const missingColumn = getMissingSchemaColumn(result.error);
-    if (!missingColumn || !(missingColumn in compatiblePayload)) throw result.error;
-    console.warn(`[Assets] ${table}.${missingColumn} is absent; retrying without it.`);
-    delete compatiblePayload[missingColumn];
-  }
+async function writeDeviceStrict(table, payload, mode = 'insert') {
+  const result = await safeQuery(
+    sb => mode === 'upsert'
+      ? sb.from(table).upsert(payload, { onConflict: 'id' }).select('id')
+      : sb.from(table).insert(payload).select('id'),
+    `${mode}Device:${table}`
+  );
+  requireCompleteWrite(result);
 }
 
 /**
@@ -232,7 +221,7 @@ export function useAssets() {
 
     if (isSupabaseConfigured && navigator.onLine) {
       try {
-        await writeWithSchemaFallback(cfg.table, dbPayload);
+        await writeDeviceStrict(cfg.table, dbPayload);
         await fetchAssets();
       } catch (err) {
         console.warn(`[Offline] Failed online addStockDevice for ${category}. Queueing action.`, err);
@@ -245,6 +234,52 @@ export function useAssets() {
   }, [fetchAssets]);
 
   // ── Generic edit device ────────────────────────────────────────────────────
+  const editDeviceDetails = useCallback(async (category, id, updates, revision) => {
+    const tableMap = {
+      dispensers: { setter: setDispensers, cacheKey: 'dispensers', table: 'dispensers', singular: 'dispenser' },
+      mixers:     { setter: setMixers,     cacheKey: 'mixers',     table: 'mixers',     singular: 'mixer' },
+      computers:  { setter: setComputers,  cacheKey: 'computers',  table: 'computers',  singular: 'computer' },
+      printers:   { setter: setPrinters,   cacheKey: 'printers',   table: 'printers',   singular: 'printer' },
+      dispenser:  { setter: setDispensers, cacheKey: 'dispensers', table: 'dispensers', singular: 'dispenser' },
+      mixer:      { setter: setMixers,     cacheKey: 'mixers',     table: 'mixers',     singular: 'mixer' },
+      computer:   { setter: setComputers,  cacheKey: 'computers',  table: 'computers',  singular: 'computer' },
+      printer:    { setter: setPrinters,   cacheKey: 'printers',   table: 'printers',   singular: 'printer' },
+    };
+
+    const cfg = tableMap[category];
+    const targetTable = cfg ? cfg.table : category;
+    const singularCat = cfg ? cfg.singular : category;
+
+    const { id: _ignoredId, ...dbUpdates } = mapDeviceToDb({ ...updates, id }, singularCat);
+    const appUpdates = { ...updates, id, isUpdated: true, updatedAt: new Date().toISOString() };
+
+    if ('is_assigned' in updates) appUpdates.isAssigned = updates.is_assigned;
+    if ('set_code' in updates) appUpdates.setCode = updates.set_code;
+
+    if (!cfg) throw createPersistenceError('Loại thiết bị không hợp lệ.');
+    if (isSupabaseConfigured) {
+      if (!navigator.onLine) throw createPersistenceError('Cần kết nối mạng để lưu thiết bị và bộ máy đồng thời. Nội dung đang nhập được giữ nguyên.');
+      await saveDeviceEdit(query => safeQuery(query, `editDevice:${targetTable}`), targetTable, id, dbUpdates, revision);
+      await fetchAssets();
+    } else {
+      cfg.setter(prev => {
+        const updated = prev.map(d => d.id === id ? { ...d, ...appUpdates } : d);
+        persistAssetsLocal(cfg.cacheKey, updated);
+        return updated;
+      });
+      setSystemSets(prev => prev.map(set => {
+        const fields = singularCat === 'dispenser' ? { dispenserId: id, dispenserModel: updates.model, dispenserSerial: updates.serial }
+          : singularCat === 'mixer' ? { mixerId: id, mixerModel: updates.model, mixerSerial: updates.serial }
+          : singularCat === 'computer' ? { computerId: id, computerType: updates.type, computerSerial: updates.serial }
+          : { printerId: id, printerSerial: updates.serial };
+        const key = `${singularCat}Id`;
+        if (set.setCode === updates.setCode && updates.isAssigned) return { ...set, ...fields };
+        if (set[key] === id) return { ...set, ...Object.fromEntries(Object.keys(fields).map(field => [field, field === key ? null : ''])) };
+        return set;
+      }));
+    }
+  }, [fetchAssets]);
+
   const editDevice = useCallback(async (category, id, updates) => {
     const tableMap = {
       dispensers: { setter: setDispensers, cacheKey: 'dispensers', table: 'dispensers', singular: 'dispenser' },
@@ -277,23 +312,11 @@ export function useAssets() {
 
     if (isSupabaseConfigured && navigator.onLine) {
       try {
-        const compatibleUpdates = { ...dbUpdates };
-        let data = null;
-        while (true) {
-          const result = await safeQuery(
-            sb => sb.from(targetTable).update(compatibleUpdates).eq('id', id).select('id'),
-            `editDevice:${targetTable}`
-          );
-          if (!result.error) {
-            data = result.data;
-            break;
-          }
-          const missingColumn = getMissingSchemaColumn(result.error);
-          if (!missingColumn || !(missingColumn in compatibleUpdates)) throw result.error;
-          console.warn(`[Assets] ${targetTable}.${missingColumn} is absent; retrying with the legacy schema.`);
-          delete compatibleUpdates[missingColumn];
-        }
-        if (!data || data.length === 0) throw createPersistenceError('Không có quyền cập nhật hoặc thiết bị không tồn tại trên Supabase');
+        const result = await safeQuery(
+          sb => sb.from(targetTable).update(dbUpdates).eq('id', id).select('id'),
+          `editDevice:${targetTable}`
+        );
+        requireCompleteWrite(result);
         await fetchAssets();
       } catch (err) {
         console.warn(`[Offline] Failed online editDevice for ${targetTable}. Queueing action.`, err);
@@ -383,7 +406,7 @@ export function useAssets() {
       if (navigator.onLine) {
         try {
           for (const item of dbItems) {
-            await writeWithSchemaFallback(cfg.table, item, 'upsert');
+            await writeDeviceStrict(cfg.table, item, 'upsert');
           }
           await fetchAssets();
         } catch (err) {
@@ -548,6 +571,7 @@ export function useAssets() {
     loading,
     addStockDevice,
     editDevice,
+    editDeviceDetails,
     deleteDevice,
     deleteSystemSet,
     importDevices,
@@ -646,7 +670,7 @@ function mapDeviceToDb(obj, category) {
 
   // Basic identification & PK
   if (obj.id !== undefined) dbObj.id = obj.id;
-  if (cat !== 'computer' && cat !== 'computers' && obj.serial !== undefined && obj.serial !== '') dbObj.serial = obj.serial;
+  if (obj.serial !== undefined && obj.serial !== '' && obj.serial !== '—') dbObj.serial = obj.serial;
 
   // Assignment status & system set link
   if (obj.isAssigned !== undefined || obj.is_assigned !== undefined) {

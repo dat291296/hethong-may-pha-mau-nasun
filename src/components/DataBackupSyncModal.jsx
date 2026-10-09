@@ -17,6 +17,7 @@ import { createSecureBackup, parseAndValidateBackup, MAX_BACKUP_BYTES } from '..
 import { useAuth } from '../context/AuthContext.jsx';
 import { ROLES } from '../security/rbac.js';
 import { PERMISSION_PURPOSES, writeSensitiveClipboard } from '../security/permissionPolicy.js';
+import { useSensitiveActionGate } from './SensitiveActionGate.jsx';
 
 /**
  * DataBackupSyncModal - Export/Import local device data & trigger cloud sync
@@ -36,6 +37,7 @@ export default function DataBackupSyncModal({
   onImportData
 }) {
   const { role } = useAuth();
+  const { requireAuthentication, dialog: authenticationDialog } = useSensitiveActionGate();
   const canManageBackups = role === ROLES.ADMIN;
   const [activeTab, setActiveTab] = useState('export'); // 'export' | 'import' | 'sync'
   const [importJsonText, setImportJsonText] = useState('');
@@ -46,9 +48,14 @@ export default function DataBackupSyncModal({
   const [syncHealth, setSyncHealth] = useState(null);
 
   const refreshSyncHealth = React.useCallback(async () => {
+    try {
     const snapshot = await getSyncHealthSnapshot();
     setSyncHealth(snapshot);
     setQueueCount(snapshot.queueTotal);
+    } catch {
+      setSyncStatus('error');
+      setSyncMsg('Không đọc được hàng đợi. Không xóa dữ liệu; vui lòng thử lại.');
+    }
   }, []);
 
   // Check offline queue count on mount/tab change
@@ -87,6 +94,7 @@ export default function DataBackupSyncModal({
   const handleExportFile = async () => {
     if (!canManageBackups) return alert('Chỉ Admin được phép xuất toàn bộ dữ liệu.');
     try {
+      await requireAuthentication();
       const dataPkg = await createSecureBackup(getBackupData());
       const jsonStr = JSON.stringify(dataPkg, null, 2);
       const blob = new Blob([jsonStr], { type: 'application/json' });
@@ -108,6 +116,7 @@ export default function DataBackupSyncModal({
   const handleCopyJson = async () => {
     if (!canManageBackups) return alert('Chỉ Admin được phép sao chép toàn bộ dữ liệu.');
     try {
+      await requireAuthentication();
       const dataPkg = await createSecureBackup(getBackupData());
       await writeSensitiveClipboard(JSON.stringify(dataPkg), PERMISSION_PURPOSES.BACKUP_CLIPBOARD);
       setCopied(true);
@@ -144,6 +153,7 @@ export default function DataBackupSyncModal({
     }
 
     try {
+      await requireAuthentication();
       const result = await parseAndValidateBackup(importJsonText);
       const integrityMessage = result.integrityVerified
         ? 'Tệp đã vượt qua kiểm tra toàn vẹn SHA-256.'
@@ -191,6 +201,8 @@ export default function DataBackupSyncModal({
   };
 
   return (
+    <>
+    {authenticationDialog}
     <div className="modal-backdrop" onClick={onClose}>
       <div 
         className="modal-container" 
@@ -446,5 +458,6 @@ export default function DataBackupSyncModal({
         </div>
       </div>
     </div>
+    </>
   );
 }

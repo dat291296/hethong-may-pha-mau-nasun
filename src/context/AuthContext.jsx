@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { createAuthEventScheduler } from '../security/authEventScheduler.js';
 import { ROLES, ROLE_LABELS, hasPermission } from '../security/rbac.js';
 import { supabase, isSupabaseConfigured, isDevelopmentFallback } from '../lib/supabase.js';
 import { clearOfflineStorage, getCache, getQueue, initializeOfflineStorage, setCache } from '../lib/offlineDb.js';
@@ -40,6 +41,7 @@ export function AuthProvider({ children }) {
   const [authRedirectError, setAuthRedirectError] = useState('');
   const sessionValidationRunning = useRef(false);
   const trustedSessionRegistered = useRef(false);
+  const sessionOwner = useRef(undefined);
 
   // ── Initialize auth ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -114,8 +116,9 @@ export function AuthProvider({ children }) {
         setLoading(false);
       });
 
-      const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      const authEvents = createAuthEventScheduler(
         async (event, session) => {
+          if ((session?.user?.id || null) !== sessionOwner.current) return;
           const currentUrlParams = new URLSearchParams(window.location.search);
           const currentIsVerified = currentUrlParams.get('verified') === 'true';
           const currentIsRecovery = currentUrlParams.get('recovery') === 'true';
@@ -149,9 +152,16 @@ export function AuthProvider({ children }) {
             setRole(ROLES.VIEWER);
             setLoading(false);
           }
-        }
+        },
+        () => { console.warn('[Auth] Deferred auth event failed'); setLoading(false); }
       );
-      return () => subscription.unsubscribe();
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+        const owner = session?.user?.id || null;
+        if (sessionOwner.current !== owner) trustedSessionRegistered.current = false;
+        sessionOwner.current = owner;
+        authEvents.listener(event, session);
+      });
+      return () => { subscription.unsubscribe(); authEvents.dispose(); };
     } else if (isDevelopmentFallback) {
       // Development: use mock user (dropdown role selector in Header)
       initializeOfflineStorage(DEV_USERS[ROLES.ADMIN].id).finally(() => {
@@ -170,6 +180,8 @@ export function AuthProvider({ children }) {
   // ── Load user profile + role from Supabase ──────────────────────────────────
   const loadUserProfile = async (authUser) => {
     try {
+      if (sessionOwner.current !== undefined && sessionOwner.current !== authUser.id) return;
+      sessionOwner.current = authUser.id;
       await initializeOfflineStorage(authUser.id);
 
       const { data: profile, error } = await supabase
@@ -177,6 +189,8 @@ export function AuthProvider({ children }) {
         .select('id, full_name, role, avatar_url, managed_region, is_active')
         .eq('id', authUser.id)
         .single();
+
+      if (sessionOwner.current !== authUser.id) return;
 
       if (profile?.is_active === false) {
         await clearOfflineStorage(authUser.id);
@@ -200,11 +214,20 @@ export function AuthProvider({ children }) {
       };
       setUser(resolvedUser);
       await persistOfflineUser(resolvedUser);
+      if (sessionOwner.current !== authUser.id) return;
       setRole(finalRole);
       if (navigator.onLine && !trustedSessionRegistered.current) {
         try {
           const { supported, state } = await registerTrustedDeviceSession();
+          if (sessionOwner.current !== authUser.id) return;
           trustedSessionRegistered.current = supported;
+          if (supported && state?.valid === false) {
+            await supabase.auth.signOut({ scope: 'local' });
+            await clearOfflineStorage(authUser.id);
+            setUser(null);
+            setRole(ROLES.VIEWER);
+            return;
+          }
           if (state?.anomaly_detected && !sessionStorage.getItem('nasun-device-alert-shown')) {
             sessionStorage.setItem('nasun-device-alert-shown', 'true');
             window.alert('Phát hiện đăng nhập từ thiết bị hoặc vị trí mới. Sự kiện đã được ghi lại để quản trị viên kiểm tra.');
@@ -214,6 +237,7 @@ export function AuthProvider({ children }) {
         }
       }
     } catch (err) {
+      if (sessionOwner.current !== authUser.id) return;
       console.error('[Auth] Failed to load user profile:', err.message);
       if (err?.code === 'ACCOUNT_DISABLED' || err?.message === 'ACCOUNT_DISABLED') {
         setUser(null);
@@ -228,6 +252,7 @@ export function AuthProvider({ children }) {
         role: ROLES.VIEWER,
         managedRegion: 'Miền Bắc'
       };
+      if (sessionOwner.current !== authUser.id) return;
       setUser(fallbackUser);
       await persistOfflineUser(fallbackUser);
       setRole(fallbackUser.role || ROLES.VIEWER);
@@ -237,8 +262,9 @@ export function AuthProvider({ children }) {
   };
 
   // ── Dev-only: switch role via dropdown ─────────────────────────────────────
-  const switchDevRole = useCallback((newRole) => {
+  const switchDevRole = useCallback(async (newRole) => {
     if (!isDevelopmentFallback) return;
+    await initializeOfflineStorage((DEV_USERS[newRole] || DEV_USERS[ROLES.VIEWER]).id);
     setRole(newRole);
     setUser(DEV_USERS[newRole] || DEV_USERS[ROLES.VIEWER]);
   }, []);
@@ -276,6 +302,7 @@ export function AuthProvider({ children }) {
 
   // ── Sign out ───────────────────────────────────────────────────────────────
   const signOut = useCallback(async () => {
+    try {
     let pendingItems = await getQueue();
     if (pendingItems.length > 0 && navigator.onLine) {
       await syncOfflineQueue();
@@ -287,13 +314,18 @@ export function AuthProvider({ children }) {
     }
     const signedOutUserId = user?.id;
     if (isSupabaseConfigured && supabase) {
-      await supabase.auth.signOut();
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
     }
     await clearOfflineStorage(signedOutUserId);
     setUser(null);
     setRole(ROLES.VIEWER);
     trustedSessionRegistered.current = false;
     return true;
+    } catch {
+      window.alert('Chưa xác minh được dữ liệu chờ gửi. Hệ thống giữ nguyên dữ liệu và chưa đăng xuất.');
+      return false;
+    }
   }, [user]);
 
   const value = {
@@ -323,13 +355,14 @@ export function AuthProvider({ children }) {
     let cancelled = false;
 
     const clearInvalidSession = async (reason) => {
+      if (cancelled || sessionOwner.current !== user.id) return;
       console.warn(`[Auth] Session invalidated: ${reason}`);
       try {
         await supabase.auth.signOut({ scope: 'local' });
       } catch (error) {
         console.warn('[Auth] Local session cleanup failed:', error.message);
       }
-      if (cancelled) return;
+      if (cancelled || (sessionOwner.current && sessionOwner.current !== user.id)) return;
       setUser(null);
       setRole(ROLES.VIEWER);
       await clearOfflineStorage(user.id);
@@ -340,6 +373,7 @@ export function AuthProvider({ children }) {
       sessionValidationRunning.current = true;
       try {
         const { data: state, error } = await supabase.rpc('get_session_security_state');
+        if (cancelled || sessionOwner.current !== user.id) return;
         if (error) {
           if ([401, 403].includes(error.status) || ['PGRST301', '28000'].includes(error.code)) {
             await clearInvalidSession(error.code || 'AUTH_REJECTED');
@@ -357,6 +391,7 @@ export function AuthProvider({ children }) {
         const trustedResult = trustedSessionRegistered.current
           ? await validateTrustedDeviceSession()
           : await registerTrustedDeviceSession();
+        if (cancelled || sessionOwner.current !== user.id) return;
         trustedSessionRegistered.current = trustedResult.supported;
         if (trustedResult.supported && trustedResult.state?.valid === false) {
           await clearInvalidSession(trustedResult.state.reason || 'TRUSTED_SESSION_REJECTED');
@@ -366,6 +401,7 @@ export function AuthProvider({ children }) {
         const expiresIn = Number(state.token_expires_at || 0) - Math.floor(Date.now() / 1000);
         if (expiresIn <= TOKEN_REFRESH_WINDOW_SECONDS) {
           const { error: refreshError } = await supabase.auth.refreshSession();
+          if (cancelled || sessionOwner.current !== user.id) return;
           if (refreshError) {
             await clearInvalidSession('TOKEN_REFRESH_FAILED');
             return;
@@ -374,6 +410,7 @@ export function AuthProvider({ children }) {
 
         if (state.role !== user.role || state.managed_region !== user.managedRegion) {
           const { data: authData, error: userError } = await supabase.auth.getUser();
+          if (cancelled || sessionOwner.current !== user.id) return;
           if (userError || !authData.user) {
             await clearInvalidSession('USER_VALIDATION_FAILED');
             return;

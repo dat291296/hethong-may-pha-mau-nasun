@@ -62,6 +62,8 @@ jobs:
           BACKUP_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL || secrets.VITE_SUPABASE_URL }}
           BACKUP_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.BACKUP_SUPABASE_SERVICE_ROLE_KEY }}
         run: node scripts/export-storage-backup.mjs backup/recovery/storage
+      - name: Independently verify exported Storage files
+        run: node scripts/verify-storage-archive.mjs backup/recovery/storage
       - name: Encrypt recovery archive
         env:
           BACKUP_ENCRYPTION_PASSPHRASE: ${{ secrets.BACKUP_ENCRYPTION_PASSPHRASE }}

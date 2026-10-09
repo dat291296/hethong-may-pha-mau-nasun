@@ -12,7 +12,7 @@ const limits = {
 };
 
 const indexHtml = await readFile(join(distDir, 'index.html'), 'utf8');
-const entryMatch = indexHtml.match(/src="\.\/assets\/(index-[^"]+\.js)"/);
+const entryMatch = indexHtml.match(/src="(?:\.\/|\/)assets\/(index-[^"]+\.js)"/);
 if (!entryMatch) throw new Error('Unable to identify the production entry bundle');
 
 const files = (await readdir(assetsDir)).filter(file => file.endsWith('.js'));

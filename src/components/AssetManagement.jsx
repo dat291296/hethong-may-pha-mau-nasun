@@ -1,3 +1,4 @@
+import { prepareDeviceEdit, findAssignedDevice } from '../lib/deviceEdit.js';
 import WorkspaceFilterBar from './WorkspaceFilterBar.jsx';
 import { matchesSearch, matchesDateRange, uniqueOptions, canEditRegion } from '../lib/workspaceFilters.js';
 import TechnicalResources from './TechnicalResources';
@@ -209,6 +210,7 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
   const openScannedMachine = value => { const machine = resolveMachine(systemSets, value); if (!machine) { setScanError('Không tìm thấy bộ máy duy nhất. Nhập đúng mã bộ máy hoặc seri.'); return; } setScanError(''); setSelectedSetDetails(machine); };
 
   // Device Edit Modal state
+  const [isSavingDevice, setIsSavingDevice] = useState(false);
   const [editingDevice, setEditingDevice] = useState(null); // { category: 'dispenser'|'mixer'|'computer'|'printer', data }
   const [editFormData, setEditFormData] = useState({});
 
@@ -440,26 +442,29 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
 
   const handleEditSubmit = async (e) => {
     e.preventDefault();
-    if (!editingDevice) return;
+    if (!editingDevice || isSavingDevice) return;
     const isAssigned = !!editFormData.isAssigned && !!editFormData.setCode;
     const cleanType = editingDevice.category === 'computer'
       ? (editFormData.type === 'Case' ? 'Case' : 'All In One')
       : editFormData.type;
-    const finalData = {
+    try {
+      const finalData = prepareDeviceEdit(editingDevice.category, {
       ...editFormData,
       type: cleanType,
       model: editingDevice.category === 'computer' ? cleanType : editFormData.model,
-      serial: editingDevice.category === 'computer' ? '—' : (editFormData.serial?.trim() || 'N/A'),
+      serial: editFormData.serial,
       isAssigned,
       setCode: isAssigned ? editFormData.setCode : null
-    };
-    try {
+      }, editingDevice.data);
+      setIsSavingDevice(true);
       await onEditDevice(editingDevice.category, finalData);
       alert('✅ Đã lưu thông tin chỉnh sửa thành công!');
       setEditingDevice(null);
     } catch (err) {
       console.error('Lỗi khi lưu thiết bị:', err);
-      alert('⚠️ Có lỗi xảy ra khi lưu thiết bị!');
+      alert('⚠️ ' + (err.message || 'Không lưu được thiết bị. Giữ nội dung đang nhập và thử lại.'));
+    } finally {
+      setIsSavingDevice(false);
     }
   };
 
@@ -1584,7 +1589,7 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
           <div style={{ marginBottom: '14px' }}>
             <h3 style={{ fontSize: '1rem', fontWeight: '800', marginBottom: '4px' }}>Danh Mục Máy Tính (Case & AIO)</h3>
             <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '10px' }}>
-              *Lưu ý: Đã bỏ quản lý số seri máy tính. Ổn áp do NPP tự trang bị.
+              *Lưu ý: Mã quản lý được giữ nguyên khi chỉnh sửa. Ổn áp do NPP tự trang bị.
             </span>
             {renderDeviceFilterBar('Máy Tính', computers.length, true)}
           </div>
@@ -2037,18 +2042,18 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
                 <h3 style={{ fontWeight: '800' }}>
                   Chỉnh Sửa Thông Tin {editingDevice.category === 'computer' ? `Máy Tính [Mã: ${editFormData.id}]` : `Thiết Bị [${editFormData.serial || 'Không seri'}]`}
                 </h3>
-                <button className="btn btn-secondary btn-sm" onClick={() => setEditingDevice(null)}>✕</button>
+                <button className="btn btn-secondary btn-sm" disabled={isSavingDevice} onClick={() => setEditingDevice(null)}>✕</button>
               </div>
               <form onSubmit={handleEditSubmit}>
                 <div className="modal-body" ref={el => { if (el) el.scrollTop = 0; }}>
                   
                   {/* ROW 1: SERIAL NUMBER & MODEL - TOP OF FORM */}
                   <div className="responsive-form-grid">
-                    {editingDevice.category !== 'computer' && (
+                    {editingDevice && (
                       <div className="form-group">
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
                           <label className="form-label" style={{ marginBottom: 0 }}>
-                            🏷️ Số Seri (Serial) <span style={{ color: 'var(--text-muted)', fontWeight: '400' }}>(Tùy chọn)</span>
+                            🏷️ Số Seri (Serial) <span style={{ color: 'var(--text-muted)', fontWeight: '400' }}>{editingDevice.category === 'computer' ? '(giữ nguyên nếu để trống)' : '(bắt buộc)'}</span>
                           </label>
                           <button
                             type="button"
@@ -2066,7 +2071,8 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
                         <input
                           type="text"
                           className="form-input"
-                          placeholder="Có thể để trống hoặc bấm Quét mã"
+                          placeholder="Nhập seri hoặc bấm Quét mã"
+                          required={editingDevice.category !== 'computer'}
                           value={editFormData.serial || ''}
                           onChange={e => setEditFormData({ ...editFormData, serial: e.target.value })}
                         />
@@ -2227,8 +2233,8 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
 
                 </div>
                 <div className="modal-footer">
-                  <button type="button" className="btn btn-secondary" onClick={() => setEditingDevice(null)}>Hủy Bỏ</button>
-                  <button type="submit" className="btn btn-primary">Lưu Thay Đổi</button>
+                  <button type="button" className="btn btn-secondary" disabled={isSavingDevice} onClick={() => setEditingDevice(null)}>Hủy Bỏ</button>
+                  <button type="submit" className="btn btn-primary" disabled={isSavingDevice}>{isSavingDevice ? 'Đang lưu…' : 'Lưu Thay Đổi'}</button>
                 </div>
               </form>
             </div>
@@ -2748,7 +2754,7 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
                 </div>
                 <div className="modal-footer">
                   <button type="button" className="btn btn-secondary" onClick={() => setEditingSet(null)}>Hủy Bỏ</button>
-                  <button type="submit" className="btn btn-primary">Lưu Thay Đổi</button>
+                  <button type="submit" className="btn btn-primary" disabled={isSavingDevice}>{isSavingDevice ? 'Đang lưu…' : 'Lưu Thay Đổi'}</button>
                 </div>
               </form>
             </div>
@@ -2986,7 +2992,7 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
                 {profileTab === 'documents' && <TechnicalResources machineModel={selectedSetDetails.dispenserModel} modelOptions={[...new Set(systemSets.map(machine => machine.dispenserModel).filter(Boolean))]} />}
                 <div hidden={profileTab !== 'equipment'}>
                 <p className="resource-muted">Cần bổ sung: {missingMachineFields(selectedSetDetails).join(' · ') || 'Đã có các trường seri và hạn bảo trì'}</p>
-                <div className="workspace-tabs">{[['dispenser','Máy chiết',dispensers,selectedSetDetails.dispenserId],['mixer','Máy lắc',mixers,selectedSetDetails.mixerId],['printer','Máy in',printers,selectedSetDetails.printerId]].map(([category,label,list,id]) => { const matches = list.filter(item => id ? item.id === id : item.setCode === selectedSetDetails.setCode); const device = matches.length === 1 ? matches[0] : null; return device && <button key={category} disabled={!can('asset:edit')} onClick={() => { setSelectedSetDetails(null); handleOpenEditDevice(category,device); }}>Bổ sung {label.toLocaleLowerCase('vi')}</button>; })}</div>
+                <div className="workspace-tabs">{[['computer','Máy tính',computers,selectedSetDetails.computerId],['dispenser','Máy chiết',dispensers,selectedSetDetails.dispenserId],['mixer','Máy lắc',mixers,selectedSetDetails.mixerId],['printer','Máy in',printers,selectedSetDetails.printerId]].map(([category,label,list,id]) => { const matches = list.filter(item => id ? item.id === id : item.setCode === selectedSetDetails.setCode); const device = matches.length === 1 ? matches[0] : null; return device && <button key={category} disabled={!can('asset:edit')} onClick={() => { setSelectedSetDetails(null); handleOpenEditDevice(category,device); }}>Bổ sung {label.toLocaleLowerCase('vi')}</button>; })}</div>
                 <div className="machine-profile-extra"><div><strong>Liên hệ NPP:</strong> {npps.find(item => item.id === selectedSetDetails.nppId)?.contactPerson || 'Chưa ghi nhận'} · {npps.find(item => item.id === selectedSetDetails.nppId)?.phone || 'Chưa có số điện thoại'}</div><div><strong>Địa chỉ:</strong> {npps.find(item => item.id === selectedSetDetails.nppId)?.address || 'Chưa ghi nhận'}</div></div>
                 {/* Machine Info Cards (4 devices) */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '10px', marginBottom: '16px' }}>
@@ -3006,7 +3012,7 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
                   </div>
                   <div style={{ background: 'var(--bg-main)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '10px' }}>
                     <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)', fontWeight: '700' }}>MÁY IN</div>
-                    <div style={{ fontWeight: '700', fontSize: '0.875rem', marginTop: '2px' }}>{selectedSetDetails.printerModel || 'QL700'}</div>
+                    <div style={{ fontWeight: '700', fontSize: '0.875rem', marginTop: '2px' }}>{findAssignedDevice('printer', printers, selectedSetDetails)?.model || selectedSetDetails.printerModel || 'Chưa ghi nhận'}</div>
                     <div style={{ fontSize: '0.75rem', color: 'var(--accent-cyan)', fontFamily: 'var(--font-mono)' }}>Seri: {selectedSetDetails.printerSerial || 'N/A'}</div>
                   </div>
                 </div>

@@ -1,0 +1,185 @@
+{
+  "schemaVersion": 1,
+  "scope": "PWA source, selected Chromium/IndexedDB checks and isolated Supabase staging; production and native packages not verified",
+  "groups": [
+    {
+      "id": "MASVS-STORAGE",
+      "title": "Lưu trữ",
+      "state": "source-only",
+      "evidence": [
+        "src/lib/offlineDb.js"
+      ],
+      "implemented": "Cache mã hóa theo tài khoản",
+      "next": "Kiểm thử đổi tài khoản, logout và giới hạn cache; bảo toàn hàng đợi chưa gửi",
+      "nativeState": "not-verified"
+    },
+    {
+      "id": "MASVS-CRYPTO",
+      "title": "Mã hóa",
+      "state": "source-only",
+      "evidence": [
+        "scripts/encrypt-recovery-backup.mjs"
+      ],
+      "implemented": "AES-GCM và xác thực backup",
+      "next": "Kiểm thử vòng đời khóa, chuyển khóa và khôi phục",
+      "nativeState": "not-verified"
+    },
+    {
+      "id": "MASVS-AUTH",
+      "title": "Xác thực và phân quyền",
+      "state": "source-only",
+      "evidence": [
+        "scripts/verify-rls.mjs"
+      ],
+      "implemented": "PKCE, kiểm tra phiên, RLS verifier",
+      "next": "Hoàn thiện staging; test quyền server, Storage và thao tác nhạy cảm",
+      "nativeState": "not-verified"
+    },
+    {
+      "id": "MASVS-NETWORK",
+      "title": "Kết nối",
+      "state": "source-only",
+      "evidence": [
+        "src/security/networkPolicy.js"
+      ],
+      "implemented": "HTTPS, allowlist và timeout",
+      "next": "Kiểm tra HTTPS, upload, download và Realtime trên môi trường chạy",
+      "nativeState": "not-verified"
+    },
+    {
+      "id": "MASVS-PLATFORM",
+      "title": "Quyền thiết bị",
+      "state": "source-only",
+      "evidence": [
+        "src/security/permissionPolicy.js"
+      ],
+      "implemented": "Quyền camera và định vị có chính sách",
+      "next": "Test từ chối quyền, thu hồi quyền và cleanup camera",
+      "nativeState": "not-verified"
+    },
+    {
+      "id": "MASVS-CODE",
+      "title": "Chất lượng code",
+      "state": "source-only",
+      "evidence": [
+        "tests/securityMasvs6.test.mjs"
+      ],
+      "implemented": "CI, validation và kiểm tra production build",
+      "next": "Bổ sung test hành vi và test luồng nghiệp vụ thực tế",
+      "nativeState": "not-verified"
+    },
+    {
+      "id": "MASVS-RESILIENCE",
+      "title": "Cập nhật và toàn vẹn",
+      "state": "source-only",
+      "evidence": [
+        "scripts/generate-service-worker.mjs"
+      ],
+      "implemented": "Integrity manifest và cập nhật PWA",
+      "next": "Test cập nhật khi có bản nháp, rollback và cache hỏng",
+      "nativeState": "not-verified"
+    },
+    {
+      "id": "MASVS-PRIVACY",
+      "title": "Quyền riêng tư",
+      "state": "source-only",
+      "evidence": [
+        "security/masvs/privacy-inventory.json"
+      ],
+      "implemented": "Danh mục dữ liệu và thông báo quyền riêng tư",
+      "next": "Chốt thời hạn lưu; luồng quản lý dữ liệu cá nhân và sự đồng ý",
+      "nativeState": "not-verified"
+    }
+  ],
+  "priorities": [
+    {
+      "id": "rls",
+      "priority": "P1",
+      "title": "Cấu hình staging và xác minh quyền",
+      "state": "partial",
+      "done": "Staging đã nghiệm thu anonymous, 5 vai trò, phạm vi vùng, recent authentication, Storage riêng tư, sửa 4 loại thiết bị và rollback.",
+      "remaining": "Chưa áp dụng hoặc nghiệm thu bản sửa mới trên production.",
+      "acceptance": "Anonymous và năm vai trò được kiểm thử; quyền sai bị từ chối; Storage và RPC có bằng chứng.",
+      "evidence": [
+        "scripts/rls-preflight.mjs",
+        ".github/workflows/rls-integration.yml"
+      ],
+      "verification": {
+        "commit": "7edcea2",
+        "workflowRun": "https://github.com/dat291296/hethong-may-pha-mau-nasun/actions/runs/37873269081",
+        "scope": "anonymous + five roles, private Storage, device transactions, recent authentication"
+      }
+    },
+    {
+      "id": "restore",
+      "priority": "P1",
+      "title": "Backup và diễn tập khôi phục",
+      "state": "partial",
+      "done": "Đã thêm verifier độc lập: đọc file qua một handle, kiểm tra tên file, kích thước và SHA-256 trước khi đóng gói backup.",
+      "remaining": "Staging đã được cấu hình, nhưng chưa có bằng chứng diễn tập khôi phục đầy đủ database/Auth/Storage.",
+      "acceptance": "Phục hồi vào môi trường riêng và đối chiếu database, Auth, Storage, quyền.",
+      "evidence": [
+        "scripts/verify-storage-archive.mjs",
+        ".github/workflows/recovery-backup.yml",
+        "tests/storageArchive.test.mjs"
+      ]
+    },
+    {
+      "id": "sync",
+      "priority": "P1",
+      "title": "Chống mất dữ liệu và xung đột",
+      "state": "partial",
+      "done": "Đã kiểm thử Chromium/IndexedDB thật với dữ liệu tổng hợp: hàng đợi mã hóa, cách ly tài khoản, giữ hàng đợi và khóa khi thu hồi phiên, reload, mất mạng, hết dung lượng, race đổi tài khoản và dữ liệu mã hóa hỏng. RPC sửa 4 loại thiết bị và chống ghi đè đã nghiệm thu staging.",
+      "remaining": "Chưa nghiệm thu đầy đủ mọi màn hình có bản nháp và vòng đời PWA trên Safari/iOS; production chưa áp dụng.",
+      "acceptance": "Không mất bản nháp, không ghi trùng và không âm thầm ghi đè.",
+      "evidence": [
+        "src/lib/offlineDb.js",
+        "src/lib/offlineSync.js",
+        "src/lib/syncQueue.js",
+        "tests/syncQueue.test.mjs",
+        "security/masvs/offline-session-browser.json"
+      ],
+      "verification": {
+        "commit": "7edcea2",
+        "workflowRun": "https://github.com/dat291296/hethong-may-pha-mau-nasun/actions/runs/37873269081",
+        "browserEvidence": "security/masvs/offline-session-browser.json"
+      }
+    },
+    {
+      "id": "session",
+      "priority": "P1",
+      "title": "Phiên và thao tác nhạy cảm",
+      "state": "partial",
+      "done": "Đã chặn replay khi chưa xác minh phiên, khi đổi tài khoản và khi thiếu RPC; giữ hàng đợi, kiểm tra từng mục và chặn logout còn pending. Staging xác nhận JWT thu hồi không ghi được ở server, không đăng ký lại được, và đăng nhập mới khôi phục quyền ghi hợp lệ.",
+      "remaining": "Chưa nghiệm thu UI reconnect với JWT thật trên Safari/iOS; chưa áp dụng production. Không khẳng định toàn bộ nhóm MASVS đã đạt.",
+      "acceptance": "Thu hồi phiên có hiệu lực khi reconnect; xuất dữ liệu và đổi quyền được kiểm soát.",
+      "evidence": [
+        "supabase/sensitive_action_reauthentication.sql",
+        "src/security/sensitiveAction.js",
+        "tests/sensitiveAction.test.mjs",
+        "src/security/replaySession.js",
+        "supabase/trusted_session_revocation.sql",
+        "scripts/verify-session-revocation.mjs",
+        "supabase/revoked_session_write_guard.sql"
+      ],
+      "verification": {
+        "commit": "7edcea2",
+        "workflowRun": "https://github.com/dat291296/hethong-may-pha-mau-nasun/actions/runs/37873269081",
+        "scope": "disposable account: valid replay, revoked replay denial, server write denial with unchanged synthetic NPP, re-registration rejection, fresh-login recovery"
+      }
+    },
+    {
+      "id": "evidence",
+      "priority": "P2",
+      "title": "Bằng chứng nghiệm thu MASVS",
+      "state": "partial",
+      "done": "Đã ghi rõ phạm vi mã nguồn, bằng chứng và giới hạn xác minh; bỏ màn hình Quyền riêng tư theo yêu cầu.",
+      "remaining": "Cần bằng chứng từ staging, trình duyệt và gói native; chưa thể kết luận đạt MASVS hay đủ điều kiện App Store.",
+      "acceptance": "Mỗi kiểm soát có phạm vi, bằng chứng và trạng thái xác minh rõ ràng.",
+      "evidence": [
+        "security/masvs/profile.json",
+        "security/masvs/readiness.json"
+      ]
+    }
+  ]
+}

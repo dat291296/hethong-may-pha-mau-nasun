@@ -16,14 +16,31 @@ async function main() {
     throw new Error('Staging must be isolated from production');
   }
   if (!key) throw new Error('STAGING_SUPABASE_SERVICE_ROLE_KEY is required');
-  client = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+  client = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false },
+    global: { fetch: async (input, options = {}) => {
+      try {
+        const response = await fetch(input, { ...options, signal: AbortSignal.any([options.signal, AbortSignal.timeout(30000)].filter(Boolean)) });
+        if (response.status >= 400) console.error(`Staging setup HTTP status: ${response.status}`);
+        return response;
+      } catch (error) {
+        const codes = ['ENOTFOUND', 'EAI_AGAIN', 'ECONNRESET', 'ECONNREFUSED', 'UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_HEADERS_TIMEOUT', 'ERR_INVALID_ARG_TYPE'];
+        const code = codes.includes(error.cause?.code) ? error.cause.code : codes.includes(error.code) ? error.code : 'NETWORK_REQUEST_FAILED';
+        console.error(`Staging setup network error: ${code}`);
+        throw error;
+      }
+    } },
+  });
   for (const region of ['Miền Bắc', 'Miền Trung', 'Miền Nam']) {
     const { count, error } = await client.from('distributors').select('id', { count: 'exact', head: true }).eq('region', region);
-    if (error || !count) throw new Error(`Staging fixture storage check failed for ${region} (${error?.code || 'NO_FIXTURES'})`);
+    if (error || !count) {
+      const reason = error ? (error.code || (/timeout|abort/i.test(error.message) ? 'REQUEST_TIMEOUT' : 'QUERY_FAILED')) : 'NO_FIXTURES';
+      throw new Error(`Staging fixture storage check failed for ${region} (${reason})`);
+    }
   }
   const env = { ...process.env };
   delete env.STAGING_SUPABASE_SERVICE_ROLE_KEY;
   for (const role of ['admin', 'manager', 'technician', 'qc', 'viewer']) {
+    console.log(`Preparing synthetic staging role: ${role}`);
     const email = `nasun-rls-${role}-${randomUUID()}@example.invalid`;
     const password = randomBytes(32).toString('base64url');
     if (process.env.GITHUB_ACTIONS === 'true') console.log(`::add-mask::${password}`);
@@ -57,6 +74,8 @@ async function main() {
     child.on('error', reject);
     child.on('exit', code => code === 0 ? resolve() : reject(new Error('Staging RLS verification failed')));
   });
+  const { verifySessionRevocation } = await import('./verify-session-revocation.mjs');
+  await verifySessionRevocation(client, env);
 }
 
 try {

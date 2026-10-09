@@ -1,9 +1,13 @@
+import { verifyDeviceEdit } from './verify-device-edit.mjs';
+import { verifyStorageAccess } from './verify-storage-access.mjs';
 import assert from 'node:assert/strict';
 import { createClient } from '@supabase/supabase-js';
+import { verifyWriteIntegrity } from './verify-write-integrity.mjs';
+import { requireRlsConfiguration } from './rls-preflight.mjs';
 
 const REQUIRED_REGIONS = ['Miền Bắc', 'Miền Trung', 'Miền Nam'];
-const url = process.env.RLS_TEST_URL || process.env.VITE_SUPABASE_URL;
-const anonKey = process.env.RLS_TEST_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+const url = process.env.RLS_TEST_URL?.trim();
+const anonKey = process.env.RLS_TEST_ANON_KEY?.trim();
 
 function requireEnvironment(name) {
   const value = process.env[name]?.trim();
@@ -14,6 +18,7 @@ function requireEnvironment(name) {
 function newClient() {
   return createClient(url, anonKey, {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    global: { fetch: (input, options = {}) => fetch(input, { ...options, signal: AbortSignal.any([options.signal, AbortSignal.timeout(30000)].filter(Boolean)) }) },
   });
 }
 
@@ -35,6 +40,7 @@ async function probe(client, region) {
 }
 
 async function main() {
+  requireRlsConfiguration(process.env);
   if (!url || !anonKey) throw new Error('Configure RLS_TEST_URL and RLS_TEST_ANON_KEY');
   const productionUrl = requireEnvironment('RLS_PRODUCTION_URL');
   if (new URL(url).origin === new URL(productionUrl).origin) throw new Error('RLS tests require an isolated staging project');
@@ -53,6 +59,17 @@ async function main() {
   try {
     for (const role of roles) clients.push({ role, client: await signIn(role) });
     const admin = clients[0].client;
+    await verifyDeviceEdit(admin, clients.find(item => item.role === 'viewer').client, async () => {
+      const result = await admin.auth.signInWithPassword({
+        email: requireEnvironment('RLS_TEST_ADMIN_EMAIL'), password: requireEnvironment('RLS_TEST_ADMIN_PASSWORD'),
+      });
+      assert.ifError(result.error);
+    });
+    console.log('Staging device edits verified: four categories, stock, assignment, move, stale-write rejection and rollback.');
+    await verifyWriteIntegrity(admin);
+    console.log('Staging recent authentication and stale-write rejection verified.');
+    await verifyStorageAccess(anonymous, clients);
+    console.log('Staging private Storage read, upload, delete and synthetic cleanup verified.');
     for (const region of REQUIRED_REGIONS) {
       const { count, error } = await admin.from('distributors').select('id', { count: 'exact', head: true }).eq('region', region);
       assert.ifError(error);

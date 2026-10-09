@@ -10,7 +10,7 @@ async function collectFiles(directory, prefix = '') {
   for (const entry of entries) {
     const relativePath = path.posix.join(prefix, entry.name);
     if (entry.isDirectory()) files.push(...await collectFiles(path.join(directory, entry.name), relativePath));
-    else if (entry.name !== 'sw.js' && entry.name !== '_headers' && !entry.name.endsWith('.map')) files.push(`/${relativePath}`);
+    else if (!['sw.js', '_headers', '_redirects'].includes(entry.name) && !entry.name.endsWith('.map')) files.push(`/${relativePath}`);
   }
   return files.sort();
 }
@@ -93,10 +93,17 @@ self.addEventListener('fetch', event => {
         if (await verifyResponse('/index.html', response)) {
           const cache = await caches.open(CACHE_NAME);
           await cache.put('/index.html', response.clone());
+          return response;
         }
-        return response;
+        // Keep the shell and its lazy modules on the same build until activation.
+        const cache = await caches.open(CACHE_NAME);
+        const shell = await cache.match('/index.html');
+        if (shell && await verifyResponse('/index.html', shell)) return shell;
+        return Response.error();
       } catch {
-        return (await caches.match('/index.html')) || Response.error();
+        const cache = await caches.open(CACHE_NAME);
+        const shell = await cache.match('/index.html');
+        return shell && await verifyResponse('/index.html', shell) ? shell : Response.error();
       }
     })());
     return;

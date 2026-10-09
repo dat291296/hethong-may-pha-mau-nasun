@@ -52,6 +52,14 @@ function requireOwner() {
   return activeOwnerId;
 }
 
+export function getOfflineOwner() {
+  return activeOwnerId;
+}
+
+function assertCurrentOwner(ownerId) {
+  if (activeOwnerId !== ownerId) throw new Error('OFFLINE_OWNER_CHANGED');
+}
+
 function waitForOwner() {
   if (activeOwnerId) return Promise.resolve(activeOwnerId);
   return new Promise(resolve => ownerWaiters.push(resolve));
@@ -326,6 +334,7 @@ export async function setCache(key, data) {
     const ownerId = requireOwner();
     const encrypted = await encryptValue(ownerId, data, 'cached_data', key);
     const db = await openDb();
+    assertCurrentOwner(ownerId);
     const transaction = db.transaction('cached_data', 'readwrite');
     transaction.objectStore('cached_data').put({
       key: scopedKey(ownerId, key), logicalKey: key, ownerId, encrypted: true,
@@ -345,7 +354,9 @@ export async function getCache(key, fallback = []) {
     const db = await openDb();
     const record = await requestResult(db.transaction('cached_data', 'readonly').objectStore('cached_data').get(scopedKey(ownerId, key)));
     if (!record) return fallback;
-    return await decryptValue(ownerId, record, 'cached_data', key);
+    const value = await decryptValue(ownerId, record, 'cached_data', key);
+    assertCurrentOwner(ownerId);
+    return value;
   } catch (error) {
     if (error.message !== 'OFFLINE_STORAGE_OWNER_REQUIRED') console.error('[offlineDb] Error reading encrypted cache:', error.message);
     return fallback;
@@ -357,6 +368,7 @@ export async function addToQueue(actionItem) {
     const ownerId = requireOwner();
     const encrypted = await encryptValue(ownerId, actionItem, 'offline_queue', actionItem.id);
     const db = await openDb();
+    assertCurrentOwner(ownerId);
     const transaction = db.transaction('offline_queue', 'readwrite');
     transaction.objectStore('offline_queue').put({
       id: scopedKey(ownerId, actionItem.id), itemId: actionItem.id, ownerId, encrypted: true,
@@ -381,10 +393,12 @@ export async function getQueue() {
     const records = await requestResult(db.transaction('offline_queue', 'readonly').objectStore('offline_queue').getAll());
     const ownedRecords = (records || []).filter(record => record.ownerId === ownerId && record.encrypted);
     const items = await Promise.all(ownedRecords.map(record => decryptValue(ownerId, record, 'offline_queue', record.itemId)));
+    assertCurrentOwner(ownerId);
     return items.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
   } catch (error) {
     if (error.message !== 'OFFLINE_STORAGE_OWNER_REQUIRED') console.error('[offlineDb] Error reading encrypted queue:', error.message);
-    return [];
+    // A failed read must never be mistaken for an empty, safely disposable queue.
+    throw error;
   }
 }
 
@@ -425,18 +439,26 @@ export async function clearOfflineStorage(userId = activeOwnerId) {
   if (!userId) return true;
   const ownerId = String(userId);
   try {
-    await deleteOwnedRecords('cached_data', ownerId);
-    await deleteOwnedRecords('offline_queue', ownerId);
-    let nativeKeyDeleted = true;
-    if (usesNativeCrypto()) {
-      try {
-        await requireNativeSecurityBridge().deleteEncryptionKey({ keyAlias: getNativeKeyAlias(ownerId) });
-      } catch (error) {
-        nativeKeyDeleted = false;
-        console.error('[offlineDb] Native encryption key deletion failed:', error.message);
-      }
-    }
-    await deleteRecord('crypto_keys', ownerId);
+    const db = await openDb();
+    // Lock all affected stores together so a concurrent queue commit cannot
+    // occur between the pending-record check and browser-key deletion.
+    const transaction = db.transaction(['cached_data', 'offline_queue', 'crypto_keys'], 'readwrite');
+    const completed = transactionDone(transaction);
+    const queueRequest = transaction.objectStore('offline_queue').getAll();
+    queueRequest.onsuccess = () => {
+      const preservePending = queueRequest.result.some(record => record.ownerId === ownerId);
+      const cursorRequest = transaction.objectStore('cached_data').openCursor();
+      cursorRequest.onsuccess = () => {
+        const cursor = cursorRequest.result;
+        if (!cursor) return;
+        if (cursor.value.ownerId === ownerId) cursor.delete();
+        cursor.continue();
+      };
+      // Native key deletion cannot participate in the IndexedDB transaction.
+      // Retain that key to avoid destroying a concurrently queued native edit.
+      if (!preservePending && !usesNativeCrypto()) transaction.objectStore('crypto_keys').delete(ownerId);
+    };
+    await completed;
     encryptionKeyPromises.delete(ownerId);
     initializationPromises.delete(ownerId);
     for (const storageKey of Object.keys(LEGACY_CACHE_KEYS)) localStorage.removeItem(storageKey);
@@ -445,9 +467,17 @@ export async function clearOfflineStorage(userId = activeOwnerId) {
       localStorage.removeItem(OWNER_STORAGE_KEY);
     }
     window.dispatchEvent(new CustomEvent('nasun-offline-storage-cleared', { detail: { userId: ownerId } }));
-    return nativeKeyDeleted;
+    return true;
   } catch (error) {
     console.error('[offlineDb] Failed to clear offline data:', error.message);
     return false;
+  } finally {
+    // Detach the revoked session even when IndexedDB cleanup fails.
+    if (activeOwnerId === ownerId) {
+      activeOwnerId = null;
+      try { localStorage.removeItem(OWNER_STORAGE_KEY); } catch { /* Storage may be unavailable. */ }
+    }
+    encryptionKeyPromises.delete(ownerId);
+    initializationPromises.delete(ownerId);
   }
 }

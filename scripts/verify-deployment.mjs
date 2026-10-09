@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 const rawBaseUrl = process.argv[2] || process.env.DEPLOYMENT_URL;
 
 if (!rawBaseUrl) {
@@ -44,11 +46,30 @@ async function verify() {
   if (!appResponse.ok) throw new Error(`APP_HTTP_${appResponse.status}`);
   const html = await appResponse.text();
   if (!/<div id="root"><\/div>/i.test(html)) throw new Error('APP_SHELL_INVALID');
+  const shellResponse = await request('/index.html');
+  if (!shellResponse.ok || !/text\/html/i.test(shellResponse.headers.get('content-type') || '')) {
+    throw new Error('OFFLINE_SHELL_MUST_NOT_REDIRECT');
+  }
 
   for (const [header, expected] of Object.entries(requiredHeaders)) {
     const actual = appResponse.headers.get(header) || '';
     if (!expected.test(actual)) throw new Error(`SECURITY_HEADER_INVALID:${header}`);
   }
+  const manifestResponse = await request('/build-manifest.json');
+  if (!manifestResponse.ok) throw new Error('BUILD_MANIFEST_UNAVAILABLE');
+  const manifest = await manifestResponse.json();
+  const modules = Object.keys(manifest.assets || {}).filter(path => path.endsWith('.js'));
+  if (!modules.length) throw new Error('JAVASCRIPT_MANIFEST_EMPTY');
+  for (const [path, expectedHash] of Object.entries(manifest.assets)) {
+    const response = await request(path);
+    if (!response.ok || (path.endsWith('.js') && !/(?:javascript|ecmascript)/i.test(response.headers.get('content-type') || ''))) {
+      throw new Error('JAVASCRIPT_ASSET_INVALID:' + path);
+    }
+    const actualHash = createHash('sha256').update(Buffer.from(await response.arrayBuffer())).digest('hex');
+    if (actualHash !== expectedHash) throw new Error('DEPLOYED_ASSET_HASH_MISMATCH:' + path);
+  }
+  const missing = await request('/assets/deployment-missing-probe.js');
+  if (missing.status !== 404) throw new Error('MISSING_ASSET_MUST_RETURN_404');
 }
 
 let lastError;

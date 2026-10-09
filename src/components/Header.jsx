@@ -50,9 +50,14 @@ export default function Header({
     };
 
     const updateQueueCount = async () => {
+      try {
       const queue = await getOfflineQueue();
       setQueueCount(queue.length);
       if (navigator.onLine && queue.length > 0) handleSync();
+      } catch {
+        setSyncState('error');
+        setSyncErrorMessage('Không đọc được dữ liệu chờ gửi. Dữ liệu vẫn được giữ trên thiết bị.');
+      }
     };
 
     const syncWhenVisible = () => {
@@ -107,6 +112,9 @@ export default function Header({
       if (success) {
         setSyncState('idle');
       }
+    } catch {
+      setSyncState('error');
+      setSyncErrorMessage('Đồng bộ chưa hoàn tất. Dữ liệu chờ gửi vẫn được giữ nguyên.');
     } finally {
       syncingRef.current = false;
     }

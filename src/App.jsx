@@ -5,6 +5,7 @@ import WorkflowModal from './components/WorkflowModal';
 import HandoverPrintModal from './components/HandoverPrintModal';
 import MobileBottomNav from './components/MobileBottomNav';
 import LoginModal from './components/LoginModal';
+import { useSensitiveActionGate } from './components/SensitiveActionGate.jsx';
 import { useAuth } from './context/AuthContext';
 import { requireRegionEdit } from './lib/workspaceFilters.js';
 import { supabase, isSupabaseConfigured } from './lib/supabase';
@@ -45,9 +46,15 @@ function persistWorkflowCache(key, data) {
 
 export default function App() {
   const { user, isDevMode, can } = useAuth();
+  const { requireAuthentication, dialog: authenticationDialog } = useSensitiveActionGate();
+  const handleSensitiveSetDeletion = async setCode => {
+    await requireAuthentication();
+    return deleteSystemSet(setCode);
+  };
   const [activeTab, setActiveTab] = useState(() => {
     try {
       const savedTab = window.localStorage.getItem('nasun_active_tab');
+      if (savedTab === 'technicianWork') return 'dashboard';
       return ['documents', 'support', 'account'].includes(savedTab) ? 'techHandbook' : savedTab || 'dashboard';
     } catch {
       return 'dashboard';
@@ -114,7 +121,7 @@ export default function App() {
   const { npps, setNpps, addNpp, editNpp, deleteNpp, importNpps, refetch: refetchNpps } = useNpps();
   const {
     dispensers, setDispensers, mixers, setMixers, computers, setComputers, printers, setPrinters, systemSets, setSystemSets,
-    addStockDevice, editDevice, deleteDevice, deleteSystemSet, assembleSet, updateSystemSet, importDevices, importSystemSets, refetch: refetchAssets
+    addStockDevice, editDevice, editDeviceDetails, deleteDevice, deleteSystemSet, assembleSet, updateSystemSet, importDevices, importSystemSets, refetch: refetchAssets
   } = useAssets();
   const { repairTickets, addTicket, editTicket, deleteTicket, importTickets, refetch: refetchRepairs } = useRepairs();
   const { auditLogs, addAuditLog, editAuditLog, deleteAuditLog, importAuditLogs, refetch: refetchAuditLogs } = useAuditLogs();
@@ -386,7 +393,7 @@ export default function App() {
       const pluralCat = category === 'computer' ? 'computers' : category === 'dispenser' ? 'dispensers' : category === 'mixer' ? 'mixers' : 'printers';
       const deviceList = category === 'dispenser' ? dispensers : category === 'mixer' ? mixers : category === 'computer' ? computers : printers;
       const sourceId = updatedData.sourceId || updatedData.id;
-      const { sourceId: ignoredSourceId, ...deviceUpdates } = updatedData;
+      const { sourceId: _ignoredSourceId, expectedRevision, ...deviceUpdates } = updatedData;
       const oldDevice = deviceList.find(d => d.id === sourceId);
       if (!can('asset:edit')) throw new Error('Bạn không có quyền sửa thiết bị.');
       if (user?.role === 'technician') {
@@ -394,52 +401,10 @@ export default function App() {
         if (updatedData.setCode) requireRegionEdit(user, systemSets.find(item => item.setCode === updatedData.setCode)?.region);
       }
 
-      await editDevice(pluralCat, sourceId, deviceUpdates);
-
-      const oldSetCode = oldDevice?.setCode;
-      const newSetCode = updatedData.isAssigned ? updatedData.setCode : null;
-
-      if (oldSetCode && oldSetCode !== newSetCode) {
-        const oldSet = systemSets.find(s => s.setCode === oldSetCode);
-        if (oldSet) {
-          const updates = {};
-          if (category === 'dispenser') { updates.dispenserId = null; updates.dispenserSerial = null; updates.dispenserModel = null; }
-          if (category === 'mixer') { updates.mixerId = null; updates.mixerSerial = null; updates.mixerModel = null; }
-          if (category === 'computer') { updates.computerId = null; updates.computerType = null; updates.pcType = null; updates.pcOs = null; }
-          if (category === 'printer') { updates.printerId = null; updates.printerSerial = null; }
-          await updateSystemSet(oldSetCode, updates);
-        }
-      }
-
-      if (newSetCode) {
-        const newSet = systemSets.find(s => s.setCode === newSetCode);
-        if (newSet) {
-          const updates = {};
-          if (category === 'dispenser') {
-            updates.dispenserId = updatedData.id;
-            updates.dispenserSerial = updatedData.serial;
-            updates.dispenserModel = updatedData.model;
-          } else if (category === 'mixer') {
-            updates.mixerId = updatedData.id;
-            updates.mixerSerial = updatedData.serial;
-            updates.mixerModel = updatedData.model;
-          } else if (category === 'computer') {
-            updates.computerId = updatedData.id;
-            updates.computerType = updatedData.type;
-            updates.pcType = updatedData.type;
-            updates.pcOs = updatedData.os;
-            updates.pcSpecs = updatedData.specs;
-            updates.computerStatus = updatedData.status;
-          } else if (category === 'printer') {
-            updates.printerId = updatedData.id;
-            updates.printerSerial = updatedData.serial;
-          }
-          await updateSystemSet(newSetCode, updates);
-        }
-      }
+      if (!oldDevice) throw new Error('Thiết bị không còn tồn tại. Vui lòng tải lại dữ liệu.');
+      await editDeviceDetails(pluralCat, sourceId, { ...deviceUpdates, id: sourceId }, expectedRevision);
     } catch (err) {
       console.error(err);
-      alert('Lỗi sửa thiết bị: ' + err.message);
       throw err;
     }
   };
@@ -755,6 +720,7 @@ export default function App() {
 
   return (
     <>
+    {authenticationDialog}
     <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg-main)' }}>
       
       {/* Sidebar Navigation for Desktop & Mobile sliding drawer */}
@@ -855,7 +821,7 @@ export default function App() {
               onDeleteDevice={handleDeleteDevice}
               onOpenImportModal={openImportModal}
               onEditSet={handleUpdateRegionalSet}
-              onDeleteSet={deleteSystemSet}
+              onDeleteSet={handleSensitiveSetDeletion}
             />
           )}
 
@@ -953,7 +919,7 @@ export default function App() {
               systemSets={systemSets}
               onCompleteMaintenance={handleCompleteMaintenance}
               onUpdateSystemSet={handleUpdateRegionalSet}
-              onDeleteSystemSet={deleteSystemSet}
+              onDeleteSystemSet={handleSensitiveSetDeletion}
             />
           )}
 

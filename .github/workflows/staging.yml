@@ -37,8 +37,8 @@ jobs:
       - name: Validate staging configuration
         shell: bash
         env:
-          VITE_SUPABASE_URL: ${{ vars.STAGING_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ vars.STAGING_SUPABASE_ANON_KEY }}
+          VITE_SUPABASE_URL: ${{ vars.STAGING_SUPABASE_URL || secrets.STAGING_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.STAGING_SUPABASE_ANON_KEY || secrets.STAGING_SUPABASE_ANON_KEY }}
           PRODUCTION_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL || secrets.VITE_SUPABASE_URL }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -50,6 +50,10 @@ jobs:
               exit 1
             fi
           done
+          if [ "${VITE_SUPABASE_URL%/}" != "https://kenznmtdfuexmfrtzypb.supabase.co" ]; then
+            echo "::error::Only the approved isolated staging project is permitted."
+            exit 1
+          fi
           if [ -n "$PRODUCTION_SUPABASE_URL" ] && [ "$VITE_SUPABASE_URL" = "$PRODUCTION_SUPABASE_URL" ]; then
             echo "::error::Staging must not use the production Supabase project."
             exit 1
@@ -61,8 +65,8 @@ jobs:
       - name: Build staging application
         run: npm run build
         env:
-          VITE_SUPABASE_URL: ${{ vars.STAGING_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ vars.STAGING_SUPABASE_ANON_KEY }}
+          VITE_SUPABASE_URL: ${{ vars.STAGING_SUPABASE_URL || secrets.STAGING_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.STAGING_SUPABASE_ANON_KEY || secrets.STAGING_SUPABASE_ANON_KEY }}
 
       - name: Deploy isolated staging worker
         id: deploy
@@ -89,3 +93,9 @@ jobs:
 
       - name: Verify staging deployment
         run: node scripts/verify-deployment.mjs "${{ steps.deploy.outputs.url }}"
+
+      - name: Install isolated WebKit runtime
+        run: npx --yes --package @playwright/cli@0.1.22 playwright-cli install-browser webkit --with-deps
+
+      - name: Verify full application shell on WebKit
+        run: node scripts/verify-staging-shell.mjs "${{ steps.deploy.outputs.url }}"
