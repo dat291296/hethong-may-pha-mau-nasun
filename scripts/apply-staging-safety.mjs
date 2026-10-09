@@ -30,7 +30,7 @@ export function validateStagingDestination(environment) {
 }
 async function main() {
   const destination = validateStagingDestination(process.env);
-  for (const migration of ['supabase/sensitive_action_reauthentication.sql', 'supabase/technical_document_uploads_migration.sql', 'supabase/technical_storage_recent_auth.sql', 'supabase/device_edit_atomic.sql', 'supabase/trusted_session_revocation.sql']) {
+  for (const migration of ['supabase/sensitive_action_reauthentication.sql', 'supabase/technical_document_uploads_migration.sql', 'supabase/technical_storage_recent_auth.sql', 'supabase/device_edit_atomic.sql', 'supabase/trusted_session_revocation.sql', 'supabase/revoked_session_write_guard.sql']) {
   const child = spawn('psql', ['--dbname=' + destination.href, '-v', 'ON_ERROR_STOP=1', '-f', migration], {
     env: { ...process.env, PGSSLMODE: 'require' }, stdio: ['ignore', 'ignore', 'ignore']
   });

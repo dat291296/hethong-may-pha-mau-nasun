@@ -64,7 +64,8 @@ BEGIN
     last_seen_at = NOW(), idle_expires_at = NOW() + INTERVAL '8 hours',
     trusted_device_id = EXCLUDED.trusted_device_id,
     anomaly_score = GREATEST(public.account_sessions.anomaly_score, EXCLUDED.anomaly_score),
-    revoked_at = NULL, revoked_reason = NULL;
+    revoked_reason = public.account_sessions.revoked_reason
+    WHERE public.account_sessions.revoked_at IS NULL;
 
   UPDATE public.account_sessions SET revoked_at = NOW(), revoked_reason = 'MAX_ACTIVE_SESSIONS'
   WHERE session_id IN (
@@ -126,5 +127,6 @@ $$;
 
 
 NOTIFY pgrst, 'reload schema';
+ALTER FUNCTION public.request_security_context() SET search_path = public, extensions, pg_temp;
 COMMIT;
 
