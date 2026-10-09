@@ -5,8 +5,11 @@ import App from './App.jsx'
 import { AuthProvider } from './context/AuthContext.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
 import { startPerformanceMonitoring } from './lib/performanceMetrics.js'
+import { startErrorMonitoring } from './lib/operationalDiagnostics.js'
 
 startPerformanceMonitoring()
+const stopErrorMonitoring = startErrorMonitoring()
+if (import.meta.hot) import.meta.hot.dispose(stopErrorMonitoring)
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

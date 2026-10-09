@@ -1,5 +1,6 @@
 import React from 'react';
 import { AlertTriangle, RefreshCw, HardDrive } from 'lucide-react';
+import { recordOperationalError } from '../lib/operationalDiagnostics.js';
 
 /**
  * ErrorBoundary - Catches unhandled React crashes & Service Worker stale cache errors.
@@ -15,8 +16,9 @@ export default class ErrorBoundary extends React.Component {
     return { hasError: true, error };
   }
 
-  componentDidCatch(error, errorInfo) {
-    console.error('[ErrorBoundary] Caught runtime error:', error, errorInfo);
+  componentDidCatch(error) {
+    recordOperationalError('runtime', error);
+    console.error('[ErrorBoundary] Runtime failure recorded without payload');
   }
 
   handleClearCacheAndReload = async () => {
@@ -88,7 +90,7 @@ export default class ErrorBoundary extends React.Component {
               marginBottom: '1.5rem',
               textAlign: 'left'
             }}>
-              {this.state.error.message}
+              Mã hỗ trợ: APP_RUNTIME_FAILURE. Không xóa dữ liệu thiết bị hoặc bản nháp.
             </pre>
           )}
 

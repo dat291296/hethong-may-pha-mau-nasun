@@ -2,7 +2,10 @@ import { prepareDeviceEdit, findAssignedDevice } from '../lib/deviceEdit.js';
 import WorkspaceFilterBar from './WorkspaceFilterBar.jsx';
 import { matchesSearch, matchesDateRange, uniqueOptions, canEditRegion } from '../lib/workspaceFilters.js';
 import TechnicalResources from './TechnicalResources';
-import { resolveMachine } from '../lib/machineWorkspace';
+import { resolveMachine, resolveMachineCode } from '../lib/machineWorkspace';
+import { resolveMachineProfile, sameMachine } from '../lib/machineProfile.js';
+import { MachineProfileSummary, MachineProfileHistory } from './MachineProfileSummary.jsx';
+import { recordOperationalError } from '../lib/operationalDiagnostics.js';
 import { searchText, missingMachineFields } from '../lib/teamWorkspace';
 import React, { useState, useEffect } from 'react';
 import SafePortal from './SafePortal.jsx';
@@ -207,7 +210,15 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
     if (machine) { openedSearch.current = globalSearch; setSelectedSetDetails(machine); }
   }, [globalSearch, systemSets]);
   useEffect(() => { setProfileTab('equipment'); }, [selectedSetDetails?.setCode]);
-  const openScannedMachine = value => { const machine = resolveMachine(systemSets, value); if (!machine) { setScanError('Không tìm thấy bộ máy duy nhất. Nhập đúng mã bộ máy hoặc seri.'); return; } setScanError(''); setSelectedSetDetails(machine); };
+  const openScannedMachine = value => {
+    const code = String(value || '').trim();
+    setScanInput(code);
+    const machine = resolveMachineCode(systemSets, code);
+    if (!machine) { setScanError('Không tìm thấy bộ máy duy nhất. Hãy quét hoặc nhập đúng mã bộ máy.'); return; }
+    setScanInput(machine.setCode);
+    setScanError('');
+    setSelectedSetDetails(machine);
+  };
 
   // Device Edit Modal state
   const [isSavingDevice, setIsSavingDevice] = useState(false);
@@ -422,9 +433,25 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
     setShowAddDeviceModal(true);
   };
 
+  const returnToProfile = React.useRef(null);
+  useEffect(() => {
+    if (editingDevice || !returnToProfile.current) return;
+    const matches = systemSets.filter(item => sameMachine(item, returnToProfile.current));
+    returnToProfile.current = null;
+    if (matches.length === 1) setSelectedSetDetails(matches[0]);
+  }, [editingDevice, systemSets]);
+  useEffect(() => {
+    if (!selectedSetDetails) return;
+    const matches = systemSets.filter(item => sameMachine(item, selectedSetDetails));
+    if (matches.length === 1 && matches[0] !== selectedSetDetails) setSelectedSetDetails(matches[0]);
+  }, [systemSets, selectedSetDetails]);
+  const machineProfile = selectedSetDetails ? resolveMachineProfile(selectedSetDetails, systemSets,
+    {dispenser:dispensers,mixer:mixers,computer:computers,printer:printers}, npps, repairTickets, auditLogs) : null;
+
   const handleOpenEditDevice = (category, data) => {
     const machine = systemSets.find(item=>item.setCode === data.setCode);
     if (!can('asset:edit') || (user?.role === 'technician' && !canEditRegion(user,machine?.region))) { alert('Thiết bị chưa có khu vực hoặc thuộc miền khác cần quản trị viên xử lý.'); return; }
+    if (selectedSetDetails) { returnToProfile.current = {id:selectedSetDetails.id,setCode:selectedSetDetails.setCode}; setSelectedSetDetails(null); }
     setEditingDevice({ category, data });
     const cleanType = category === 'computer' 
       ? (data.type === 'Case' ? 'Case' : 'All In One')
@@ -461,7 +488,8 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
       alert('✅ Đã lưu thông tin chỉnh sửa thành công!');
       setEditingDevice(null);
     } catch (err) {
-      console.error('Lỗi khi lưu thiết bị:', err);
+      recordOperationalError('device',err);
+      console.error('[Device] Save failed without payload');
       alert('⚠️ ' + (err.message || 'Không lưu được thiết bị. Giữ nội dung đang nhập và thử lại.'));
     } finally {
       setIsSavingDevice(false);
@@ -761,9 +789,9 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
   return (
     <div className="workspace-screen assetmanagement-screen" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       
-      <div className="filter-scan-actions"><button className="btn btn-secondary" onClick={()=>{setScanTargetField('profile');setShowScanSerialModal(true);}}>Quét QR / Seri</button><button className="btn btn-secondary" onClick={()=>setShowManualScan(value=>!value)}>Nhập mã bộ máy</button></div>
+      <div className="filter-scan-actions"><button className="btn btn-secondary" aria-expanded={showManualScan} onClick={()=>setShowManualScan(value=>!value)}>Nhập mã bộ máy</button></div>
       {activeSubTab === 'comboSets' && <WorkspaceFilterBar search={searchTerm} onSearch={setSearchTerm} placeholder="Tìm mã bộ, NPP, seri…" count={filteredSets.length} fields={[{key:'province',label:'Tỉnh / thành',value:provinceFilter,onChange:setProvinceFilter,options:uniqueOptions([...systemSets.map(item=>item.province),...npps.map(item=>item.province)])},{key:'owner',label:'Kỹ thuật viên',value:ownerFilter,onChange:setOwnerFilter,options:uniqueOptions(systemSets.map(item=>item.technician))},{key:'model',label:'Máy chiết',value:modelFilter,onChange:setModelFilter,options:uniqueOptions(systemSets.map(item=>item.dispenserModel))},{key:'status',label:'Trạng thái bộ máy',value:statusFilter,onChange:setStatusFilter,options:[{value:'DA_LAP_DAT',label:'Đã lắp đặt'},{value:'TRONG_KHO',label:'Trong kho'},{value:'DA_THU_HOI',label:'Đã thu hồi'},{value:'BAO_THUONG_BAO_TRI',label:'Đang bảo trì'}]},{key:'from',label:'Ngày lắp đặt · từ',type:'date',defaultValue:'',value:dateFrom,onChange:setDateFrom},{key:'to',label:'Ngày lắp đặt · đến',type:'date',defaultValue:'',value:dateTo,onChange:setDateTo}]} quick={[{value:'ALL',label:'Tất cả'},{value:'STOCK',label:'Trong kho'},{value:'PENDING',label:'Chờ sửa'},{value:'RETURN',label:'Chờ trả'},{value:'OVERDUE',label:'Quá hạn'}]} quickValue={quickFilter} onQuick={setQuickFilter} onReset={() => { setSearchTerm(''); setModelFilter('ALL'); setStatusFilter('ALL'); setQuickFilter('ALL'); setProvinceFilter('ALL'); setOwnerFilter('ALL'); setDateFrom(''); setDateTo(''); }}/>}
-      {showManualScan && <form className="machine-serial-form" onSubmit={event => { event.preventDefault(); openScannedMachine(scanInput); }}><label>Mã bộ máy hoặc seri<input className="form-input" required maxLength={160} value={scanInput} onChange={event => setScanInput(event.target.value)} placeholder="SET-... hoặc seri thiết bị" /></label><button className="btn btn-primary">Mở hồ sơ</button></form>}
+      {showManualScan && <form className="machine-serial-form" onSubmit={event => { event.preventDefault(); openScannedMachine(scanInput); }}><label>Mã bộ máy<input className="form-input" required maxLength={160} value={scanInput} onChange={event => { setScanInput(event.target.value); setScanError(''); }} placeholder="Nhập hoặc quét mã bộ máy" /></label><button type="button" className="btn btn-secondary" onClick={()=>{setScanTargetField('profile');setShowScanSerialModal(true);}}>Quét mã bộ máy</button><button type="submit" className="btn btn-primary">Mở hồ sơ</button></form>}
       {scanError && <p role="alert" className="resource-error">{scanError}</p>}
       {/* 📦 BẢNG TỔNG HỢP TỒN KHO THIẾT BỊ HIỆN TẠI */}
       <div className="glass-panel" style={{ padding: '20px', background: 'linear-gradient(135deg, rgba(15,23,42,0.95) 0%, rgba(30,41,59,0.85) 100%)', border: '1px solid rgba(56,189,248,0.3)' }}>
@@ -2072,6 +2100,7 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
                           type="text"
                           className="form-input"
                           placeholder="Nhập seri hoặc bấm Quét mã"
+                          aria-label="Số serial thiết bị"
                           required={editingDevice.category !== 'computer'}
                           value={editFormData.serial || ''}
                           onChange={e => setEditFormData({ ...editFormData, serial: e.target.value })}
@@ -2082,7 +2111,7 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
                     {editingDevice.category !== 'computer' && (
                       <div className="form-group">
                         <label className="form-label">⚙️ Model / Hệ Máy *</label>
-                        <input type="text" className="form-input" required value={editFormData.model || editFormData.type || ''} onChange={e => setEditFormData({ ...editFormData, model: e.target.value })} />
+                        <input type="text" className="form-input" aria-label="Model thiết bị" required value={editFormData.model || editFormData.type || ''} onChange={e => setEditFormData({ ...editFormData, model: e.target.value })} />
                       </div>
                     )}
                   </div>
@@ -2970,52 +2999,30 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
       {selectedSetDetails && (
         <SafePortal>
           <div className="modal-overlay">
-            <div className="modal-content" style={{ maxWidth: '820px', width: '95%' }}>
+            <div className="modal-content machine-profile-modal" style={{ maxWidth: '820px', width: '95%' }}>
               <div className="modal-header">
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <Camera size={22} color="var(--accent-cyan)" />
                   <div>
                     <h3 style={{ fontWeight: '800', margin: 0 }}>
-                      Chi Tiết & Thư Viện Ảnh Bộ Máy [{selectedSetDetails.setCode}]
+                      Hồ Sơ Máy · {selectedSetDetails.setCode}
                     </h3>
                     <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                       🏢 {selectedSetDetails.nppName || 'Kho Tổng Trung Tâm'} ({selectedSetDetails.province || selectedSetDetails.region || 'Toàn Quốc'})
                     </div>
                   </div>
                 </div>
-                <button className="btn btn-secondary btn-sm" onClick={() => setSelectedSetDetails(null)}>✕</button>
+                <button className="btn btn-secondary btn-sm" aria-label="Đóng hồ sơ máy" onClick={() => setSelectedSetDetails(null)}>✕</button>
               </div>
 
-              <div className="modal-body" style={{ maxHeight: '78vh', overflowY: 'auto' }}>
-<div className="workspace-tabs">{[['equipment','Thiết bị'],['history','Lịch sử'],['documents','Tài liệu & Ảnh']].map(([key,label]) => <button key={key} aria-pressed={profileTab === key} onClick={() => setProfileTab(key)}>{label}</button>)}<button disabled={!can('repair:create')} onClick={() => onRequestRepair?.(selectedSetDetails)}>Tạo phiếu sửa chữa</button><button disabled={!can('asset:edit')} onClick={() => onRequestMaintenance?.(selectedSetDetails)}>Bảo trì</button></div>
-                {profileTab === 'history' && <section>{repairTickets.filter(ticket => ticket.nppId === selectedSetDetails.nppId && [selectedSetDetails.dispenserSerial, selectedSetDetails.mixerSerial, selectedSetDetails.computerSerial, selectedSetDetails.printerSerial].filter(Boolean).includes(ticket.serialNumber)).map(ticket => <article className="machine-history" key={ticket.id}><strong>{ticket.ticketCode} · {ticket.date}</strong><p>{ticket.errorDescription}</p><span className={ticket.processingStatus === 'Đã xử lý' ? 'badge badge-success' : 'badge badge-warning'}>{ticket.processingStatus} · {ticket.customerReturnStatus}</span></article>)}{auditLogs.filter(log => log.setCode === selectedSetDetails.setCode).map(log => <article className="machine-history" key={log.id}><strong>{log.type} · {log.timestamp}</strong><p>{log.technician}</p><p style={{ whiteSpace: 'pre-wrap' }}>{log.notes}</p></article>)}{!auditLogs.some(log => log.setCode === selectedSetDetails.setCode) && <p>Chưa có nhật ký cho bộ máy này.</p>}</section>}
+              <div className="modal-body machine-profile-body">
+<div className="workspace-tabs">{[['equipment','Thiết bị'],['history','Lịch sử'],['documents','Tài liệu & Ảnh']].map(([key,label]) => <button key={key} aria-pressed={profileTab === key} onClick={() => setProfileTab(key)}>{label}</button>)}<button disabled={!can('repair:create') || !onRequestRepair} onClick={() => { onRequestRepair(selectedSetDetails); setSelectedSetDetails(null); }}>Tạo phiếu sửa chữa</button><button disabled={!can('asset:edit') || !onRequestMaintenance} onClick={() => { onRequestMaintenance(selectedSetDetails); setSelectedSetDetails(null); }}>Bảo trì</button></div>
+                {profileTab === 'history' && <MachineProfileHistory items={machineProfile.history} />}
                 {profileTab === 'documents' && <TechnicalResources machineModel={selectedSetDetails.dispenserModel} modelOptions={[...new Set(systemSets.map(machine => machine.dispenserModel).filter(Boolean))]} />}
                 <div hidden={profileTab !== 'equipment'}>
                 <p className="resource-muted">Cần bổ sung: {missingMachineFields(selectedSetDetails).join(' · ') || 'Đã có các trường seri và hạn bảo trì'}</p>
-                <div className="workspace-tabs">{[['computer','Máy tính',computers,selectedSetDetails.computerId],['dispenser','Máy chiết',dispensers,selectedSetDetails.dispenserId],['mixer','Máy lắc',mixers,selectedSetDetails.mixerId],['printer','Máy in',printers,selectedSetDetails.printerId]].map(([category,label,list,id]) => { const matches = list.filter(item => id ? item.id === id : item.setCode === selectedSetDetails.setCode); const device = matches.length === 1 ? matches[0] : null; return device && <button key={category} disabled={!can('asset:edit')} onClick={() => { setSelectedSetDetails(null); handleOpenEditDevice(category,device); }}>Bổ sung {label.toLocaleLowerCase('vi')}</button>; })}</div>
-                <div className="machine-profile-extra"><div><strong>Liên hệ NPP:</strong> {npps.find(item => item.id === selectedSetDetails.nppId)?.contactPerson || 'Chưa ghi nhận'} · {npps.find(item => item.id === selectedSetDetails.nppId)?.phone || 'Chưa có số điện thoại'}</div><div><strong>Địa chỉ:</strong> {npps.find(item => item.id === selectedSetDetails.nppId)?.address || 'Chưa ghi nhận'}</div></div>
-                {/* Machine Info Cards (4 devices) */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '10px', marginBottom: '16px' }}>
-                  <div style={{ background: 'var(--bg-main)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '10px' }}>
-                    <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)', fontWeight: '700' }}>MÁY CHIẾT</div>
-                    <div style={{ fontWeight: '700', fontSize: '0.875rem', marginTop: '2px' }}>{selectedSetDetails.dispenserModel || 'N/A'}</div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--accent-cyan)', fontFamily: 'var(--font-mono)' }}>Seri: {selectedSetDetails.dispenserSerial || 'N/A'}</div>
-                  </div>
-                  <div style={{ background: 'var(--bg-main)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '10px' }}>
-                    <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)', fontWeight: '700' }}>MÁY LẮC</div>
-                    <div style={{ fontWeight: '700', fontSize: '0.875rem', marginTop: '2px' }}>{selectedSetDetails.mixerModel || 'N/A'}</div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--accent-cyan)', fontFamily: 'var(--font-mono)' }}>Seri: {selectedSetDetails.mixerSerial || 'N/A'}</div>
-                  </div>
-                  <div style={{ background: 'var(--bg-main)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '10px' }}>
-                    <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)', fontWeight: '700' }}>MÁY TÍNH</div>
-                    <div style={{ fontWeight: '700', fontSize: '0.875rem', marginTop: '2px' }}>{selectedSetDetails.computerType || selectedSetDetails.pcType || 'All In One'}</div>
-                  </div>
-                  <div style={{ background: 'var(--bg-main)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '10px' }}>
-                    <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)', fontWeight: '700' }}>MÁY IN</div>
-                    <div style={{ fontWeight: '700', fontSize: '0.875rem', marginTop: '2px' }}>{findAssignedDevice('printer', printers, selectedSetDetails)?.model || selectedSetDetails.printerModel || 'Chưa ghi nhận'}</div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--accent-cyan)', fontFamily: 'var(--font-mono)' }}>Seri: {selectedSetDetails.printerSerial || 'N/A'}</div>
-                  </div>
-                </div>
+                <div className="workspace-tabs">{[['computer','Máy tính',computers,selectedSetDetails.computerId],['dispenser','Máy chiết',dispensers,selectedSetDetails.dispenserId],['mixer','Máy lắc',mixers,selectedSetDetails.mixerId],['printer','Máy in',printers,selectedSetDetails.printerId]].map(([category,label,list,id]) => { const matches = list.filter(item => id ? item.id === id : item.setCode === selectedSetDetails.setCode); const device = matches.length === 1 ? matches[0] : null; return device && <button key={category} disabled={!can('asset:edit')} onClick={() => { handleOpenEditDevice(category,device); }}>Bổ sung {label.toLocaleLowerCase('vi')}</button>; })}</div>
+                <MachineProfileSummary machine={selectedSetDetails} profile={machineProfile} />
 
                 <div className="machine-profile-extra">{[['computerSerial','Seri máy tính'],['tintingSoftware','Phần mềm pha màu'],['softwareVersion','Phiên bản'],['agentStatus','Trạng thái kết nối'],['lastMaintenanceDate','Bảo trì gần nhất'],['province','Tỉnh / Thành'],['region','Khu vực'],['notes','Ghi chú']].map(([key,label]) => <div key={key}><strong>{label}:</strong> {selectedSetDetails[key] || 'Chưa ghi nhận'}</div>)}</div>
                 {/* Additional details bar */}
@@ -3143,6 +3150,7 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
       {/* QR & BARCODE CAMERA SCANNER MODAL */}
       {showScanSerialModal && (
         <QrScannerModal
+          title={scanTargetField === 'profile' ? 'Quét mã bộ máy' : undefined}
           onScanSuccess={(scannedText) => {
             if (scanTargetField === 'profile') { openScannedMachine(scannedText); } else if (scanTargetField === 'add') {
               setAddFormData(prev => ({ ...prev, serial: scannedText }));

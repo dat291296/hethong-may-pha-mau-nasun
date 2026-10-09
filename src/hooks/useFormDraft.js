@@ -1,3 +1,4 @@
+import { recordOperationalError } from '../lib/operationalDiagnostics.js';
 import { useEffect, useRef, useState } from 'react';
 import { getCache, setCache } from '../lib/offlineDb';
 import { isDraftExpired } from '../lib/teamWorkspace';
@@ -28,7 +29,8 @@ export function useFormDraft(key, value, enabled, onRestore) {
       else { ready.current = true; setStatus('Chưa gửi lên hệ thống'); }
     }).catch(error => {
       if (active) setStatus('Không đọc được bản nháp trên thiết bị');
-      console.warn('[FormDraft] Read failed', error.name);
+      recordOperationalError('draft',error);
+      console.warn('[FormDraft] Read failed without payload');
     });
     return () => { active = false; };
   }, [key, enabled]);
@@ -43,7 +45,7 @@ export function useFormDraft(key, value, enabled, onRestore) {
         if (token !== generation.current) return;
         if (!await setCache(`form-draft:${key}`, { value: snapshot, savedAt: Date.now() })) throw new Error('DRAFT_WRITE_FAILED');
         if (token === generation.current) setStatus('Đã lưu nháp trên thiết bị · Chưa gửi');
-      }).catch(error => { setStatus('Không lưu được nháp; giữ màn hình mở và thử lại'); console.warn('[FormDraft] Write failed', error.name); });
+      }).catch(error => { setStatus('Không lưu được nháp; giữ màn hình mở và thử lại'); recordOperationalError('draft',error); console.warn('[FormDraft] Write failed without payload'); });
     };
     persistRef.current = persist;
     const timer = window.setTimeout(persist, 350);
