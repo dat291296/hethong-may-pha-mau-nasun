@@ -1,0 +1,14 @@
+{
+  "testedCommit": "15c8be4",
+  "browserRun": "https://github.com/dat291296/hethong-may-pha-mau-nasun/actions/runs/37875550943",
+  "sourceTests": { "passed": 225, "failed": 0 },
+  "engines": { "chromium": "passed", "webkit": "passed" },
+  "realStagingJwt": true,
+  "stagingProject": "kenznmtdfuexmfrtzypb",
+  "checks": ["offline queue preserved", "revoked reconnect signs out", "revoked replay rejected", "fresh login recovers pending changes", "account switching isolates and recovers queues"],
+  "scope": "Actual AuthProvider UI and offline storage with disposable staging accounts. Full application workflows and physical devices are separate acceptance checks.",
+  "realSafariIos": "awaiting physical device acceptance",
+  "nativeIos": "not tested",
+  "production": "No deployment or database migration performed",
+  "preview": "https://kythuat-staging.nasun.workers.dev"
+}
