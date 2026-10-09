@@ -47,6 +47,15 @@ export async function verifySessionRevocation(service, environment) {
     assert.ifError(repeated.error);
     assert.equal(repeated.data.valid, false, 'A revoked JWT must not reactivate its session');
     assert.equal((await validate()).state.valid, false);
+    const freshLogin = await client.auth.signInWithPassword({ email: environment.RLS_TEST_MANAGER_EMAIL, password: environment.RLS_TEST_MANAGER_PASSWORD });
+    assert.ifError(freshLogin.error);
+    const freshRegistration = await client.rpc('register_trusted_device_session', { ...args, p_device_label: 'Synthetic session verification' });
+    assert.ifError(freshRegistration.error);
+    assert.equal(freshRegistration.data.valid, true, 'Fresh authentication must create an allowed new session');
+    await requireReplaySession(client, owner, () => owner, validate);
+    const resumed = await client.from('distributors').update({ name: 'Synthetic fresh session writer' }).eq('id', distributorId).select('id');
+    assert.ifError(resumed.error);
+    assert.equal(resumed.data.length, 1);
     console.log('Staging revoked-session replay and re-registration rejection verified on disposable account.');
   } finally {
     if (inserted) {
