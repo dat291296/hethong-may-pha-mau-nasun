@@ -8,7 +8,7 @@ CREATE OR REPLACE FUNCTION public.register_trusted_device_session(
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public, pg_temp
+SET search_path = public, extensions, pg_temp
 AS $$
 DECLARE
   caller_id UUID := auth.uid();
@@ -85,6 +85,42 @@ BEGIN
     'anomaly_detected', anomaly, 'anomaly_reason', anomaly_reason,
     'trusted_until', device_row.trusted_until, 'session_expires_at', NOW() + INTERVAL '24 hours'
   );
+END;
+$$;
+
+
+CREATE OR REPLACE FUNCTION public.validate_trusted_device_session(
+  p_device_id TEXT,
+  p_timezone TEXT DEFAULT 'UTC'
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, extensions, pg_temp
+AS $$
+DECLARE
+  caller_id UUID := auth.uid();
+  jwt JSONB := auth.jwt();
+  session_key TEXT;
+  device_hash TEXT;
+  session_row public.account_sessions%ROWTYPE;
+  device_row public.trusted_devices%ROWTYPE;
+BEGIN
+  IF caller_id IS NULL THEN RAISE EXCEPTION 'AUTH_REQUIRED' USING ERRCODE = '28000'; END IF;
+  device_hash := encode(digest(BTRIM(COALESCE(p_device_id, '')), 'sha256'), 'hex');
+  session_key := COALESCE(NULLIF(jwt->>'session_id', ''), encode(digest(caller_id::TEXT || ':' || COALESCE(jwt->>'iat', ''), 'sha256'), 'hex'));
+  SELECT * INTO session_row FROM public.account_sessions WHERE session_id = session_key AND user_id = caller_id;
+  IF NOT FOUND THEN RETURN jsonb_build_object('valid', FALSE, 'reason', 'SESSION_NOT_REGISTERED'); END IF;
+  SELECT * INTO device_row FROM public.trusted_devices WHERE id = session_row.trusted_device_id AND device_id_hash = device_hash;
+  IF NOT FOUND THEN RETURN jsonb_build_object('valid', FALSE, 'reason', 'DEVICE_MISMATCH'); END IF;
+  IF session_row.revoked_at IS NOT NULL THEN RETURN jsonb_build_object('valid', FALSE, 'reason', COALESCE(session_row.revoked_reason, 'SESSION_REVOKED')); END IF;
+  IF device_row.revoked_at IS NOT NULL OR device_row.trusted_until <= NOW() THEN RETURN jsonb_build_object('valid', FALSE, 'reason', 'DEVICE_TRUST_EXPIRED'); END IF;
+  IF session_row.expires_at <= NOW() THEN RETURN jsonb_build_object('valid', FALSE, 'reason', 'SESSION_EXPIRED'); END IF;
+  IF session_row.idle_expires_at <= NOW() THEN RETURN jsonb_build_object('valid', FALSE, 'reason', 'SESSION_IDLE_TIMEOUT'); END IF;
+
+  UPDATE public.account_sessions SET last_seen_at = NOW(), idle_expires_at = NOW() + INTERVAL '8 hours' WHERE session_id = session_key;
+  UPDATE public.trusted_devices SET last_seen_at = NOW() WHERE id = device_row.id;
+  RETURN jsonb_build_object('valid', TRUE, 'trusted', TRUE, 'expires_at', session_row.expires_at, 'idle_expires_at', NOW() + INTERVAL '8 hours');
 END;
 $$;
 
