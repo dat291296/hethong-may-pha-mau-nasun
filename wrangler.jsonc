@@ -9,6 +9,7 @@
   },
   "assets": {
     "binding": "ASSETS",
+    "html_handling": "none",
     "run_worker_first": ["/assets/*"],
     "directory": "./dist",
     "not_found_handling": "single-page-application"

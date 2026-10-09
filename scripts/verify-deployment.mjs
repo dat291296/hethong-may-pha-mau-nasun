@@ -44,6 +44,10 @@ async function verify() {
   if (!appResponse.ok) throw new Error(`APP_HTTP_${appResponse.status}`);
   const html = await appResponse.text();
   if (!/<div id="root"><\/div>/i.test(html)) throw new Error('APP_SHELL_INVALID');
+  const shellResponse = await request('/index.html');
+  if (!shellResponse.ok || !/text\/html/i.test(shellResponse.headers.get('content-type') || '')) {
+    throw new Error('OFFLINE_SHELL_MUST_NOT_REDIRECT');
+  }
 
   for (const [header, expected] of Object.entries(requiredHeaders)) {
     const actual = appResponse.headers.get(header) || '';
