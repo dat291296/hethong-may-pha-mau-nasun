@@ -1,0 +1,44 @@
+name: Staging real JWT browser reconnect
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/nasun-staging-integrity]
+    paths: [scripts/verify-browser-reconnect.mjs, .github/workflows/browser-reconnect.yml, src/context/AuthContext.jsx, src/lib/offlineDb.js, src/security/replaySession.js]
+permissions:
+  contents: read
+concurrency:
+  group: staging-browser-reconnect
+  cancel-in-progress: false
+jobs:
+  reconnect:
+    environment: staging
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        engine: [chrome, webkit]
+    env:
+      UI_TEST_ENGINE: ${{ matrix.engine }}
+      RLS_TEST_URL: ${{ vars.STAGING_SUPABASE_URL || secrets.STAGING_SUPABASE_URL }}
+      RLS_TEST_ANON_KEY: ${{ vars.STAGING_SUPABASE_ANON_KEY || secrets.STAGING_SUPABASE_ANON_KEY }}
+      RLS_PRODUCTION_URL: ${{ vars.VITE_SUPABASE_URL || secrets.VITE_SUPABASE_URL }}
+      STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Install isolated browser runtime
+        run: npx --yes --package @playwright/cli@0.1.22 playwright-cli install-browser ${{ matrix.engine }} --with-deps
+      - name: Verify UI reconnect against real staging JWT
+        run: node scripts/verify-browser-reconnect.mjs
+      - name: Upload credential-free verification evidence
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: reconnect-${{ matrix.engine }}-${{ github.run_id }}
+          path: output/playwright/reconnect/*-evidence.json
+          if-no-files-found: error
