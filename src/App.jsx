@@ -124,7 +124,7 @@ export default function App() {
     addStockDevice, editDevice, editDeviceDetails, deleteDevice, deleteSystemSet, assembleSet, updateSystemSet, importDevices, importSystemSets, refetch: refetchAssets
   } = useAssets();
   const { repairTickets, addTicket, editTicket, deleteTicket, importTickets, refetch: refetchRepairs } = useRepairs();
-  const { auditLogs, addAuditLog, editAuditLog, deleteAuditLog, importAuditLogs, refetch: refetchAuditLogs } = useAuditLogs();
+  const { auditLogs, addAuditLog, importAuditLogs, refetch: refetchAuditLogs } = useAuditLogs();
   const { lockedMonths, lockMonth, unlockMonth, isDateLocked, loading: lockLoading, error: lockError } = useLockedMonths();
   const { tintingLogs, importLogs, refetch: refetchTintingLogs } = useTintingLogs();
 
@@ -302,12 +302,8 @@ export default function App() {
   };
 
   const handleDeleteTicket = async (ticketId) => {
-    try {
-      await deleteTicket(ticketId);
-    } catch (err) {
-      console.error(err);
-      alert('Lỗi xóa phiếu sửa chữa: ' + err.message);
-    }
+    if (!can('repair:delete')) throw new Error('Bạn không có quyền xóa phiếu.');
+    return deleteTicket(ticketId);
   };
 
   // NPP CRUD Handlers
@@ -927,8 +923,6 @@ export default function App() {
             <AuditLogs 
               globalSearch={globalSearch}
               auditLogs={auditLogs} 
-              onEditLog={editAuditLog} 
-              onDeleteLog={deleteAuditLog} 
             />
           )}
 

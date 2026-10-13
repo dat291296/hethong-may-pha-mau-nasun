@@ -1,3 +1,4 @@
+import { assertAuditAppendOnly } from './auditPolicy.js';
 import { supabase, isSupabaseConfigured } from './supabase';
 import { addToQueue, getQueue, removeFromQueue, clearQueue, setCache, getCache, getOfflineOwner } from './offlineDb';
 import { createOperationId, migrateQueueItem, classifySyncError, resolveFailureState } from './syncQueue';
@@ -514,6 +515,7 @@ async function insertDeviceWithSchemaFallback(table, payload, queueItemId) {
  * Push an action to the offline queue
  */
 export async function enqueueOfflineAction(action, payload, category = null) {
+  assertAuditAppendOnly(action);
   const now = Date.now();
   const entity = resolveSyncEntity(action, payload, category);
   const versionMap = await getCache('sync_entity_versions_v1', {});
@@ -615,7 +617,7 @@ async function processOfflineQueue(onStatusChange) {
 
   const totalQueueCount = queue.length;
   const now = Date.now();
-  const reviewItems = queue.filter(item => item.status === 'needs_review');
+  const reviewItems = queue.filter(item => ['needs_review', 'dead_letter'].includes(item.status));
   queue = queue.filter(item => !['needs_review', 'dead_letter'].includes(item.status) && Number(item.nextAttemptAt || 0) <= now);
   if (queue.length === 0) {
     if (reviewItems.length > 0 && onStatusChange) {
@@ -634,6 +636,7 @@ async function processOfflineQueue(onStatusChange) {
 
   for (const item of queue) {
     try {
+      assertAuditAppendOnly(item.action);
       assertOwner();
       await requireReplaySession(supabase, ownerId, getOfflineOwner, validateTrustedDeviceSession);
       assertOwner();
@@ -758,27 +761,14 @@ async function processOfflineQueue(onStatusChange) {
           }
           break;
         case 'DELETE_REPAIR':
-          const { error: delRepErr } = await supabase.from('repair_tickets').delete().eq('id', item.payload.id);
-          error = delRepErr;
+          const { data: deletedRepairs, error: delRepErr } = await supabase.from('repair_tickets').delete().eq('id', item.payload.id).select('id');
+          error = delRepErr || (!deletedRepairs?.length ? { code: 'PERSISTENCE_DENIED', message: 'Không xác nhận được quyền xóa phiếu. Cần đối chiếu trước khi gửi lại.' } : null);
           break;
         case 'ADD_AUDIT_LOG':
           item.payload = normalizeAuditPayload(item.payload, item.id);
           await addToQueue(item);
           const { error: auditErr } = await supabase.rpc('create_audit_log', { p_payload: item.payload });
           error = auditErr;
-          break;
-        case 'UPDATE_AUDIT_LOG':
-          {
-            const { id, ...auditUpdate } = item.payload;
-            const { error: updateAuditErr } = await supabase.from('audit_logs').update(auditUpdate).eq('id', id);
-            error = updateAuditErr;
-          }
-          break;
-        case 'DELETE_AUDIT_LOG':
-          {
-            const { error: deleteAuditErr } = await supabase.from('audit_logs').delete().eq('id', item.payload.id);
-            error = deleteAuditErr;
-          }
           break;
         default:
           throw new Error(`Unknown offline action type: ${item.action}`);

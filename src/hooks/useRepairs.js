@@ -1,3 +1,4 @@
+import { persistMutation } from '../lib/durableMutation.js';
 import { fetchAllRows } from '../lib/paginatedQuery.js';
 import { useState, useEffect, useCallback } from 'react';
 import { supabase, isSupabaseConfigured, safeQuery } from '../lib/supabase.js';
@@ -175,28 +176,24 @@ export function useRepairs() {
   }, [fetchRepairs, repairTickets]);
 
   const deleteTicket = useCallback(async (id) => {
-    // Update local state immediately
-    setRepairTickets(prev => {
-      const updated = filterRepairTicketsById(prev, id);
+    if (!id) throw new Error('Thiếu mã phiếu cần xóa.');
+    let result = { queued: false };
+    if (isSupabaseConfigured) {
+      result = await persistMutation({
+        online: navigator.onLine,
+        write: () => safeQuery(
+          sb => sb.from('repair_tickets').delete().eq('id', id).select('id'),
+          'deleteTicket'
+        ),
+        queue: () => enqueueOfflineAction('DELETE_REPAIR', { id }),
+      });
+    }
+    setRepairTickets(previous => {
+      const updated = filterRepairTicketsById(previous, id);
       cacheOfflineData('repair_tickets', updated);
       return updated;
     });
-
-    if (isSupabaseConfigured && navigator.onLine) {
-      try {
-        const { error } = await safeQuery(
-          sb => sb.from('repair_tickets').delete().eq('id', id),
-          'deleteTicket'
-        );
-        if (error) throw error;
-      } catch (err) {
-        console.warn('[Offline] Failed online deleteTicket. Queueing.', err);
-        enqueueOfflineAction('DELETE_REPAIR', { id });
-      }
-    } else if (isSupabaseConfigured && !navigator.onLine) {
-      console.log('[Offline] Network down. Enqueueing deleteTicket.');
-      enqueueOfflineAction('DELETE_REPAIR', { id });
-    }
+    return result;
   }, []);
 
   const importTickets = useCallback(async (items) => {
