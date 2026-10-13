@@ -88,8 +88,8 @@ try {
   for (const id of users.reverse()) {
     try {
       await retireStagingUser(client, id);
-    } catch {
-      console.error('Failed to retire a temporary staging account');
+    } catch (error) {
+      console.error(error.message);
       process.exitCode = 1;
     }
   }
