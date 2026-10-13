@@ -55,3 +55,7 @@ test('permission, authentication and conflict failures stop automatic replay', (
   for (const code of ['42501', 'PGRST301']) assert.equal(classifySyncError({ code }), 'needs_review');
   assert.equal(classifySyncError({ status: 503 }), 'retry_wait');
 });
+
+test('an unconfirmed delete requires review instead of automatic retry', () => {
+  assert.equal(classifySyncError({code:'PERSISTENCE_DENIED'}), 'needs_review');
+});

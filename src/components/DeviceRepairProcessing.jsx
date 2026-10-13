@@ -536,7 +536,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
     finally { setSaving(false); }
   };
 
-  const handleDelete = (ticket) => {
+  const handleDelete = async (ticket) => {
     if (isDateLocked(ticket.date)) {
       alert(`Thao tác bị khóa: Phiếu thuộc tháng ${ticket.date.substring(0, 7)} đã chốt sổ kế toán!`);
       return;
@@ -546,7 +546,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
       return;
     }
     if (confirm(`Bạn có chắc chắn muốn xóa Phiếu xử lý máy [${ticket.ticketCode}]?`)) {
-      onDeleteTicket(ticket.id);
+      try { await onDeleteTicket(ticket.id); } catch { alert('Không xóa được phiếu. Dữ liệu được giữ nguyên; kiểm tra quyền và kết nối rồi thử lại.'); }
     }
   };
 

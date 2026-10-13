@@ -139,74 +139,8 @@ export function useAuditLogs() {
     return finalLog || { ...logData, timestamp };
   }, [fetchAuditLogs]);
 
-  const editAuditLog = useCallback(async (id, updates) => {
-    let currentItem = null;
-    setAuditLogs(prev => {
-      const updated = prev.map(item => {
-        if (item.id === id) {
-          currentItem = { ...item, ...updates };
-          return currentItem;
-        }
-        return item;
-      });
-      persistAuditLogs(updated);
-      return updated;
-    });
-
-    const fullDbPayload = mapAuditToDb({ id, ...(currentItem || updates) });
-    const { id: _stableId, ...dbUpdates } = fullDbPayload;
-
-    if (isSupabaseConfigured && navigator.onLine) {
-      try {
-        const { data: updatedRows, error } = await safeQuery(
-          sb => sb.from('audit_logs').update(dbUpdates).eq('id', id).select('id'),
-          'editAuditLog'
-        );
-        if (error) throw error;
-
-        if (!updatedRows || updatedRows.length === 0) {
-          await safeQuery(
-            sb => sb.from('audit_logs').upsert(fullDbPayload, { onConflict: 'id' }),
-            'upsertAuditLog'
-          );
-        }
-        await fetchAuditLogs();
-      } catch (err) {
-        console.warn('[Offline] Failed online editAuditLog. Queueing.', err);
-        enqueueOfflineAction('UPDATE_AUDIT_LOG', { id, ...dbUpdates });
-      }
-    } else if (isSupabaseConfigured && !navigator.onLine) {
-      enqueueOfflineAction('UPDATE_AUDIT_LOG', { id, ...dbUpdates });
-    }
-  }, [fetchAuditLogs]);
-
-  const deleteAuditLog = useCallback(async (id) => {
-    setAuditLogs(prev => {
-      const updated = prev.filter(item => item.id !== id);
-      persistAuditLogs(updated);
-      return updated;
-    });
-
-    if (isSupabaseConfigured && navigator.onLine) {
-      try {
-        const { data, error } = await safeQuery(
-          sb => sb.from('audit_logs').delete().eq('id', id).select('id'),
-          'deleteAuditLog'
-        );
-        if (error) throw error;
-        if (!data || data.length === 0) throw createPersistenceError('Không có quyền xóa hoặc nhật ký không tồn tại trên Supabase');
-      } catch (err) {
-        console.warn('[Offline] Failed online deleteAuditLog. Queueing.', err);
-        if (!canRetryOffline(err)) {
-          await fetchAuditLogs();
-          throw err;
-        }
-        await enqueueOfflineAction('DELETE_AUDIT_LOG', { id });
-      }
-    } else if (isSupabaseConfigured && !navigator.onLine) {
-      await enqueueOfflineAction('DELETE_AUDIT_LOG', { id });
-    }
-  }, [fetchAuditLogs]);
+  const editAuditLog = useCallback(async () => { throw new Error('Nhật ký tác nghiệp chỉ đọc, không được sửa.'); }, []);
+  const deleteAuditLog = useCallback(async () => { throw new Error('Nhật ký tác nghiệp chỉ đọc, không được xóa.'); }, []);
 
   const importAuditLogs = useCallback(async (items) => {
     const dbItems = items.map(mapAuditToDb).filter(item => item.id && item.type);
@@ -214,7 +148,7 @@ export function useAuditLogs() {
 
     setAuditLogs(prev => {
       const merged = new Map(prev.map(item => [item.id, item]));
-      items.forEach(item => merged.set(item.id, item));
+      items.forEach(item => { if (!merged.has(item.id)) merged.set(item.id, item); });
       const updated = sanitizeAndRenumberAuditLogs(Array.from(merged.values()));
       persistAuditLogs(updated);
       return updated;
