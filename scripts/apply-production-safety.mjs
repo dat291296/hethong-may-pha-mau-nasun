@@ -14,7 +14,8 @@ if (!['postgres:', 'postgresql:'].includes(destination.protocol) || databaseRef 
 }
 if (process.argv.includes('--validate-only')) process.exit(0);
 
-const migrations = ['sensitive_action_reauthentication.sql', 'technical_document_uploads_migration.sql',
+const auditOnly = process.argv.includes('--audit-only');
+const migrations = auditOnly ? ['audit_logs_append_only.sql'] : ['sensitive_action_reauthentication.sql', 'technical_document_uploads_migration.sql',
   'technical_storage_recent_auth.sql', 'device_edit_atomic.sql', 'trusted_session_revocation.sql', 'revoked_session_write_guard.sql'];
 const statements = await Promise.all(migrations.map(async name => (await readFile(`supabase/${name}`, 'utf8'))
   .replace(/^\s*(BEGIN|COMMIT);\s*$/gm, '')));
@@ -49,11 +50,31 @@ SELECT pg_notification_queue_usage();
 NOTIFY pgrst, 'reload schema';
 COMMIT;
 `;
+const auditVerification = auditOnly ? `
+CREATE TEMP TABLE audit_immutability_probe (id integer) ON COMMIT DROP;
+INSERT INTO audit_immutability_probe VALUES (1);
+CREATE TRIGGER probe_rows BEFORE UPDATE OR DELETE ON audit_immutability_probe
+FOR EACH ROW EXECUTE FUNCTION public.reject_audit_log_mutation();
+CREATE TRIGGER probe_truncate BEFORE TRUNCATE ON audit_immutability_probe
+FOR EACH STATEMENT EXECUTE FUNCTION public.reject_audit_log_mutation();
+DO $$ BEGIN
+  BEGIN UPDATE audit_immutability_probe SET id=2; RAISE EXCEPTION 'UPDATE_NOT_BLOCKED'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+  BEGIN DELETE FROM audit_immutability_probe; RAISE EXCEPTION 'DELETE_NOT_BLOCKED'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+  BEGIN TRUNCATE audit_immutability_probe; RAISE EXCEPTION 'TRUNCATE_NOT_BLOCKED'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+  IF (SELECT count(*) FROM pg_trigger WHERE tgrelid='public.audit_logs'::regclass AND tgname IN ('audit_logs_append_only','audit_logs_no_truncate') AND tgenabled='O') <> 2 THEN
+    RAISE EXCEPTION 'AUDIT_TRIGGERS_NOT_ENABLED';
+  END IF;
+  IF has_table_privilege('authenticated','public.audit_logs','UPDATE') OR has_table_privilege('authenticated','public.audit_logs','DELETE')
+    OR has_table_privilege('anon','public.audit_logs','UPDATE') OR has_table_privilege('anon','public.audit_logs','DELETE') THEN
+    RAISE EXCEPTION 'AUDIT_ROLE_PRIVILEGES_NOT_REVOKED';
+  END IF;
+END $$;
+` : '';
 const child = spawn('psql', ['--dbname=' + destination.href, '-X', '-q', '-v', 'ON_ERROR_STOP=1'], {
   env: { ...process.env, PGSSLMODE: 'require' }, stdio: ['pipe', 'ignore', 'ignore'],
 });
 child.stdin.on('error', () => {});
-child.stdin.end(snapshot + statements.join('\n') + verify);
+child.stdin.end(snapshot + statements.join('\n') + auditVerification + verify);
 await new Promise((accept, reject) => {
   child.on('error', () => reject(new Error('PostgreSQL client unavailable')));
   child.on('exit', code => code === 0 ? accept() : reject(new Error('Production migration failed; transaction rolled back. Review schema prerequisites.')));
