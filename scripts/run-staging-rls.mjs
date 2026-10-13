@@ -1,6 +1,7 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { createClient } from '@supabase/supabase-js';
+import { retireStagingUser } from './staging-user-cleanup.mjs';
 
 const expectedHost = 'kenznmtdfuexmfrtzypb.supabase.co';
 const url = process.env.RLS_TEST_URL;
@@ -85,9 +86,10 @@ try {
   process.exitCode = 1;
 } finally {
   for (const id of users.reverse()) {
-    const { error } = await client.auth.admin.deleteUser(id);
-    if (error) {
-      console.error('Failed to remove a temporary staging account');
+    try {
+      await retireStagingUser(client, id);
+    } catch {
+      console.error('Failed to retire a temporary staging account');
       process.exitCode = 1;
     }
   }
