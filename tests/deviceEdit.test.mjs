@@ -1,7 +1,21 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { prepareDeviceEdit, saveDeviceEdit, findAssignedDevice } from '../src/lib/deviceEdit.js';
+import { prepareDeviceEdit, saveDeviceEdit, findAssignedDevice, requireUniqueDeviceSerial } from '../src/lib/deviceEdit.js';
 import { verifyDeviceEdit } from '../scripts/verify-device-edit.mjs';
+
+test('serial conflicts identify the other device and its distributor without rejecting the original device', () => {
+  const devices = [{ id: 'MIX-001', serial: 'SAME', model: 'KMC', setCode: 'SET-1' }];
+  const sets = [{ setCode: 'SET-1', nppId: 'NPP-1' }];
+  const npps = [{ id: 'NPP-1', name: 'Synthetic distributor' }];
+  assert.doesNotThrow(() => requireUniqueDeviceSerial('SAME', 'MIX-001', devices, sets, npps));
+  assert.throws(() => requireUniqueDeviceSerial(' same ', 'MIX-002', devices, sets, npps), error =>
+    error.code === 'DEVICE_SERIAL_CONFLICT' && error.message.includes('MIX-001') && error.message.includes('Synthetic distributor') && error.message.includes('KMC'));
+  assert.throws(() => requireUniqueDeviceSerial('SAME', 'MIX-002', [{ ...devices[0], setCode: null }], [], []), /Trong kho/);
+});
+
+test('serial constraint races remain a rejected write with a readable conflict message', async () => {
+  await assert.rejects(saveDeviceEdit(async () => ({ error: { code: '23505', message: 'duplicate key value violates unique constraint "mixers_serial_key"' } }), 'mixers', 'MIX-1', { serial: 'SAME' }, '2026-10-14T00:00:00Z'), { code: 'DEVICE_SERIAL_CONFLICT' });
+});
 
 test('all device categories preserve identity and explicit assignments', () => {
   for (const category of ['computer', 'dispenser', 'mixer', 'printer']) {

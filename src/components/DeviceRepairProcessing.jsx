@@ -904,7 +904,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
       {showModal && (
         <SafePortal>
           <div className="modal-overlay">
-            <div className="modal-content" style={{ maxWidth: '720px' }}>
+            <div className="modal-content repair-ticket-modal" style={{ maxWidth: '720px' }}>
               <div className="modal-header">
                 <h3 style={{ fontWeight: '800' }}>
                   {editingTicket ? `Chỉnh Sửa Phiếu Xử Lý Máy [${editingTicket.ticketCode}]` : 'Tạo Phiếu Xử Lý Máy & Sửa Chữa Mới'}
@@ -914,8 +914,8 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
               <form onSubmit={handleSubmit}>
                 <DraftNotice draft={draft} />
                 {saveError && <p className="resource-error" role="alert">{saveError}</p>}
+                <div className="modal-body">
                 <fieldset disabled={saving || Boolean(draft.existing)} className="form-fieldset">
-                <div className="modal-body" ref={el => { if (el) el.scrollTop = 0; }}>
                   <div className="responsive-form-grid">
                     <label>Người nhận công việc<select className="form-select" disabled={!canAssign} value={formData.assignedUserId || ''} onChange={event => setFormData(previous => ({ ...previous, assignedUserId: event.target.value || null }))}><option value="">Chưa phân công</option>{assignableUsers.map(item => <option key={item.id} value={item.id}>{item.name || item.full_name}</option>)}</select></label>
                     <label>Hạn xử lý<input type="date" className="form-input" value={formData.assignmentDueDate || ''} onChange={event => setFormData(previous => ({ ...previous, assignmentDueDate: event.target.value || null }))} /></label>
@@ -1364,8 +1364,8 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
                     )}
                   </div>
 
-                </div>
                 </fieldset>
+                </div>
                 <div className="modal-footer">
                   <button type="button" className="btn btn-secondary" disabled={saving} onClick={closeForm}>Đóng · Giữ nháp</button>
                   {onReturnToProfile && <button type="button" className="btn btn-secondary" disabled={saving} onClick={async () => {

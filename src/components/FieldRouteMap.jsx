@@ -129,12 +129,10 @@ export default function FieldRouteMap({
       }
 
       const hasCoordinates = npp.locationCoordinates && npp.locationCoordinates.includes(',');
-      const searchTarget = hasCoordinates
-        ? npp.locationCoordinates.trim()
-        : `${npp.name}, ${npp.address || npp.province || ''}`;
+      const searchTarget = String(npp.address || '').trim();
 
-      const googleMapsSearchUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(searchTarget)}`;
-      const googleMapsNavUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(searchTarget)}`;
+      const googleMapsSearchUrl = searchTarget ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(searchTarget)}` : null;
+      const googleMapsNavUrl = searchTarget ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(searchTarget)}` : null;
 
       return {
         ...npp,
@@ -252,7 +250,7 @@ export default function FieldRouteMap({
 
   // Generate Google Maps Multi-stop URL for ALL selected NPPs
   const multiStopMapsUrl = useMemo(() => {
-    if (tripNppObjects.length === 0) return '#';
+    if (tripNppObjects.length === 0 || tripNppObjects.some(npp => !String(npp.address || '').trim())) return undefined;
     
     // Single selected NPP: open direct location search
     if (tripNppObjects.length === 1) {
@@ -261,10 +259,7 @@ export default function FieldRouteMap({
 
     // 2 or more selected NPPs: Build Google Maps Directions with all stops
     const stops = tripNppObjects.map((npp) => {
-      if (npp.locationCoordinates && npp.locationCoordinates.includes(',')) {
-        return npp.locationCoordinates.trim();
-      }
-      return encodeURIComponent(`${npp.name}, ${npp.address || npp.province || ''}`);
+      return encodeURIComponent(String(npp.address || '').trim());
     });
 
     return `https://www.google.com/maps/dir/${stops.join('/')}`;
@@ -272,12 +267,9 @@ export default function FieldRouteMap({
 
   // Multi-stop directions starting from current user GPS
   const multiStopWithUserLocationUrl = useMemo(() => {
-    if (tripNppObjects.length === 0) return '#';
+    if (tripNppObjects.length === 0 || tripNppObjects.some(npp => !String(npp.address || '').trim())) return undefined;
     const stops = tripNppObjects.map((npp) => {
-      if (npp.locationCoordinates && npp.locationCoordinates.includes(',')) {
-        return npp.locationCoordinates.trim();
-      }
-      return encodeURIComponent(`${npp.name}, ${npp.address || npp.province || ''}`);
+      return encodeURIComponent(String(npp.address || '').trim());
     });
 
     if (userLocation) {
@@ -849,7 +841,9 @@ export default function FieldRouteMap({
 
                       {/* Google Maps link for single item */}
                       <a
-                        href={npp.googleMapsSearchUrl}
+                        href={npp.googleMapsSearchUrl || undefined}
+                        aria-disabled={!npp.googleMapsSearchUrl}
+                        title={!npp.googleMapsSearchUrl ? 'Cần bổ sung địa chỉ NPP trước khi mở bản đồ.' : undefined}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="btn btn-secondary btn-sm"
@@ -861,7 +855,9 @@ export default function FieldRouteMap({
                       </a>
 
                       <a
-                        href={npp.googleMapsNavUrl}
+                        href={npp.googleMapsNavUrl || undefined}
+                        aria-disabled={!npp.googleMapsNavUrl}
+                        title={!npp.googleMapsNavUrl ? 'Cần bổ sung địa chỉ NPP trước khi mở bản đồ.' : undefined}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="btn btn-secondary btn-sm"
@@ -1036,7 +1032,9 @@ export default function FieldRouteMap({
                     {/* Google Maps Actions Row */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                       <a
-                        href={npp.googleMapsSearchUrl}
+                        href={npp.googleMapsSearchUrl || undefined}
+                        aria-disabled={!npp.googleMapsSearchUrl}
+                        title={!npp.googleMapsSearchUrl ? 'Cần bổ sung địa chỉ NPP trước khi mở bản đồ.' : undefined}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="btn btn-primary btn-sm"
@@ -1055,7 +1053,9 @@ export default function FieldRouteMap({
                       </a>
 
                       <a
-                        href={npp.googleMapsNavUrl}
+                        href={npp.googleMapsNavUrl || undefined}
+                        aria-disabled={!npp.googleMapsNavUrl}
+                        title={!npp.googleMapsNavUrl ? 'Cần bổ sung địa chỉ NPP trước khi mở bản đồ.' : undefined}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="btn btn-secondary btn-sm"
