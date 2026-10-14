@@ -14,14 +14,15 @@ test('date range is inclusive, excludes missing dates and supports open bounds',
   assert.equal(matchesDateRange('2026-10-06', '', '2026-10-05'), false);
   assert.equal(matchesDateRange('', '', ''), true);
 });
-test('each technician can only edit their assigned concrete region', () => {
+test('each non-admin writer can only edit their assigned concrete region', () => {
   const regions = ['Miền Bắc','Miền Trung','Miền Nam'];
-  for (const assigned of regions) for (const target of regions) {
-    assert.equal(canEditRegion({role:'technician',managedRegion:assigned},target), assigned === target);
+  for (const role of ['technician', 'manager', 'qc']) for (const assigned of regions) for (const target of regions) {
+    assert.equal(canEditRegion({role,managedRegion:assigned},target), assigned === target);
   }
   for (const assigned of ['',undefined,'Toàn Quốc']) assert.equal(canEditRegion({role:'technician',managedRegion:assigned},'Miền Bắc'), false);
   assert.throws(() => requireRegionEdit({role:'technician',managedRegion:'Miền Bắc'},''));
   assert.equal(canEditRegion({role:'viewer',managedRegion:'Miền Bắc'},'Miền Bắc'),false);
   assert.equal(canEditRegion({role:'admin'},''),true);
-  assert.equal(canEditRegion({role:'manager',managedRegion:'Toàn Quốc'},'Miền Nam'),true);
+  assert.equal(canEditRegion({role:'manager',managedRegion:'Toàn Quốc'},'Miền Nam'),false);
+  assert.equal(canEditRegion({role:'qc',managedRegion:'Miền Bắc'},''),false);
 });

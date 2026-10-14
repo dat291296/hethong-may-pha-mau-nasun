@@ -123,7 +123,7 @@ export default function UserManagement({
     fetchProfiles();
   }, []);
 
-  if (!currentUser) return null;
+  if (!currentUser || currentUser.role !== 'admin') return null;
 
   const handleRoleChange = async (profileId, newRole) => {
     // Prevent admin from demoting themselves
@@ -159,7 +159,8 @@ export default function UserManagement({
         fetchProfiles();
         return;
       }
-      const nextRegion = profile?.managed_region || 'Miền Bắc';
+      const nextRegion = ['Miền Bắc', 'Miền Trung', 'Miền Nam'].includes(profile?.managed_region) ? profile.managed_region : '';
+      if (!nextRegion) throw new Error('Hãy chọn Miền Bắc, Miền Trung hoặc Miền Nam trước khi thay đổi vai trò.');
       const { data: updateResult, error: updateErr } = await supabase.rpc('update_user_access', {
         target_user_id: profileId,
         target_role: newRole,
@@ -446,9 +447,10 @@ export default function UserManagement({
                         <td>
                           {p.role === 'admin' ? (
                             <span style={{ fontSize: '0.8rem', color: '#f59e0b', fontWeight: 'bold' }}>Toàn Quốc</span>
-                          ) : ['manager', 'technician', 'qc'].includes(p.role) ? (
+                          ) : (
                             <select 
-                              value={p.managed_region || 'Miền Bắc'} 
+                              value={['Miền Bắc', 'Miền Trung', 'Miền Nam'].includes(p.managed_region) ? p.managed_region : ''}
+                              disabled={isSelf || loading}
                               onChange={e => handleRegionChange(p.id, e.target.value)}
                               className="form-input"
                               style={{
@@ -460,13 +462,11 @@ export default function UserManagement({
                                 borderColor: 'var(--border-color)'
                               }}
                             >
+                              <option value="" disabled>Chọn khu vực</option>
                               <option value="Miền Bắc">Miền Bắc</option>
                               <option value="Miền Trung">Miền Trung</option>
                               <option value="Miền Nam">Miền Nam</option>
-                              <option value="Toàn Quốc">Toàn Quốc</option>
                             </select>
-                          ) : (
-                            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Mặc định theo NPP</span>
                           )}
                         </td>
                         <td style={{ textAlign: 'center' }}>

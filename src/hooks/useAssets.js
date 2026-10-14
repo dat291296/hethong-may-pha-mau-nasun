@@ -272,7 +272,7 @@ export function useAssets() {
       setSystemSets(prev => prev.map(set => {
         const fields = singularCat === 'dispenser' ? { dispenserId: id, dispenserModel: updates.model, dispenserSerial: updates.serial }
           : singularCat === 'mixer' ? { mixerId: id, mixerModel: updates.model, mixerSerial: updates.serial }
-          : singularCat === 'computer' ? { computerId: id, computerType: updates.type, computerSerial: updates.serial }
+          : singularCat === 'computer' ? { computerId: id, computerType: updates.type, computerSerial: updates.serial, tintingSoftware: updates.tintingSoftware, softwareVersion: updates.softwareVersion }
           : { printerId: id, printerSerial: updates.serial };
         const key = `${singularCat}Id`;
         if (set.setCode === updates.setCode && updates.isAssigned) return { ...set, ...fields };
@@ -624,7 +624,9 @@ function mapDbToComputer(row) {
   return { 
     id: row.id, 
     type: cleanType, 
-    os: row.os, 
+    os: row.os,
+    tintingSoftware: row.tinting_software ?? row.tintingSoftware,
+    softwareVersion: row.software_version ?? row.softwareVersion,
     specs: row.specs, 
     serial: row.serial || '—', 
     status: row.status || 'Mới 100%',
@@ -688,6 +690,8 @@ function mapDeviceToDb(obj, category) {
   if (cat === 'computer' || cat === 'computers') {
     if (obj.type !== undefined) dbObj.type = obj.type === 'Case' ? 'Case' : 'AIO';
     if (obj.os !== undefined) dbObj.os = obj.os;
+    if (obj.tintingSoftware !== undefined) dbObj.tinting_software = String(obj.tintingSoftware).trim();
+    if (obj.softwareVersion !== undefined) dbObj.software_version = String(obj.softwareVersion).trim();
     if (obj.specs !== undefined) dbObj.specs = obj.specs;
     if (obj.network !== undefined) dbObj.network = obj.network;
     if (obj.status !== undefined) dbObj.status = obj.status;

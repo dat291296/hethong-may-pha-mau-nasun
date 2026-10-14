@@ -208,9 +208,12 @@ export default function App() {
   // Tech Handbook -> Repair Ticket Prefill State
   const [prefilledRepairData, setPrefilledRepairData] = useState(null);
   const [workspaceFilter, setWorkspaceFilter] = useState('ALL');
+  const [machineProfileReturn, setMachineProfileReturn] = useState(null);
   const navigateMain = tab => { setWorkspaceFilter('ALL'); setGlobalSearch(''); setActiveTab(tab); };
   const navigateWorkspace = (tab, query = '', filter = 'ALL') => { setGlobalSearch(query); setWorkspaceFilter(filter); setActiveTab(tab); };
-  const requestMachineRepair = machine => { setPrefilledRepairData({ nppId: machine.nppId, nppName: machine.nppName, machineModel: machine.dispenserModel, serialNumber: machine.dispenserSerial, productCategory: 'Máy chiết' }); navigateWorkspace('repairs'); };
+  const rememberMachineProfile = machine => setMachineProfileReturn({ machine: { id: machine.id, setCode: machine.setCode }, search: globalSearch, filter: workspaceFilter });
+  const returnToMachineProfile = () => { if (machineProfileReturn) navigateWorkspace('assets', machineProfileReturn.search, machineProfileReturn.filter); };
+  const requestMachineRepair = machine => { rememberMachineProfile(machine); setPrefilledRepairData({ nppId: machine.nppId, nppName: machine.nppName, machineModel: machine.dispenserModel, serialNumber: machine.dispenserSerial, productCategory: 'Máy chiết' }); navigateWorkspace('repairs'); };
 
   const handleSelectErrorForRepair = (errorObj) => {
     let cat = errorObj.category;
@@ -765,6 +768,11 @@ export default function App() {
         {/* Dynamic View Content */}
         <main key={activeTab} className="page-transition nasun-workspace" data-page={activeTab} style={{ flex: 1, padding: '28px', overflowY: 'auto' }}>
           <Suspense fallback={<div className="glass-panel" style={{ padding: '28px', color: 'var(--text-muted)' }}>Đang tải màn hình...</div>}>
+          {machineProfileReturn && ['repairs', 'maintenance'].includes(activeTab) && (
+            <div className="glass-panel" style={{ padding: 12, marginBottom: 16 }}>
+              <button className="btn btn-secondary" onClick={() => navigateWorkspace('assets', machineProfileReturn.search, machineProfileReturn.filter)}>← Quay lại hồ sơ bộ máy {machineProfileReturn.machine.setCode}</button>
+            </div>
+          )}
           
           {activeTab === 'dashboard' && (
             <Dashboard
@@ -804,7 +812,9 @@ export default function App() {
               repairTickets={repairTickets}
               auditLogs={auditLogs}
               onRequestRepair={requestMachineRepair}
-              onRequestMaintenance={machine => navigateWorkspace('maintenance', machine.setCode)}
+              onRequestMaintenance={machine => { rememberMachineProfile(machine); navigateWorkspace('maintenance', machine.setCode); }}
+              initialProfile={machineProfileReturn?.machine}
+              onProfileRestored={() => setMachineProfileReturn(null)}
               systemSets={systemSets}
               npps={npps}
               dispensers={dispensers}
@@ -833,6 +843,7 @@ export default function App() {
               onEditTicket={handleEditTicket}
               onDeleteTicket={handleDeleteTicket}
               prefilledTicket={prefilledRepairData}
+              onReturnToProfile={machineProfileReturn ? returnToMachineProfile : undefined}
               onClearPrefill={() => setPrefilledRepairData(null)}
               onOpenImportModal={() => openImportModal('repair')}
               isDateLocked={isDateLocked}
@@ -914,6 +925,7 @@ export default function App() {
               initialFilter={workspaceFilter}
               systemSets={systemSets}
               onCompleteMaintenance={handleCompleteMaintenance}
+              onReturnToProfile={machineProfileReturn ? returnToMachineProfile : undefined}
               onUpdateSystemSet={handleUpdateRegionalSet}
               onDeleteSystemSet={handleSensitiveSetDeletion}
             />

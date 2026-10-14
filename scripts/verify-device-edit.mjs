@@ -41,6 +41,16 @@ export async function verifyDeviceEdit(admin, viewer, reauthenticate) {
         check(await edit(admin, table, assigned, { os: 'Windows 11 Pro' }));
         const retained = check(await admin.from('system_sets').select('computer_serial').eq('set_code', sets[0]).single());
         assert.equal(retained.computer_serial, legacySerial, 'Editing OS must preserve existing profile serial');
+        const softwareRevision = await read(table, id);
+        check(await edit(admin, table, softwareRevision, { tinting_software: 'ColorExpert 3', software_version: '3.2' }));
+        const softwareDevice = await read(table, id);
+        assert.equal(softwareDevice.tinting_software, 'ColorExpert 3');
+        assert.equal(softwareDevice.software_version, '3.2');
+        const softwareSet = check(await admin.from('system_sets').select('tinting_software,software_version,computer_serial').eq('set_code', sets[0]).single());
+        assert.equal(softwareSet.tinting_software, 'ColorExpert 3');
+        assert.equal(softwareSet.software_version, '3.2');
+        assert.equal(softwareSet.computer_serial, legacySerial);
+        assert.ok((await edit(admin, table, softwareDevice, { software_version: 'x'.repeat(121) })).error, 'Oversized software details must fail');
       }
       if (table !== 'computers') assert.ok((await edit(admin, table, assigned, { status: 'INVALID-STATUS', set_code: sets[1] })).error);
       // An inaccessible/nonexistent target must roll back the device update too.

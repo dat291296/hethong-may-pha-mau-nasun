@@ -15,8 +15,7 @@ export function uniqueOptions(values) {
 export function canEditRegion(user, region) {
   if (!user || !['admin', 'manager', 'technician', 'qc'].includes(user.role)) return false;
   if (user.role === 'admin') return true;
-  if (user.role === 'technician') return REGIONS.includes(user.managedRegion) && user.managedRegion === region;
-  return user.managedRegion === 'Toàn Quốc' || (REGIONS.includes(region) && user.managedRegion === region);
+  return REGIONS.includes(user.managedRegion) && user.managedRegion === region;
 }
 export function requireRegionEdit(user, region) {
   if (!canEditRegion(user, region)) throw new Error('Bạn chỉ được sửa dữ liệu trong khu vực được phân công. Dữ liệu chưa có khu vực cần quản trị viên xử lý.');
