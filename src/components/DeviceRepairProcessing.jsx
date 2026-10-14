@@ -99,6 +99,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
   onPrintTicket,
   prefilledTicket,
   onClearPrefill,
+  onReturnToProfile,
   onOpenImportModal,
   isDateLocked = () => false
 }) {
@@ -1364,11 +1365,15 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
                   </div>
 
                 </div>
-                <div className="modal-footer">
-                  <button type="button" className="btn btn-secondary" onClick={closeForm}>Đóng · Giữ nháp</button>
-                  <button type="submit" className="btn btn-primary">{saving ? 'Đang xác nhận lưu...' : editingTicket ? 'Cập Nhật Phiếu' : 'Tạo Phiếu Mới'}</button>
-                </div>
                 </fieldset>
+                <div className="modal-footer">
+                  <button type="button" className="btn btn-secondary" disabled={saving} onClick={closeForm}>Đóng · Giữ nháp</button>
+                  {onReturnToProfile && <button type="button" className="btn btn-secondary" disabled={saving} onClick={async () => {
+                    try { await draft.flush(); onReturnToProfile(); }
+                    catch { setSaveError('Chưa lưu được bản nháp. Vui lòng thử lại trước khi quay lại hồ sơ.'); }
+                  }}>← Quay lại hồ sơ bộ máy</button>}
+                  <button type="submit" className="btn btn-primary" disabled={saving || Boolean(draft.existing)}>{saving ? 'Đang xác nhận lưu...' : editingTicket ? 'Cập Nhật Phiếu' : 'Tạo Phiếu Mới'}</button>
+                </div>
               </form>
             </div>
           </div>

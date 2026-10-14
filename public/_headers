@@ -24,3 +24,6 @@
 
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
+
+/nasun_logo.png
+  Cross-Origin-Resource-Policy: cross-origin

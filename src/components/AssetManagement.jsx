@@ -49,7 +49,7 @@ import { exportExcel } from '../utils/excelExport.js';
 import { getSystemSetMissingFields } from '../utils/systemSetValidation.js';
 import { useWorkspaceState, useWorkspaceScroll } from '../hooks/useWorkspaceState';
 
-export default function AssetManagement({ globalSearch = '', initialFilter = 'ALL', repairTickets = [], auditLogs = [], onRequestRepair, onRequestMaintenance,
+export default function AssetManagement({ globalSearch = '', initialFilter = 'ALL', initialProfile, onProfileRestored, repairTickets = [], auditLogs = [], onRequestRepair, onRequestMaintenance,
   systemSets,
   npps = [],
   dispensers,
@@ -196,6 +196,14 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
   const [selectedSetDetails, setSelectedSetDetails] = useState(null);
   const openedSearch = React.useRef('');
   const [profileTab, setProfileTab] = useState('equipment');
+  useEffect(() => {
+    if (!initialProfile) return;
+    const matches = systemSets.filter(machine => sameMachine(machine, initialProfile));
+    if (matches.length !== 1) return;
+    setSelectedSetDetails(matches[0]);
+    openedSearch.current = globalSearch;
+    onProfileRestored?.();
+  }, [initialProfile, systemSets, globalSearch, onProfileRestored]);
   const [quickFilter, setQuickFilter] = useState(initialFilter);
   useEffect(() => { setQuickFilter(initialFilter); }, [initialFilter]);
   const [scanError, setScanError] = useState('');
@@ -450,7 +458,7 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
 
   const handleOpenEditDevice = (category, data) => {
     const machine = systemSets.find(item=>item.setCode === data.setCode);
-    if (!can('asset:edit') || (user?.role === 'technician' && !canEditRegion(user,machine?.region))) { alert('Thiết bị chưa có khu vực hoặc thuộc miền khác cần quản trị viên xử lý.'); return; }
+    if (!can('asset:edit') || !canEditRegion(user,machine?.region)) { alert('Thiết bị chưa có khu vực hoặc thuộc miền khác cần quản trị viên xử lý.'); return; }
     if (selectedSetDetails) { returnToProfile.current = {id:selectedSetDetails.id,setCode:selectedSetDetails.setCode}; setSelectedSetDetails(null); }
     setEditingDevice({ category, data });
     const cleanType = category === 'computer' 
@@ -461,6 +469,10 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
       sourceId: data.id || '',
       type: cleanType,
       model: category === 'computer' ? cleanType : (data.model || ''),
+      ...(category === 'computer' ? {
+        tintingSoftware: machine?.tintingSoftware ?? data.tintingSoftware ?? '',
+        softwareVersion: machine?.softwareVersion ?? data.softwareVersion ?? '',
+      } : {}),
       id: data.id || '',
       isAssigned: data.isAssigned || !!data.setCode,
       setCode: data.setCode || ''
@@ -2181,6 +2193,12 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
 
                   {editingDevice.category === 'computer' && (
                     <div className="responsive-form-grid">
+                      { [['tintingSoftware', 'Phần mềm pha màu'], ['softwareVersion', 'Phiên bản phần mềm']].map(([key, label]) => (
+                        <div className="form-group" key={key}>
+                          <label className="form-label" htmlFor={`edit-computer-${key}`}>{label}</label>
+                          <input id={`edit-computer-${key}`} className="form-input" maxLength={120} value={editFormData[key] || ''} onChange={event => setEditFormData(previous => ({ ...previous, [key]: event.target.value }))} />
+                        </div>
+                      ))}
                       <div className="form-group">
                         <label className="form-label">Loại Máy Tính & OS</label>
                         <div style={{ display: 'flex', gap: '8px' }}>
@@ -3021,7 +3039,7 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
                 {profileTab === 'documents' && <TechnicalResources machineModel={selectedSetDetails.dispenserModel} modelOptions={[...new Set(systemSets.map(machine => machine.dispenserModel).filter(Boolean))]} />}
                 <div hidden={profileTab !== 'equipment'}>
                 <p className="resource-muted">Cần bổ sung: {missingMachineFields(selectedSetDetails).join(' · ') || 'Đã có các trường seri và hạn bảo trì'}</p>
-                <div className="workspace-tabs">{[['computer','Máy tính',computers,selectedSetDetails.computerId],['dispenser','Máy chiết',dispensers,selectedSetDetails.dispenserId],['mixer','Máy lắc',mixers,selectedSetDetails.mixerId],['printer','Máy in',printers,selectedSetDetails.printerId]].map(([category,label,list,id]) => { const matches = list.filter(item => id ? item.id === id : item.setCode === selectedSetDetails.setCode); const device = matches.length === 1 ? matches[0] : null; return device && <button key={category} disabled={!can('asset:edit')} onClick={() => { handleOpenEditDevice(category,device); }}>Bổ sung {label.toLocaleLowerCase('vi')}</button>; })}</div>
+                <div className="workspace-tabs">{[['computer','Máy tính',computers,selectedSetDetails.computerId],['dispenser','Máy chiết',dispensers,selectedSetDetails.dispenserId],['mixer','Máy lắc',mixers,selectedSetDetails.mixerId],['printer','Máy in',printers,selectedSetDetails.printerId]].map(([category,label,list,id]) => { const matches = list.filter(item => id ? item.id === id : item.setCode === selectedSetDetails.setCode); const device = matches.length === 1 ? matches[0] : null; return device && <button key={category} disabled={!can('asset:edit')} onClick={() => { handleOpenEditDevice(category,device); }}>Chỉnh sửa {label.toLocaleLowerCase('vi')}</button>; })}</div>
                 <MachineProfileSummary machine={selectedSetDetails} profile={machineProfile} />
 
                 <div className="machine-profile-extra">{[['computerSerial','Seri máy tính'],['tintingSoftware','Phần mềm pha màu'],['softwareVersion','Phiên bản'],['agentStatus','Trạng thái kết nối'],['lastMaintenanceDate','Bảo trì gần nhất'],['province','Tỉnh / Thành'],['region','Khu vực'],['notes','Ghi chú']].map(([key,label]) => <div key={key}><strong>{label}:</strong> {selectedSetDetails[key] || 'Chưa ghi nhận'}</div>)}</div>
