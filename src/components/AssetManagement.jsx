@@ -1,4 +1,4 @@
-import { prepareDeviceEdit, findAssignedDevice } from '../lib/deviceEdit.js';
+import { prepareDeviceEdit, findAssignedDevice, requireUniqueDeviceSerial } from '../lib/deviceEdit.js';
 import WorkspaceFilterBar from './WorkspaceFilterBar.jsx';
 import { matchesSearch, matchesDateRange, uniqueOptions, canEditRegion } from '../lib/workspaceFilters.js';
 import TechnicalResources from './TechnicalResources';
@@ -495,6 +495,10 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
       isAssigned,
       setCode: isAssigned ? editFormData.setCode : null
       }, editingDevice.data);
+      if (finalData.serial !== editingDevice.data.serial) {
+        const inventory = { computer: computers, dispenser: dispensers, mixer: mixers, printer: printers }[editingDevice.category];
+        requireUniqueDeviceSerial(finalData.serial, editingDevice.data.id, inventory, systemSets, npps);
+      }
       setIsSavingDevice(true);
       await onEditDevice(editingDevice.category, finalData);
       alert('✅ Đã lưu thông tin chỉnh sửa thành công!');

@@ -253,6 +253,7 @@ export function useAssets() {
     const singularCat = cfg ? cfg.singular : category;
 
     const { id: _ignoredId, ...dbUpdates } = mapDeviceToDb({ ...updates, id }, singularCat);
+    if (updates.originalSerial !== undefined && updates.serial === updates.originalSerial) delete dbUpdates.serial;
     const appUpdates = { ...updates, id, isUpdated: true, updatedAt: new Date().toISOString() };
 
     if ('is_assigned' in updates) appUpdates.isAssigned = updates.is_assigned;

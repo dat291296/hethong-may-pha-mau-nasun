@@ -316,9 +316,10 @@ export default function NppManagement({ globalSearch = '', npps, systemSets, onA
           .slice((currentPage - 1) * pageSize, currentPage * pageSize)
           .map((npp) => {
           const assignedSets = systemSets.filter(s => s.nppId === npp.id);
-          const isInactive = String(npp.status || '').toLowerCase().includes('ngưng');
+          const isWithdrawn = assignedSets.length > 0 && assignedSets.every(set => set.status === 'DA_THU_HOI');
+          const isInactive = String(npp.status || '').toLowerCase().includes('ngưng') || isWithdrawn;
           return (
-            <div key={npp.id} className="glass-panel glass-panel-hover" style={{ padding: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', border: isInactive ? '2px solid rgba(239,68,68,0.75)' : undefined, background: isInactive ? 'linear-gradient(135deg, rgba(127,29,29,0.32), rgba(15,23,42,0.95))' : undefined, boxShadow: isInactive ? '0 0 0 1px rgba(239,68,68,0.18), 0 10px 26px rgba(127,29,29,0.22)' : undefined }}>
+            <div key={npp.id} className={`glass-panel glass-panel-hover${isInactive ? ' npp-card-withdrawn' : ''}`} style={{ padding: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', border: isInactive ? '2px solid rgba(239,68,68,0.75)' : undefined, background: isInactive ? 'linear-gradient(135deg, rgba(127,29,29,0.32), rgba(15,23,42,0.95))' : undefined, boxShadow: isInactive ? '0 0 0 1px rgba(239,68,68,0.18), 0 10px 26px rgba(127,29,29,0.22)' : undefined }}>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -333,7 +334,7 @@ export default function NppManagement({ globalSearch = '', npps, systemSets, onA
                     </span>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    {npp.status === 'Đang hợp tác' ? (
+                    {isWithdrawn ? (<span className="badge badge-danger">↩ Đã thu hồi bộ máy</span>) : npp.status === 'Đang hợp tác' ? (
                       <span className="badge badge-success">✓ Đang hợp tác</span>
                     ) : (
                       <span className="badge badge-danger">⚠ Đã ngưng hợp tác</span>
