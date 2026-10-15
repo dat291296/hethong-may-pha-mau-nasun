@@ -1,3 +1,5 @@
+import { summarizeInventory } from '../lib/inventorySummary.js';
+import { findAssignedDevice } from '../lib/deviceEdit.js';
 import React, { useState, useMemo } from 'react';
 import { 
   Building2, 
@@ -56,9 +58,10 @@ export default function Dashboard({
   onOpenNewInstallation
 }) {
   // Stat calculations
-  const totalSetsCount = systemSets.length;
+  const inventory = useMemo(() => summarizeInventory({ systemSets, dispensers, mixers, computers, printers }), [systemSets, dispensers, mixers, computers, printers]);
+  const totalSetsCount = inventory.totalSets;
   const installedSetsCount = systemSets.filter(s => s.status === 'DA_LAP_DAT').length;
-  const stockSetsCount = systemSets.filter(s => s.status === 'TRONG_KHO').length;
+  const stockSetsCount = inventory.totalReadySets;
   const revokedSetsCount = systemSets.filter(s => s.status === 'DA_THU_HOI').length;
   const maintenanceSetsCount = systemSets.filter(s => s.status === 'BAO_THUONG_BAO_TRI').length;
 
@@ -312,7 +315,7 @@ export default function Dashboard({
           </div>
           <div style={{ marginTop: '12px', display: 'flex', gap: '8px', fontSize: '0.75rem', flexWrap: 'wrap' }}>
             <span className="badge badge-success">● {installedSetsCount} Đã Lắp</span>
-            <span className="badge badge-info">● {stockSetsCount} Trong Kho</span>
+            <span className="badge badge-info" title="Gồm bộ đã ghép và số bộ có thể ghép đủ từ thiết bị lẻ, đồng nhất với Kho thiết bị">● {stockSetsCount} Trong Kho</span>
           </div>
         </div>
 
@@ -402,7 +405,7 @@ export default function Dashboard({
 
       </div>
 
-      <div className="workspace-tabs" aria-label="Thống kê nhanh">{[['assets','STOCK','Trong kho',systemSets.filter(set => set.status === 'TRONG_KHO').length],['repairs','PENDING','Chờ sửa',pendingTasks.length],['repairs','RETURN','Chờ gửi trả',returnTasks.length],['maintenance','OVERDUE','Quá hạn bảo trì',systemSets.filter(set => set.nextMaintenanceDue && set.nextMaintenanceDue < new Date().toLocaleDateString('en-CA')).length]].map(([tab,filter,label,count]) => <button key={filter} onClick={() => onNavigateWorkspace?.(tab, '', filter)}>{label} ({count})</button>)}</div>
+      <div className="workspace-tabs" aria-label="Thống kê nhanh">{[['assets','STOCK','Trong kho',stockSetsCount],['repairs','PENDING','Chờ sửa',pendingTasks.length],['repairs','RETURN','Chờ gửi trả',returnTasks.length],['maintenance','OVERDUE','Quá hạn bảo trì',systemSets.filter(set => set.nextMaintenanceDue && set.nextMaintenanceDue < new Date().toLocaleDateString('en-CA')).length]].map(([tab,filter,label,count]) => <button key={filter} onClick={() => onNavigateWorkspace?.(tab, '', filter)}>{label} ({count})</button>)}</div>
       <details className="dashboard-chart-group"><summary>Chi tiết cảnh báo theo nhóm ({actionTasks.length})</summary>
       <section className="glass-panel overview-tasks" aria-labelledby="task-heading">
         <div className="workspace-section-heading"><div><h2 id="task-heading">Việc cần xử lý ({actionTasks.length})</h2><p>Phiếu chưa xử lý, thiết bị chờ gửi trả và lịch bảo trì cần kiểm tra.</p></div></div>
@@ -521,14 +524,10 @@ export default function Dashboard({
             </thead>
             <tbody>
               {paginatedAllocatedSets.map((set) => {
-                const pcObj = computers?.find(c => 
-                  (set.computerId && c.id === set.computerId) || 
-                  (set.setCode && c.setCode === set.setCode) ||
-                  (set.pcSerial && c.serial && c.serial !== '—' && c.serial === set.pcSerial)
-                );
-                const pcSpecs = pcObj?.specs || set.pcSpecs || 'Core i5 / 16GB RAM / 512GB SSD';
-                const pcType = set.pcType || pcObj?.type || 'AIO';
-                const pcOs = set.pcOs || pcObj?.os || 'Windows 11 Pro';
+                const pcObj = findAssignedDevice('computer', computers, set);
+                const pcSpecs = pcObj?.specs || set.pcSpecs || 'Chưa có cấu hình';
+                const pcType = set.pcType || pcObj?.type || 'Chưa có thông tin';
+                const pcOs = set.pcOs || pcObj?.os || 'Chưa có thông tin';
 
                 // Find repair & exchange history for this specific set/NPP
                 const nppTickets = getTicketsForSetOrNpp(set);
@@ -713,14 +712,10 @@ export default function Dashboard({
         {/* Mobile View Cards */}
         <div className="mobile-only mobile-card-list">
           {paginatedAllocatedSets.map((set) => {
-            const pcObj = computers?.find(c => 
-              (set.computerId && c.id === set.computerId) || 
-              (set.setCode && c.setCode === set.setCode) ||
-              (set.pcSerial && c.serial && c.serial !== '—' && c.serial === set.pcSerial)
-            );
-            const pcSpecs = pcObj?.specs || set.pcSpecs || 'Core i5 / 16GB RAM / 512GB SSD';
-            const pcType = set.pcType || pcObj?.type || 'AIO';
-            const pcOs = set.pcOs || pcObj?.os || 'Windows 11 Pro';
+            const pcObj = findAssignedDevice('computer', computers, set);
+            const pcSpecs = pcObj?.specs || set.pcSpecs || 'Chưa có cấu hình';
+            const pcType = set.pcType || pcObj?.type || 'Chưa có thông tin';
+            const pcOs = set.pcOs || pcObj?.os || 'Chưa có thông tin';
 
             const nppTickets = getTicketsForSetOrNpp(set);
             const nppStats = getNppTicketStats(nppTickets);

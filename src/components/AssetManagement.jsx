@@ -1,3 +1,4 @@
+import { summarizeInventory, nextWarehouseId, inventoryLinkIssues } from '../lib/inventorySummary.js';
 import { prepareDeviceEdit, findAssignedDevice, requireUniqueDeviceSerial } from '../lib/deviceEdit.js';
 import WorkspaceFilterBar from './WorkspaceFilterBar.jsx';
 import { matchesSearch, matchesDateRange, uniqueOptions, canEditRegion } from '../lib/workspaceFilters.js';
@@ -364,18 +365,7 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
       computer: computers,
       printer: printers
     }[category] || [];
-    const prefix = { dispenser: 'DISP', mixer: 'MIXE', computer: 'COMP', printer: 'PRIN' }[category];
-    const prefixPattern = new RegExp(`^${prefix}-(\\d{1,3})$`, 'i');
-    let highestNumber = 0;
-    source.forEach(item => {
-      const id = String(item.id || '').trim();
-      const prefixedMatch = id.match(prefixPattern);
-      const legacyMatch = id.match(/^(\d{1,3})$/);
-      const matchedNumber = prefixedMatch?.[1] || legacyMatch?.[1];
-      if (matchedNumber) highestNumber = Math.max(highestNumber, Number(matchedNumber));
-    });
-    const nextNumber = highestNumber + 1;
-    return nextNumber <= 999 ? `${prefix}-${String(nextNumber).padStart(3, '0')}` : '';
+    return nextWarehouseId(category, source);
   };
 
   const handleOpenAssembleModal = () => {
@@ -534,10 +524,12 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
     }
   };
 
-  const handleAddDeviceSubmit = (e) => {
+  const [isAddingDevice, setIsAddingDevice] = useState(false);
+  const handleAddDeviceSubmit = async (e) => {
     e.preventDefault();
+    if (isAddingDevice) return;
     if (!addFormData.id) {
-      alert('Đã dùng hết mã tự động từ 001 đến 999 cho loại thiết bị này. Vui lòng liên hệ quản trị để kiểm tra kho.');
+      alert('Chưa tạo được mã quản lý. Vui lòng tải lại kho rồi thử lại.');
       return;
     }
     if (addDeviceCategory !== 'computer' && !addFormData.model && !addFormData.type) {
@@ -553,9 +545,17 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
       model: addDeviceCategory === 'computer' ? cleanType : addFormData.model,
       serial: addDeviceCategory === 'computer' ? '—' : (addFormData.serial?.trim() || 'N/A')
     };
-    onAddStockDevice(addDeviceCategory, finalData);
-    alert('✅ Đã thêm thiết bị vào kho thành công!');
-    setShowAddDeviceModal(false);
+    setIsAddingDevice(true);
+    try {
+      const result = await onAddStockDevice(addDeviceCategory, finalData);
+      alert(result?.queued ? 'Đã lưu ngoại tuyến. Thiết bị đang chờ đồng bộ lên server.' : '✅ Đã thêm thiết bị vào kho thành công!');
+      setShowAddDeviceModal(false);
+    } catch (error) {
+      recordOperationalError('device', error);
+      alert('Không thêm được thiết bị: ' + error.message);
+    } finally {
+      setIsAddingDevice(false);
+    }
   };
 
   const handleOpenEditSet = (set) => {
@@ -733,29 +733,10 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
   };
 
   // Inventory Stock Calculations (Items not yet assigned to any combo or setCode is null)
-  const stockDispensers = React.useMemo(() => (dispensers || []).filter(d => !d.isAssigned && !d.setCode), [dispensers]);
-  const stockMixers = React.useMemo(() => (mixers || []).filter(m => !m.isAssigned && !m.setCode), [mixers]);
-  const stockComputers = React.useMemo(() => (computers || []).filter(c => !c.isAssigned && !c.setCode), [computers]);
-  const stockPrinters = React.useMemo(() => (printers || []).filter(p => !p.isAssigned && !p.setCode), [printers]);
-  const stockSets = React.useMemo(() => (systemSets || []).filter(s => s.status === 'TRONG_KHO'), [systemSets]);
-  const stockBundleSummary = React.useMemo(() => {
-    const completeFromLooseDevices = Math.min(
-      stockDispensers.length,
-      stockMixers.length,
-      stockComputers.length,
-      stockPrinters.length
-    );
-    return {
-      completeFromLooseDevices,
-      totalReadySets: completeFromLooseDevices + stockSets.length,
-      loose: {
-        dispensers: stockDispensers.slice(completeFromLooseDevices),
-        mixers: stockMixers.slice(completeFromLooseDevices),
-        computers: stockComputers.slice(completeFromLooseDevices),
-        printers: stockPrinters.slice(completeFromLooseDevices)
-      }
-    };
-  }, [stockDispensers, stockMixers, stockComputers, stockPrinters, stockSets]);
+  const stockBundleSummary = React.useMemo(() => summarizeInventory({ systemSets, dispensers, mixers, computers, printers }), [systemSets, dispensers, mixers, computers, printers]);
+  const { dispensers: stockDispensers, mixers: stockMixers, computers: stockComputers, printers: stockPrinters } = stockBundleSummary.stock;
+  const stockSets = stockBundleSummary.stockSets;
+  const linkIssues = React.useMemo(() => inventoryLinkIssues({ systemSets, dispensers, mixers, computers, printers }), [systemSets, dispensers, mixers, computers, printers]);
 
   const looseInventoryGroups = React.useMemo(() => [
     { key: 'dispensers', label: 'Máy chiết lẻ', icon: '🖨️', color: '#ec4899', items: stockBundleSummary.loose.dispensers, getName: item => `${item.model || 'Máy chiết'} · ${item.serial || item.id}` },
@@ -809,6 +790,7 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
       {activeSubTab === 'comboSets' && <WorkspaceFilterBar search={searchTerm} onSearch={setSearchTerm} placeholder="Tìm mã bộ, NPP, seri…" count={filteredSets.length} fields={[{key:'province',label:'Tỉnh / thành',value:provinceFilter,onChange:setProvinceFilter,options:uniqueOptions([...systemSets.map(item=>item.province),...npps.map(item=>item.province)])},{key:'owner',label:'Kỹ thuật viên',value:ownerFilter,onChange:setOwnerFilter,options:uniqueOptions(systemSets.map(item=>item.technician))},{key:'model',label:'Máy chiết',value:modelFilter,onChange:setModelFilter,options:uniqueOptions(systemSets.map(item=>item.dispenserModel))},{key:'status',label:'Trạng thái bộ máy',value:statusFilter,onChange:setStatusFilter,options:[{value:'DA_LAP_DAT',label:'Đã lắp đặt'},{value:'TRONG_KHO',label:'Trong kho'},{value:'DA_THU_HOI',label:'Đã thu hồi'},{value:'BAO_THUONG_BAO_TRI',label:'Đang bảo trì'}]},{key:'from',label:'Ngày lắp đặt · từ',type:'date',defaultValue:'',value:dateFrom,onChange:setDateFrom},{key:'to',label:'Ngày lắp đặt · đến',type:'date',defaultValue:'',value:dateTo,onChange:setDateTo}]} quick={[{value:'ALL',label:'Tất cả'},{value:'STOCK',label:'Trong kho'},{value:'PENDING',label:'Chờ sửa'},{value:'RETURN',label:'Chờ trả'},{value:'OVERDUE',label:'Quá hạn'}]} quickValue={quickFilter} onQuick={setQuickFilter} onReset={() => { setSearchTerm(''); setModelFilter('ALL'); setStatusFilter('ALL'); setQuickFilter('ALL'); setProvinceFilter('ALL'); setOwnerFilter('ALL'); setDateFrom(''); setDateTo(''); }}/>}
       {showManualScan && <form className="machine-serial-form" onSubmit={event => { event.preventDefault(); openScannedMachine(scanInput); }}><label>Mã bộ máy<input className="form-input" required maxLength={160} value={scanInput} onChange={event => { setScanInput(event.target.value); setScanError(''); }} placeholder="Nhập hoặc quét mã bộ máy" /></label><button type="button" className="btn btn-secondary" onClick={()=>{setScanTargetField('profile');setShowScanSerialModal(true);}}>Quét mã bộ máy</button><button type="submit" className="btn btn-primary">Mở hồ sơ</button></form>}
       {scanError && <p role="alert" className="resource-error">{scanError}</p>}
+      {linkIssues.length > 0 && <details className="resource-error"><summary>Kiểm tra liên kết thiết bị: {linkIssues.length} điểm cần đối chiếu</summary><p>Thiết bị đã được bộ máy tham chiếu không được tính lại vào tồn kho. Hãy đối chiếu hồ sơ thực tế trước khi sửa liên kết.</p><ol>{linkIssues.map((issue, index) => <li key={index}>{issue}</li>)}</ol></details>}
       {/* 📦 BẢNG TỔNG HỢP TỒN KHO THIẾT BỊ HIỆN TẠI */}
       <div className="glass-panel" style={{ padding: '20px', background: 'linear-gradient(135deg, rgba(15,23,42,0.95) 0%, rgba(30,41,59,0.85) 100%)', border: '1px solid rgba(56,189,248,0.3)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
@@ -1087,7 +1069,7 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
                   const missingMixerInfo = missingFields.filter(field => field.toLowerCase().includes('máy lắc'));
                   const missingPrinterInfo = missingFields.filter(field => field.toLowerCase().includes('máy in'));
                   const pcObj = (computers || []).find(c => set.computerId && c.id === set.computerId);
-                  const pcSpecsText = pcObj?.specs || set.pcSpecs || (set.pcType ? `${set.pcType} (${set.pcOs || ''})` : set.computerType || 'Core i5 / 16GB / 512GB SSD');
+                  const pcSpecsText = pcObj?.specs || set.pcSpecs || (set.pcType ? `${set.pcType} (${set.pcOs || ''})` : set.computerType || 'Chưa có cấu hình');
 
                   const prnObj = (printers || []).find(p => (set.printerId && p.id === set.printerId) || (set.printerSerial && p.serial === set.printerSerial));
                   const printerModelText = prnObj?.model || set.printerModel || 'QL700';
@@ -1258,7 +1240,7 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
               const missingMixerInfo = missingFields.filter(field => field.toLowerCase().includes('máy lắc'));
               const missingPrinterInfo = missingFields.filter(field => field.toLowerCase().includes('máy in'));
                   const pcObj = (computers || []).find(c => set.computerId && c.id === set.computerId);
-              const pcSpecsText = pcObj?.specs || set.pcSpecs || (set.pcType ? `${set.pcType} (${set.pcOs || ''})` : set.computerType || 'Core i5 / 16GB / 512GB SSD');
+              const pcSpecsText = pcObj?.specs || set.pcSpecs || (set.pcType ? `${set.pcType} (${set.pcOs || ''})` : set.computerType || 'Chưa có cấu hình');
 
               const prnObj = (printers || []).find(p => (set.printerId && p.id === set.printerId) || (set.printerSerial && p.serial === set.printerSerial));
               const printerModelText = prnObj?.model || set.printerModel || 'QL700';
@@ -1923,7 +1905,7 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
                 {addDeviceCategory === 'computer' && '💻 Máy Tính'}
                 {addDeviceCategory === 'printer' && '🖨️ Máy In QL700'}
               </h3>
-              <button className="btn btn-secondary btn-sm" onClick={() => setShowAddDeviceModal(false)}>✕</button>
+              <button className="btn btn-secondary btn-sm" disabled={isAddingDevice} onClick={() => setShowAddDeviceModal(false)}>✕</button>
             </div>
             <form onSubmit={handleAddDeviceSubmit}>
               <div className="modal-body">
@@ -1934,7 +1916,7 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
                 {/* Mã QL (ID) */}
                 <div className="form-group">
                   <label className="form-label">
-                    Mã Quản Lý (Mã QL) <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>(Tự động theo loại, 001–999)</span>
+                    Mã Quản Lý (Mã QL) <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>(Tự động theo loại)</span>
                   </label>
                   <input
                     type="text"
@@ -2069,8 +2051,8 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
 
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowAddDeviceModal(false)}>Hủy Bỏ</button>
-                <button type="submit" className="btn btn-primary">✅ Thêm Vào Kho</button>
+                <button type="button" className="btn btn-secondary" disabled={isAddingDevice} onClick={() => setShowAddDeviceModal(false)}>Hủy Bỏ</button>
+                <button type="submit" className="btn btn-primary" disabled={isAddingDevice}>{isAddingDevice ? 'Đang lưu…' : '✅ Thêm Vào Kho'}</button>
               </div>
             </form>
           </div>

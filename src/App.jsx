@@ -439,13 +439,8 @@ export default function App() {
   };
 
   const handleAddStockDevice = async (category, newDeviceData) => {
-    try {
-      if (user?.role === 'technician') throw new Error('Thiết bị kho chưa gán khu vực cần quản trị viên hoặc quản lý thêm.');
-      await addStockDevice(category, newDeviceData);
-    } catch (err) {
-      console.error(err);
-      alert('Lỗi thêm thiết bị: ' + err.message);
-    }
+    if (user?.role === 'technician') throw new Error('Thiết bị kho chưa gán khu vực cần quản trị viên hoặc quản lý thêm.');
+    return addStockDevice(category, newDeviceData);
   };
 
   const handleAssembleSet = async (newCombo) => {
