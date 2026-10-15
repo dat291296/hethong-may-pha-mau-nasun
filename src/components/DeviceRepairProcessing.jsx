@@ -1,3 +1,5 @@
+import { getOwnedCacheEntries } from '../lib/offlineDb.js';
+import { isDraftExpired } from '../lib/teamWorkspace.js';
 import WorkspaceFilterBar from './WorkspaceFilterBar.jsx';
 import { matchesSearch, matchesDateRange, uniqueOptions, canEditRegion } from '../lib/workspaceFilters.js';
 import React, { useState, useMemo, useEffect } from 'react';
@@ -11,7 +13,6 @@ import {
   Trash2,
   Search,
   Clock, 
-  Camera, 
   X, 
   RefreshCw,
   ShieldAlert,
@@ -79,7 +80,6 @@ function createFieldWorkflowDefaults() {
   };
 }
 
-import { compressImage } from '../utils/imageCompressor.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useModalScrollLock } from '../hooks/useModalScrollLock.js';
 import { exportExcel } from '../utils/excelExport.js';
@@ -242,7 +242,23 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
     notes: ''
   });
   const draft = useFormDraft(`${user.id}:repair:${editingTicket?.id || 'new'}`, formData, showModal, saved => setFormData(saved));
-  const closeForm = async () => { if (saving) return; await draft.flush(); setShowModal(false); };
+  const [savedDrafts, setSavedDrafts] = useState([]);
+  const [resumeRequested, setResumeRequested] = useState(false);
+  useEffect(() => {
+    let active = true;
+    if (!showModal) getOwnedCacheEntries(`form-draft:${user.id}:repair:`).then(entries => {
+      if (active) setSavedDrafts(entries.filter(entry => entry.value && !isDraftExpired(entry.value)).sort((a, b) => b.value.savedAt - a.value.savedAt));
+    }).catch(() => { if (active) setSaveError('Không đọc được danh sách bản nháp trên thiết bị.'); });
+    return () => { active = false; };
+  }, [showModal, user.id]);
+  useEffect(() => {
+    if (resumeRequested && draft.existing) { draft.resume(); setResumeRequested(false); }
+  }, [resumeRequested, draft.existing]);
+  const closeForm = async () => {
+    if (saving) return;
+    try { await draft.flush(); setShowModal(false); }
+    catch { setSaveError('Chưa lưu được nháp. Hãy giữ phiếu mở và thử lại.'); }
+  };
   const selectedNppRegion = npps.find(item => item.id === formData.nppId)?.region;
   const assignableUsers = qcUsers.filter(item => item.role === 'admin' || (item.region || item.managedRegion) === 'Toàn Quốc' || (item.region || item.managedRegion) === selectedNppRegion);
 
@@ -385,47 +401,6 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
     }));
   };
 
-  const handlePhotoUpload = async (e) => {
-    const files = Array.from(e.target.files);
-    for (const file of files) {
-      try {
-        const compressedBase64 = await compressImage(file);
-        setFormData(prev => ({
-          ...prev,
-          photos: [...(prev.photos || []), compressedBase64],
-          beforePhotos: [...(prev.beforePhotos || prev.photos || []), compressedBase64]
-        }));
-      } catch (err) {
-        console.error('Error compressing image:', err);
-        alert(`Không thể thêm ảnh ${file.name}: ${err.message}`);
-      }
-    }
-  };
-
-  const handleRemovePhoto = (index) => {
-    setFormData(prev => ({
-      ...prev,
-      photos: prev.photos.filter((_, i) => i !== index),
-      beforePhotos: (prev.beforePhotos || []).filter((_, i) => i !== index)
-    }));
-  };
-
-  const handleAfterPhotoUpload = async (event) => {
-    const files = Array.from(event.target.files || []);
-    for (const file of files) {
-      try {
-        const compressedBase64 = await compressImage(file);
-        setFormData(prev => ({
-          ...prev,
-          afterPhotos: [...(prev.afterPhotos || []), compressedBase64]
-        }));
-      } catch (err) {
-        console.error('Error compressing after-service image:', err);
-        alert(`Không thể thêm ảnh ${file.name}: ${err.message}`);
-      }
-    }
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (saving || draft.existing) return;
@@ -471,11 +446,6 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
       return;
     }
 
-    if (sanitized.nppConfirmation?.confirmed && !sanitized.nppConfirmation.confirmedBy) {
-      alert('Vui lòng nhập tên người đại diện NPP xác nhận hoàn thành.');
-      return;
-    }
-
     if (sanitized.nppConfirmation?.confirmed) {
       sanitized.nppConfirmation = {
         ...sanitized.nppConfirmation,
@@ -490,12 +460,8 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
       alert('Cần hoàn thành toàn bộ checklist trước khi kết thúc công tác.');
       return;
     }
-    if (isCompleted && !(sanitized.afterPhotos || []).length) {
-      alert('Cần ít nhất một ảnh sau khi hoàn thành công tác.');
-      return;
-    }
     if (sanitized.fieldVisitStatus === 'customer_confirmed' && !sanitized.nppConfirmation?.confirmed) {
-      alert('Trạng thái NPP đã xác nhận yêu cầu thông tin người xác nhận.');
+      alert('Vui lòng tích xác nhận hoàn thành của đại diện NPP.');
       return;
     }
 
@@ -581,6 +547,12 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
     <div className="workspace-screen devicerepairprocessing-screen" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       <div className="workspace-tabs"><button aria-pressed={mineOnly} onClick={() => setMineOnly(value => !value)}>Việc của tôi</button><span className="resource-muted">Hạn xử lý và người nhận hiển thị trong chi tiết phiếu.</span></div>
       
+      {savedDrafts.length > 0 && <section className="glass-panel repair-draft-list" aria-label="Phiếu nháp đã lưu"><h3>Phiếu nháp trên thiết bị ({savedDrafts.length})</h3><p>Chỉ tài khoản này có thể mở các bản nháp trên thiết bị này.</p>{savedDrafts.map(entry => <div className="workspace-task-row" key={entry.key}><div><strong>{entry.value.value.nppName || 'Chưa chọn NPP'} · {entry.value.value.serialNumber || entry.value.value.productCategory}</strong><p>Lưu lúc {new Date(entry.value.savedAt).toLocaleString('vi-VN')}</p></div><button className="btn btn-primary" onClick={() => {
+        const id = entry.key.slice(`form-draft:${user.id}:repair:`.length);
+        if (id === 'new') handleOpenAdd();
+        else { const ticket = repairTickets.find(item => item.id === id); if (!ticket) { alert('Phiếu gốc chưa có trong dữ liệu đã tải. Hãy tải lại trước khi mở nháp.'); return; } if (!isTicketAllowed(ticket.nppId) || isDateLocked(ticket.date)) { alert('Phiếu này không còn cho phép chỉnh sửa.'); return; } handleOpenEdit(ticket); }
+        setResumeRequested(true);
+      }}>Mở bản nháp</button></div>)}</section>}
       <WorkspaceFilterBar search={searchTerm} onSearch={setSearchTerm} placeholder="Tìm mã phiếu, NPP, seri…" count={filteredTickets.length} fields={[{key:'province',label:'Tỉnh / thành',value:provinceFilter,onChange:setProvinceFilter,options:uniqueOptions(npps.map(item=>item.province))},{key:'owner',label:'Người phụ trách',value:ownerFilter,onChange:setOwnerFilter,options:[...qcUsers.map(item=>({value:item.id,label:item.name || item.full_name || item.id})),...uniqueOptions(repairTickets.filter(item=>!item.assignedUserId).map(item=>item.technician))]},{key:'category',label:'Loại thiết bị',value:categoryFilter,onChange:setCategoryFilter,options:uniqueOptions(PRODUCT_CATEGORIES)},{key:'model',label:'Model',value:modelFilter,onChange:setModelFilter,options:uniqueOptions(MACHINE_MODELS)},{key:'from',label:'Ngày tiếp nhận · từ',type:'date',defaultValue:'',value:dateFrom,onChange:setDateFrom},{key:'to',label:'Ngày tiếp nhận · đến',type:'date',defaultValue:'',value:dateTo,onChange:setDateTo}]} quick={[{value:'ALL',label:'Tất cả',count:repairTickets.length},{value:'PENDING',label:'Chờ sửa',count:pendingCount},{value:'NOT_RETURNED',label:'Chờ trả',count:notReturnedCount},{value:'REPLACED',label:'Xuất đổi',count:replacedCount}]} quickValue={activeTab} onQuick={setActiveTab} onReset={() => { setSearchTerm(''); setActiveTab('ALL'); setMineOnly(false); setCategoryFilter('ALL'); setModelFilter('ALL'); setProvinceFilter('ALL'); setOwnerFilter('ALL'); setDateFrom(''); setDateTo(''); }} actions={<><details className="filter-more-actions"><summary>Thao tác khác</summary><div><button className="btn btn-secondary" onClick={()=>onOpenImportModal?.()}>Nhập Excel</button><button className="btn btn-secondary" onClick={exportRepairs}>Xuất Excel</button></div></details><button className="btn btn-primary" onClick={handleOpenAdd}>Tạo phiếu</button></>}/>
 
       {/* 1-YEAR FAILURE ANALYSIS DASHBOARD CHARTS */}
@@ -1289,53 +1261,6 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
                     </div>
                   </div>
 
-                  {/* Photo Upload Section */}
-                  <div style={{ marginTop: '16px', borderTop: '1px solid var(--border-color)', paddingTop: '14px' }}>
-                    <label className="form-label">📸 Ảnh Chụp Hiện Trường / Thiết Bị Hỏng</label>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-                      <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer' }}>
-                        <Camera size={14} />
-                        <span>Chụp / Chọn Ảnh</span>
-                        <input type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={handlePhotoUpload} />
-                      </label>
-                    </div>
-                    {formData.photos && formData.photos.length > 0 && (
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: '8px' }}>
-                        {formData.photos.map((url, idx) => (
-                          <div key={idx} style={{ position: 'relative', width: '100%', height: '65px', borderRadius: '6px', overflow: 'hidden', border: '1px solid var(--border-color)' }}>
-                            <img src={url} alt="ticket photo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                            <button
-                              type="button"
-                              onClick={() => handleRemovePhoto(idx)}
-                              style={{ position: 'absolute', top: '2px', right: '2px', background: 'rgba(0,0,0,0.7)', color: '#fff', border: 'none', borderRadius: '50%', width: '18px', height: '18px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                            >
-                              <X size={12} />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  <div style={{ marginTop: '16px' }}>
-                    <label className="form-label">📸 Ảnh Sau Khi Hoàn Thành</label>
-                    <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer' }}>
-                      <Camera size={14} />
-                      <span>Chụp / Chọn Ảnh Sau</span>
-                      <input type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={handleAfterPhotoUpload} />
-                    </label>
-                    {(formData.afterPhotos || []).length > 0 && (
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: '8px', marginTop: '10px' }}>
-                        {formData.afterPhotos.map((url, idx) => (
-                          <div key={idx} style={{ position: 'relative', height: '65px', borderRadius: '6px', overflow: 'hidden', border: '1px solid var(--border-color)' }}>
-                            <img src={url} alt="after service" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                            <button type="button" aria-label="Xóa ảnh sau" onClick={() => setFormData(prev => ({ ...prev, afterPhotos: prev.afterPhotos.filter((_, index) => index !== idx) }))} style={{ position: 'absolute', top: 2, right: 2, border: 0, borderRadius: '50%', background: 'rgba(0,0,0,.7)', color: '#fff' }}><X size={12} /></button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
                   <div className="form-group" style={{ marginTop: '16px', padding: '12px', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
                     <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700 }}>
                       <input
@@ -1348,20 +1273,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
                       />
                       Đại diện NPP xác nhận đã hoàn thành
                     </label>
-                    {formData.nppConfirmation?.confirmed && (
-                      <input
-                        className="form-input"
-                        style={{ marginTop: '10px' }}
-                        maxLength={120}
-                        required
-                        placeholder="Họ tên người xác nhận"
-                        value={formData.nppConfirmation.confirmedBy || ''}
-                        onChange={e => setFormData(prev => ({
-                          ...prev,
-                          nppConfirmation: { ...(prev.nppConfirmation || {}), confirmedBy: e.target.value }
-                        }))}
-                      />
-                    )}
+
                   </div>
 
                 </fieldset>
@@ -1410,7 +1322,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
                   <div><strong>Hạn SLA:</strong> {selectedTicket.slaDueAt ? new Date(selectedTicket.slaDueAt).toLocaleString('vi-VN') : 'Chưa đặt'}</div>
                   <div><strong>Checklist:</strong> {Object.values(selectedTicket.serviceChecklist || {}).filter(Boolean).length}/{Object.keys(EMPTY_SERVICE_CHECKLIST).length} mục</div>
                   <div><strong>Vật tư:</strong> {(selectedTicket.materialsUsed || []).join(', ') || 'Không sử dụng'}</div>
-                  <div><strong>NPP xác nhận:</strong> {selectedTicket.nppConfirmation?.confirmed ? `Đã xác nhận - ${selectedTicket.nppConfirmation.confirmedBy}` : 'Chưa xác nhận'}</div>
+                  <div><strong>NPP xác nhận:</strong> {selectedTicket.nppConfirmation?.confirmed ? `Đã xác nhận${selectedTicket.nppConfirmation.confirmedBy ? ` - ${selectedTicket.nppConfirmation.confirmedBy}` : ''}` : 'Chưa xác nhận'}</div>
                 </div>
 
                 {selectedTicket.photos && selectedTicket.photos.length > 0 && (

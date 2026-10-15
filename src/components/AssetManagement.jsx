@@ -491,7 +491,7 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
       }
       setIsSavingDevice(true);
       await onEditDevice(editingDevice.category, finalData);
-      alert('✅ Đã lưu thông tin chỉnh sửa thành công!');
+      alert(finalData.serial ? '✅ Đã lưu thông tin chỉnh sửa thành công!' : 'Đã lưu thiết bị. ⚠️ Chưa có serial; cần kỹ thuật viên phụ trách khu vực bổ sung trong hồ sơ máy.');
       setEditingDevice(null);
     } catch (err) {
       recordOperationalError('device',err);
@@ -543,12 +543,12 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
       ...addFormData,
       type: cleanType,
       model: addDeviceCategory === 'computer' ? cleanType : addFormData.model,
-      serial: addDeviceCategory === 'computer' ? '—' : (addFormData.serial?.trim() || 'N/A')
+      serial: addDeviceCategory === 'computer' ? '—' : (addFormData.serial?.trim() || null)
     };
     setIsAddingDevice(true);
     try {
       const result = await onAddStockDevice(addDeviceCategory, finalData);
-      alert(result?.queued ? 'Đã lưu ngoại tuyến. Thiết bị đang chờ đồng bộ lên server.' : '✅ Đã thêm thiết bị vào kho thành công!');
+      alert(result?.queued ? 'Đã lưu ngoại tuyến. Thiết bị đang chờ đồng bộ lên server.' : !finalData.serial ? 'Đã thêm thiết bị. ⚠️ Chưa có serial; cần bổ sung khi gán khu vực hoặc lắp đặt tại NPP.' : '✅ Đã thêm thiết bị vào kho thành công!');
       setShowAddDeviceModal(false);
     } catch (error) {
       recordOperationalError('device', error);
@@ -2079,7 +2079,7 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
                       <div className="form-group">
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
                           <label className="form-label" style={{ marginBottom: 0 }}>
-                            🏷️ Số Seri (Serial) <span style={{ color: 'var(--text-muted)', fontWeight: '400' }}>{editingDevice.category === 'computer' ? '(giữ nguyên nếu để trống)' : '(bắt buộc)'}</span>
+                            🏷️ Số Seri (Serial) <span style={{ color: 'var(--text-muted)', fontWeight: '400' }}>{editingDevice.category === 'computer' ? '(giữ nguyên nếu để trống)' : '(có thể để trống)'}</span>
                           </label>
                           <button
                             type="button"
@@ -2099,7 +2099,7 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
                           className="form-input"
                           placeholder="Nhập seri hoặc bấm Quét mã"
                           aria-label="Số serial thiết bị"
-                          required={editingDevice.category !== 'computer'}
+                          required={false}
                           value={editFormData.serial || ''}
                           onChange={e => setEditFormData({ ...editFormData, serial: e.target.value })}
                         />
