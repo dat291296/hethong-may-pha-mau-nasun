@@ -529,7 +529,7 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
     e.preventDefault();
     if (isAddingDevice) return;
     if (!addFormData.id) {
-      alert('Đã dùng hết mã tự động từ 001 đến 999 cho loại thiết bị này. Vui lòng liên hệ quản trị để kiểm tra kho.');
+      alert('Chưa tạo được mã quản lý. Vui lòng tải lại kho rồi thử lại.');
       return;
     }
     if (addDeviceCategory !== 'computer' && !addFormData.model && !addFormData.type) {
@@ -1916,7 +1916,7 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
                 {/* Mã QL (ID) */}
                 <div className="form-group">
                   <label className="form-label">
-                    Mã Quản Lý (Mã QL) <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>(Tự động theo loại, 001–999)</span>
+                    Mã Quản Lý (Mã QL) <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>(Tự động theo loại)</span>
                   </label>
                   <input
                     type="text"

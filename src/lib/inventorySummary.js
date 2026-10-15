@@ -20,7 +20,7 @@ export function nextWarehouseId(category, devices = []) {
   if (!prefix) throw new Error('Unknown device category');
   // Legacy imports used another category prefix. Keep existing IDs intact.
   const highest = devices.reduce((max, device) => {
-    const match = String(device.id || '').trim().match(/^(?:(?:DISP|MIXE|COMP|PRIN)-)?(\d+)$/i);
+    const match = String(device.id || '').trim().match(/^(?:(?:DISP|MIXE|COMP|PRIN|PC|MIX|PRN)-)?(\d+)$/i);
     const number = match ? Number(match[1]) : 0;
     return Number.isSafeInteger(number) ? Math.max(max, number) : max;
   }, 0);

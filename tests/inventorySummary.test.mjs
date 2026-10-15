@@ -19,6 +19,7 @@ test('explicit set references and either assignment marker exclude equipment fro
 test('new category code respects legacy prefixes, short numeric IDs and sequences above 999', () => {
   assert.equal(nextWarehouseId('computer', [{ id: 'COMP-061' }, { id: 'MIXE-076' }, { id: 'COMP-03' }]), 'COMP-077');
   assert.equal(nextWarehouseId('computer', [{ id: '1000' }, { id: 'unrelated-99999' }]), 'COMP-1001');
+  assert.equal(nextWarehouseId('computer', [{ id: 'PC-007' }]), 'COMP-008');
   assert.equal(nextWarehouseId('printer'), 'PRIN-001');
 });
 
