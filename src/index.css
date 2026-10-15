@@ -1834,3 +1834,12 @@ main.page-transition .nppmanagement-screen .npp-card-withdrawn { border-top-colo
 .machine-profile-modal .modal-header { flex-shrink:0; }
 .machine-profile-body { flex:1; min-height:0; overflow-y:auto; scrollbar-gutter:stable; }
 .machine-profile-body > .workspace-tabs:first-child { position:sticky; top:0; z-index:2; background:var(--bg-card); padding-bottom:10px; margin-top:0; }
+
+.repair-draft-list { padding: 18px; min-width: 0; }
+.repair-draft-list .workspace-task-row { grid-template-columns: minmax(0, 1fr) auto; gap: 16px; }
+.repair-draft-list .workspace-task-row > div { min-width: 0; overflow-wrap: anywhere; }
+.repair-draft-list .workspace-task-row .btn { width: auto; white-space: nowrap; }
+@media (max-width: 600px) {
+  .repair-draft-list .workspace-task-row { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .repair-draft-list .workspace-task-row .btn { width: 100%; }
+}

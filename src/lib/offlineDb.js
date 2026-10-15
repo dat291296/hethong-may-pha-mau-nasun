@@ -481,3 +481,13 @@ export async function clearOfflineStorage(userId = activeOwnerId) {
     initializationPromises.delete(ownerId);
   }
 }
+
+export async function getOwnedCacheEntries(prefix) {
+  const ownerId = await waitForOwner();
+  const db = await openDb();
+  const records = await requestResult(db.transaction('cached_data', 'readonly').objectStore('cached_data').getAll());
+  const owned = records.filter(record => record.ownerId === ownerId && record.encrypted && record.logicalKey?.startsWith(prefix));
+  const entries = await Promise.all(owned.map(async record => ({ key: record.logicalKey, value: await decryptValue(ownerId, record, 'cached_data', record.logicalKey) })));
+  assertCurrentOwner(ownerId);
+  return entries;
+}

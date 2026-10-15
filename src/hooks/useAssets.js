@@ -669,7 +669,7 @@ function mapDeviceToDb(obj, category) {
 
   // Basic identification & PK
   if (obj.id !== undefined) dbObj.id = obj.id;
-  if (obj.serial !== undefined && obj.serial !== '' && obj.serial !== '—') dbObj.serial = obj.serial;
+  if (obj.serial !== undefined && obj.serial !== '—') dbObj.serial = obj.serial?.trim() || null;
 
   // Assignment status & system set link
   if (obj.isAssigned !== undefined || obj.is_assigned !== undefined) {
@@ -727,7 +727,7 @@ function sanitizeDeviceForDb(category, data, tempId) {
   if (category === 'dispenser') {
     return {
       ...base,
-      serial: data.serial || 'N/A',
+      serial: data.serial?.trim() || null,
       model: data.model || 'Satint'
     };
   }
@@ -735,7 +735,7 @@ function sanitizeDeviceForDb(category, data, tempId) {
   if (category === 'mixer') {
     return {
       ...base,
-      serial: data.serial || 'N/A',
+      serial: data.serial?.trim() || null,
       model: data.model || 'Satint ST-50',
       type: data.type || 'Lắc xoay khép kín'
     };
@@ -754,7 +754,7 @@ function sanitizeDeviceForDb(category, data, tempId) {
   if (category === 'printer') {
     return {
       ...base,
-      serial: data.serial || 'N/A',
+      serial: data.serial?.trim() || null,
       model: data.model || 'QL700',
       connection: data.connection || 'USB'
     };

@@ -25,9 +25,9 @@ export function prepareDeviceEdit(category, form, original) {
   const inputSerial = form.serial?.trim();
   const serial = inputSerial && inputSerial === original.serial?.trim() ? original.serial
     : category === 'computer' ? (inputSerial || original.serial) : inputSerial;
-  if (category !== 'computer' && !serial) throw new Error('Vui lòng nhập serial thiết bị.');
+
   const isAssigned = Boolean(form.isAssigned && form.setCode);
-  return { ...form, id: original.id, sourceId: original.id, expectedRevision: original.updatedAt, originalSerial: original.serial, serial,
+  return { ...form, id: original.id, sourceId: original.id, expectedRevision: original.updatedAt, originalSerial: original.serial, serial: serial || null,
     isAssigned, setCode: isAssigned ? form.setCode : null };
 }
 

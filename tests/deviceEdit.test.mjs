@@ -27,7 +27,7 @@ test('all device categories preserve identity and explicit assignments', () => {
     assert.equal(prepareDeviceEdit(category, { serial: 'SERIAL', isAssigned: false, setCode: 'SET-A' }, { id: 'original' }).setCode, null);
   }
   assert.equal(prepareDeviceEdit('computer', { isAssigned: false }, { id: 'PC', serial: 'PC-OLD' }).serial, 'PC-OLD');
-  assert.throws(() => prepareDeviceEdit('printer', { serial: ' ' }, { id: 'PR' }));
+  assert.equal(prepareDeviceEdit('printer', { serial: ' ' }, { id: 'PR' }).serial, null);
 });
 
 test('atomic edit sends the original revision and never falls back to partial writes', async () => {
@@ -77,4 +77,11 @@ test('staging cleanup reauthenticates, attempts all synthetic sets and preserves
   await assert.rejects(verifyDeviceEdit(admin, {}, async () => { refreshed = true; }), /ORIGINAL_FAILURE/);
   assert.equal(removed.length, 2);
   assert.ok(removed.every(id => id.startsWith('NASUN-STAGING-EDIT-')));
+});
+
+test('unknown serials remain NULL and known serials still require uniqueness', () => {
+  for (const category of ['dispenser', 'mixer', 'printer']) {
+    assert.equal(prepareDeviceEdit(category, { serial: '' }, { id: 'D1', serial: 'OLD' }).serial, null);
+    assert.equal(prepareDeviceEdit(category, { serial: null }, { id: 'D2' }).serial, null);
+  }
 });

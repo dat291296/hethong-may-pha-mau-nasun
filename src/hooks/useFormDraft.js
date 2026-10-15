@@ -7,6 +7,7 @@ export function useFormDraft(key, value, enabled, onRestore) {
   const [existing, setExisting] = useState(null);
   const [status, setStatus] = useState('');
   const ready = useRef(false);
+  const persistenceError = useRef(null);
   const queue = useRef(Promise.resolve());
   const generation = useRef(0);
   const latest = useRef(value);
@@ -21,6 +22,7 @@ export function useFormDraft(key, value, enabled, onRestore) {
     let active = true;
     generation.current += 1;
     ready.current = false;
+    persistenceError.current = null;
     setExisting(null);
     setStatus('Đang kiểm tra bản nháp...');
     getCache(`form-draft:${key}`, null).then(draft => {
@@ -44,8 +46,8 @@ export function useFormDraft(key, value, enabled, onRestore) {
       queue.current = queue.current.catch(() => {}).then(async () => {
         if (token !== generation.current) return;
         if (!await setCache(`form-draft:${key}`, { value: snapshot, savedAt: Date.now() })) throw new Error('DRAFT_WRITE_FAILED');
-        if (token === generation.current) setStatus('Đã lưu nháp trên thiết bị · Chưa gửi');
-      }).catch(error => { setStatus('Không lưu được nháp; giữ màn hình mở và thử lại'); recordOperationalError('draft',error); console.warn('[FormDraft] Write failed without payload'); });
+        if (token === generation.current) { persistenceError.current = null; setStatus('Đã lưu nháp trên thiết bị · Chưa gửi'); }
+      }).catch(error => { persistenceError.current = error; setStatus('Không lưu được nháp; giữ màn hình mở và thử lại'); recordOperationalError('draft',error); console.warn('[FormDraft] Write failed without payload'); });
     };
     persistRef.current = persist;
     const timer = window.setTimeout(persist, 350);
@@ -68,6 +70,6 @@ export function useFormDraft(key, value, enabled, onRestore) {
     if (!await setCache(`form-draft:${key}`, null)) throw new Error('DRAFT_CLEAR_FAILED');
     setExisting(null); setStatus('Đã lưu lên hệ thống');
   };
-  const flush = async () => { persistRef.current(); await queue.current; };
+  const flush = async () => { if (!ready.current && !existing) throw new Error('DRAFT_NOT_READY'); persistRef.current(); await queue.current; if (persistenceError.current) throw persistenceError.current; };
   return { existing, status, resume, discard, clear, flush };
 }

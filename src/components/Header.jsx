@@ -1,3 +1,4 @@
+import { inManagedRegion, missingMachineFields, repairNeedsAction } from '../lib/teamWorkspace.js';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Bell, Search, PlusCircle, AlertTriangle, ShieldAlert, CheckCircle2, UserCheck, Wifi, WifiOff, RefreshCw, Menu, Database, MoreHorizontal } from 'lucide-react';
 import RoleSelector from './RoleSelector.jsx';
@@ -12,8 +13,8 @@ export default function Header({
   setGlobalSearch, 
   onNavigate,
   onOpenNewInstallation,
-  maintenanceAlerts,
-  unstabilizedAlerts,
+  maintenanceAlerts: allMaintenanceAlerts = [],
+  unstabilizedAlerts: allUnstabilizedAlerts = [],
   onOpenMobileSidebar,
   npps = [],
   dispensers = [],
@@ -132,7 +133,11 @@ export default function Header({
     }
   };
 
-  const totalAlertsCount = maintenanceAlerts.length + unstabilizedAlerts.length;
+  const maintenanceAlerts = allMaintenanceAlerts.filter(item => inManagedRegion(item, user, npps, systemSets));
+  const unstabilizedAlerts = allUnstabilizedAlerts.filter(item => inManagedRegion(item, user, npps, systemSets));
+  const pendingRegionalRepairs = repairTickets.filter(item => repairNeedsAction(item) && inManagedRegion(item, user, npps, systemSets));
+  const incompleteRegionalMachines = systemSets.filter(item => inManagedRegion(item, user, npps) && (missingMachineFields(item).length || (['DA_LAP_DAT', 'BAO_THUONG_BAO_TRI'].includes(item.status) && (!npps.find(npp => npp.id === item.nppId)?.phone || !npps.find(npp => npp.id === item.nppId)?.address))));
+  const totalAlertsCount = maintenanceAlerts.length + unstabilizedAlerts.length + pendingRegionalRepairs.length + incompleteRegionalMachines.length;
   const compactTitle = {
     dashboard: 'Tổng quan', npp: 'Nhà phân phối', assets: 'Bộ máy & kho thiết bị',
     workflows: 'Cấp phát / Thu hồi', repairs: 'Sửa chữa', maintenance: 'Bảo trì',
@@ -333,8 +338,10 @@ export default function Header({
                 </div>
               ) : (
                 <div style={{ maxHeight: '280px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {pendingRegionalRepairs.length > 0 && <button className="btn btn-secondary" onClick={() => { onNavigate('dashboard'); setShowNotifications(false); }}>Cần xử lý: {pendingRegionalRepairs.length} phiếu sửa chữa / gửi trả · Xem thứ tự công việc</button>}
+                  {incompleteRegionalMachines.length > 0 && <button className="btn btn-secondary" onClick={() => { onNavigate('dashboard'); setShowNotifications(false); }}>Cần bổ sung dữ liệu: {incompleteRegionalMachines.length} bộ máy · Xem chi tiết trong công việc đội kỹ thuật</button>}
                   {maintenanceAlerts.map(item => (
-                    <div key={item.id} style={{ padding: '10px', background: 'rgba(245, 158, 11, 0.1)', borderLeft: '3px solid #f59e0b', borderRadius: '4px', fontSize: '0.8rem' }}>
+                    <div key={item.setCode} style={{ padding: '10px', background: 'rgba(245, 158, 11, 0.1)', borderLeft: '3px solid #f59e0b', borderRadius: '4px', fontSize: '0.8rem' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '700', color: '#fbbf24' }}>
                         <AlertTriangle size={14} />
                         <span>Sắp đến hạn bảo trì 1 năm!</span>
@@ -345,7 +352,7 @@ export default function Header({
                   ))}
 
                   {unstabilizedAlerts.map(item => (
-                    <div key={item.id} style={{ padding: '10px', background: 'rgba(244, 63, 94, 0.1)', borderLeft: '3px solid #f43f5e', borderRadius: '4px', fontSize: '0.8rem' }}>
+                    <div key={item.setCode} style={{ padding: '10px', background: 'rgba(244, 63, 94, 0.1)', borderLeft: '3px solid #f43f5e', borderRadius: '4px', fontSize: '0.8rem' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '700', color: '#fb7185' }}>
                         <ShieldAlert size={14} />
                         <span>Máy tính chưa trang bị Ổn áp</span>

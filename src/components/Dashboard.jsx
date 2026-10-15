@@ -1,3 +1,4 @@
+import { regionalMachineCounts } from '../lib/teamWorkspace.js';
 import { summarizeInventory } from '../lib/inventorySummary.js';
 import { findAssignedDevice } from '../lib/deviceEdit.js';
 import React, { useState, useMemo } from 'react';
@@ -90,12 +91,8 @@ export default function Dashboard({
   }, [repairTickets]);
 
   // Region data for chart
-  const regionChartData = [
-    { name: 'Miền Bắc', count: systemSets.filter(s => s.region === 'Miền Bắc').length },
-    { name: 'Miền Trung', count: systemSets.filter(s => s.region === 'Miền Trung').length },
-    { name: 'Miền Nam', count: systemSets.filter(s => s.region === 'Miền Nam').length },
-    { name: 'Trong Kho', count: systemSets.filter(s => s.region === 'Kho Tổng').length },
-  ];
+  const regionalCounts = useMemo(() => regionalMachineCounts(systemSets, npps), [systemSets, npps]);
+  const regionChartData = [...regionalCounts, { name: 'Trong Kho', count: systemSets.filter(s => s.region === 'Kho Tổng').length }];
 
   // Dispenser Model distribution chart data
   const modelCounts = systemSets.reduce((acc, curr) => {
@@ -314,6 +311,7 @@ export default function Dashboard({
             {totalSetsCount} <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)', fontWeight: 'normal' }}>Bộ</span>
           </div>
           <div style={{ marginTop: '12px', display: 'flex', gap: '8px', fontSize: '0.75rem', flexWrap: 'wrap' }}>
+            {regionalCounts.map(region => <span key={region.name} className="badge badge-info">{region.name}: {region.count} bộ</span>)}
             <span className="badge badge-success">● {installedSetsCount} Đã Lắp</span>
             <span className="badge badge-info" title="Gồm bộ đã ghép và số bộ có thể ghép đủ từ thiết bị lẻ, đồng nhất với Kho thiết bị">● {stockSetsCount} Trong Kho</span>
           </div>
