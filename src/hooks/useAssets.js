@@ -21,7 +21,7 @@ import { cacheOfflineData, getCachedOfflineData, enqueueOfflineAction, getOfflin
  * Integrated with offline support, local persistence & action queuing.
  */
 function getInitialAssets(key, fallback) {
-  return fallback;
+  return isSupabaseConfigured ? [] : fallback;
 }
 
 function persistAssetsLocal(key, data) {
@@ -73,7 +73,7 @@ export function useAssets() {
   useEffect(() => {
     async function loadCached() {
       try {
-        if (navigator.onLine) return;
+        if (navigator.onLine && !(await getOfflineQueue()).some(isPendingAssetAction)) return;
         const [d, m, c, p, s] = await Promise.all([
           getCachedOfflineData('dispensers', null),
           getCachedOfflineData('mixers', null),
@@ -81,11 +81,11 @@ export function useAssets() {
           getCachedOfflineData('printers', null),
           getCachedOfflineData('system_sets', null),
         ]);
-        if (d && d.length > 0) { setDispensers(d); persistAssetsLocal('dispensers', d); }
-        if (m && m.length > 0) { setMixers(m); persistAssetsLocal('mixers', m); }
-        if (c && c.length > 0) { setComputers(c); persistAssetsLocal('computers', c); }
-        if (p && p.length > 0) { setPrinters(p); persistAssetsLocal('printers', p); }
-        if (s && s.length > 0) { setSystemSets(s); persistAssetsLocal('system_sets', s); }
+        if (Array.isArray(d)) { setDispensers(d); persistAssetsLocal('dispensers', d); }
+        if (Array.isArray(m)) { setMixers(m); persistAssetsLocal('mixers', m); }
+        if (Array.isArray(c)) { setComputers(c); persistAssetsLocal('computers', c); }
+        if (Array.isArray(p)) { setPrinters(p); persistAssetsLocal('printers', p); }
+        if (Array.isArray(s)) { setSystemSets(s); persistAssetsLocal('system_sets', s); }
       } finally {
         setCacheHydrated(true);
       }
@@ -116,7 +116,7 @@ export function useAssets() {
       persistAssetsLocal('dispensers', mapped);
     } else if (dRes.error) {
       const cached = await getCachedOfflineData('dispensers', null);
-      if (cached && cached.length > 0) setDispensers(cached);
+      if (Array.isArray(cached)) setDispensers(cached);
     }
 
     if (Array.isArray(mRes.data)) {
@@ -125,7 +125,7 @@ export function useAssets() {
       persistAssetsLocal('mixers', mapped);
     } else if (mRes.error) {
       const cached = await getCachedOfflineData('mixers', null);
-      if (cached && cached.length > 0) setMixers(cached);
+      if (Array.isArray(cached)) setMixers(cached);
     }
 
     if (Array.isArray(cRes.data)) {
@@ -134,7 +134,7 @@ export function useAssets() {
       persistAssetsLocal('computers', mapped);
     } else if (cRes.error) {
       const cached = await getCachedOfflineData('computers', null);
-      if (cached && cached.length > 0) setComputers(cached);
+      if (Array.isArray(cached)) setComputers(cached);
     }
 
     if (Array.isArray(pRes.data)) {
@@ -143,7 +143,7 @@ export function useAssets() {
       persistAssetsLocal('printers', mapped);
     } else if (pRes.error) {
       const cached = await getCachedOfflineData('printers', null);
-      if (cached && cached.length > 0) setPrinters(cached);
+      if (Array.isArray(cached)) setPrinters(cached);
     }
 
     if (Array.isArray(sRes.data)) {
@@ -152,7 +152,7 @@ export function useAssets() {
       persistAssetsLocal('system_sets', mapped);
     } else if (sRes.error) {
       const cached = await getCachedOfflineData('system_sets', null);
-      if (cached && cached.length > 0) setSystemSets(cached);
+      if (Array.isArray(cached)) setSystemSets(cached);
     }
 
     setLoading(false);
@@ -213,26 +213,18 @@ export function useAssets() {
     const dbPayload = sanitizeDeviceForDb(category, deviceData, tempId);
     const localDevice = cfg.mapper(dbPayload);
 
-    // Update local state immediately for instant feedback
+    const result = isSupabaseConfigured ? await persistMutation({
+      online: navigator.onLine,
+      write: () => safeQuery(sb => sb.from(cfg.table).insert(dbPayload).select('id'), `addDevice:${cfg.table}`),
+      queue: () => enqueueOfflineAction('ADD_DEVICE', dbPayload, cfg.table),
+    }) : { queued: false };
     cfg.setter(prev => {
       const updated = [localDevice, ...prev];
       persistAssetsLocal(cfg.cacheKey, updated);
       return updated;
     });
-
-    if (isSupabaseConfigured && navigator.onLine) {
-      try {
-        await writeDeviceStrict(cfg.table, dbPayload);
-        await fetchAssets();
-      } catch (err) {
-        recordOperationalError('device', err);
-        console.warn(`[Offline] Failed online addStockDevice for ${category}. Queueing action.`);
-        enqueueOfflineAction('ADD_DEVICE', dbPayload, cfg.table);
-      }
-    } else if (isSupabaseConfigured && !navigator.onLine) {
-      console.log(`[Offline] Network down. Enqueueing addStockDevice for ${category}.`);
-      enqueueOfflineAction('ADD_DEVICE', dbPayload, cfg.table);
-    }
+    if (isSupabaseConfigured && !result.queued) await fetchAssets();
+    return result;
   }, [fetchAssets]);
 
   // ── Generic edit device ────────────────────────────────────────────────────
