@@ -1,3 +1,4 @@
+import { normalizeOptionalSerial } from './deviceSerial.js';
 import { assertAuditAppendOnly } from './auditPolicy.js';
 import { supabase, isSupabaseConfigured } from './supabase';
 import { addToQueue, getQueue, removeFromQueue, clearQueue, setCache, getCache, getOfflineOwner } from './offlineDb';
@@ -450,8 +451,9 @@ async function updateDeviceWithSchemaFallback(table, id, updates) {
     }
     if ('os' in compatibleUpdates && !compatibleUpdates.os) compatibleUpdates.os = 'Windows 10 LTSC';
   }
-  if (compatibleUpdates.serial && ['N/A', '—', 'null', 'undefined'].includes(String(compatibleUpdates.serial).trim())) {
-    compatibleUpdates.serial = `AUTO-${id}`;
+  if ('serial' in compatibleUpdates) {
+    const serial = normalizeOptionalSerial(compatibleUpdates.serial);
+    compatibleUpdates.serial = table === 'computers' ? serial || `AUTO-${id}` : serial;
   }
   while (true) {
     const { error } = await supabase.from(table).update(compatibleUpdates).eq('id', id);
@@ -461,11 +463,6 @@ async function updateDeviceWithSchemaFallback(table, id, updates) {
     if (missingColumn && missingColumn in compatibleUpdates) {
       console.warn(`[OfflineSync] ${table}.${missingColumn} is absent; retrying with legacy schema.`);
       delete compatibleUpdates[missingColumn];
-      continue;
-    }
-    const isDuplicateSerial = error.code === '23505' && String(error.message || '').toLowerCase().includes('serial');
-    if (isDuplicateSerial && compatibleUpdates.serial !== `AUTO-${id}`) {
-      compatibleUpdates.serial = `AUTO-${id}`;
       continue;
     }
     return error;
@@ -501,11 +498,6 @@ async function insertDeviceWithSchemaFallback(table, payload, queueItemId) {
       continue;
     }
 
-    const isDuplicateSerial = error.code === '23505' && String(error.message || '').toLowerCase().includes('serial');
-    if (isDuplicateSerial && compatiblePayload.serial !== `AUTO-${compatiblePayload.id}`) {
-      compatiblePayload.serial = `AUTO-${compatiblePayload.id}`;
-      continue;
-    }
 
     return { error, deferredLink: null, resolvedId: compatiblePayload.id };
   }
@@ -993,8 +985,8 @@ function normalizeDevicePayload(payload) {
 }
 
 function applyRequiredDeviceDefaults(table, payload) {
-  const missingSerial = !payload.serial || ['N/A', '—', 'null', 'undefined'].includes(String(payload.serial).trim());
-  if (missingSerial) payload.serial = `AUTO-${payload.id}`;
+  const serial = normalizeOptionalSerial(payload.serial);
+  payload.serial = table === 'computers' ? serial || `AUTO-${payload.id}` : serial;
   payload.is_assigned = Boolean(payload.is_assigned);
 
   if (table === 'dispensers') {

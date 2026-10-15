@@ -21,6 +21,7 @@ DECLARE
   set_payload JSONB;
   affected INTEGER;
   profile_serial TEXT;
+  conflicting_legacy_link BOOLEAN := FALSE;
 BEGIN
   IF auth.uid() IS NULL THEN RAISE EXCEPTION 'AUTH_REQUIRED' USING ERRCODE = '42501'; END IF;
   allowed := CASE p_table
@@ -55,7 +56,11 @@ BEGIN
     ORDER BY set_code FOR UPDATE LOOP
     IF linked.set_code = new_code AND NULLIF(to_jsonb(linked)->>(prefix || '_id'), '') IS NOT NULL
       AND to_jsonb(linked)->>(prefix || '_id') <> p_id THEN
-      RAISE EXCEPTION 'DEVICE_SLOT_OCCUPIED: bộ máy đã có thiết bị loại này' USING ERRCODE = '23505';
+      IF old_code IS NOT DISTINCT FROM new_code THEN
+        conflicting_legacy_link := TRUE;
+      ELSE
+        RAISE EXCEPTION 'DEVICE_SLOT_OCCUPIED: bộ máy đã có thiết bị loại này' USING ERRCODE = '23505';
+      END IF;
     END IF;
   END LOOP;
   SELECT string_agg(format('%I = (jsonb_populate_record(NULL::public.%I, $1)).%I', key, p_table, key), ', ')
@@ -82,7 +87,7 @@ BEGIN
     GET DIAGNOSTICS affected = ROW_COUNT;
     IF affected <> 1 THEN RAISE EXCEPTION 'OLD_SET_WRITE_DENIED' USING ERRCODE = '42501'; END IF;
   END IF;
-  IF new_code IS NOT NULL THEN
+  IF new_code IS NOT NULL AND NOT conflicting_legacy_link THEN
     set_payload := jsonb_build_object(prefix || '_id', p_id, prefix || '_serial', COALESCE(profile_serial, revised->>'serial'));
     IF prefix IN ('dispenser','mixer') THEN set_payload := set_payload || jsonb_build_object(prefix || '_model', revised->>'model'); END IF;
     IF prefix = 'computer' THEN set_payload := set_payload || jsonb_build_object('computer_type', revised->>'type'); END IF;
