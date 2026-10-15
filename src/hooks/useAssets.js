@@ -268,7 +268,7 @@ export function useAssets() {
           : singularCat === 'computer' ? { computerId: id, computerType: updates.type, computerSerial: updates.serial, tintingSoftware: updates.tintingSoftware, softwareVersion: updates.softwareVersion }
           : { printerId: id, printerSerial: updates.serial };
         const key = `${singularCat}Id`;
-        if (set.setCode === updates.setCode && updates.isAssigned) return { ...set, ...fields };
+        if (set.setCode === updates.setCode && updates.isAssigned && (!set[key] || set[key] === id)) return { ...set, ...fields };
         if (set[key] === id) return { ...set, ...Object.fromEntries(Object.keys(fields).map(field => [field, field === key ? null : ''])) };
         return set;
       }));

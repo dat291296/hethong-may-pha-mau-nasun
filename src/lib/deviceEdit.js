@@ -1,3 +1,4 @@
+import { normalizeOptionalSerial } from './deviceSerial.js';
 import { requireCompleteWrite } from './guardedWrite.js';
 
 export function requireUniqueDeviceSerial(serial, originalId, devices, sets, npps = []) {
@@ -27,7 +28,7 @@ export function prepareDeviceEdit(category, form, original) {
     : category === 'computer' ? (inputSerial || original.serial) : inputSerial;
 
   const isAssigned = Boolean(form.isAssigned && form.setCode);
-  return { ...form, id: original.id, sourceId: original.id, expectedRevision: original.updatedAt, originalSerial: original.serial, serial: serial || null,
+  return { ...form, id: original.id, sourceId: original.id, expectedRevision: original.updatedAt, originalSerial: original.serial, serial: category === 'computer' ? serial || null : normalizeOptionalSerial(serial),
     isAssigned, setCode: isAssigned ? form.setCode : null };
 }
 

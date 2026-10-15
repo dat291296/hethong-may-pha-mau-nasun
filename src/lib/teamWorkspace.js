@@ -1,3 +1,4 @@
+import { isUnknownSerial } from './deviceSerial.js';
 export function isAssignedTo(item, user) {
   if (!user) return false;
   if (item.assignedUserId) return item.assignedUserId === user.id;
@@ -15,7 +16,7 @@ export function missingMachineFields(machine) {
     ['dispenserSerial', 'Seri máy chiết'], ['mixerSerial', 'Seri máy lắc'],
     ['computerSerial', 'Seri máy tính'], ['printerSerial', 'Seri máy in'],
     ['nextMaintenanceDue', 'Hạn bảo trì'],
-  ].filter(([key]) => !String(machine[key] || '').trim() || /^(n\/a|không có seri|—|-)$/i.test(String(machine[key]).trim())).map(([, label]) => label);
+  ].filter(([key]) => isUnknownSerial(machine[key])).map(([, label]) => label);
 }
 
 export function isDraftExpired(draft, now = Date.now()) {

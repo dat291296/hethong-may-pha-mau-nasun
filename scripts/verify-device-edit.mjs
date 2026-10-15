@@ -35,6 +35,25 @@ export async function verifyDeviceEdit(admin, viewer, reauthenticate) {
       const firstSet = check(await admin.from('system_sets').select('*').eq('set_code', sets[0]).single());
       assert.equal(firstSet[prefix + '_id'], id);
       assert.equal(firstSet[prefix + '_serial'], original.serial);
+      if (table !== 'computers') {
+        check(await edit(admin, table, assigned, { serial: null }));
+        assert.equal((await read(table, id)).serial, null);
+        const cleared = check(await admin.from('system_sets').select('*').eq('set_code', sets[0]).single());
+        assert.equal(cleared[prefix + '_serial'], null);
+        const legacyId = id + '-LEGACY';
+        ids.push({ table, id: legacyId });
+        check(await admin.from(table).insert({ id: legacyId, serial: legacyId, model: 'STAGING-ONLY', is_assigned: false, set_code: null }));
+        const unassignedLegacy = await read(table, legacyId);
+        assert.ok((await edit(admin, table, unassignedLegacy, { is_assigned: true, set_code: sets[0] })).error, 'A new assignment must never replace an occupied slot');
+        check(await admin.from(table).update({ is_assigned: true, set_code: sets[0] }).eq('id', legacyId));
+        const legacy = await read(table, legacyId);
+        check(await edit(admin, table, legacy, { serial: null }));
+        assert.equal((await read(table, legacyId)).serial, null);
+        const preserved = check(await admin.from('system_sets').select('*').eq('set_code', sets[0]).single());
+        assert.equal(preserved[prefix + '_id'], id, 'Legacy metadata edit must not replace the canonical device');
+        const restoredRevision = await read(table, id);
+        check(await edit(admin, table, restoredRevision, { serial: original.serial }));
+      }
       if (table === 'computers') {
         const legacySerial = tag + '-LEGACY-PC';
         check(await admin.from('system_sets').update({ computer_serial: legacySerial }).eq('set_code', sets[0]));
