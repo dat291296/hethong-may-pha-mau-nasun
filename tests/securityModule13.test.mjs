@@ -18,7 +18,7 @@ test('live verifier covers anonymous, vertical, and regional access boundaries',
   const verifier = await readFile(verifierUrl, 'utf8');
   assert.match(verifier, /Anonymous users must not execute the RLS probe/);
   assert.match(verifier, /\['admin', 'manager', 'technician', 'qc', 'viewer'\]/);
-  assert.match(verifier, /role === 'admin' \|\| \['manager', 'qc'\]\.includes\(role\) && targetRegion === region/);
+  assert.match(verifier, /role === 'admin' \|\| \['manager', 'qc', 'technician'\]\.includes\(role\) && targetRegion === region/);
   assert.match(verifier, /result\.can_insert_target_region, permitted/);
   assert.match(verifier, /data\.length, 0/);
   assert.match(verifier, /RLS tests require an isolated staging project/);

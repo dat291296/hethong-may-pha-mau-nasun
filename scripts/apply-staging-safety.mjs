@@ -30,7 +30,7 @@ export function validateStagingDestination(environment) {
 }
 async function main() {
   const destination = validateStagingDestination(process.env);
-  for (const migration of ['supabase/sensitive_action_reauthentication.sql', 'supabase/technical_document_uploads_migration.sql', 'supabase/technical_storage_recent_auth.sql', 'supabase/device_edit_atomic.sql', 'supabase/optional_device_serial.sql', 'supabase/account_npp_integrity.sql', 'supabase/technician_region_write_migration.sql', 'supabase/trusted_session_revocation.sql', 'supabase/revoked_session_write_guard.sql']) {
+  for (const migration of ['supabase/sensitive_action_reauthentication.sql', 'supabase/technical_document_uploads_migration.sql', 'supabase/technical_storage_recent_auth.sql', 'supabase/device_edit_atomic.sql', 'supabase/optional_device_serial.sql', 'supabase/account_npp_integrity.sql', 'supabase/technician_region_write_migration.sql', 'supabase/trusted_session_revocation.sql', 'supabase/revoked_session_write_guard.sql', 'supabase/technician_national_read_admin_session.sql']) {
   const child = spawn('psql', ['--dbname=' + destination.href, '-v', 'ON_ERROR_STOP=1', '-f', migration], {
     env: { ...process.env, PGSSLMODE: 'require' }, stdio: ['ignore', 'ignore', 'ignore']
   });

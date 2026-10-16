@@ -35,8 +35,8 @@ export const REGIONAL_ROLES = Object.freeze([
 export const PERMISSIONS = Object.freeze({
   // NPP Management
   'npp:read':              ALL_ROLES,
-  'npp:create':            [ROLES.QC, ROLES.MANAGER, ROLES.ADMIN],
-  'npp:edit':              [ROLES.QC, ROLES.MANAGER, ROLES.ADMIN],
+  'npp:create':            OPERATIONAL_ROLES,
+  'npp:edit':              OPERATIONAL_ROLES,
   'npp:delete':            [ROLES.ADMIN],
   'npp:import_excel':      [ROLES.QC, ROLES.MANAGER, ROLES.ADMIN],
 

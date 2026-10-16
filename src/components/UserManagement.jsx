@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase.js';
 import { useAuth } from '../context/AuthContext.jsx';
-import { useSensitiveActionGate } from './SensitiveActionGate.jsx';
+import { authorizeAccountManagement, confirmAccountUpdate } from '../security/accountManagement.js';
 import { UserCheck, ShieldAlert, Trash2, Key, RefreshCw, Award, Lock, Unlock, Calendar, ExternalLink } from 'lucide-react';
 
 const keycloakAccountUrl = import.meta.env.VITE_KEYCLOAK_ACCOUNT_URL;
@@ -14,7 +14,7 @@ export default function UserManagement({
   lockError = null
 }) {
   const { user: currentUser } = useAuth();
-  const { requireAuthentication, dialog: authenticationDialog } = useSensitiveActionGate();
+  const [savingAccess, setSavingAccess] = useState(false);
   const [profiles, setProfiles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -130,7 +130,8 @@ export default function UserManagement({
 
     try {
       const profile = profiles.find(item => item.id === profileId);
-      await requireAuthentication();
+      setSavingAccess(true);
+      await authorizeAccountManagement(supabase);
       if (newRole === 'admin') {
         const reason = window.prompt('Nhập lý do cấp quyền Admin (tối thiểu 10 ký tự):', 'Cấp quyền quản trị theo phê duyệt nội bộ');
         if (reason === null) return;
@@ -154,6 +155,7 @@ export default function UserManagement({
       });
 
       if (updateErr) throw updateErr;
+      confirmAccountUpdate(updateResult, profileId, { role: newRole, managed_region: nextRegion });
       if (updateResult?.error === 'RATE_LIMIT_EXCEEDED') {
         throw new Error(`Thao tác quá nhanh. Vui lòng thử lại sau ${updateResult.retry_after_seconds} giây.`);
       }
@@ -163,7 +165,7 @@ export default function UserManagement({
     } catch (err) {
       console.error(err);
       setError('Lỗi cập nhật vai trò: ' + err.message);
-    }
+    } finally { setSavingAccess(false); }
   };
 
   const handleRegionChange = async (profileId, newRegion) => {
@@ -179,7 +181,8 @@ export default function UserManagement({
     try {
       const profile = profiles.find(item => item.id === profileId);
       if (!profile) throw new Error('Không tìm thấy tài khoản cần cập nhật.');
-      await requireAuthentication();
+      setSavingAccess(true);
+      await authorizeAccountManagement(supabase);
       const { data: updateResult, error: updateErr } = await supabase.rpc('update_user_access', {
         target_user_id: profileId,
         target_role: profile.role,
@@ -187,6 +190,7 @@ export default function UserManagement({
       });
 
       if (updateErr) throw updateErr;
+      confirmAccountUpdate(updateResult, profileId, { role: profile.role, managed_region: newRegion });
       if (updateResult?.error === 'RATE_LIMIT_EXCEEDED') {
         throw new Error(`Thao tác quá nhanh. Vui lòng thử lại sau ${updateResult.retry_after_seconds} giây.`);
       }
@@ -196,7 +200,7 @@ export default function UserManagement({
     } catch (err) {
       console.error(err);
       setError('Lỗi cập nhật vùng quản lý: ' + err.message);
-    }
+    } finally { setSavingAccess(false); }
   };
 
   const handleAccountStatusChange = async (profileId, isActive) => {
@@ -223,7 +227,8 @@ export default function UserManagement({
     }
 
     try {
-      await requireAuthentication();
+      setSavingAccess(true);
+      await authorizeAccountManagement(supabase);
       const { data: statusResult, error: delErr } = await supabase.rpc('set_user_account_active', {
         target_user_id: profileId,
         target_active: nextActive,
@@ -239,12 +244,11 @@ export default function UserManagement({
     } catch (err) {
       console.error(err);
       setError('Lỗi cập nhật trạng thái tài khoản: ' + err.message);
-    }
+    } finally { setSavingAccess(false); }
   };
 
   return (
     <div className="workspace-screen" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      {authenticationDialog}
       {keycloakAccountUrl && (
         <div className="glass-panel" style={{ padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap', borderColor: 'rgba(6, 182, 212, 0.3)' }}>
           <div>
@@ -411,7 +415,7 @@ export default function UserManagement({
                         <td>
                           <select 
                             value={p.role} 
-                            disabled={isSelf}
+                            disabled={isSelf || savingAccess || loading}
                             onChange={e => handleRoleChange(p.id, e.target.value)}
                             className="form-input"
                             style={{
@@ -436,7 +440,7 @@ export default function UserManagement({
                           ) : (
                             <select 
                               value={['Miền Bắc', 'Miền Trung', 'Miền Nam'].includes(p.managed_region) ? p.managed_region : ''}
-                              disabled={isSelf || loading}
+                              disabled={isSelf || savingAccess || loading}
                               onChange={e => handleRegionChange(p.id, e.target.value)}
                               className="form-input"
                               style={{
@@ -458,7 +462,7 @@ export default function UserManagement({
                         <td style={{ textAlign: 'center' }}>
                           <button
                             onClick={() => handleAccountStatusChange(p.id, p.is_active !== false)}
-                            disabled={isSelf}
+                            disabled={isSelf || savingAccess || loading}
                             className="btn btn-secondary btn-sm"
                             style={{
                               borderColor: 'transparent',
