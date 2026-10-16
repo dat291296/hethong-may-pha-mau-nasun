@@ -86,11 +86,18 @@ async function main() {
       assert.equal(profile.is_active, true);
       assert.equal(profile.managed_region, region);
       for (const targetRegion of REQUIRED_REGIONS) {
+        if (role === 'viewer') {
+          const visible = await client.from('distributors').select('id').eq('region', targetRegion).limit(1);
+          assert.ifError(visible.error);
+          assert.equal(visible.data.length, 1, 'Viewer must read distributors nationwide');
+          const emails = await client.rpc('admin_list_registered_accounts');
+          assert.ok(emails.error, 'Viewer must never access account email directory');
+        }
         const result = await probe(client, targetRegion);
         assert.equal(result.effective_role, role);
         const permitted = role === 'admin' || ['manager', 'qc'].includes(role) && targetRegion === region;
         assert.equal(result.can_insert_target_region, permitted, `${role} insert policy mismatch`);
-        if (role !== 'admin' && targetRegion !== region) {
+        if (!['admin', 'viewer'].includes(role) && targetRegion !== region) {
           for (const table of ['distributors', 'system_sets']) {
             const { data, error } = await client.from(table).select(table === 'system_sets' ? 'set_code' : 'id').eq('region', targetRegion).limit(1);
             assert.ifError(error);

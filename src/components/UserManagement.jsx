@@ -74,23 +74,9 @@ export default function UserManagement({
     setLoading(true);
     setError(null);
     try {
-      const { data, error: fetchErr } = await supabase
-        .from('profiles')
-        .select('id, full_name, role, managed_region, is_active, created_at')
-        .order('created_at', { ascending: false });
-      
+      const { data, error: fetchErr } = await supabase.rpc('admin_list_registered_accounts');
       if (fetchErr) throw fetchErr;
-      
-      // Since supabase profiles table might not contain emails (email is in auth.users),
-      // in production, we can mock or map emails if needed, or just show the ID / Full Name.
-      // But we can try to fetch auth user emails via a secure view or just display their Full Name & ID.
-      // In this case, we display full_name and use default fallback emails.
-      const mappedProfiles = data.map(p => ({
-        ...p,
-        email: p.email || (p.id === currentUser.id ? currentUser.email : `${p.full_name.toLowerCase().replace(/\s+/g, '')}@nasun.vn`)
-      }));
-      
-      setProfiles(mappedProfiles);
+      setProfiles((data || []).map(profile => ({ ...profile, email: profile.email || 'Chưa có email đăng ký' })));
     } catch (err) {
       console.error('[UserManagement] Error loading profiles:', err.message);
       setError('Lỗi tải danh sách tài khoản: ' + err.message);

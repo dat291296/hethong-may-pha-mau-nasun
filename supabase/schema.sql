@@ -244,7 +244,7 @@ CREATE TABLE IF NOT EXISTS computers (
                 CHECK (type IN ('AIO','Case')),
   os          TEXT NOT NULL DEFAULT 'Windows 10 LTSC',
   specs       TEXT DEFAULT '',
-  serial      TEXT NOT NULL UNIQUE,
+  serial      TEXT UNIQUE,
   network     TEXT DEFAULT 'Có mạng LAN'
                 CHECK (network IN ('Có mạng LAN','Có mạng Wifi','Không có mạng')),
   stabilizer  JSONB DEFAULT '{"hasStabilizer":false,"brand":null,"isSelfBought":false}',

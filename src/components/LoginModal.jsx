@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowLeft, CheckCircle2, Eye, EyeOff, KeyRound, LockKeyhole, Mail, UserRound } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Circle, Eye, EyeOff, KeyRound, LockKeyhole, Mail, UserRound } from 'lucide-react';
+import { getAuthErrorMessage, getPasswordRuleState } from '../security/authFeedback.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { supabase } from '../lib/supabase.js';
 import { syncOfflineQueue } from '../lib/offlineSync.js';
@@ -14,11 +15,12 @@ const LOGIN_LOCK_MS = 15 * 60 * 1000;
 const RESEND_COOLDOWN_SECONDS = 60;
 
 function getPasswordRules(value) {
+  const state = getPasswordRuleState(value);
   return [
-    { id: 'length', label: 'Ít nhất 12 ký tự', passed: value.length >= 12 },
-    { id: 'uppercase', label: 'Có chữ hoa', passed: /[A-Z]/.test(value) },
-    { id: 'lowercase', label: 'Có chữ thường', passed: /[a-z]/.test(value) },
-    { id: 'number', label: 'Có chữ số', passed: /\d/.test(value) },
+    { id: 'length', label: `Ít nhất 12 ký tự (${value.length}/12)`, passed: state.length },
+    { id: 'uppercase', label: 'Có chữ hoa', passed: state.uppercase },
+    { id: 'lowercase', label: 'Có chữ thường', passed: state.lowercase },
+    { id: 'number', label: 'Có chữ số', passed: state.number },
   ];
 }
 
@@ -219,8 +221,8 @@ export default function LoginModal() {
         ? 'Tài khoản đã được tạo. Bạn có thể đăng nhập.'
         : 'Đã gửi email xác thực. Kiểm tra hộp thư đến hoặc thư rác để kích hoạt tài khoản.');
     } catch (err) {
-      console.error('[Login] Sign-up failed:', err.message);
-      setError(err.message || 'Không thể tạo tài khoản.');
+      console.error('[Login] Sign-up failed:', { code: err?.code, status: err?.status });
+      setError(getAuthErrorMessage(err));
     } finally {
       setPending(false);
     }
@@ -237,7 +239,7 @@ export default function LoginModal() {
       setNotice('Đã gửi lại email xác minh. Hãy kiểm tra hộp thư đến hoặc thư rác.');
     } catch (err) {
       console.error('[Login] Verification resend failed:', err.message);
-      setError('Chưa thể gửi lại email xác minh. Vui lòng thử lại sau.');
+      setError(getAuthErrorMessage(err, 'resend'));
     } finally {
       setPending(false);
     }
@@ -258,7 +260,7 @@ export default function LoginModal() {
       setNotice('Nếu email đã đăng ký, liên kết đặt lại mật khẩu sẽ được gửi. Hãy kiểm tra hộp thư đến hoặc thư rác.');
     } catch (err) {
       console.error('[Login] Password reset failed:', err.message);
-      setError('Không thể gửi yêu cầu đặt lại mật khẩu.');
+      setError(getAuthErrorMessage(err, 'recovery'));
     } finally {
       setPending(false);
     }
@@ -309,7 +311,7 @@ export default function LoginModal() {
         <div className="auth-password-rules" aria-live="polite">
           {passwordRules.map(rule => (
             <span key={rule.id} className={rule.passed ? 'is-valid' : ''}>
-              <CheckCircle2 size={13} aria-hidden="true" />{rule.label}
+              {rule.passed ? <CheckCircle2 size={13} aria-hidden="true" /> : <Circle size={13} aria-hidden="true" />}{rule.label}
             </span>
           ))}
         </div>
@@ -369,7 +371,7 @@ export default function LoginModal() {
           </div>
 
           {notice && <div className="auth-alert auth-alert-success"><CheckCircle2 size={18} />{notice}</div>}
-          {error && <div className="auth-alert auth-alert-error">{error}</div>}
+          {error && <div className="auth-alert auth-alert-error" role="alert">{error}</div>}
           {mode === 'login' && verificationEmail && (
             <div className="auth-verification-panel">
               <span>Chưa nhận được email xác minh?</span>
@@ -399,7 +401,7 @@ export default function LoginModal() {
               <label className="auth-field"><span>Email công việc</span><div className="auth-input-wrap"><Mail size={18} aria-hidden="true" /><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required autoComplete="email" /></div></label>
               {renderPasswordInput()}
               {renderConfirmPasswordInput()}
-              <button className="btn btn-primary auth-submit" type="submit" disabled={pending}>{pending ? 'Đang xử lý...' : 'Tạo tài khoản'}</button>
+              <button className="btn btn-primary auth-submit" type="submit" disabled={pending || !passwordIsStrong || password !== confirmPassword}>{pending ? 'Đang xử lý...' : 'Tạo tài khoản'}</button>
               <p className="auth-privacy-note">Khi tạo tài khoản, bạn đồng ý với <button type="button" className="auth-text-link" onClick={() => setPrivacyOpen(true)}>chính sách quyền riêng tư</button>.</p>
               <button type="button" className="auth-back" onClick={() => changeMode('login')}><ArrowLeft size={16} />Quay lại đăng nhập</button>
             </form>

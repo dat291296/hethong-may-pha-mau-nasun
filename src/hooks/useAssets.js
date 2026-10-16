@@ -694,7 +694,7 @@ function mapDeviceToDb(obj, category) {
     if (obj.status !== undefined) dbObj.status = obj.status;
   } else if (cat === 'mixer' || cat === 'mixers') {
     if (obj.model !== undefined) dbObj.model = obj.model;
-    if (obj.type !== undefined) dbObj.type = obj.type;
+    if (obj.type !== undefined) dbObj.type = obj.type === 'Case' ? 'Case' : 'AIO';
     if (obj.status !== undefined) dbObj.status = obj.status;
   } else if (cat === 'printer' || cat === 'printers') {
     if (obj.model !== undefined) dbObj.model = obj.model;
@@ -744,7 +744,8 @@ function sanitizeDeviceForDb(category, data, tempId) {
   if (category === 'computer') {
     return {
       ...base,
-      type: data.type || 'AIO',
+      type: data.type === 'Case' ? 'Case' : 'AIO',
+      serial: null,
       os: data.os || 'Windows 11 Pro',
       specs: data.specs || 'Core i5',
       network: data.network || 'Có mạng LAN'
