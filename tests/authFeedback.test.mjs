@@ -11,7 +11,8 @@ test('auth feedback never exposes empty provider payloads or internal messages',
   assert.match(getAuthErrorMessage({ status: 500, code: 'unexpected_failure' }), /cấu hình gửi email/);
   assert.match(getAuthErrorMessage({ status: 429 }), /chờ vài phút/);
   assert.match(getAuthErrorMessage({ code: 'weak_password' }), /12 ký tự/);
-  assert.match(getAuthErrorMessage(new TypeError('Failed to fetch')), /Kiểm tra mạng/);
+  assert.match(getAuthErrorMessage(new TypeError('Failed to fetch'), 'recovery'), /Kiểm tra mạng/);
+  assert.match(getAuthErrorMessage(new TypeError('Failed to fetch')), /Chưa nhận được phản hồi đăng ký/);
 });
 
 test('password length is enforced independently of character variety', () => {

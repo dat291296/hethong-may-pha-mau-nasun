@@ -6,7 +6,7 @@ import { supabase } from '../lib/supabase.js';
 import { syncOfflineQueue } from '../lib/offlineSync.js';
 import { clearOfflineStorage } from '../lib/offlineDb.js';
 import { AUTH_REDIRECT_PURPOSES, createPrivateIdentifier, getAuthRedirectUrl } from '../security/authRuntime.js';
-import { completePasswordRecovery, requestPasswordRecovery, resendSignupVerification } from '../security/authEmailFlows.js';
+import { completePasswordRecovery, registerEmailAccount, requestPasswordRecovery, resendSignupVerification } from '../security/authEmailFlows.js';
 
 const isKeycloakEnabled = import.meta.env.VITE_ENABLE_KEYCLOAK === 'true';
 const LOGIN_ATTEMPTS_KEY = 'nasun_login_attempts';
@@ -186,6 +186,7 @@ export default function LoginModal() {
 
   const submitSignup = async (event) => {
     event.preventDefault();
+    if (pending || resendCooldown > 0) return;
     resetFeedback();
     if (!passwordIsStrong) {
       setError('Mật khẩu chưa đáp ứng đầy đủ các yêu cầu bảo mật.');
@@ -203,12 +204,11 @@ export default function LoginModal() {
         return;
       }
       const emailRedirectTo = await getAuthRedirectUrl(AUTH_REDIRECT_PURPOSES.VERIFIED);
-      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+      const signUpData = await registerEmailAccount(supabase.auth, {
         email: email.trim().toLowerCase(),
         password,
         options: { emailRedirectTo, data: { full_name: fullName.trim() } },
       });
-      if (signUpError) throw signUpError;
       const normalizedEmail = email.trim().toLowerCase();
       setMode('login');
       if (!signUpData.session) {
@@ -223,6 +223,10 @@ export default function LoginModal() {
     } catch (err) {
       console.error('[Login] Sign-up failed:', { code: err?.code, status: err?.status });
       setError(getAuthErrorMessage(err));
+      if (err?.code === 'AUTH_RESPONSE_TIMEOUT' || err?.code === 'request_timeout' || err?.status >= 500 || err?.name === 'AuthRetryableFetchError' || err instanceof TypeError) {
+        setVerificationEmail(email.trim().toLowerCase());
+        setResendCooldown(RESEND_COOLDOWN_SECONDS);
+      }
     } finally {
       setPending(false);
     }
@@ -372,7 +376,7 @@ export default function LoginModal() {
 
           {notice && <div className="auth-alert auth-alert-success"><CheckCircle2 size={18} />{notice}</div>}
           {error && <div className="auth-alert auth-alert-error" role="alert">{error}</div>}
-          {mode === 'login' && verificationEmail && (
+          {['login', 'signup'].includes(mode) && verificationEmail && (
             <div className="auth-verification-panel">
               <span>Chưa nhận được email xác minh?</span>
               <button type="button" className="auth-text-link" onClick={resendVerificationEmail} disabled={pending || resendCooldown > 0}>
@@ -401,7 +405,7 @@ export default function LoginModal() {
               <label className="auth-field"><span>Email công việc</span><div className="auth-input-wrap"><Mail size={18} aria-hidden="true" /><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required autoComplete="email" /></div></label>
               {renderPasswordInput()}
               {renderConfirmPasswordInput()}
-              <button className="btn btn-primary auth-submit" type="submit" disabled={pending || !passwordIsStrong || password !== confirmPassword}>{pending ? 'Đang xử lý...' : 'Tạo tài khoản'}</button>
+              <button className="btn btn-primary auth-submit" type="submit" disabled={pending || resendCooldown > 0 || !passwordIsStrong || password !== confirmPassword}>{pending ? 'Đang xử lý...' : resendCooldown > 0 ? `Thử lại sau ${resendCooldown}s` : 'Tạo tài khoản'}</button>
               <p className="auth-privacy-note">Khi tạo tài khoản, bạn đồng ý với <button type="button" className="auth-text-link" onClick={() => setPrivacyOpen(true)}>chính sách quyền riêng tư</button>.</p>
               <button type="button" className="auth-back" onClick={() => changeMode('login')}><ArrowLeft size={16} />Quay lại đăng nhập</button>
             </form>

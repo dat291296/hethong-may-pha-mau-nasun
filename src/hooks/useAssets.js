@@ -450,28 +450,18 @@ export function useAssets() {
     const dbPayload = mapSystemSetToDb({ ...newSet, setCode });
     const appSetData = mapDbToSystemSet(dbPayload);
 
+    const result = !isSupabaseConfigured ? { queued: false } : await persistMutation({
+      online: navigator.onLine,
+      write: () => safeQuery(sb => sb.from('system_sets').insert(dbPayload).select('id,set_code'), 'assembleSet'),
+      queue: () => enqueueOfflineAction('ASSEMBLE_SET', dbPayload)
+    });
     setSystemSets(prev => {
       const updated = [appSetData, ...prev];
       persistAssetsLocal('system_sets', updated);
       return updated;
     });
-
-    if (isSupabaseConfigured && navigator.onLine) {
-      try {
-        const { error } = await safeQuery(
-          sb => sb.from('system_sets').insert(dbPayload),
-          'assembleSet'
-        );
-        if (error) throw error;
-        await fetchAssets();
-      } catch (err) {
-        console.warn('[Offline] Failed online assembleSet. Queueing action.', err);
-        enqueueOfflineAction('ASSEMBLE_SET', dbPayload);
-      }
-    } else if (isSupabaseConfigured && !navigator.onLine) {
-      console.log('[Offline] Network down. Enqueueing assembleSet.');
-      enqueueOfflineAction('ASSEMBLE_SET', dbPayload);
-    }
+    if (isSupabaseConfigured && !result.queued) await fetchAssets();
+    return result;
   }, [fetchAssets]);
 
   // ── Update system set ──────────────────────────────────────────────────────

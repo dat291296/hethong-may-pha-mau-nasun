@@ -1,6 +1,9 @@
 export function getAuthErrorMessage(error, action = 'signup') {
   const code = typeof error?.code === 'string' ? error.code : '';
   const message = typeof error?.message === 'string' ? error.message : '';
+  if (code === 'AUTH_RESPONSE_TIMEOUT' || code === 'request_timeout' || error?.status === 504 || error?.status === 408) {
+    return 'Máy chủ chưa xác nhận xong yêu cầu. Hãy kiểm tra email xác minh (kể cả thư rác). Nếu chưa nhận được, chờ 60 giây rồi gửi lại email xác minh; không bấm đăng ký liên tục.';
+  }
   if (['weak_password', 'password_too_short'].includes(code) || /weak password|password.*(at least|characters)/i.test(message)) {
     return 'Mật khẩu cần ít nhất 12 ký tự, gồm chữ hoa, chữ thường và chữ số. Nếu vẫn bị từ chối, hãy chọn mật khẩu khác mạnh hơn.';
   }
@@ -15,6 +18,7 @@ export function getAuthErrorMessage(error, action = 'signup') {
     return 'Hệ thống chưa gửi được email xác minh hoặc khôi phục. Vui lòng liên hệ quản trị viên NASUN kiểm tra cấu hình gửi email, sau đó thử lại.';
   }
   if (error instanceof TypeError || error?.name === 'AuthRetryableFetchError' || /fetch|network|timeout/i.test(message)) {
+    if (action === 'signup') return 'Chưa nhận được phản hồi đăng ký từ máy chủ. Kiểm tra kết nối và hộp thư; nếu chưa có email, chờ 60 giây rồi gửi lại email xác minh.';
     return 'Không kết nối được hệ thống. Kiểm tra mạng rồi thử lại.';
   }
   return action === 'signup' ? 'Chưa thể tạo tài khoản. Vui lòng thử lại hoặc liên hệ quản trị viên NASUN.' : 'Chưa gửi được email. Vui lòng thử lại hoặc liên hệ quản trị viên NASUN.';

@@ -1,3 +1,4 @@
+import { assignedSetsForNpp, assertAdditionalSetConfirmed } from '../lib/assemblyGuard.js';
 import { isUnknownSerial } from '../lib/deviceSerial.js';
 import { summarizeInventory, nextWarehouseId, inventoryLinkIssues } from '../lib/inventorySummary.js';
 import { prepareDeviceEdit, findAssignedDevice, requireUniqueDeviceSerial } from '../lib/deviceEdit.js';
@@ -339,6 +340,8 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
     stabilizerBrand: ''
   });
 
+  const [assemblySaving, setAssemblySaving] = useState(false);
+  const [assemblyError, setAssemblyError] = useState('');
   // Combo Assembly Form State
   const [newSetData, setNewSetData] = useState({
     dispenserId: '',
@@ -387,8 +390,13 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
     setShowAssembleModal(true);
   };
 
-  const handleAssembleSubmit = (e) => {
+  const existingNppSets = assignedSetsForNpp(systemSets, newSetData.nppId);
+  const handleAssembleSubmit = async (e) => {
     e.preventDefault();
+    if (assemblySaving) return;
+    setAssemblyError('');
+    try { assertAdditionalSetConfirmed(systemSets, newSetData.nppId, newSetData.confirmAdditionalSet); }
+    catch (error) { setAssemblyError(error.message); return; }
     if (!newSetData.dispenserId || !newSetData.mixerId || !newSetData.computerId || !newSetData.printerId) {
       alert('Vui lòng chọn đủ 4 thiết bị: 1 Máy Chiết + 1 Máy Lắc + 1 Máy Tính + 1 Máy In QL700!');
       return;
@@ -402,13 +410,17 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
     if (missingSerialDevices.length > 0 && !window.confirm(`⚠️ CẢNH BÁO SERI\n\n${missingSerialDevices.map(item => `• ${item.label}`).join('\n')} chưa có số seri. Khi ghép xong, thiết bị sẽ được đánh dấu nổi bật trong danh mục đã cấp phát.\n\nBạn vẫn muốn ghép bộ máy?`)) {
       return;
     }
-    onAssembleSet(newSetData);
+    setAssemblySaving(true);
+    try {
+    await onAssembleSet(newSetData);
     setShowAssembleModal(false);
     setNewSetData({
       dispenserId: '', mixerId: '', computerId: '', printerId: '',
       nppId: '', nppName: '', region: '', province: '', salesperson: '',
       technician: '', installationPhotos: []
     });
+    } catch (error) { setAssemblyError(error.message || 'Chưa lưu được bộ máy.'); }
+    finally { setAssemblySaving(false); }
   };
 
   const handleOpenAddDevice = (category) => {
@@ -2279,11 +2291,17 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
                 <button className="btn btn-secondary btn-sm" onClick={() => setShowAssembleModal(false)}>✕</button>
               </div>
               <form onSubmit={handleAssembleSubmit}>
-                <div className="modal-body" ref={el => { if (el) el.scrollTop = 0; }}>
+                <div className="modal-body">
                   <div style={{ padding: '12px', background: 'rgba(56, 189, 248, 0.1)', border: '1px solid var(--accent-blue)', borderRadius: '8px', marginBottom: '16px', fontSize: '0.825rem' }}>
                     💡 Quy chuẩn 1 Bộ Máy Pha Màu bao gồm: 1 Máy Chiết + 1 Máy Lắc + 1 Máy Tính + 1 Máy In QL700. (Ổn áp sẽ ghi nhận thêm khi lắp đặt tại NPP).
                   </div>
 
+                  {assemblyError && <p className="resource-error" role="alert">{assemblyError}</p>}
+                  {existingNppSets.length > 0 && <div className="repair-missing-fields" role="alert">
+                    <strong>{newSetData.nppName} đã có {existingNppSets.length} bộ máy: {existingNppSets.map(item => item.setCode || item.set_code).join(', ')}</strong>
+                    <p>Kiểm tra bộ máy đang sử dụng trước khi ghép thêm để tránh cấp phát nhầm.</p>
+                    <label><input type="checkbox" checked={newSetData.confirmAdditionalSet === true} onChange={event => setNewSetData(previous => ({ ...previous, confirmAdditionalSet: event.target.checked }))} /> Tôi xác nhận cần ghép thêm một bộ máy mới cho NPP này</label>
+                  </div>}
                   {/* NPP Selector & Set Code */}
                   <div className="responsive-form-grid" style={{ marginBottom: '12px' }}>
                     <div className="form-group">
@@ -2326,6 +2344,7 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
                           setNewSetData({
                             ...newSetData,
                             nppId: selectedId,
+                            confirmAdditionalSet: false,
                             nppName: targetNpp ? targetNpp.name : 'Kho Tổng Trung Tâm',
                             region: targetNpp ? (targetNpp.region || '') : '',
                             province: targetNpp ? (targetNpp.province || '') : '',
@@ -2547,7 +2566,7 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
                 </div>
                 <div className="modal-footer">
                   <button type="button" className="btn btn-secondary" onClick={() => setShowAssembleModal(false)}>Hủy Bỏ</button>
-                  <button type="submit" className="btn btn-primary">Xác Nhận Tạo Bộ Combo</button>
+                  <button type="submit" className="btn btn-primary" disabled={assemblySaving || (existingNppSets.length > 0 && newSetData.confirmAdditionalSet !== true)}>{assemblySaving ? 'Đang lưu...' : 'Xác Nhận Tạo Bộ Combo'}</button>
                 </div>
               </form>
             </div>

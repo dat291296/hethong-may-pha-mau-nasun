@@ -161,6 +161,7 @@ export function useRepairs() {
       const { data, error } = await safeQuery(
         sb => sb.from('repair_tickets').update(dbUpdates).eq('id', id).eq('record_version', updates.recordVersion).select('*'), 'editTicket'
       );
+      if (error?.code === '23505') throw new Error('Mã phiếu đã tồn tại. Hãy dùng mã khác; nội dung đang sửa vẫn được giữ.');
       if (error) throw error;
       if (!data?.length) {
         await fetchRepairs();
