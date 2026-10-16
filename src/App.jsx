@@ -331,6 +331,10 @@ export default function App() {
       const wasInactive = String(previousNpp?.status || '').toLowerCase().includes('ngưng');
       const isNowInactive = String(updatedNpp.status || '').toLowerCase().includes('ngưng');
       const persistence = await editNpp(updatedNpp.id, updatedNpp);
+      if (!persistence?.queued) {
+        if (isDevMode) setSystemSets(previous => previous.map(machine => machine.nppId === updatedNpp.id ? { ...machine, region: updatedNpp.region, province: updatedNpp.province } : machine));
+        else await refetchAssets();
+      }
 
       if (!wasInactive && isNowInactive) {
         const assignedSets = systemSets.filter(set => String(set.nppId || set.npp_id || '') === String(updatedNpp.id));

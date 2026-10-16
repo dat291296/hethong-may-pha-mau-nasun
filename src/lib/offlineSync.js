@@ -453,7 +453,7 @@ async function updateDeviceWithSchemaFallback(table, id, updates) {
   }
   if ('serial' in compatibleUpdates) {
     const serial = normalizeOptionalSerial(compatibleUpdates.serial);
-    compatibleUpdates.serial = table === 'computers' ? serial || `AUTO-${id}` : serial;
+    compatibleUpdates.serial = serial;
   }
   while (true) {
     const { error } = await supabase.from(table).update(compatibleUpdates).eq('id', id);
@@ -986,7 +986,7 @@ function normalizeDevicePayload(payload) {
 
 function applyRequiredDeviceDefaults(table, payload) {
   const serial = normalizeOptionalSerial(payload.serial);
-  payload.serial = table === 'computers' ? serial || `AUTO-${payload.id}` : serial;
+  payload.serial = serial;
   payload.is_assigned = Boolean(payload.is_assigned);
 
   if (table === 'dispensers') {

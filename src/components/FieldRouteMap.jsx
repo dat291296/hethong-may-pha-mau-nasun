@@ -1,3 +1,4 @@
+import { calculateRoadRoute } from '../lib/routeEstimate.js';
 import React, { useState, useMemo, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useWorkspaceState } from '../hooks/useWorkspaceState';
@@ -59,6 +60,22 @@ export default function FieldRouteMap({
 
   // GPS state
   const [userLocation, setUserLocation] = useState(null);
+  const [locationBusy, setLocationBusy] = useState(false);
+  const [routeBusy, setRouteBusy] = useState(false);
+  const [routeConsent, setRouteConsent] = useState(false);
+  const [routeResult, setRouteResult] = useState(null);
+  const [routeError, setRouteError] = useState('');
+  const routeGeneration = React.useRef(0);
+  useEffect(() => { routeGeneration.current += 1; setRouteResult(null); setRouteConsent(false); }, [selectedTripNpps, userLocation]);
+  const locateRouteOrigin = async () => {
+    setLocationBusy(true); setRouteError('');
+    try {
+      const result = await getRobustUserLocation({ purpose: PERMISSION_PURPOSES.ROUTE_ORIGIN, allowIpFallback: false });
+      if (!result.success || !result.coords) throw new Error(result.errorMessage || 'Không lấy được vị trí GPS. Kiểm tra quyền vị trí của trình duyệt.');
+      setUserLocation(result.coords);
+    } catch(error) { setRouteError(error.message); }
+    finally { setLocationBusy(false); }
+  };
 
   // Distance helper (Haversine formula in km)
   const getDistanceKm = (lat1, lon1, lat2, lon2) => {
@@ -234,6 +251,16 @@ export default function FieldRouteMap({
       .filter(Boolean);
   }, [selectedTripNpps, enrichedNpps]);
 
+  const calculateSelectedRoute = async () => {
+    if (!routeConsent || !userLocation || routeBusy) return;
+    const generation = routeGeneration.current;
+    setRouteBusy(true); setRouteError('');
+    try {
+      const result = await calculateRoadRoute(userLocation, tripNppObjects);
+      if (generation === routeGeneration.current) setRouteResult(result);
+    } catch(error) { if (generation === routeGeneration.current) setRouteError(error.message); }
+    finally { setRouteBusy(false); }
+  };
   // Total route distance calculation
   const totalTripDistanceKm = useMemo(() => {
     if (tripNppObjects.length < 2) return 0;
@@ -407,7 +434,10 @@ export default function FieldRouteMap({
   };
 
   return (
-    <div className="workspace-screen" style={{ display: 'flex', flexDirection: 'column', gap: '20px', paddingBottom: selectedTripNpps.length > 0 ? '90px' : '20px' }}>
+    <div className="workspace-screen" style={{ display: 'flex', flexDirection: 'column', gap: '20px', paddingBottom: selectedTripNpps.length >
+
+ 0 ? '90px' : '20px' }}>
+      <section className="glass-panel" style={{ padding: 16 }} aria-label="Điểm xuất phát và tính đường"><h3>Tính đường từ vị trí của tôi</h3><button className="btn btn-secondary" disabled={locationBusy} onClick={locateRouteOrigin}>{locationBusy ? 'Đang lấy vị trí…' : 'Lấy vị trí của tôi'}</button>{userLocation && <p>Đã lấy vị trí GPS. Chọn NPP và sắp xếp thứ tự ghé thăm trước khi tính đường.</p>}<label style={{ display: 'block', margin: '12px 0' }}><input type="checkbox" checked={routeConsent} onChange={event => setRouteConsent(event.target.checked)} /> Cho phép gửi tọa độ hiện tại và các NPP đã chọn tới dịch vụ OSRM để tính đường.</label><button className="btn btn-primary" disabled={!routeConsent || !userLocation || !tripNppObjects.length || routeBusy} onClick={calculateSelectedRoute}>{routeBusy ? 'Đang tính đường…' : 'Tính km và thời gian'}</button>{routeError && <p role="alert" className="resource-error">{routeError}</p>}{routeResult && <div><strong>Tổng tuyến: {routeResult.km.toFixed(1)} km · khoảng {Math.ceil(routeResult.minutes)} phút</strong><p>Ước tính theo tuyến ô tô, không tính ùn tắc hoặc thời gian dừng tại NPP.</p><ol>{routeResult.legs.map(leg => <li key={leg.id}>{leg.name}: chặng này {leg.km.toFixed(1)} km / {Math.ceil(leg.minutes)} phút; từ điểm xuất phát {leg.cumulativeKm.toFixed(1)} km / {Math.ceil(leg.cumulativeMinutes)} phút</li>)}</ol></div>}</section>
       <section className="glass-panel route-planner"><h2>Gom việc theo tỉnh / thành</h2><p>Chọn tỉnh để thêm tối đa 10 NPP cần sửa hoặc bảo trì vào chuyến. Có thể điều chỉnh thứ tự trước khi mở bản đồ.</p><label>Ngày công tác<input type="date" className="form-input" value={tripDate} onChange={event => setTripDate(event.target.value)} /></label><div className="workspace-tabs">{provinces.map(province => { const pending = enrichedNpps.filter(item => item.province === province && item.priority !== 'OK').sort((a, b) => a.minDiffDays - b.minDiffDays); return pending.length > 0 && <button key={province} onClick={() => { setProvinceFilter(province); setSelectedTripNpps(previous => [...new Set([...previous, ...pending.map(item => item.id)])].slice(0, 10)); setViewMode('TRIP'); }}>{province} ({pending.length} NPP)</button>; })}</div>{!enrichedNpps.some(item => item.priority !== 'OK') && <p>Chưa có NPP cần sửa hoặc đến hạn bảo trì.</p>}</section>
       {/* Top Banner & Main Actions */}
       <div
@@ -1023,7 +1053,7 @@ export default function FieldRouteMap({
                   {/* Distance Info */}
                   {nppDistance !== null && (
                     <div style={{ fontSize: '0.75rem', color: '#10b981', fontWeight: '700', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      🚗 Cách vị trí của bạn: <strong>{nppDistance.toFixed(1)} km</strong>
+                      Đường chim bay từ bạn: <strong>{nppDistance.toFixed(1)} km</strong>
                     </div>
                   )}
 

@@ -1843,3 +1843,12 @@ main.page-transition .nppmanagement-screen .npp-card-withdrawn { border-top-colo
   .repair-draft-list .workspace-task-row { grid-template-columns: minmax(0, 1fr); gap: 10px; }
   .repair-draft-list .workspace-task-row .btn { width: 100%; }
 }
+
+.repair-ticket-modal { height: min(860px, 92dvh) !important; max-height: 92dvh !important; }
+.repair-ticket-modal > form { flex: 1 1 0; min-height: 0; }
+.repair-ticket-modal .modal-body { flex: 1 1 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; }
+.repair-ticket-modal .form-fieldset { display: block; width: 100%; }
+.repair-ticket-modal .modal-footer { flex: 0 0 auto; }
+.repair-missing-fields { padding: 10px; margin: 8px 0; border-left: 4px solid #f59e0b; background: #f59e0b18; color: #fbbf24; overflow-wrap: anywhere; }
+.field-missing, .repair-ticket-modal input:invalid, .repair-ticket-modal select:invalid { border-color: #f59e0b; background: #f59e0b0a; }
+.repair-save-notice { padding: 12px; background: #10b98118; border: 1px solid #10b981; border-radius: 8px; }
