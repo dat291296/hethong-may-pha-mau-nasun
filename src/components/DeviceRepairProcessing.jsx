@@ -411,6 +411,10 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
     sanitized.photos = formData.photos || [];
     sanitized.beforePhotos = formData.beforePhotos || [];
     sanitized.afterPhotos = formData.afterPhotos || [];
+    sanitized.ticketCode = String(formData.ticketCode || '').trim();
+    if (editingTicket && !sanitized.ticketCode) { setSaveError('Vui lòng nhập mã phiếu.'); return; }
+    const duplicateCode = repairTickets.find(ticket => ticket.id !== editingTicket?.id && ticket.ticketCode?.trim().toLowerCase() === sanitized.ticketCode.toLowerCase());
+    if (sanitized.ticketCode && duplicateCode) { setSaveError(`Mã phiếu đã được dùng tại ${duplicateCode.nppName || 'NPP khác'}: ${duplicateCode.ticketCode}`); return; }
     // Format validation (chỉ kiểm tra nếu có nhập serial)
     if (sanitized.serialNumber && sanitized.serialNumber.trim() && sanitized.serialNumber !== 'Không có seri') {
       const serialCheck = validateSerial(sanitized.serialNumber);
@@ -462,6 +466,8 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
     if (editingTicket) {
       await onEditTicket({
         ...sanitized,
+        id: editingTicket.id,
+        recordVersion: editingTicket.recordVersion,
         nppName: finalNppName
       });
     } else {
@@ -881,6 +887,11 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
                   </div>
 
                   {/* PRIMARY EDIT FIELDS - TOP OF FORM */}
+                  <div className="form-group">
+                    <label className="form-label" htmlFor="repair-ticket-code">Mã phiếu (có thể sửa)</label>
+                    <input id="repair-ticket-code" className="form-input" value={formData.ticketCode || ''} required={Boolean(editingTicket)} maxLength={100} placeholder="Để trống để tự tạo mã phiếu mới" onChange={event => setFormData(previous => ({ ...previous, ticketCode: event.target.value }))} />
+                    <small>Đổi mã phiếu vẫn giữ nguyên hồ sơ và lịch sử liên kết.</small>
+                  </div>
                   {/* FIELD 1: NGÀY XỬ LÝ MÁY & KỸ THUẬT VIÊN */}
                   <div className="responsive-form-grid" style={{ marginBottom: '14px' }}>
                     <div className="form-group">

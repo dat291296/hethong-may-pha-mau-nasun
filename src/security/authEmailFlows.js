@@ -9,6 +9,23 @@ function normalizeEmail(email) {
   return normalized;
 }
 
+export async function registerEmailAccount(authClient, credentials, timeoutMs = 25000) {
+  const auth = requireAuthClient(authClient);
+  let timer;
+  try {
+    const result = await Promise.race([
+      auth.signUp({ ...credentials, email: normalizeEmail(credentials.email) }),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(Object.assign(new Error('Registration response timed out'), { code: 'AUTH_RESPONSE_TIMEOUT' })), timeoutMs);
+      }),
+    ]);
+    if (result.error) throw result.error;
+    return result.data;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function resendSignupVerification(authClient, email, emailRedirectTo) {
   const auth = requireAuthClient(authClient);
   const result = await auth.resend({

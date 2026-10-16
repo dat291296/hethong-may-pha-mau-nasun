@@ -1,3 +1,4 @@
+import { assertAdditionalSetConfirmed } from './lib/assemblyGuard.js';
 import React, { useState, useEffect, lazy, Suspense } from 'react';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
@@ -448,6 +449,15 @@ export default function App() {
   };
 
   const handleAssembleSet = async (newCombo) => {
+    let assignedSets = systemSets;
+    if (newCombo.nppId && isSupabaseConfigured) {
+      if (!navigator.onLine) throw new Error('Cần kết nối mạng để kiểm tra bộ máy NPP đang có trước khi ghép.');
+      const { data, error } = await supabase.from('system_sets').select('set_code,npp_id').eq('npp_id', newCombo.nppId).limit(100);
+      if (error) throw new Error('Chưa kiểm tra được bộ máy hiện có của NPP. Nội dung chưa được lưu.');
+      assignedSets = data || [];
+    }
+    assertAdditionalSetConfirmed(assignedSets, newCombo.nppId, newCombo.confirmAdditionalSet);
+
     if (user?.role === 'technician') requireRegionEdit(user, newCombo.region);
     const disp = dispensers.find(d => d.id === newCombo.dispenserId);
     const mix = mixers.find(m => m.id === newCombo.mixerId);
@@ -494,7 +504,7 @@ export default function App() {
       if (prn) await editDevice('printers', prn.id, { is_assigned: true, set_code: setCode });
     } catch (err) {
       console.error(err);
-      alert('Lỗi ráp bộ máy: ' + err.message);
+      throw err;
     }
   };
 
