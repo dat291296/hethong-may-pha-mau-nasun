@@ -50,10 +50,10 @@ export function regionalMachineCounts(systemSets, npps = []) {
 }
 
 export function inManagedRegion(item, user, npps = [], systemSets = []) {
-  if (user?.role === 'admin') return true;
+  if (['admin', 'viewer'].includes(user?.role)) return true;
   const assignedRegion = normalizeRegion(user?.managedRegion);
   const machine = systemSets.find(set => (item.setCode && set.setCode === item.setCode) || (item.nppId && set.nppId === item.nppId));
-  const region = normalizeRegion(item.region || npps.find(npp => npp.id === item.nppId)?.region || machine?.region);
+  const region = normalizeRegion(npps.find(npp => npp.id === (item.nppId || machine?.nppId))?.region || machine?.region || item.region);
   return Boolean(assignedRegion && region === assignedRegion);
 }
 

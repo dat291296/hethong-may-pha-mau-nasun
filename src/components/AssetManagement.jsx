@@ -54,6 +54,7 @@ import { useWorkspaceState, useWorkspaceScroll } from '../hooks/useWorkspaceStat
 
 export default function AssetManagement({ globalSearch = '', initialFilter = 'ALL', initialProfile, onProfileRestored, repairTickets = [], auditLogs = [], onRequestRepair, onRequestMaintenance,
   systemSets,
+  catalog,
   npps = [],
   dispensers,
   mixers,
@@ -70,6 +71,7 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
   onDeleteSet
 }) {
   const { user, can } = useAuth();
+  const fullCatalog = catalog || { systemSets, npps, dispensers, mixers, computers, printers };
   const exportCurrentInventory = () => {
     const config = {
       dispensers: { rows: dispensers, name: 'Kho_May_Chiet', columns: [{ key: 'id', label: 'Mã QL' }, { key: 'model', label: 'Model' }, { key: 'serial', label: 'Số Seri' }, { key: 'status', label: 'Tình Trạng' }, { key: 'setCode', label: 'Mã Bộ Máy' }] },
@@ -361,17 +363,17 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
 
   const generateNextWarehouseId = (category) => {
     const source = {
-      dispenser: dispensers,
-      mixer: mixers,
-      computer: computers,
-      printer: printers
+      dispenser: fullCatalog.dispensers,
+      mixer: fullCatalog.mixers,
+      computer: fullCatalog.computers,
+      printer: fullCatalog.printers
     }[category] || [];
     return nextWarehouseId(category, source);
   };
 
   const handleOpenAssembleModal = () => {
     const defaultTech = (user && ['admin', 'manager', 'technician', 'qc'].includes(user.role)) ? (user.name || user.full_name) : (qcUsers[0]?.name || '');
-    const autoCode = generateNextSetCode(systemSets);
+    const autoCode = generateNextSetCode(fullCatalog.systemSets);
     setNppSearchTerm('');
     setNewSetData({
       setCode: autoCode,
@@ -498,8 +500,8 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
       setCode: isAssigned ? editFormData.setCode : null
       }, editingDevice.data);
       if (finalData.serial !== editingDevice.data.serial) {
-        const inventory = { computer: computers, dispenser: dispensers, mixer: mixers, printer: printers }[editingDevice.category];
-        requireUniqueDeviceSerial(finalData.serial, editingDevice.data.id, inventory, systemSets, npps);
+        const inventory = { computer: fullCatalog.computers, dispenser: fullCatalog.dispensers, mixer: fullCatalog.mixers, printer: fullCatalog.printers }[editingDevice.category];
+        requireUniqueDeviceSerial(finalData.serial, editingDevice.data.id, inventory, fullCatalog.systemSets, fullCatalog.npps);
       }
       setIsSavingDevice(true);
       await onEditDevice(editingDevice.category, finalData);

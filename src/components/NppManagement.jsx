@@ -2,7 +2,7 @@ import { isSupabaseConfigured } from '../lib/supabase.js';
 import { nextNppCode, validateNppCode } from '../lib/nppCodes.js';
 import { nppCoverage, assignedNppSets } from '../lib/nppCoverage.js';
 import WorkspaceFilterBar from './WorkspaceFilterBar.jsx';
-import { matchesSearch, matchesDateRange, uniqueOptions, REGIONS } from '../lib/workspaceFilters.js';
+import { matchesSearch, matchesDateRange, uniqueOptions } from '../lib/workspaceFilters.js';
 import { useWorkspaceState, useWorkspaceScroll } from '../hooks/useWorkspaceState.js';
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
@@ -34,15 +34,13 @@ import SafePortal from './SafePortal.jsx';
 import { useModalScrollLock } from '../hooks/useModalScrollLock.js';
 import { exportExcel } from '../utils/excelExport.js';
 
-export default function NppManagement({ globalSearch = '', npps, systemSets, onAddNpp, onEditNpp, onDeleteNpp, onOpenImportModal }) {
+export default function NppManagement({ globalSearch = '', coverageFilter = 'ALL', onCoverageFilterChange = () => {}, npps, systemSets, onAddNpp, onEditNpp, onDeleteNpp, onOpenImportModal }) {
   const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useWorkspaceState('npps:search', '');
   useEffect(() => { if (globalSearch) setSearchTerm(globalSearch); }, [globalSearch, setSearchTerm]);
   useWorkspaceScroll('npps');
   const [customCode, setCustomCode] = useState(false);
-  const [coverageFilter, setCoverageFilter] = useState('ALL');
   const coverage = nppCoverage(npps, systemSets);
-  const [regionFilter, setRegionFilter] = useWorkspaceState('npps:region', 'ALL');
   const [statusFilter, setStatusFilter] = useWorkspaceState('npps:status', 'ALL');
   const [brandFilter, setBrandFilter] = useWorkspaceState('npps:brand', 'ALL');
   const [selectedNpp, setSelectedNpp] = useState(null);
@@ -60,7 +58,7 @@ export default function NppManagement({ globalSearch = '', npps, systemSets, onA
     { key: 'province', label: 'Tỉnh Thành' }, { key: 'address', label: 'Địa Chỉ' }, { key: 'status', label: 'Trạng Thái' }
   ], 'Nha_Phan_Phoi', 'NPP');
 
-  const filterSignature = [coverageFilter,searchTerm,regionFilter,statusFilter,brandFilter,provinceFilter,ownerFilter,dateFrom,dateTo].join('|');
+  const filterSignature = [coverageFilter,searchTerm,statusFilter,brandFilter,provinceFilter,ownerFilter,dateFrom,dateTo].join('|');
   const previousFilters = React.useRef(filterSignature);
   useEffect(() => { if (previousFilters.current !== filterSignature) { previousFilters.current = filterSignature; setCurrentPage(1); } }, [filterSignature, setCurrentPage]);
 
@@ -92,10 +90,9 @@ export default function NppManagement({ globalSearch = '', npps, systemSets, onA
     const found = matchesSearch(searchTerm, [npp.name,npp.code,npp.id,npp.phone,npp.address,npp.salesperson,npp.province,npp.region,npp.contactPerson]);
     const owners = systemSets.filter(machine => machine.nppId === npp.id).map(machine => machine.technician);
     const matchesExtra = (provinceFilter === 'ALL' || npp.province === provinceFilter) && (ownerFilter === 'ALL' || owners.includes(ownerFilter)) && matchesDateRange(npp.createdAt,dateFrom,dateTo);
-    const matchesRegion = regionFilter === 'ALL' || npp.region === regionFilter;
     const matchesStatus = statusFilter === 'ALL' || npp.status === statusFilter;
     const matchesBrand = brandFilter === 'ALL' || (npp.brand || 'Nasun') === brandFilter;
-    return found && matchesExtra && matchesRegion && matchesStatus && matchesBrand && (coverageFilter === 'ALL' || (coverageFilter === 'ASSIGNED' ? coverage.assigned : coverage.unassigned).some(item => item.id === npp.id));
+    return found && matchesExtra && matchesStatus && matchesBrand && (coverageFilter === 'ALL' || (coverageFilter === 'ASSIGNED' ? coverage.assigned : coverage.unassigned).some(item => item.id === npp.id));
   });
 
   const isRegionAllowed = (nppRegion) => {
@@ -323,11 +320,9 @@ export default function NppManagement({ globalSearch = '', npps, systemSets, onA
     <div className="workspace-screen nppmanagement-screen" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       {saveNotice && <div role="status" className="glass-panel" style={{ padding: '12px' }}>{saveNotice}</div>}
       
-      <div className="workspace-heading"><div><span className="workspace-eyebrow">ĐỐI TÁC / NHÀ PHÂN PHỐI</span><h2>Nhà phân phối</h2><p>Liên hệ, địa điểm và các bộ máy tại từng đại lý.</p></div></div>
-      <div className="workspace-tabs" aria-label="Chọn miền NPP">{['ALL', ...REGIONS].map(region => <button key={region} aria-pressed={regionFilter === region} onClick={() => setRegionFilter(region)}>{region === 'ALL' ? 'Tất cả miền' : region}</button>)}</div>
-      <div className="workspace-tabs" aria-label="Tình trạng ghép bộ NPP"><button aria-pressed={coverageFilter === 'ALL'} onClick={() => setCoverageFilter('ALL')}>Tất cả NPP ({npps.length})</button><button aria-pressed={coverageFilter === 'ASSIGNED'} onClick={() => setCoverageFilter('ASSIGNED')}>Đã ghép bộ ({coverage.assigned.length} NPP)</button><button aria-pressed={coverageFilter === 'UNASSIGNED'} onClick={() => setCoverageFilter('UNASSIGNED')}>Chưa ghép bộ ({coverage.unassigned.length} NPP)</button></div>
-      <WorkspaceFilterBar search={searchTerm} onSearch={setSearchTerm} placeholder="Tìm mã, tên NPP, điện thoại…" count={filteredNpps.length} fields={[{key:'region',label:'Khu vực',value:regionFilter,onChange:setRegionFilter,options:uniqueOptions(REGIONS)},{key:'province',label:'Tỉnh / thành',value:provinceFilter,onChange:setProvinceFilter,options:uniqueOptions(npps.map(item=>item.province))},{key:'owner',label:'Kỹ thuật viên phụ trách bộ máy',value:ownerFilter,onChange:setOwnerFilter,options:uniqueOptions(systemSets.map(item=>item.technician))},{key:'brand',label:'Hãng',value:brandFilter,onChange:setBrandFilter,options:uniqueOptions(['Nasun','Natos'])},{key:'status',label:'Trạng thái',value:statusFilter,onChange:setStatusFilter,options:uniqueOptions(['Đang hợp tác','Đã ngưng hợp tác'])},{key:'from',label:'Ngày tạo NPP · từ',type:'date',defaultValue:'',value:dateFrom,onChange:setDateFrom},{key:'to',label:'Ngày tạo NPP · đến',type:'date',defaultValue:'',value:dateTo,onChange:setDateTo}]} onReset={() => { setCoverageFilter('ALL'); setSearchTerm(''); setRegionFilter('ALL'); setStatusFilter('ALL'); setBrandFilter('ALL'); setProvinceFilter('ALL'); setOwnerFilter('ALL'); setDateFrom(''); setDateTo(''); }} actions={<><details className="filter-more-actions"><summary>Thao tác khác</summary><div><button className="btn btn-secondary" onClick={onOpenImportModal}>Nhập Excel</button><button className="btn btn-secondary" onClick={exportNpps}>Xuất Excel</button></div></details><button className="btn btn-primary" onClick={handleOpenAdd}>Thêm NPP</button></>}/>
+      <WorkspaceFilterBar search={searchTerm} onSearch={setSearchTerm} placeholder="Tìm mã, tên NPP, điện thoại…" count={filteredNpps.length} fields={[{key:'province',label:'Tỉnh / thành',value:provinceFilter,onChange:setProvinceFilter,options:uniqueOptions(npps.map(item=>item.province))},{key:'owner',label:'Kỹ thuật viên phụ trách bộ máy',value:ownerFilter,onChange:setOwnerFilter,options:uniqueOptions(systemSets.map(item=>item.technician))},{key:'brand',label:'Hãng',value:brandFilter,onChange:setBrandFilter,options:uniqueOptions(['Nasun','Natos'])},{key:'status',label:'Trạng thái',value:statusFilter,onChange:setStatusFilter,options:uniqueOptions(['Đang hợp tác','Đã ngưng hợp tác'])},{key:'from',label:'Ngày tạo NPP · từ',type:'date',defaultValue:'',value:dateFrom,onChange:setDateFrom},{key:'to',label:'Ngày tạo NPP · đến',type:'date',defaultValue:'',value:dateTo,onChange:setDateTo}]} onReset={() => { onCoverageFilterChange('ALL'); setSearchTerm(''); setStatusFilter('ALL'); setBrandFilter('ALL'); setProvinceFilter('ALL'); setOwnerFilter('ALL'); setDateFrom(''); setDateTo(''); }} actions={<><details className="filter-more-actions"><summary>Thao tác khác</summary><div><button className="btn btn-secondary" onClick={onOpenImportModal}>Nhập Excel</button><button className="btn btn-secondary" onClick={exportNpps}>Xuất Excel</button></div></details><button className="btn btn-primary" onClick={handleOpenAdd}>Thêm NPP</button></>}/>
 
+      <p className="npp-coverage-summary">{coverage.assigned.length} NPP đã ghép · {coverage.unassigned.length} NPP chưa ghép</p>
       {/* NPP Cards Grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}>
         {filteredNpps

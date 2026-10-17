@@ -1,3 +1,6 @@
+import { WorkspaceRegionContext } from './hooks/useWorkspaceState.js';
+import RegionalWorkspaceBar from './components/RegionalWorkspaceBar.jsx';
+import { defaultWorkspaceRegion, resolveWorkspaceRegion, scopeWorkspace } from './lib/regionalWorkspace.js';
 import { assertAdditionalSetConfirmed } from './lib/assemblyGuard.js';
 import React, { useState, useEffect, lazy, Suspense } from 'react';
 import Sidebar from './components/Sidebar';
@@ -63,6 +66,13 @@ export default function App() {
   });
   const [globalSearch, setGlobalSearch] = useState('');
   const [qcUsers, setQcUsers] = useState([]);
+  const [regionalSelection, setRegionalSelection] = useState(null);
+  const [nppCoverageFilter, setNppCoverageFilter] = useState('ALL');
+  const regionalIdentity = `${user?.id}:${user?.role}:${user?.managedRegion}`;
+  const workspaceRegion = regionalSelection?.identity === regionalIdentity
+    ? regionalSelection.region : defaultWorkspaceRegion(user);
+  const setWorkspaceRegion = region => setRegionalSelection({ identity: regionalIdentity, region });
+
 
   useEffect(() => {
     try {
@@ -244,7 +254,7 @@ export default function App() {
     return s.status === 'DA_LAP_DAT' && (s.stabilizer?.includes('Chưa') || s.stabilizer?.includes('Không'));
   });
 
-  const pendingRepairCount = repairTickets.filter(t => t.processingStatus === 'Chưa xử lý').length;
+
 
   // Helper for Dev/Mock mode local sync of device status
   const updateLocalDeviceStatus = (cat, serial, newStatus) => {
@@ -722,6 +732,13 @@ export default function App() {
     }
   };
 
+  const regionalData = scopeWorkspace({ npps, systemSets, dispensers, mixers, computers, printers, repairTickets, auditLogs, tintingLogs }, workspaceRegion);
+  const scopedMaintenanceAlerts = maintenanceAlerts.filter(item => workspaceRegion === 'ALL' || resolveWorkspaceRegion(item, npps, systemSets) === workspaceRegion);
+  const scopedUnstabilizedAlerts = unstabilizedAlerts.filter(item => workspaceRegion === 'ALL' || resolveWorkspaceRegion(item, npps, systemSets) === workspaceRegion);
+  const scopedPendingRepairCount = regionalData.repairTickets.filter(ticket => ticket.processingStatus === 'Chưa xử lý').length;
+  const regionCounts = Object.fromEntries(['Miền Bắc', 'Miền Trung', 'Miền Nam', 'UNASSIGNED'].map(region => [region, npps.filter(item => resolveWorkspaceRegion(item) === region).length]));
+  regionCounts.ALL = npps.length;
+
   if (!user) {
     return <LoginModal />;
   }
@@ -730,20 +747,20 @@ export default function App() {
     <>
     {authenticationDialog}
     <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg-main)' }}>
-      
+
       {/* Sidebar Navigation for Desktop & Mobile sliding drawer */}
-      <Sidebar 
-        activeTab={activeTab} 
+      <Sidebar
+        activeTab={activeTab}
         setActiveTab={navigateMain}
-        maintenanceCount={maintenanceAlerts.length}
-        pendingRepairCount={pendingRepairCount}
+        maintenanceCount={scopedMaintenanceAlerts.length}
+        pendingRepairCount={scopedPendingRepairCount}
         isOpen={isMobileSidebarOpen}
         onClose={() => setIsMobileSidebarOpen(false)}
       />
 
       {/* Sidebar Backdrop Overlay on Mobile */}
       {isMobileSidebarOpen && (
-        <div 
+        <div
           className="sidebar-backdrop mobile-only"
           onClick={() => setIsMobileSidebarOpen(false)}
         />
@@ -751,7 +768,7 @@ export default function App() {
 
       {/* Main Container */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-        
+
         {/* Top Header */}
         <Header
           activeTab={activeTab}
@@ -759,43 +776,44 @@ export default function App() {
           globalSearch={globalSearch}
           setGlobalSearch={setGlobalSearch}
           onOpenNewInstallation={() => setWorkflowMode('INSTALL')}
-          maintenanceAlerts={maintenanceAlerts}
-          unstabilizedAlerts={unstabilizedAlerts}
+          maintenanceAlerts={scopedMaintenanceAlerts}
+          unstabilizedAlerts={scopedUnstabilizedAlerts}
           onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
-          npps={npps}
-          dispensers={dispensers}
-          mixers={mixers}
-          computers={computers}
-          printers={printers}
-          systemSets={systemSets}
-          repairTickets={repairTickets}
-          auditLogs={auditLogs}
-          tintingLogs={tintingLogs}
+          npps={regionalData.npps}
+          dispensers={regionalData.dispensers}
+          mixers={regionalData.mixers}
+          computers={regionalData.computers}
+          printers={regionalData.printers}
+          systemSets={regionalData.systemSets}
+          repairTickets={regionalData.repairTickets}
+          auditLogs={regionalData.auditLogs}
+          tintingLogs={regionalData.tintingLogs}
           onImportData={handleImportData}
         />
 
         {/* Dynamic View Content */}
         <main key={activeTab} className="page-transition nasun-workspace" data-page={activeTab} style={{ flex: 1, padding: '28px', overflowY: 'auto' }}>
-          <Suspense fallback={<div className="glass-panel" style={{ padding: '28px', color: 'var(--text-muted)' }}>Đang tải màn hình...</div>}>
+          {!['users', 'techHandbook'].includes(activeTab) && <RegionalWorkspaceBar key={regionalIdentity} user={user} region={workspaceRegion} onChange={setWorkspaceRegion} counts={regionCounts} compact={activeTab === 'npp'} extra={activeTab === 'npp' ? <label className="coverage-inline">Ghép bộ<select aria-label="Lọc NPP theo tình trạng ghép bộ" className="form-select" value={nppCoverageFilter} onChange={event => setNppCoverageFilter(event.target.value)}><option value="ALL">Tất cả NPP</option><option value="ASSIGNED">Đã ghép bộ</option><option value="UNASSIGNED">Chưa ghép bộ</option></select></label> : null} />}
+          <WorkspaceRegionContext.Provider value={workspaceRegion}><Suspense key={`${regionalIdentity}:${workspaceRegion}`} fallback={<div className="glass-panel" style={{ padding: '28px', color: 'var(--text-muted)' }}>Đang tải màn hình...</div>}>
           {machineProfileReturn && ['repairs', 'maintenance'].includes(activeTab) && (
             <div className="glass-panel" style={{ padding: 12, marginBottom: 16 }}>
               <button className="btn btn-secondary" onClick={() => navigateWorkspace('assets', machineProfileReturn.search, machineProfileReturn.filter)}>← Quay lại hồ sơ bộ máy {machineProfileReturn.machine.setCode}</button>
             </div>
           )}
-          
+
           {activeTab === 'dashboard' && (
             <Dashboard
               teamUsers={qcUsers}
-              systemSets={systemSets}
-              npps={npps}
-              dispensers={dispensers}
-              mixers={mixers}
-              computers={computers}
-              printers={printers}
-              repairTickets={repairTickets}
-              auditLogs={auditLogs}
-              maintenanceAlerts={maintenanceAlerts}
-              unstabilizedAlerts={unstabilizedAlerts}
+              systemSets={regionalData.systemSets}
+              npps={regionalData.npps}
+              dispensers={regionalData.dispensers}
+              mixers={regionalData.mixers}
+              computers={regionalData.computers}
+              printers={regionalData.printers}
+              repairTickets={regionalData.repairTickets}
+              auditLogs={regionalData.auditLogs}
+              maintenanceAlerts={scopedMaintenanceAlerts}
+              unstabilizedAlerts={scopedUnstabilizedAlerts}
               setActiveTab={navigateMain}
               onNavigateWorkspace={navigateWorkspace}
               onOpenNewInstallation={() => setWorkflowMode('INSTALL')}
@@ -804,9 +822,11 @@ export default function App() {
 
           {activeTab === 'npp' && (
             <NppManagement
+              coverageFilter={nppCoverageFilter}
+              onCoverageFilterChange={setNppCoverageFilter}
               globalSearch={globalSearch}
-              npps={npps}
-              systemSets={systemSets}
+              npps={regionalData.npps}
+              systemSets={regionalData.systemSets}
               onAddNpp={handleAddNpp}
               onEditNpp={handleEditNpp}
               onDeleteNpp={handleDeleteNpp}
@@ -816,20 +836,21 @@ export default function App() {
 
           {activeTab === 'assets' && (
             <AssetManagement
+              catalog={{ systemSets, npps, dispensers, mixers, computers, printers }}
               globalSearch={globalSearch}
               initialFilter={workspaceFilter}
-              repairTickets={repairTickets}
-              auditLogs={auditLogs}
+              repairTickets={regionalData.repairTickets}
+              auditLogs={regionalData.auditLogs}
               onRequestRepair={requestMachineRepair}
               onRequestMaintenance={machine => { rememberMachineProfile(machine); navigateWorkspace('maintenance', machine.setCode); }}
               initialProfile={machineProfileReturn?.machine}
               onProfileRestored={() => setMachineProfileReturn(null)}
-              systemSets={systemSets}
-              npps={npps}
-              dispensers={dispensers}
-              mixers={mixers}
-              computers={computers}
-              printers={printers}
+              systemSets={regionalData.systemSets}
+              npps={regionalData.npps}
+              dispensers={regionalData.dispensers}
+              mixers={regionalData.mixers}
+              computers={regionalData.computers}
+              printers={regionalData.printers}
               onAssembleSet={handleAssembleSet}
               onAddStockDevice={handleAddStockDevice}
               onEditDevice={handleEditDevice}
@@ -842,11 +863,12 @@ export default function App() {
 
           {activeTab === 'repairs' && (
             <DeviceRepairProcessing
+              ticketCatalog={repairTickets}
               globalSearch={globalSearch}
               initialFilter={workspaceFilter}
-              repairTickets={repairTickets}
-              npps={npps}
-              systemSets={systemSets}
+              repairTickets={regionalData.repairTickets}
+              npps={regionalData.npps}
+              systemSets={regionalData.systemSets}
               qcUsers={qcUsers}
               onAddTicket={handleAddTicket}
               onEditTicket={handleEditTicket}
@@ -869,9 +891,9 @@ export default function App() {
 
           {activeTab === 'routeMap' && (
             <FieldRouteMap
-              npps={npps}
-              systemSets={systemSets}
-              repairTickets={repairTickets}
+              npps={regionalData.npps}
+              systemSets={regionalData.systemSets}
+              repairTickets={regionalData.repairTickets}
               onAddAuditLog={addAuditLog}
               onNavigateTab={(tab) => setActiveTab(tab)}
             />
@@ -932,7 +954,7 @@ export default function App() {
             <MaintenanceSchedule
               globalSearch={globalSearch}
               initialFilter={workspaceFilter}
-              systemSets={systemSets}
+              systemSets={regionalData.systemSets}
               onCompleteMaintenance={handleCompleteMaintenance}
               onReturnToProfile={machineProfileReturn ? returnToMachineProfile : undefined}
               onUpdateSystemSet={handleUpdateRegionalSet}
@@ -941,9 +963,9 @@ export default function App() {
           )}
 
           {activeTab === 'auditLogs' && (
-            <AuditLogs 
+            <AuditLogs
               globalSearch={globalSearch}
-              auditLogs={auditLogs} 
+              auditLogs={regionalData.auditLogs}
             />
           )}
 
@@ -957,7 +979,7 @@ export default function App() {
             />
           )}
 
-          </Suspense>
+          </Suspense></WorkspaceRegionContext.Provider>
 
         </main>
       </div>
@@ -966,8 +988,8 @@ export default function App() {
       <MobileBottomNav
         activeTab={activeTab}
         setActiveTab={navigateMain}
-        maintenanceCount={maintenanceAlerts.length}
-        pendingRepairCount={pendingRepairCount}
+        maintenanceCount={scopedMaintenanceAlerts.length}
+        pendingRepairCount={scopedPendingRepairCount}
         onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
       />
 

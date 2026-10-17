@@ -1,9 +1,12 @@
-import { useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState } from 'react';
+
+export const WorkspaceRegionContext = createContext('ALL');
 import { useAuth } from '../context/AuthContext';
 
 export function useWorkspaceState(name, initial) {
   const { user } = useAuth();
-  const key = `nasun-view:${user?.id || 'guest'}:${name}`;
+  const region = useContext(WorkspaceRegionContext);
+  const key = `nasun-view:${user?.id || 'guest'}:${region}:${name}`;
   const [value, setValue] = useState(() => {
     try { const stored = sessionStorage.getItem(key); return stored === null ? initial : JSON.parse(stored); }
     catch { return initial; }

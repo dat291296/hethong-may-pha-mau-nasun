@@ -93,6 +93,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
   npps = [],
   systemSets = [],
   qcUsers = [],
+  ticketCatalog,
   onAddTicket,
   onEditTicket,
   onDeleteTicket,
@@ -473,7 +474,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
     } else {
       const now = new Date();
       const codePrefix = `TICK-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}-`;
-      const sequence = repairTickets.reduce((max, ticket) => {
+      const sequence = (ticketCatalog || repairTickets).reduce((max, ticket) => {
         const match = String(ticket.ticketCode || ticket.id || '').match(new RegExp(`^${codePrefix}(\\d+)$`));
         return match ? Math.max(max, Number(match[1])) : max;
       }, 0) + 1;

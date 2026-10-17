@@ -1,8 +1,9 @@
+import { WorkspaceRegionContext } from '../hooks/useWorkspaceState.js';
 import { nppCoverage } from '../lib/nppCoverage.js';
 import { regionalMachineCounts } from '../lib/teamWorkspace.js';
 import { summarizeInventory } from '../lib/inventorySummary.js';
 import { findAssignedDevice } from '../lib/deviceEdit.js';
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useContext } from 'react';
 import { 
   Building2, 
   Cpu, 
@@ -93,7 +94,8 @@ export default function Dashboard({
   }, [repairTickets]);
 
   // Region data for chart
-  const regionalCounts = useMemo(() => regionalMachineCounts(systemSets, npps), [systemSets, npps]);
+  const workspaceRegion = useContext(WorkspaceRegionContext);
+  const regionalCounts = useMemo(() => regionalMachineCounts(systemSets, npps).filter(item => workspaceRegion === 'ALL' || item.name === workspaceRegion), [systemSets, npps, workspaceRegion]);
   const regionChartData = [...regionalCounts, { name: 'Trong Kho', count: systemSets.filter(s => s.region === 'Kho Tổng').length }];
 
   // Dispenser Model distribution chart data
@@ -256,7 +258,6 @@ export default function Dashboard({
 
   return (
     <div className="workspace-screen dashboard-screen" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      <div className="workspace-heading"><div><span className="workspace-eyebrow">VẬN HÀNH / TỔNG QUAN</span><h2>Nắm việc cần xử lý</h2><p>Thống kê, cảnh báo và thông tin thiết bị trên cùng một màn hình.</p></div></div>
 
       <TeamWorkPanel teamUsers={teamUsers} repairTickets={repairTickets} systemSets={systemSets} npps={npps} onNavigate={(tab, query) => onNavigateWorkspace?.(tab, query)} />
       {/* Warning Banners */}
