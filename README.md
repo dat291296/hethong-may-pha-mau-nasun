@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="public/nasun_logo.png" alt="Logo NASUN" width="110" />
+  <img src="docs/images/nasun-logo.png" alt="Sơn NASUN — Sơn Mặt trời Việt" width="420" />
 </p>
 <h1 align="center">NASUN</h1>
 <p align="center"><strong>Hệ thống quản lý máy pha màu và công việc kỹ thuật</strong></p>
