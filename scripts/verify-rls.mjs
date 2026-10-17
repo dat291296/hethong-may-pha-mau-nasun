@@ -1,4 +1,5 @@
 import { verifyDeviceEdit } from './verify-device-edit.mjs';
+import { verifyAccountAccess } from './verify-account-access.mjs';
 import { verifyStorageAccess } from './verify-storage-access.mjs';
 import assert from 'node:assert/strict';
 import { createClient } from '@supabase/supabase-js';
@@ -67,6 +68,8 @@ async function main() {
     });
     console.log('Staging device edits verified: four categories, stock, assignment, move, stale-write rejection and rollback.');
     await verifyWriteIntegrity(admin);
+    await verifyAccountAccess(admin, clients.find(item => item.role === 'viewer').client);
+    console.log('Staging account access changes retained the admin session and rejected viewer management.');
     console.log('Staging recent authentication and stale-write rejection verified.');
     await verifyStorageAccess(anonymous, clients);
     console.log('Staging private Storage read, upload, delete and synthetic cleanup verified.');
@@ -86,18 +89,18 @@ async function main() {
       assert.equal(profile.is_active, true);
       assert.equal(profile.managed_region, region);
       for (const targetRegion of REQUIRED_REGIONS) {
-        if (role === 'viewer') {
+        if (['viewer', 'technician'].includes(role)) {
           const visible = await client.from('distributors').select('id').eq('region', targetRegion).limit(1);
           assert.ifError(visible.error);
-          assert.equal(visible.data.length, 1, 'Viewer must read distributors nationwide');
+          assert.equal(visible.data.length, 1, 'Read-only nationwide visibility is required');
           const emails = await client.rpc('admin_list_registered_accounts');
           assert.ok(emails.error, 'Viewer must never access account email directory');
         }
         const result = await probe(client, targetRegion);
         assert.equal(result.effective_role, role);
-        const permitted = role === 'admin' || ['manager', 'qc'].includes(role) && targetRegion === region;
+        const permitted = role === 'admin' || ['manager', 'qc', 'technician'].includes(role) && targetRegion === region;
         assert.equal(result.can_insert_target_region, permitted, `${role} insert policy mismatch`);
-        if (!['admin', 'viewer'].includes(role) && targetRegion !== region) {
+        if (!['admin', 'viewer', 'technician'].includes(role) && targetRegion !== region) {
           for (const table of ['distributors', 'system_sets']) {
             const { data, error } = await client.from(table).select(table === 'system_sets' ? 'set_code' : 'id').eq('region', targetRegion).limit(1);
             assert.ifError(error);

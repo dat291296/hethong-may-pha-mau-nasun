@@ -101,14 +101,14 @@ export default function NppManagement({ globalSearch = '', npps, systemSets, onA
   const isRegionAllowed = (nppRegion) => {
     if (!user) return false;
     if (user.role === 'admin') return true;
-    if (['manager', 'qc'].includes(user.role)) {
-      return user.managedRegion === 'Toàn Quốc' || user.managedRegion === nppRegion;
+    if (['manager', 'qc', 'technician'].includes(user.role)) {
+      return ['Miền Bắc', 'Miền Trung', 'Miền Nam'].includes(user.managedRegion) && user.managedRegion === nppRegion;
     }
     return false;
   };
 
   const handleOpenAdd = () => {
-    const defaultRegion = (['manager', 'qc'].includes(user?.role) && user?.managedRegion !== 'Toàn Quốc') ? user.managedRegion : 'Miền Bắc';
+    const defaultRegion = (['manager', 'qc', 'technician'].includes(user?.role) && user?.managedRegion !== 'Toàn Quốc') ? user.managedRegion : 'Miền Bắc';
     setSaveNotice('');
     setCustomCode(false);
     setFormData({
@@ -564,7 +564,7 @@ export default function NppManagement({ globalSearch = '', npps, systemSets, onA
                       <select 
                         className="form-select" 
                         value={formData.region} 
-                        disabled={['manager', 'qc'].includes(user?.role) && user?.managedRegion !== 'Toàn Quốc'}
+                        disabled={['manager', 'qc', 'technician'].includes(user?.role) && user?.managedRegion !== 'Toàn Quốc'}
                         onChange={e => { setCustomCode(false); setFormData({ ...formData, region: e.target.value, code: nextNppCode(e.target.value,npps) }); }}
                       >
                         <option value="Miền Bắc">Miền Bắc</option>
