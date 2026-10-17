@@ -404,7 +404,7 @@ export default function Dashboard({
 
 
       {/* Charts Section */}
-      <details className="dashboard-chart-group" open>
+      <details className="dashboard-chart-group" open={!window.matchMedia('(max-width: 600px)').matches}>
       <summary>Biểu đồ tổng quan</summary>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px' }}>
 

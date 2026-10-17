@@ -452,7 +452,7 @@ export function useAssets() {
 
     const result = !isSupabaseConfigured ? { queued: false } : await persistMutation({
       online: navigator.onLine,
-      write: () => safeQuery(sb => sb.from('system_sets').insert(dbPayload).select('id,set_code'), 'assembleSet'),
+      write: () => safeQuery(sb => sb.from('system_sets').insert(dbPayload).select('set_code'), 'assembleSet'),
       queue: () => enqueueOfflineAction('ASSEMBLE_SET', dbPayload)
     });
     setSystemSets(prev => {

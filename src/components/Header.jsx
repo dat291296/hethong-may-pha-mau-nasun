@@ -1,3 +1,4 @@
+import { completedSyncState } from '../lib/syncPresentation.js';
 import { inManagedRegion, missingMachineFields, repairNeedsAction } from '../lib/teamWorkspace.js';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Bell, Search, PlusCircle, AlertTriangle, ShieldAlert, CheckCircle2, UserCheck, Wifi, WifiOff, RefreshCw, Menu, Database, MoreHorizontal } from 'lucide-react';
@@ -93,15 +94,18 @@ export default function Header({
   }, []);
 
   const handleSync = async () => {
+    if (isDevMode) { setSyncState('idle'); setSyncErrorMessage(''); return; }
     if (syncingRef.current || !navigator.onLine) return;
     
     syncingRef.current = true;
     setSyncState('syncing');
     setSyncErrorMessage('');
     
+    let reportedError = '';
     try {
       const success = await syncOfflineQueue((status, remaining, err) => {
         if (status === 'error') {
+          reportedError = err || 'Đồng bộ chưa hoàn tất';
           setSyncState('error');
           setSyncErrorMessage(err || 'Đồng bộ thất bại');
         }
@@ -110,9 +114,9 @@ export default function Header({
 
       const queue = await getOfflineQueue();
       setQueueCount(queue.length);
-      if (success) {
-        setSyncState('idle');
-      }
+      const settled = completedSyncState(success, queue.length, reportedError);
+      setSyncState(settled.state);
+      setSyncErrorMessage(settled.message);
     } catch {
       setSyncState('error');
       setSyncErrorMessage('Đồng bộ chưa hoàn tất. Dữ liệu chờ gửi vẫn được giữ nguyên.');
@@ -187,7 +191,7 @@ export default function Header({
               <WifiOff size={12} />
               <span>Ngoại Tuyến (Offline)</span>
             </div>
-          ) : queueCount > 0 ? (
+          ) : queueCount > 0 || syncState === 'error' ? (
             <button 
               onClick={handleSync}
               className="connection-status-badge sync-pending"
@@ -197,7 +201,7 @@ export default function Header({
               }}
             >
               <RefreshCw size={12} className={syncState === 'syncing' ? 'spin' : ''} />
-              <span>Đang có {queueCount} dữ liệu cần đồng bộ</span>
+              <span>{syncState === 'syncing' ? `Đang gửi · ${queueCount}` : syncState === 'error' ? `Chưa đồng bộ · Thử lại (${queueCount})` : `Chờ gửi · ${queueCount}`}</span>
             </button>
           ) : (
             <div className="connection-status-badge online">

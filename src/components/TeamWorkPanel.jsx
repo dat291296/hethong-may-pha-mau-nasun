@@ -8,7 +8,7 @@ export default function TeamWorkPanel({ repairTickets, systemSets, npps, onNavig
   const workspaceRegion = useContext(WorkspaceRegionContext);
   const [scope, setScope] = useState(user?.role === 'technician' ? 'MINE' : 'ALL');
   const [period, setPeriod] = useState('ALL');
-  const [limit, setLimit] = useState(3);
+  const [limit, setLimit] = useState(2);
   const today = new Date().toLocaleDateString('en-CA');
   const upcoming = new Date(); upcoming.setDate(upcoming.getDate() + 30);
   const upcomingDate = upcoming.toLocaleDateString('en-CA');
@@ -25,7 +25,7 @@ export default function TeamWorkPanel({ repairTickets, systemSets, npps, onNavig
   }).filter(item => item.fields.length);
   return <section className="glass-panel team-work" aria-label="Công việc đội kỹ thuật">
     <div className="team-compact-heading"><h2>Nắm việc cần xử lý <span>{filtered.length}</span></h2><span className="team-scope-label">{user?.role === 'technician' ? normalizeRegion(user.managedRegion) || 'Chưa phân công miền' : workspaceRegion === 'ALL' ? 'Toàn quốc' : workspaceRegion}</span></div>
-    <div className="workspace-tabs"><button aria-pressed={scope === 'MINE'} onClick={() => { setScope('MINE'); setLimit(3); }}>Việc của tôi ({tasks.filter(task => isAssignedTo(task.item, user)).length})</button><button aria-pressed={scope === 'ALL'} onClick={() => { setScope('ALL'); setLimit(3); }}>{['admin', 'viewer'].includes(user?.role) ? 'Toàn đội' : 'Trong miền'} ({tasks.length})</button><select aria-label="Lọc hạn công việc" className="form-select" value={period} onChange={event => { setPeriod(event.target.value); setLimit(3); }}><option value="ALL">Mọi hạn xử lý</option><option value="TODAY">Hôm nay</option><option value="OVERDUE">Quá hạn</option></select></div>
+    <div className="workspace-tabs"><button aria-pressed={scope === 'MINE'} onClick={() => { setScope('MINE'); setLimit(2); }}>Việc của tôi ({tasks.filter(task => isAssignedTo(task.item, user)).length})</button><button aria-pressed={scope === 'ALL'} onClick={() => { setScope('ALL'); setLimit(2); }}>{['admin', 'viewer'].includes(user?.role) ? 'Toàn đội' : 'Trong miền'} ({tasks.length})</button><select aria-label="Lọc hạn công việc" className="form-select" value={period} onChange={event => { setPeriod(event.target.value); setLimit(2); }}><option value="ALL">Mọi hạn xử lý</option><option value="TODAY">Hôm nay</option><option value="OVERDUE">Quá hạn</option></select></div>
     <div className="team-compact-list">{filtered.slice(0, limit).map(task => <article className="team-compact-task" key={`${task.tab}:${task.code}`}>
       <span className={`badge ${task.due && task.due < today ? 'badge-danger' : 'badge-warning'}`}>{task.label}{task.due && task.due < today ? ' · Quá hạn' : ''}</span>
       <div className="team-task-copy"><strong>{task.title || 'Chưa có NPP'}</strong><span>{task.code} · {task.due || 'Chưa đặt hạn'}</span></div>

@@ -954,7 +954,13 @@ export function syncOfflineQueue(onStatusChange) {
   if (activeSyncPromise) return activeSyncPromise;
   const runSync = () => processOfflineQueue(onStatusChange);
   const syncTask = navigator.locks?.request
-    ? navigator.locks.request('nasun-offline-sync', { mode: 'exclusive' }, runSync)
+    ? navigator.locks.request('nasun-offline-sync', { mode: 'exclusive', ifAvailable: true }, lock => {
+      if (!lock) {
+        onStatusChange?.('error', 0, 'Một cửa sổ khác đang đồng bộ. Đóng cửa sổ trùng rồi thử lại; dữ liệu chưa gửi vẫn được giữ nguyên.');
+        return false;
+      }
+      return runSync();
+    })
     : runSync();
   activeSyncPromise = syncTask
     .finally(() => {

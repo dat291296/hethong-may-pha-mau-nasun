@@ -1680,7 +1680,7 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
                       {item.stabilizer?.hasStabilizer ? (
                         <span className="badge badge-success">✓ {item.stabilizer.brand}</span>
                       ) : (
-                        <span className="badge badge-neutral">Không có</span>
+                        <span className="badge badge-warning">⚠ Chưa có ổn áp</span>
                       )}
                     </td>
                     <td>
@@ -1773,7 +1773,7 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
                   <div className="mobile-card-row">
                     <span className="mobile-card-label">Ổn áp (NPP):</span>
                     <span className="mobile-card-value">
-                      {item.stabilizer?.hasStabilizer ? `✓ ${item.stabilizer.brand}` : 'Chưa có'}
+                      {item.stabilizer?.hasStabilizer ? <span className="badge badge-success">✓ {item.stabilizer.brand}</span> : <span className="badge badge-warning">⚠ Chưa có ổn áp</span>}
                     </span>
                   </div>
                 </div>

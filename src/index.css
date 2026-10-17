@@ -1890,3 +1890,29 @@ main.page-transition .nppmanagement-screen .npp-card-withdrawn { border-top-colo
 .team-work .workspace-tabs > select { flex:0 0 auto; width:auto; margin-left:auto; grid-column:auto; }
 .team-work .data-quality { padding-top:8px; }
 @media(max-width:600px) { .team-work { padding:14px; } .team-work .workspace-tabs > select { margin-left:0; } }
+
+.mobile-region-picker { display:none; }
+@media(max-width:600px) {
+  .nasun-workspace { padding:12px 10px calc(92px + env(safe-area-inset-bottom)) !important; }
+  .mobile-region-picker { display:grid; gap:4px; flex:1; min-width:0; font-size:.75rem; color:var(--text-muted); }
+  .mobile-region-picker .form-select { min-height:44px; width:100%; font-size:16px; padding:8px 28px 8px 10px; }
+  .regional-primary > .regional-desktop-picker { display:none; }
+  .regional-workspace { padding:10px; margin-bottom:12px; }
+  .regional-primary { flex-wrap:nowrap; align-items:end; gap:8px; }
+  .regional-workspace .coverage-inline { display:grid; gap:4px; font-size:.75rem; min-width:0; flex:1; }
+  .coverage-inline .form-select { min-width:0; min-height:44px; width:100%; font-size:16px; }
+  .regional-workspace > p { font-size:.73rem; line-height:1.4; }
+  .workspace-screen { gap:14px !important; }
+  .filter-search-row { flex-wrap:wrap; gap:8px; }
+  .filter-search-row .filter-search { flex-basis:100%; }
+  .filter-actions { width:100%; justify-content:flex-end; }
+  .filter-options-row { gap:8px; }
+  .filter-options-row .filter-quick { display:flex; flex-wrap:nowrap; overflow-x:auto; max-width:100%; padding-bottom:4px; }
+  .filter-quick button { flex-shrink:0; min-height:44px; }
+  .mobile-card { padding:14px !important; }
+  .mobile-card-actions .btn { min-height:44px; flex:1; }
+  .modal-body input, .modal-body select, .modal-body textarea, .filter-search input { font-size:16px; }
+  .modal-content { max-height:calc(100dvh - 20px); }
+  .modal-footer { padding-bottom:calc(12px + env(safe-area-inset-bottom)); gap:8px; }
+  .modal-footer > .btn { min-height:46px; flex:1; }
+}
