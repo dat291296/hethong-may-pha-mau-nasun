@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { ArrowLeft, CheckCircle2, Circle, Eye, EyeOff, KeyRound, LockKeyhole, Mail, UserRound } from 'lucide-react';
-import { getAuthErrorMessage, getPasswordRuleState } from '../security/authFeedback.js';
+import { getAuthErrorMessage, getPasswordRuleState, shouldCountLoginFailure } from '../security/authFeedback.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { supabase } from '../lib/supabase.js';
 import { syncOfflineQueue } from '../lib/offlineSync.js';
 import { clearOfflineStorage } from '../lib/offlineDb.js';
 import { AUTH_REDIRECT_PURPOSES, createPrivateIdentifier, getAuthRedirectUrl } from '../security/authRuntime.js';
-import { completePasswordRecovery, registerEmailAccount, requestPasswordRecovery, resendSignupVerification } from '../security/authEmailFlows.js';
+import { completePasswordRecovery, signInEmailAccount, registerEmailAccount, requestPasswordRecovery, resendSignupVerification } from '../security/authEmailFlows.js';
 
 const isKeycloakEnabled = import.meta.env.VITE_ENABLE_KEYCLOAK === 'true';
 const LOGIN_ATTEMPTS_KEY = 'nasun_login_attempts';
@@ -131,6 +131,7 @@ export default function LoginModal() {
 
   const submitLogin = async (event) => {
     event.preventDefault();
+    if (pending) return;
     resetFeedback();
     setPending(true);
     const normalizedEmail = email.trim().toLowerCase();
@@ -145,10 +146,9 @@ export default function LoginModal() {
         const remainingMinutes = Math.max(1, Math.ceil((LOGIN_LOCK_MS - (Date.now() - attemptState.firstFailureAt)) / 60000));
         throw new Error(`LOCAL_LOGIN_LOCKED:${remainingMinutes}`);
       }
-      const { error: signInError } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password });
-      if (signInError) throw signInError;
+      await signInEmailAccount(supabase.auth, { email: normalizedEmail, password });
       await updateLoginAttemptState(normalizedEmail, true);
-      await syncOfflineQueue();
+      syncOfflineQueue().catch(() => console.warn('[Login] Offline synchronization deferred'));
     } catch (err) {
       console.error('[Login] Password sign-in failed:', err.message);
       if (err.code === 'email_not_confirmed' || /email not confirmed/i.test(err.message || '')) {
@@ -159,8 +159,8 @@ export default function LoginModal() {
       } else if (err.message?.startsWith('LOCAL_LOGIN_LOCKED:')) {
         setError(`Đã tạm khóa đăng nhập trên thiết bị này. Thử lại sau ${err.message.split(':')[1]} phút.`);
       } else {
-        await updateLoginAttemptState(normalizedEmail, false);
-        setError('Không thể đăng nhập. Kiểm tra lại email và mật khẩu.');
+        if (shouldCountLoginFailure(err)) await updateLoginAttemptState(normalizedEmail, false);
+        setError(getAuthErrorMessage(err, 'login'));
       }
     } finally {
       setPending(false);
@@ -251,6 +251,7 @@ export default function LoginModal() {
 
   const submitReset = async (event) => {
     event.preventDefault();
+    if (pending || resetCooldown > 0) return;
     resetFeedback();
     setPending(true);
     try {
@@ -272,6 +273,7 @@ export default function LoginModal() {
 
   const submitNewPassword = async (event) => {
     event.preventDefault();
+    if (pending) return;
     resetFeedback();
     if (!passwordIsStrong) {
       setError('Mật khẩu mới chưa đáp ứng đầy đủ các yêu cầu bảo mật.');
@@ -294,7 +296,7 @@ export default function LoginModal() {
       setNotice('Mật khẩu đã được cập nhật. Bạn có thể đăng nhập bằng mật khẩu mới.');
     } catch (err) {
       console.error('[Login] Password update failed:', err.message);
-      setError('Liên kết đã hết hạn hoặc không hợp lệ. Hãy yêu cầu gửi lại liên kết đặt lại mật khẩu.');
+      setError(getAuthErrorMessage(err, 'update-password'));
     } finally {
       setPending(false);
     }

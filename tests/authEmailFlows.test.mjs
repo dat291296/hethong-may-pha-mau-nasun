@@ -1,10 +1,25 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  signInEmailAccount,
+  registerEmailAccount,
   completePasswordRecovery,
   requestPasswordRecovery,
   resendSignupVerification,
 } from '../src/security/authEmailFlows.js';
+
+test('every email auth operation releases the UI when the provider never responds', async () => {
+  const hanging = () => new Promise(() => {});
+  const auth = { signInWithPassword: hanging, signUp: hanging, resend: hanging, resetPasswordForEmail: hanging, updateUser: hanging };
+  const credentials = { email: 'user@example.com', password: 'SyntheticPassword123' };
+  for (const action of [
+    () => signInEmailAccount(auth, credentials, 5),
+    () => registerEmailAccount(auth, credentials, 5),
+    () => resendSignupVerification(auth, credentials.email, 'https://app.example', 5),
+    () => requestPasswordRecovery(auth, credentials.email, 'https://app.example', 5),
+    () => completePasswordRecovery(auth, credentials.password, 5),
+  ]) await assert.rejects(action, { code: 'AUTH_RESPONSE_TIMEOUT' });
+});
 
 test('verification email flow sends normalized email and redirect URL', async () => {
   let payload;

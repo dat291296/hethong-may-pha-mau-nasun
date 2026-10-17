@@ -1,6 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { getAuthErrorMessage, getPasswordRuleState } from '../src/security/authFeedback.js';
+import { getAuthErrorMessage, getPasswordRuleState, shouldCountLoginFailure } from '../src/security/authFeedback.js';
+
+test('network and provider failures never count as incorrect passwords', () => {
+  assert.equal(shouldCountLoginFailure({ code: 'invalid_credentials' }), true);
+  for (const error of [{ code: 'AUTH_RESPONSE_TIMEOUT' }, { status: 500 }, new TypeError('Failed to fetch'), { code: 'email_not_confirmed' }, { status: 429 }]) assert.equal(shouldCountLoginFailure(error), false);
+  assert.match(getAuthErrorMessage({ code: 'AUTH_RESPONSE_TIMEOUT' }, 'login'), /Đăng nhập/);
+  assert.doesNotMatch(getAuthErrorMessage({ code: 'AUTH_RESPONSE_TIMEOUT' }, 'recovery'), /đăng ký|email xác minh/);
+  assert.match(getAuthErrorMessage({ code: 'same_password' }, 'update-password'), /khác mật khẩu/);
+});
 
 test('auth feedback never exposes empty provider payloads or internal messages', () => {
   for (const error of [{}, null, { message: '{}' }, { message: 'private SMTP credentials' }]) {
