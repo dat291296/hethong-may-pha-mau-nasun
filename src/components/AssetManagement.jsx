@@ -1,3 +1,4 @@
+import {missingSystemSetFields} from '../lib/dataCompleteness.js';
 import { assignedSetsForNpp, assertAdditionalSetConfirmed } from '../lib/assemblyGuard.js';
 import { isUnknownSerial } from '../lib/deviceSerial.js';
 import { summarizeInventory, nextWarehouseId, inventoryLinkIssues } from '../lib/inventorySummary.js';
@@ -3066,7 +3067,7 @@ export default function AssetManagement({ initialProfile, onProfileRestored, glo
                 {profileTab === 'history' && <MachineProfileHistory items={machineProfile.history} />}
                 {profileTab === 'documents' && <TechnicalResources machineModel={selectedSetDetails.dispenserModel} modelOptions={[...new Set(systemSets.map(machine => machine.dispenserModel).filter(Boolean))]} />}
                 <div hidden={profileTab !== 'equipment'}>
-                <p className="resource-muted">Cần bổ sung: {missingMachineFields(selectedSetDetails).join(' · ') || 'Đã có các trường seri và hạn bảo trì'}</p>
+                <p className="resource-muted">Cần bổ sung: {missingSystemSetFields(selectedSetDetails).join(' · ') || 'Đã có các trường thông tin chính'}</p>
                 <div className="workspace-tabs">{[['computer','Máy tính',computers,selectedSetDetails.computerId],['dispenser','Máy chiết',dispensers,selectedSetDetails.dispenserId],['mixer','Máy lắc',mixers,selectedSetDetails.mixerId],['printer','Máy in',printers,selectedSetDetails.printerId]].map(([category,label,list,id]) => { const matches = list.filter(item => id ? item.id === id : item.setCode === selectedSetDetails.setCode); const device = matches.length === 1 ? matches[0] : null; return device && <button key={category} disabled={!can('asset:edit')} onClick={() => { handleOpenEditDevice(category,device); }}>Chỉnh sửa {label.toLocaleLowerCase('vi')}</button>; })}</div>
                 <MachineProfileSummary machine={selectedSetDetails} profile={machineProfile} />
 

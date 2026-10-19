@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {normalizeDeviceType} from '../src/lib/deviceType.js';
-import {dataCompletenessAlerts,missingDeviceFields,missingNppFields} from '../src/lib/dataCompleteness.js';
+import {dataCompletenessAlerts,missingDeviceFields,missingNppFields,missingSystemSetFields} from '../src/lib/dataCompleteness.js';
 test('mixer types preserve mechanical values rather than computer enum values',()=>{
  for(const type of ['Lắc xoay khép kín','Lắc rung đứng',''])assert.equal(normalizeDeviceType('mixer',type),type);
  assert.equal(normalizeDeviceType('computer','All In One'),'AIO');assert.equal(normalizeDeviceType('computer','Case'),'Case');
@@ -18,4 +18,10 @@ test('data warnings identify individual missing fields and respect existing mach
  assert.ok(missingNppFields({name:'N',region:'Miền Bắc'}).includes('Địa chỉ'));
  assert.deepEqual(missingDeviceFields({type:'Case',status:'Đang chạy tốt',os:'Windows',specs:'i5',network:'LAN'},'computer',{computerSerial:'PC-1'}),[]);
  assert.ok(missingDeviceFields({model:'M',serial:'—',status:'Mới'},'mixer').includes('Số seri'));
+});
+
+test('machine profile warnings include software, serial and responsible technician without requiring freeform notes',()=>{
+ const fields=missingSystemSetFields({setCode:'M1',status:'TRONG_KHO'});
+ for(const field of ['Phần mềm pha màu','Seri máy tính','Kỹ thuật viên phụ trách'])assert.ok(fields.includes(field));
+ assert.ok(!fields.includes('Ghi chú'));
 });
