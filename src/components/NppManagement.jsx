@@ -1,3 +1,4 @@
+import {missingNppFields} from '../lib/dataCompleteness.js';
 import { isSupabaseConfigured } from '../lib/supabase.js';
 import { nextNppCode, validateNppCode } from '../lib/nppCodes.js';
 import { nppCoverage, assignedNppSets } from '../lib/nppCoverage.js';
@@ -384,6 +385,7 @@ export default function NppManagement({ globalSearch = '', coverageFilter = 'ALL
 
                 <h3 style={{ fontSize: '1.05rem', fontWeight: '800', color: 'var(--text-main)', marginBottom: '8px' }}>
                   {npp.name}
+                  {missingNppFields(npp).length>0 && <small className="repair-missing-fields">⚠ Cần bổ sung: {missingNppFields(npp).join(' · ')}</small>}
                 </h3>
 
                 {isInactive && (

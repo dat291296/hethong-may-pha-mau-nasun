@@ -1,3 +1,4 @@
+import {normalizeDeviceType} from '../lib/deviceType.js';
 import {saveSystemSetEdit} from '../lib/systemSetEdit.js';
 import { recordOperationalError } from '../lib/operationalDiagnostics.js';
 import { saveDeviceEdit } from '../lib/deviceEdit.js';
@@ -584,7 +585,7 @@ function mapDeviceToDb(obj, category) {
 
   // Category specific allowed fields (STRICT SCHEMA SANITIZATION)
   if (cat === 'computer' || cat === 'computers') {
-    if (obj.type !== undefined) dbObj.type = obj.type === 'Case' ? 'Case' : 'AIO';
+    if (obj.type !== undefined) dbObj.type = normalizeDeviceType(cat,obj.type);
     if (obj.os !== undefined) dbObj.os = obj.os;
     if (obj.tintingSoftware !== undefined) dbObj.tinting_software = String(obj.tintingSoftware).trim();
     if (obj.softwareVersion !== undefined) dbObj.software_version = String(obj.softwareVersion).trim();
@@ -597,7 +598,7 @@ function mapDeviceToDb(obj, category) {
     if (obj.status !== undefined) dbObj.status = obj.status;
   } else if (cat === 'mixer' || cat === 'mixers') {
     if (obj.model !== undefined) dbObj.model = obj.model;
-    if (obj.type !== undefined) dbObj.type = obj.type === 'Case' ? 'Case' : 'AIO';
+    if (obj.type !== undefined) dbObj.type = normalizeDeviceType(cat,obj.type);
     if (obj.status !== undefined) dbObj.status = obj.status;
   } else if (cat === 'printer' || cat === 'printers') {
     if (obj.model !== undefined) dbObj.model = obj.model;

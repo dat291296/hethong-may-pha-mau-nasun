@@ -144,6 +144,7 @@ export default function AssetManagement({ initialProfile, onProfileRestored, glo
   }, [activeSubTab]);
   const [searchTerm, setSearchTerm] = useWorkspaceState('assets:search', '');
   useEffect(() => { if (globalSearch) setSearchTerm(globalSearch); }, [globalSearch, setSearchTerm]);
+  useEffect(()=>{if(!globalSearch)return;const target=[['dispensers',dispensers],['mixers',mixers],['computers',computers],['printers',printers]].find(([,list])=>list.some(device=>device.id===globalSearch));if(target)setActiveSubTab(target[0]);},[globalSearch,dispensers,mixers,computers,printers]);
   useWorkspaceScroll('assets');
   const [modelFilter, setModelFilter] = useWorkspaceState('assets:model', 'ALL');
   const [statusFilter, setStatusFilter] = useWorkspaceState('assets:status', 'ALL');
@@ -1953,7 +1954,7 @@ export default function AssetManagement({ initialProfile, onProfileRestored, glo
               <button className="btn btn-secondary btn-sm" onClick={closeStockEditor} disabled={isSavingDevice}>✕</button>
             </div>
             <form onSubmit={handleAddDeviceSubmit}>
-              <div className="modal-body">
+              <div className="modal-body"><DraftNotice draft={stockDraft} />
                 <div style={{ padding: '12px', marginBottom: '14px', borderRadius: '8px', background: 'rgba(56,189,248,0.10)', border: '1px solid rgba(56,189,248,0.35)', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
                   💡 Gợi ý nhập kho: chọn model và tình trạng thiết bị. Mã QL tự tăng theo loại máy và tiếp tục từ mã lớn nhất đã có. Số seri là tùy chọn; thiết bị thiếu seri sẽ được cảnh báo khi ghép bộ (trừ máy tính).
                 </div>

@@ -1,9 +1,10 @@
+import {matchesSearch} from '../lib/workspaceFilters.js';
 import { WorkspaceRegionContext } from '../hooks/useWorkspaceState.js';
 import { nppCoverage } from '../lib/nppCoverage.js';
 import { regionalMachineCounts } from '../lib/teamWorkspace.js';
 import { summarizeInventory } from '../lib/inventorySummary.js';
 import { findAssignedDevice } from '../lib/deviceEdit.js';
-import React, { useState, useMemo, useContext } from 'react';
+import React, { useState, useMemo, useContext, useEffect } from 'react';
 import { 
   Building2, 
   Cpu, 
@@ -130,8 +131,10 @@ export default function Dashboard({
 
 
   // Sắp xếp bộ máy mới lắp đặt gần nhất lên đầu
+  const [allocatedSearch,setAllocatedSearch]=useState('');
+  useEffect(()=>setDashboardPage(1),[allocatedSearch]);
   const sortedAllocatedSets = useMemo(() => {
-    return [...systemSets].sort((a, b) => {
+    return systemSets.filter(machine=>matchesSearch(allocatedSearch,[machine.nppName,machine.nppId,machine.setCode,npps.find(npp=>npp.id===machine.nppId)?.name])).sort((a, b) => {
       const dateA = a.installedDate || a.installed_date || a.createdAt || a.created_at || '';
       const dateB = b.installedDate || b.installed_date || b.createdAt || b.created_at || '';
       if (dateA && dateB) {
@@ -140,7 +143,7 @@ export default function Dashboard({
       }
       return String(b.setCode || b.id || '').localeCompare(String(a.setCode || a.id || ''), undefined, { numeric: true, sensitivity: 'base' });
     });
-  }, [systemSets]);
+  }, [systemSets,npps,allocatedSearch]);
 
   const totalAllocatedPages = Math.ceil(sortedAllocatedSets.length / dashboardPageSize) || 1;
   const paginatedAllocatedSets = sortedAllocatedSets.slice(
@@ -469,7 +472,7 @@ export default function Dashboard({
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
           <div>
             <h3 style={{ fontSize: '1.05rem', fontWeight: '800', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span>Danh Mục Bộ Máy Cấp Phát & Lịch Sử Xử Lý Thiết Bị</span>
+              <span>Danh Mục Bộ Máy Cấp Phát & Lịch Sử Xử Lý Thiết Bị</span><input className="form-input" aria-label="Tìm NPP trong bộ máy cấp phát" placeholder="Tìm tên NPP, mã NPP hoặc mã bộ máy..." value={allocatedSearch} onChange={event=>setAllocatedSearch(event.target.value)} style={{maxWidth:340}}/>
               <span className="badge badge-info" style={{ fontSize: '0.75rem' }}>Tổng {sortedAllocatedSets.length} bộ</span>
             </h3>
             <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
