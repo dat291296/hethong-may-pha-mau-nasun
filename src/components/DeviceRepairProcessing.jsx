@@ -1,3 +1,5 @@
+import {validateDocumentFile} from '../lib/technicalResources.js';
+import {compressImage} from '../utils/imageCompressor.js';
 import {validateRepairReturn} from '../lib/repairLifecycle.js';
 import { repairMissingFields } from '../lib/repairCompleteness.js';
 import { getOwnedCacheEntries } from '../lib/offlineDb.js';
@@ -107,9 +109,17 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
 }) {
   const { user } = useAuth();
   const [saving, setSaving] = useState(false);
+  const [photoBusy,setPhotoBusy]=useState(false);
+  async function addErrorPhotos(event){
+    const files=Array.from(event.target.files||[]);event.target.value='';setSaveError('');setPhotoBusy(true);
+    try {
+      if(files.length+(formData.photos||[]).length>6)throw new Error('Tối đa 6 ảnh lỗi cho mỗi phiếu.');
+      const images=[];for(const file of files){if(!file.type.startsWith('image/'))throw new Error('Chỉ nhận ảnh JPG, PNG hoặc WebP.');await validateDocumentFile(file);images.push(await compressImage(file));}
+      setFormData(previous=>({...previous,photos:[...(previous.photos||[]),...images]}));
+    }catch(error){setSaveError(error.message);}finally{setPhotoBusy(false);}
+  }
   const [saveError, setSaveError] = useState('');
   const [saveNotice, setSaveNotice] = useState('');
-  const canAssign = ['admin', 'manager'].includes(user?.role);
   const [activeTab, setActiveTab] = useWorkspaceState('repairs:state', 'ALL'); // ALL | PENDING | NOT_RETURNED | REPLACED
   const [searchTerm, setSearchTerm] = useWorkspaceState('repairs:search', '');
   useEffect(() => { if (globalSearch) setSearchTerm(globalSearch); }, [globalSearch, setSearchTerm]);
@@ -257,12 +267,10 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
     if (resumeRequested && draft.existing) { draft.resume(); setResumeRequested(false); }
   }, [resumeRequested, draft.existing]);
   const closeForm = async () => {
-    if (saving) return;
+    if (saving || photoBusy) return;
     try { await draft.flush(); setShowModal(false); onReturnToProfile?.(); }
     catch { setSaveError('Chưa lưu được nháp. Hãy giữ phiếu mở và thử lại.'); }
   };
-  const selectedNppRegion = npps.find(item => item.id === formData.nppId)?.region;
-  const assignableUsers = qcUsers.filter(item => item.role === 'admin' || (item.region || item.managedRegion) === 'Toàn Quốc' || (item.region || item.managedRegion) === selectedNppRegion);
 
   // Auto-fill from Handbook if prefilledTicket is provided
   React.useEffect(() => {
@@ -398,7 +406,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (saving || draft.existing) return;
+    if (saving || photoBusy || draft.existing) return;
     setSaveError('');
 
     // Sanitize input form data
@@ -410,6 +418,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
     });
 
     if (!sanitized.nppId || !sanitized.date) { setSaveError('Vui lòng chọn NPP và ngày xử lý. Các nội dung khác có thể bổ sung sau.'); return; }
+    sanitized.materialsUsed=(formData.materialsUsed || []).map(item=>item.trim()).filter(Boolean);
     sanitized.photos = formData.photos || [];
     sanitized.beforePhotos = formData.beforePhotos || [];
     sanitized.afterPhotos = formData.afterPhotos || [];
@@ -704,7 +713,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
                     </td>
                     <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent-blue)' }}>{ticket.serialNumber}</td>
                     <td style={{ maxWidth: '220px', fontSize: '0.825rem' }}>
-                      <div style={{ color: 'var(--text-main)', fontWeight: '500' }}>{ticket.errorDescription}</div>{repairMissingFields(ticket).length > 0 && <p className="repair-missing-fields">⚠ Cần bổ sung: {repairMissingFields(ticket).join(' · ')}</p>}
+                      <div style={{ color: 'var(--text-main)', fontWeight: '500' }}>{ticket.errorDescription}</div><div className="repair-inline-photos">{(ticket.photos||[]).slice(0,3).map((url,index)=><button type="button" key={index} onClick={()=>setSelectedTicket(ticket)} aria-label={`Xem ảnh lỗi ${index+1}`}><img loading="lazy" src={url} alt={ticket.errorCategory||'Ảnh lỗi thiết bị'}/></button>)}</div>{repairMissingFields(ticket).length > 0 && <p className="repair-missing-fields">⚠ Cần bổ sung: {repairMissingFields(ticket).join(' · ')}</p>}
                       {ticket.errorCategory && (
                         <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>[{ticket.errorCategory}]</span>
                       )}
@@ -809,7 +818,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
                   </div>
                   <div className="mobile-card-row">
                     <span className="mobile-card-label">Lỗi:</span>
-                    <span className="mobile-card-value">{ticket.errorDescription}</span>{repairMissingFields(ticket).length > 0 && <p className="repair-missing-fields">⚠ Cần bổ sung: {repairMissingFields(ticket).join(' · ')}</p>}
+                    <span className="mobile-card-value">{ticket.errorDescription}<span className="repair-inline-photos">{(ticket.photos||[]).slice(0,3).map((url,index)=><button type="button" key={index} onClick={()=>setSelectedTicket(ticket)} aria-label={`Xem ảnh lỗi ${index+1}`}><img loading="lazy" src={url} alt={ticket.errorCategory||'Ảnh lỗi thiết bị'}/></button>)}</span></span>{repairMissingFields(ticket).length > 0 && <p className="repair-missing-fields">⚠ Cần bổ sung: {repairMissingFields(ticket).join(' · ')}</p>}
                   </div>
                   <div className="mobile-card-row">
                     <span className="mobile-card-label">Kỹ thuật viên:</span>
@@ -877,25 +886,14 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
                 <h3 style={{ fontWeight: '800' }}>
                   {editingTicket ? `Chỉnh Sửa Phiếu Xử Lý Máy [${editingTicket.ticketCode}]` : 'Tạo Phiếu Xử Lý Máy & Sửa Chữa Mới'}
                 </h3>
-                <button className="btn btn-secondary btn-sm" disabled={saving} onClick={closeForm}>✕</button>
+                <button className="btn btn-secondary btn-sm" disabled={saving || photoBusy} onClick={closeForm}>✕</button>
               </div>
               <form onSubmit={handleSubmit} onInvalidCapture={() => setSaveError('Hãy bổ sung các ô bắt buộc đang được đánh dấu. Nội dung chưa được lưu.')}>
                 <DraftNotice draft={draft} />
                 {repairMissingFields(formData).length > 0 && <div className="repair-missing-fields" role="status"><strong>Cần bổ sung:</strong> {repairMissingFields(formData).join(' · ')}</div>}
                 {saveError && <p className="resource-error" role="alert">{saveError}</p>}
                 <div className="modal-body">
-                <fieldset disabled={saving || Boolean(draft.existing)} className="form-fieldset">
-                  <div className="responsive-form-grid">
-                    <label>Người nhận công việc<select className="form-select" disabled={!canAssign} value={formData.assignedUserId || ''} onChange={event => setFormData(previous => ({ ...previous, assignedUserId: event.target.value || null }))}><option value="">Chưa phân công</option>{assignableUsers.map(item => <option key={item.id} value={item.id}>{item.name || item.full_name}</option>)}</select></label>
-                    <label>Hạn xử lý<input type="date" className="form-input" value={formData.assignmentDueDate || ''} onChange={event => setFormData(previous => ({ ...previous, assignmentDueDate: event.target.value || null }))} /></label>
-                  </div>
-
-                  {/* PRIMARY EDIT FIELDS - TOP OF FORM */}
-                  <div className="form-group">
-                    <label className="form-label" htmlFor="repair-ticket-code">Mã phiếu (có thể sửa)</label>
-                    <input id="repair-ticket-code" className="form-input" value={formData.ticketCode || ''} required={Boolean(editingTicket)} maxLength={100} placeholder="Để trống để tự tạo mã phiếu mới" onChange={event => setFormData(previous => ({ ...previous, ticketCode: event.target.value }))} />
-                    <small>Đổi mã phiếu vẫn giữ nguyên hồ sơ và lịch sử liên kết.</small>
-                  </div>
+                <fieldset disabled={saving || photoBusy || Boolean(draft.existing)} className="form-fieldset">
                   {/* FIELD 1: NGÀY XỬ LÝ MÁY & KỸ THUẬT VIÊN */}
                   <div className="responsive-form-grid" style={{ marginBottom: '14px' }}>
                     <div className="form-group">
@@ -969,7 +967,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
                     </div>
 
                     <select
-                      className="form-select"
+                      className="form-select repair-npp-select"
                       required
                       value={formData.nppId}
                       onChange={e => handleSelectNpp(e.target.value)}
@@ -1127,7 +1125,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
 
                   <div className="form-group">
                     <label className="form-label">⚠️ 5. Diễn Giải Tình Trạng Lỗi *</label>
-                    <textarea className={`form-input ${!formData.errorDescription ? 'field-missing' : ''}`} rows={2} placeholder="Mô tả chi tiết sự cố kỹ thuật..." value={formData.errorDescription} onChange={e => setFormData({ ...formData, errorDescription: e.target.value })} />
+                    <textarea className={`form-input ${!formData.errorDescription ? 'field-missing' : ''}`} rows={2} placeholder="Mô tả chi tiết sự cố kỹ thuật..." value={formData.errorDescription} onChange={e => setFormData({ ...formData, errorDescription: e.target.value })} /><label className="error-photo-upload">Ảnh minh họa lỗi (tối đa 6)<input aria-label="Thêm ảnh lỗi" type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={photoBusy} onChange={addErrorPhotos}/></label><div className="repair-error-photos">{(formData.photos||[]).map((url,index)=><figure key={index}><img src={url} alt={`Ảnh lỗi ${index+1}`}/><button type="button" className="btn btn-secondary btn-sm" aria-label={`Bỏ ảnh lỗi ${index+1}`} onClick={()=>setFormData(previous=>({...previous,photos:previous.photos.filter((_,position)=>position!==index)}))}>Bỏ ảnh</button></figure>)}</div>{photoBusy && <p role="status">Đang xử lý ảnh...</p>}
                   </div>
 
                   {['Máy chiết', 'Máy lắc'].includes(formData.productCategory) && (
@@ -1249,7 +1247,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
                         value={(formData.materialsUsed || []).join('\n')}
                         onChange={e => setFormData({
                           ...formData,
-                          materialsUsed: e.target.value.split('\n').map(item => item.trim()).filter(Boolean)
+                          materialsUsed: e.target.value.split('\n')
                         })}
                       />
                     </div>
@@ -1273,12 +1271,12 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
                 </fieldset>
                 </div>
                 <div className="modal-footer">
-                  <button type="button" className="btn btn-secondary" disabled={saving} onClick={closeForm}>Đóng · Giữ nháp</button>
+                  <button type="button" className="btn btn-secondary" disabled={saving || photoBusy} onClick={closeForm}>Đóng · Giữ nháp</button>
                   {onReturnToProfile && <button type="button" className="btn btn-secondary" disabled={saving} onClick={async () => {
                     try { await draft.flush(); onReturnToProfile(); }
                     catch { setSaveError('Chưa lưu được bản nháp. Vui lòng thử lại trước khi quay lại hồ sơ.'); }
                   }}>← Quay lại hồ sơ máy</button>}
-                  <button type="submit" className="btn btn-primary" disabled={saving || Boolean(draft.existing)}>{saving ? 'Đang xác nhận lưu...' : editingTicket ? 'Cập Nhật Phiếu' : 'Tạo Phiếu Mới'}</button>
+                  <button type="submit" className="btn btn-primary" disabled={saving || photoBusy || Boolean(draft.existing)}>{saving ? 'Đang xác nhận lưu...' : editingTicket ? 'Cập Nhật Phiếu' : 'Tạo Phiếu Mới'}</button>
                 </div>
               </form>
             </div>
@@ -1299,12 +1297,12 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
                 <button className="btn btn-secondary btn-sm" onClick={() => setSelectedTicket(null)}>✕</button>
               </div>
               <div className="modal-body">
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '0.85rem' }}>
+                <div className="repair-detail-grid">
                   <div><strong>Nhà Phân Phối:</strong> {selectedTicket.nppName}</div>
                   <div><strong>Sản Phẩm & Seri:</strong> {selectedTicket.machineModel} ({selectedTicket.serialNumber})</div>
                   <div><strong>Kỹ Thuật Viên:</strong> {selectedTicket.technician}</div>
-                  <div><strong>Người nhận công việc:</strong> {qcUsers.find(item => item.id === selectedTicket.assignedUserId)?.name || (selectedTicket.assignedUserId ? 'Tài khoản được giao' : 'Chưa gán tài khoản')}</div>
-                  <div><strong>Hạn xử lý:</strong> {selectedTicket.assignmentDueDate || 'Chưa đặt'}</div>
+                  <div hidden><strong>Người nhận công việc:</strong> {qcUsers.find(item => item.id === selectedTicket.assignedUserId)?.name || (selectedTicket.assignedUserId ? 'Tài khoản được giao' : 'Chưa gán tài khoản')}</div>
+                  <div hidden><strong>Hạn xử lý:</strong> {selectedTicket.assignmentDueDate || 'Chưa đặt'}</div>
                   <div><strong>Cập nhật gần nhất:</strong> {selectedTicket.lastUpdatedAt ? new Date(selectedTicket.lastUpdatedAt).toLocaleString('vi-VN') : 'Chưa ghi nhận'} · {qcUsers.find(item => item.id === selectedTicket.lastUpdatedBy)?.name || 'Hệ thống'}</div>
                   <div><strong>Ngày Tạo:</strong> {formatDateVN(selectedTicket.date)}</div>
                   <div><strong>Diễn Giải Lỗi:</strong> {selectedTicket.errorDescription}</div>

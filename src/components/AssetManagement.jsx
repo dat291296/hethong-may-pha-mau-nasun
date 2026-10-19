@@ -1,3 +1,4 @@
+import {missingSystemSetFields} from '../lib/dataCompleteness.js';
 import { assignedSetsForNpp, assertAdditionalSetConfirmed } from '../lib/assemblyGuard.js';
 import { isUnknownSerial } from '../lib/deviceSerial.js';
 import { summarizeInventory, nextWarehouseId, inventoryLinkIssues } from '../lib/inventorySummary.js';
@@ -144,6 +145,7 @@ export default function AssetManagement({ initialProfile, onProfileRestored, glo
   }, [activeSubTab]);
   const [searchTerm, setSearchTerm] = useWorkspaceState('assets:search', '');
   useEffect(() => { if (globalSearch) setSearchTerm(globalSearch); }, [globalSearch, setSearchTerm]);
+  useEffect(()=>{if(!globalSearch)return;const target=[['dispensers',dispensers],['mixers',mixers],['computers',computers],['printers',printers]].find(([,list])=>list.some(device=>device.id===globalSearch));if(target)setActiveSubTab(target[0]);},[globalSearch,dispensers,mixers,computers,printers]);
   useWorkspaceScroll('assets');
   const [modelFilter, setModelFilter] = useWorkspaceState('assets:model', 'ALL');
   const [statusFilter, setStatusFilter] = useWorkspaceState('assets:status', 'ALL');
@@ -1953,7 +1955,7 @@ export default function AssetManagement({ initialProfile, onProfileRestored, glo
               <button className="btn btn-secondary btn-sm" onClick={closeStockEditor} disabled={isSavingDevice}>✕</button>
             </div>
             <form onSubmit={handleAddDeviceSubmit}>
-              <div className="modal-body">
+              <div className="modal-body"><DraftNotice draft={stockDraft} />
                 <div style={{ padding: '12px', marginBottom: '14px', borderRadius: '8px', background: 'rgba(56,189,248,0.10)', border: '1px solid rgba(56,189,248,0.35)', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
                   💡 Gợi ý nhập kho: chọn model và tình trạng thiết bị. Mã QL tự tăng theo loại máy và tiếp tục từ mã lớn nhất đã có. Số seri là tùy chọn; thiết bị thiếu seri sẽ được cảnh báo khi ghép bộ (trừ máy tính).
                 </div>
@@ -3065,7 +3067,7 @@ export default function AssetManagement({ initialProfile, onProfileRestored, glo
                 {profileTab === 'history' && <MachineProfileHistory items={machineProfile.history} />}
                 {profileTab === 'documents' && <TechnicalResources machineModel={selectedSetDetails.dispenserModel} modelOptions={[...new Set(systemSets.map(machine => machine.dispenserModel).filter(Boolean))]} />}
                 <div hidden={profileTab !== 'equipment'}>
-                <p className="resource-muted">Cần bổ sung: {missingMachineFields(selectedSetDetails).join(' · ') || 'Đã có các trường seri và hạn bảo trì'}</p>
+                <p className="resource-muted">Cần bổ sung: {missingSystemSetFields(selectedSetDetails).join(' · ') || 'Đã có các trường thông tin chính'}</p>
                 <div className="workspace-tabs">{[['computer','Máy tính',computers,selectedSetDetails.computerId],['dispenser','Máy chiết',dispensers,selectedSetDetails.dispenserId],['mixer','Máy lắc',mixers,selectedSetDetails.mixerId],['printer','Máy in',printers,selectedSetDetails.printerId]].map(([category,label,list,id]) => { const matches = list.filter(item => id ? item.id === id : item.setCode === selectedSetDetails.setCode); const device = matches.length === 1 ? matches[0] : null; return device && <button key={category} disabled={!can('asset:edit')} onClick={() => { handleOpenEditDevice(category,device); }}>Chỉnh sửa {label.toLocaleLowerCase('vi')}</button>; })}</div>
                 <MachineProfileSummary machine={selectedSetDetails} profile={machineProfile} />
 
