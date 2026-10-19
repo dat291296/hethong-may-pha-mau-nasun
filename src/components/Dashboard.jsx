@@ -1,4 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import { WorkspaceRegionContext } from '../hooks/useWorkspaceState.js';
+import { nppCoverage } from '../lib/nppCoverage.js';
+import { regionalMachineCounts } from '../lib/teamWorkspace.js';
+import { summarizeInventory } from '../lib/inventorySummary.js';
+import { findAssignedDevice } from '../lib/deviceEdit.js';
+import React, { useState, useMemo, useContext } from 'react';
 import { 
   Building2, 
   Cpu, 
@@ -56,9 +61,11 @@ export default function Dashboard({
   onOpenNewInstallation
 }) {
   // Stat calculations
-  const totalSetsCount = systemSets.length;
+  const inventory = useMemo(() => summarizeInventory({ systemSets, dispensers, mixers, computers, printers }), [systemSets, dispensers, mixers, computers, printers]);
+  const coverage = useMemo(() => nppCoverage(npps, systemSets), [npps, systemSets]);
+  const totalSetsCount = inventory.totalSets;
   const installedSetsCount = systemSets.filter(s => s.status === 'DA_LAP_DAT').length;
-  const stockSetsCount = systemSets.filter(s => s.status === 'TRONG_KHO').length;
+  const stockSetsCount = inventory.totalReadySets;
   const revokedSetsCount = systemSets.filter(s => s.status === 'DA_THU_HOI').length;
   const maintenanceSetsCount = systemSets.filter(s => s.status === 'BAO_THUONG_BAO_TRI').length;
 
@@ -87,12 +94,9 @@ export default function Dashboard({
   }, [repairTickets]);
 
   // Region data for chart
-  const regionChartData = [
-    { name: 'Miền Bắc', count: systemSets.filter(s => s.region === 'Miền Bắc').length },
-    { name: 'Miền Trung', count: systemSets.filter(s => s.region === 'Miền Trung').length },
-    { name: 'Miền Nam', count: systemSets.filter(s => s.region === 'Miền Nam').length },
-    { name: 'Trong Kho', count: systemSets.filter(s => s.region === 'Kho Tổng').length },
-  ];
+  const workspaceRegion = useContext(WorkspaceRegionContext);
+  const regionalCounts = useMemo(() => regionalMachineCounts(systemSets, npps).filter(item => workspaceRegion === 'ALL' || item.name === workspaceRegion), [systemSets, npps, workspaceRegion]);
+  const regionChartData = [...regionalCounts, { name: 'Trong Kho', count: systemSets.filter(s => s.region === 'Kho Tổng').length }];
 
   // Dispenser Model distribution chart data
   const modelCounts = systemSets.reduce((acc, curr) => {
@@ -121,16 +125,9 @@ export default function Dashboard({
   const [repairActionFilter, setRepairActionFilter] = useState('ALL');
   const [repairPage, setRepairPage] = useState(1);
   const [repairPageSize, setRepairPageSize] = useState(10);
-  const [taskFilter, setTaskFilter] = useState('ALL');
   const pendingTasks = repairTickets.filter(item => item.processingStatus === 'Chưa xử lý');
   const returnTasks = repairTickets.filter(item => item.processingStatus === 'Đã xử lý' && item.customerReturnStatus === 'Chưa gửi trả');
-  const taskGroups = [
-    { key: 'REPAIR', label: 'Sửa chữa', tab: 'repairs', items: pendingTasks },
-    { key: 'RETURN', label: 'Chờ gửi trả', tab: 'repairs', items: returnTasks },
-    { key: 'MAINTENANCE', label: 'Bảo trì', tab: 'maintenance', items: maintenanceAlerts },
-  ];
-  const actionTasks = taskGroups.flatMap(group => group.items.map(item => ({ ...group, item })));
-  const visibleTasks = actionTasks.filter(task => taskFilter === 'ALL' || task.key === taskFilter);
+
 
   // Sắp xếp bộ máy mới lắp đặt gần nhất lên đầu
   const sortedAllocatedSets = useMemo(() => {
@@ -261,7 +258,6 @@ export default function Dashboard({
 
   return (
     <div className="workspace-screen dashboard-screen" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      <div className="workspace-heading"><div><span className="workspace-eyebrow">VẬN HÀNH / TỔNG QUAN</span><h2>Nắm việc cần xử lý</h2><p>Thống kê, cảnh báo và thông tin thiết bị trên cùng một màn hình.</p></div></div>
 
       <TeamWorkPanel teamUsers={teamUsers} repairTickets={repairTickets} systemSets={systemSets} npps={npps} onNavigate={(tab, query) => onNavigateWorkspace?.(tab, query)} />
       {/* Warning Banners */}
@@ -311,8 +307,9 @@ export default function Dashboard({
             {totalSetsCount} <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)', fontWeight: 'normal' }}>Bộ</span>
           </div>
           <div style={{ marginTop: '12px', display: 'flex', gap: '8px', fontSize: '0.75rem', flexWrap: 'wrap' }}>
+            {regionalCounts.map(region => <span key={region.name} className="badge badge-info">{region.name}: {region.count} bộ</span>)}
             <span className="badge badge-success">● {installedSetsCount} Đã Lắp</span>
-            <span className="badge badge-info">● {stockSetsCount} Trong Kho</span>
+            <span className="badge badge-info" title="Gồm bộ đã ghép và số bộ có thể ghép đủ từ thiết bị lẻ, đồng nhất với Kho thiết bị">● {stockSetsCount} Trong Kho</span>
           </div>
         </div>
 
@@ -327,7 +324,8 @@ export default function Dashboard({
           <div style={{ fontSize: '2rem', fontWeight: '800', color: 'var(--text-main)', lineHeight: 1.1 }}>
             {npps.length} <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)', fontWeight: 'normal' }}>Đại lý</span>
           </div>
-          <div style={{ marginTop: '12px', display: 'flex', gap: '8px', fontSize: '0.75rem' }}>
+          <div style={{ marginTop: '12px', display: 'flex', gap: '8px', fontSize: '0.75rem', flexWrap: 'wrap' }}>
+            <span className="badge badge-info">{coverage.assigned.length} NPP đã ghép bộ</span><span className="badge badge-warning">{coverage.unassigned.length} NPP chưa ghép</span>
             <span className="badge badge-success">● {npps.filter(n => n.status === 'Đang hợp tác').length} Hợp tác</span>
             <span className="badge badge-neutral">● {npps.filter(n => n.status === 'Đã ngưng hợp tác').length} Ngưng</span>
           </div>
@@ -344,7 +342,7 @@ export default function Dashboard({
           <div style={{ fontSize: '2rem', fontWeight: '800', color: 'var(--text-main)', lineHeight: 1.1 }}>
             {dispensers.length + mixers.length} <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)', fontWeight: 'normal' }}>Thiết bị</span>
           </div>
-          <div style={{ marginTop: '12px', display: 'flex', gap: '8px', fontSize: '0.75rem' }}>
+          <div style={{ marginTop: '12px', display: 'flex', gap: '8px', fontSize: '0.75rem', flexWrap: 'wrap' }}>
             <span className="badge badge-purple">{dispensers.length} Máy Chiết</span>
             <span className="badge badge-info">{mixers.length} Máy Lắc</span>
           </div>
@@ -402,26 +400,11 @@ export default function Dashboard({
 
       </div>
 
-      <div className="workspace-tabs" aria-label="Thống kê nhanh">{[['assets','STOCK','Trong kho',systemSets.filter(set => set.status === 'TRONG_KHO').length],['repairs','PENDING','Chờ sửa',pendingTasks.length],['repairs','RETURN','Chờ gửi trả',returnTasks.length],['maintenance','OVERDUE','Quá hạn bảo trì',systemSets.filter(set => set.nextMaintenanceDue && set.nextMaintenanceDue < new Date().toLocaleDateString('en-CA')).length]].map(([tab,filter,label,count]) => <button key={filter} onClick={() => onNavigateWorkspace?.(tab, '', filter)}>{label} ({count})</button>)}</div>
-      <details className="dashboard-chart-group"><summary>Chi tiết cảnh báo theo nhóm ({actionTasks.length})</summary>
-      <section className="glass-panel overview-tasks" aria-labelledby="task-heading">
-        <div className="workspace-section-heading"><div><h2 id="task-heading">Việc cần xử lý ({actionTasks.length})</h2><p>Phiếu chưa xử lý, thiết bị chờ gửi trả và lịch bảo trì cần kiểm tra.</p></div></div>
-        <div className="workspace-tabs" aria-label="Lọc việc cần xử lý">
-          <button type="button" aria-pressed={taskFilter === 'ALL'} onClick={() => setTaskFilter('ALL')}>Tất cả ({actionTasks.length})</button>
-          {taskGroups.map(group => <button type="button" key={group.key} aria-pressed={taskFilter === group.key} onClick={() => setTaskFilter(group.key)}>{group.label} ({group.items.length})</button>)}
-        </div>
-        {visibleTasks.slice(0, 6).map(task => <div className="workspace-task-row" key={`${task.key}-${task.item.id || task.item.setCode || task.item.ticketCode}`}>
-          <div className="workspace-task-icon">{task.key === 'MAINTENANCE' ? <CalendarClock size={20}/> : <Wrench size={20}/>}</div>
-          <div><strong>{task.item.machineModel || task.item.dispenserModel || task.item.setCode}</strong><p>{task.item.nppName} · {task.item.ticketCode || task.item.setCode}</p><span className={`badge ${task.item.nextMaintenanceDue && task.item.nextMaintenanceDue < new Date().toLocaleDateString('en-CA') ? 'badge-danger' : 'badge-warning'}`}>{task.label}{task.item.nextMaintenanceDue ? ` · ${task.item.nextMaintenanceDue}` : ''}</span></div>
-          <button type="button" className="btn btn-secondary btn-sm" onClick={() => onNavigateWorkspace ? onNavigateWorkspace(task.key === 'MAINTENANCE' ? 'assets' : task.tab, task.item.ticketCode || task.item.setCode || task.item.serialNumber || '') : setActiveTab(task.tab)}>Xem</button>
-        </div>)}
-        {!visibleTasks.length && <p className="workspace-empty">Không có công việc trong nhóm này.</p>}
-        {visibleTasks.length > 6 && <button type="button" className="btn btn-secondary" onClick={() => setActiveTab(taskFilter === 'MAINTENANCE' ? 'maintenance' : 'repairs')}>Xem danh sách đầy đủ</button>}
-      </section>
-      </details>
+      <div className="workspace-tabs" aria-label="Thống kê nhanh">{[['assets','STOCK','Trong kho',stockSetsCount],['repairs','PENDING','Chờ sửa',pendingTasks.length],['repairs','RETURN','Chờ gửi trả',returnTasks.length],['maintenance','OVERDUE','Quá hạn bảo trì',systemSets.filter(set => set.nextMaintenanceDue && set.nextMaintenanceDue < new Date().toLocaleDateString('en-CA')).length]].map(([tab,filter,label,count]) => <button key={filter} onClick={() => onNavigateWorkspace?.(tab, '', filter)}>{label} ({count})</button>)}</div>
+
 
       {/* Charts Section */}
-      <details className="dashboard-chart-group" open>
+      <details className="dashboard-chart-group" open={!window.matchMedia('(max-width: 600px)').matches}>
       <summary>Biểu đồ tổng quan</summary>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px' }}>
 
@@ -521,14 +504,10 @@ export default function Dashboard({
             </thead>
             <tbody>
               {paginatedAllocatedSets.map((set) => {
-                const pcObj = computers?.find(c => 
-                  (set.computerId && c.id === set.computerId) || 
-                  (set.setCode && c.setCode === set.setCode) ||
-                  (set.pcSerial && c.serial && c.serial !== '—' && c.serial === set.pcSerial)
-                );
-                const pcSpecs = pcObj?.specs || set.pcSpecs || 'Core i5 / 16GB RAM / 512GB SSD';
-                const pcType = set.pcType || pcObj?.type || 'AIO';
-                const pcOs = set.pcOs || pcObj?.os || 'Windows 11 Pro';
+                const pcObj = findAssignedDevice('computer', computers, set);
+                const pcSpecs = pcObj?.specs || set.pcSpecs || 'Chưa có cấu hình';
+                const pcType = set.pcType || pcObj?.type || 'Chưa có thông tin';
+                const pcOs = set.pcOs || pcObj?.os || 'Chưa có thông tin';
 
                 // Find repair & exchange history for this specific set/NPP
                 const nppTickets = getTicketsForSetOrNpp(set);
@@ -713,14 +692,10 @@ export default function Dashboard({
         {/* Mobile View Cards */}
         <div className="mobile-only mobile-card-list">
           {paginatedAllocatedSets.map((set) => {
-            const pcObj = computers?.find(c => 
-              (set.computerId && c.id === set.computerId) || 
-              (set.setCode && c.setCode === set.setCode) ||
-              (set.pcSerial && c.serial && c.serial !== '—' && c.serial === set.pcSerial)
-            );
-            const pcSpecs = pcObj?.specs || set.pcSpecs || 'Core i5 / 16GB RAM / 512GB SSD';
-            const pcType = set.pcType || pcObj?.type || 'AIO';
-            const pcOs = set.pcOs || pcObj?.os || 'Windows 11 Pro';
+            const pcObj = findAssignedDevice('computer', computers, set);
+            const pcSpecs = pcObj?.specs || set.pcSpecs || 'Chưa có cấu hình';
+            const pcType = set.pcType || pcObj?.type || 'Chưa có thông tin';
+            const pcOs = set.pcOs || pcObj?.os || 'Chưa có thông tin';
 
             const nppTickets = getTicketsForSetOrNpp(set);
             const nppStats = getNppTicketStats(nppTickets);

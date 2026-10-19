@@ -1,3 +1,4 @@
+import { calculateRoadRoute } from '../lib/routeEstimate.js';
 import React, { useState, useMemo, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useWorkspaceState } from '../hooks/useWorkspaceState';
@@ -59,6 +60,22 @@ export default function FieldRouteMap({
 
   // GPS state
   const [userLocation, setUserLocation] = useState(null);
+  const [locationBusy, setLocationBusy] = useState(false);
+  const [routeBusy, setRouteBusy] = useState(false);
+  const [routeConsent, setRouteConsent] = useState(false);
+  const [routeResult, setRouteResult] = useState(null);
+  const [routeError, setRouteError] = useState('');
+  const routeGeneration = React.useRef(0);
+  useEffect(() => { routeGeneration.current += 1; setRouteResult(null); setRouteConsent(false); }, [selectedTripNpps, userLocation]);
+  const locateRouteOrigin = async () => {
+    setLocationBusy(true); setRouteError('');
+    try {
+      const result = await getRobustUserLocation({ purpose: PERMISSION_PURPOSES.ROUTE_ORIGIN, allowIpFallback: false });
+      if (!result.success || !result.coords) throw new Error(result.errorMessage || 'Không lấy được vị trí GPS. Kiểm tra quyền vị trí của trình duyệt.');
+      setUserLocation(result.coords);
+    } catch(error) { setRouteError(error.message); }
+    finally { setLocationBusy(false); }
+  };
 
   // Distance helper (Haversine formula in km)
   const getDistanceKm = (lat1, lon1, lat2, lon2) => {
@@ -129,12 +146,10 @@ export default function FieldRouteMap({
       }
 
       const hasCoordinates = npp.locationCoordinates && npp.locationCoordinates.includes(',');
-      const searchTarget = hasCoordinates
-        ? npp.locationCoordinates.trim()
-        : `${npp.name}, ${npp.address || npp.province || ''}`;
+      const searchTarget = String(npp.address || '').trim();
 
-      const googleMapsSearchUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(searchTarget)}`;
-      const googleMapsNavUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(searchTarget)}`;
+      const googleMapsSearchUrl = searchTarget ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(searchTarget)}` : null;
+      const googleMapsNavUrl = searchTarget ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(searchTarget)}` : null;
 
       return {
         ...npp,
@@ -236,6 +251,16 @@ export default function FieldRouteMap({
       .filter(Boolean);
   }, [selectedTripNpps, enrichedNpps]);
 
+  const calculateSelectedRoute = async () => {
+    if (!routeConsent || !userLocation || routeBusy) return;
+    const generation = routeGeneration.current;
+    setRouteBusy(true); setRouteError('');
+    try {
+      const result = await calculateRoadRoute(userLocation, tripNppObjects);
+      if (generation === routeGeneration.current) setRouteResult(result);
+    } catch(error) { if (generation === routeGeneration.current) setRouteError(error.message); }
+    finally { setRouteBusy(false); }
+  };
   // Total route distance calculation
   const totalTripDistanceKm = useMemo(() => {
     if (tripNppObjects.length < 2) return 0;
@@ -252,7 +277,7 @@ export default function FieldRouteMap({
 
   // Generate Google Maps Multi-stop URL for ALL selected NPPs
   const multiStopMapsUrl = useMemo(() => {
-    if (tripNppObjects.length === 0) return '#';
+    if (tripNppObjects.length === 0 || tripNppObjects.some(npp => !String(npp.address || '').trim())) return undefined;
     
     // Single selected NPP: open direct location search
     if (tripNppObjects.length === 1) {
@@ -261,10 +286,7 @@ export default function FieldRouteMap({
 
     // 2 or more selected NPPs: Build Google Maps Directions with all stops
     const stops = tripNppObjects.map((npp) => {
-      if (npp.locationCoordinates && npp.locationCoordinates.includes(',')) {
-        return npp.locationCoordinates.trim();
-      }
-      return encodeURIComponent(`${npp.name}, ${npp.address || npp.province || ''}`);
+      return encodeURIComponent(String(npp.address || '').trim());
     });
 
     return `https://www.google.com/maps/dir/${stops.join('/')}`;
@@ -272,12 +294,9 @@ export default function FieldRouteMap({
 
   // Multi-stop directions starting from current user GPS
   const multiStopWithUserLocationUrl = useMemo(() => {
-    if (tripNppObjects.length === 0) return '#';
+    if (tripNppObjects.length === 0 || tripNppObjects.some(npp => !String(npp.address || '').trim())) return undefined;
     const stops = tripNppObjects.map((npp) => {
-      if (npp.locationCoordinates && npp.locationCoordinates.includes(',')) {
-        return npp.locationCoordinates.trim();
-      }
-      return encodeURIComponent(`${npp.name}, ${npp.address || npp.province || ''}`);
+      return encodeURIComponent(String(npp.address || '').trim());
     });
 
     if (userLocation) {
@@ -415,7 +434,10 @@ export default function FieldRouteMap({
   };
 
   return (
-    <div className="workspace-screen" style={{ display: 'flex', flexDirection: 'column', gap: '20px', paddingBottom: selectedTripNpps.length > 0 ? '90px' : '20px' }}>
+    <div className="workspace-screen" style={{ display: 'flex', flexDirection: 'column', gap: '20px', paddingBottom: selectedTripNpps.length >
+
+ 0 ? '90px' : '20px' }}>
+      <section className="glass-panel" style={{ padding: 16 }} aria-label="Điểm xuất phát và tính đường"><h3>Tính đường từ vị trí của tôi</h3><button className="btn btn-secondary" disabled={locationBusy} onClick={locateRouteOrigin}>{locationBusy ? 'Đang lấy vị trí…' : 'Lấy vị trí của tôi'}</button>{userLocation && <p>Đã lấy vị trí GPS. Chọn NPP và sắp xếp thứ tự ghé thăm trước khi tính đường.</p>}<label style={{ display: 'block', margin: '12px 0' }}><input type="checkbox" checked={routeConsent} onChange={event => setRouteConsent(event.target.checked)} /> Cho phép gửi tọa độ hiện tại và các NPP đã chọn tới dịch vụ OSRM để tính đường.</label><button className="btn btn-primary" disabled={!routeConsent || !userLocation || !tripNppObjects.length || routeBusy} onClick={calculateSelectedRoute}>{routeBusy ? 'Đang tính đường…' : 'Tính km và thời gian'}</button>{routeError && <p role="alert" className="resource-error">{routeError}</p>}{routeResult && <div><strong>Tổng tuyến: {routeResult.km.toFixed(1)} km · khoảng {Math.ceil(routeResult.minutes)} phút</strong><p>Ước tính theo tuyến ô tô, không tính ùn tắc hoặc thời gian dừng tại NPP.</p><ol>{routeResult.legs.map(leg => <li key={leg.id}>{leg.name}: chặng này {leg.km.toFixed(1)} km / {Math.ceil(leg.minutes)} phút; từ điểm xuất phát {leg.cumulativeKm.toFixed(1)} km / {Math.ceil(leg.cumulativeMinutes)} phút</li>)}</ol></div>}</section>
       <section className="glass-panel route-planner"><h2>Gom việc theo tỉnh / thành</h2><p>Chọn tỉnh để thêm tối đa 10 NPP cần sửa hoặc bảo trì vào chuyến. Có thể điều chỉnh thứ tự trước khi mở bản đồ.</p><label>Ngày công tác<input type="date" className="form-input" value={tripDate} onChange={event => setTripDate(event.target.value)} /></label><div className="workspace-tabs">{provinces.map(province => { const pending = enrichedNpps.filter(item => item.province === province && item.priority !== 'OK').sort((a, b) => a.minDiffDays - b.minDiffDays); return pending.length > 0 && <button key={province} onClick={() => { setProvinceFilter(province); setSelectedTripNpps(previous => [...new Set([...previous, ...pending.map(item => item.id)])].slice(0, 10)); setViewMode('TRIP'); }}>{province} ({pending.length} NPP)</button>; })}</div>{!enrichedNpps.some(item => item.priority !== 'OK') && <p>Chưa có NPP cần sửa hoặc đến hạn bảo trì.</p>}</section>
       {/* Top Banner & Main Actions */}
       <div
@@ -849,7 +871,9 @@ export default function FieldRouteMap({
 
                       {/* Google Maps link for single item */}
                       <a
-                        href={npp.googleMapsSearchUrl}
+                        href={npp.googleMapsSearchUrl || undefined}
+                        aria-disabled={!npp.googleMapsSearchUrl}
+                        title={!npp.googleMapsSearchUrl ? 'Cần bổ sung địa chỉ NPP trước khi mở bản đồ.' : undefined}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="btn btn-secondary btn-sm"
@@ -861,7 +885,9 @@ export default function FieldRouteMap({
                       </a>
 
                       <a
-                        href={npp.googleMapsNavUrl}
+                        href={npp.googleMapsNavUrl || undefined}
+                        aria-disabled={!npp.googleMapsNavUrl}
+                        title={!npp.googleMapsNavUrl ? 'Cần bổ sung địa chỉ NPP trước khi mở bản đồ.' : undefined}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="btn btn-secondary btn-sm"
@@ -1027,7 +1053,7 @@ export default function FieldRouteMap({
                   {/* Distance Info */}
                   {nppDistance !== null && (
                     <div style={{ fontSize: '0.75rem', color: '#10b981', fontWeight: '700', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      🚗 Cách vị trí của bạn: <strong>{nppDistance.toFixed(1)} km</strong>
+                      Đường chim bay từ bạn: <strong>{nppDistance.toFixed(1)} km</strong>
                     </div>
                   )}
 
@@ -1036,7 +1062,9 @@ export default function FieldRouteMap({
                     {/* Google Maps Actions Row */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                       <a
-                        href={npp.googleMapsSearchUrl}
+                        href={npp.googleMapsSearchUrl || undefined}
+                        aria-disabled={!npp.googleMapsSearchUrl}
+                        title={!npp.googleMapsSearchUrl ? 'Cần bổ sung địa chỉ NPP trước khi mở bản đồ.' : undefined}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="btn btn-primary btn-sm"
@@ -1055,7 +1083,9 @@ export default function FieldRouteMap({
                       </a>
 
                       <a
-                        href={npp.googleMapsNavUrl}
+                        href={npp.googleMapsNavUrl || undefined}
+                        aria-disabled={!npp.googleMapsNavUrl}
+                        title={!npp.googleMapsNavUrl ? 'Cần bổ sung địa chỉ NPP trước khi mở bản đồ.' : undefined}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="btn btn-secondary btn-sm"

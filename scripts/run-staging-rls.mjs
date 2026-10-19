@@ -2,6 +2,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { createClient } from '@supabase/supabase-js';
 import { retireStagingUser } from './staging-user-cleanup.mjs';
+import { verifyAuthLifecycle } from './verify-auth-lifecycle.mjs';
 
 const expectedHost = 'kenznmtdfuexmfrtzypb.supabase.co';
 const url = process.env.RLS_TEST_URL;
@@ -39,6 +40,7 @@ async function main() {
     }
   }
   const env = { ...process.env };
+  await verifyAuthLifecycle(client, env);
   delete env.STAGING_SUPABASE_SERVICE_ROLE_KEY;
   for (const role of ['admin', 'manager', 'technician', 'qc', 'viewer']) {
     console.log(`Preparing synthetic staging role: ${role}`);

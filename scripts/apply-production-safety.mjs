@@ -18,7 +18,7 @@ const auditOnly = process.argv.includes('--audit-only');
 const operational = process.argv.includes('--operational');
 if (auditOnly && operational) throw new Error('Choose exactly one migration mode');
 const migrations = operational ? ['migrations/20261017075603_roadmap_operational_integrity.sql'] : auditOnly ? ['audit_logs_append_only.sql'] : ['sensitive_action_reauthentication.sql', 'technical_document_uploads_migration.sql',
-  'technical_storage_recent_auth.sql', 'device_edit_atomic.sql', 'trusted_session_revocation.sql', 'revoked_session_write_guard.sql'];
+  'technical_storage_recent_auth.sql', 'device_edit_atomic.sql', 'optional_device_serial.sql', 'account_npp_integrity.sql', 'technician_region_write_migration.sql', 'technician_national_read_admin_session.sql', 'trusted_session_revocation.sql', 'revoked_session_write_guard.sql'];
 const statements = await Promise.all(migrations.map(async name => (await readFile(`supabase/${name}`, 'utf8'))
   .replace(/^\s*(BEGIN|COMMIT);\s*$/gm, '')));
 const snapshot = `

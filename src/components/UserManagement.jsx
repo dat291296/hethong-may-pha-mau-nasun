@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase.js';
 import { useAuth } from '../context/AuthContext.jsx';
-import { useSensitiveActionGate } from './SensitiveActionGate.jsx';
+import { authorizeAccountManagement, confirmAccountUpdate } from '../security/accountManagement.js';
 import { UserCheck, ShieldAlert, Trash2, Key, RefreshCw, Award, Lock, Unlock, Calendar, ExternalLink } from 'lucide-react';
 
 const keycloakAccountUrl = import.meta.env.VITE_KEYCLOAK_ACCOUNT_URL;
@@ -14,7 +14,7 @@ export default function UserManagement({
   lockError = null
 }) {
   const { user: currentUser } = useAuth();
-  const { requireAuthentication, dialog: authenticationDialog } = useSensitiveActionGate();
+  const [savingAccess, setSavingAccess] = useState(false);
   const [profiles, setProfiles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -74,23 +74,9 @@ export default function UserManagement({
     setLoading(true);
     setError(null);
     try {
-      const { data, error: fetchErr } = await supabase
-        .from('profiles')
-        .select('id, full_name, role, managed_region, is_active, created_at')
-        .order('created_at', { ascending: false });
-      
+      const { data, error: fetchErr } = await supabase.rpc('admin_list_registered_accounts');
       if (fetchErr) throw fetchErr;
-      
-      // Since supabase profiles table might not contain emails (email is in auth.users),
-      // in production, we can mock or map emails if needed, or just show the ID / Full Name.
-      // But we can try to fetch auth user emails via a secure view or just display their Full Name & ID.
-      // In this case, we display full_name and use default fallback emails.
-      const mappedProfiles = data.map(p => ({
-        ...p,
-        email: p.email || (p.id === currentUser.id ? currentUser.email : `${p.full_name.toLowerCase().replace(/\s+/g, '')}@nasun.vn`)
-      }));
-      
-      setProfiles(mappedProfiles);
+      setProfiles((data || []).map(profile => ({ ...profile, email: profile.email || 'Chưa có email đăng ký' })));
     } catch (err) {
       console.error('[UserManagement] Error loading profiles:', err.message);
       setError('Lỗi tải danh sách tài khoản: ' + err.message);
@@ -123,7 +109,7 @@ export default function UserManagement({
     fetchProfiles();
   }, []);
 
-  if (!currentUser) return null;
+  if (!currentUser || currentUser.role !== 'admin') return null;
 
   const handleRoleChange = async (profileId, newRole) => {
     // Prevent admin from demoting themselves
@@ -144,7 +130,8 @@ export default function UserManagement({
 
     try {
       const profile = profiles.find(item => item.id === profileId);
-      await requireAuthentication();
+      setSavingAccess(true);
+      await authorizeAccountManagement(supabase);
       if (newRole === 'admin') {
         const reason = window.prompt('Nhập lý do cấp quyền Admin (tối thiểu 10 ký tự):', 'Cấp quyền quản trị theo phê duyệt nội bộ');
         if (reason === null) return;
@@ -159,7 +146,8 @@ export default function UserManagement({
         fetchProfiles();
         return;
       }
-      const nextRegion = profile?.managed_region || 'Miền Bắc';
+      const nextRegion = ['Miền Bắc', 'Miền Trung', 'Miền Nam'].includes(profile?.managed_region) ? profile.managed_region : '';
+      if (!nextRegion) throw new Error('Hãy chọn Miền Bắc, Miền Trung hoặc Miền Nam trước khi thay đổi vai trò.');
       const { data: updateResult, error: updateErr } = await supabase.rpc('update_user_access', {
         target_user_id: profileId,
         target_role: newRole,
@@ -167,6 +155,7 @@ export default function UserManagement({
       });
 
       if (updateErr) throw updateErr;
+      confirmAccountUpdate(updateResult, profileId, { role: newRole, managed_region: nextRegion });
       if (updateResult?.error === 'RATE_LIMIT_EXCEEDED') {
         throw new Error(`Thao tác quá nhanh. Vui lòng thử lại sau ${updateResult.retry_after_seconds} giây.`);
       }
@@ -176,7 +165,7 @@ export default function UserManagement({
     } catch (err) {
       console.error(err);
       setError('Lỗi cập nhật vai trò: ' + err.message);
-    }
+    } finally { setSavingAccess(false); }
   };
 
   const handleRegionChange = async (profileId, newRegion) => {
@@ -192,7 +181,8 @@ export default function UserManagement({
     try {
       const profile = profiles.find(item => item.id === profileId);
       if (!profile) throw new Error('Không tìm thấy tài khoản cần cập nhật.');
-      await requireAuthentication();
+      setSavingAccess(true);
+      await authorizeAccountManagement(supabase);
       const { data: updateResult, error: updateErr } = await supabase.rpc('update_user_access', {
         target_user_id: profileId,
         target_role: profile.role,
@@ -200,6 +190,7 @@ export default function UserManagement({
       });
 
       if (updateErr) throw updateErr;
+      confirmAccountUpdate(updateResult, profileId, { role: profile.role, managed_region: newRegion });
       if (updateResult?.error === 'RATE_LIMIT_EXCEEDED') {
         throw new Error(`Thao tác quá nhanh. Vui lòng thử lại sau ${updateResult.retry_after_seconds} giây.`);
       }
@@ -209,7 +200,7 @@ export default function UserManagement({
     } catch (err) {
       console.error(err);
       setError('Lỗi cập nhật vùng quản lý: ' + err.message);
-    }
+    } finally { setSavingAccess(false); }
   };
 
   const handleAccountStatusChange = async (profileId, isActive) => {
@@ -236,7 +227,8 @@ export default function UserManagement({
     }
 
     try {
-      await requireAuthentication();
+      setSavingAccess(true);
+      await authorizeAccountManagement(supabase);
       const { data: statusResult, error: delErr } = await supabase.rpc('set_user_account_active', {
         target_user_id: profileId,
         target_active: nextActive,
@@ -252,12 +244,11 @@ export default function UserManagement({
     } catch (err) {
       console.error(err);
       setError('Lỗi cập nhật trạng thái tài khoản: ' + err.message);
-    }
+    } finally { setSavingAccess(false); }
   };
 
   return (
     <div className="workspace-screen" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      {authenticationDialog}
       {keycloakAccountUrl && (
         <div className="glass-panel" style={{ padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap', borderColor: 'rgba(6, 182, 212, 0.3)' }}>
           <div>
@@ -424,7 +415,7 @@ export default function UserManagement({
                         <td>
                           <select 
                             value={p.role} 
-                            disabled={isSelf}
+                            disabled={isSelf || savingAccess || loading}
                             onChange={e => handleRoleChange(p.id, e.target.value)}
                             className="form-input"
                             style={{
@@ -446,9 +437,10 @@ export default function UserManagement({
                         <td>
                           {p.role === 'admin' ? (
                             <span style={{ fontSize: '0.8rem', color: '#f59e0b', fontWeight: 'bold' }}>Toàn Quốc</span>
-                          ) : ['manager', 'technician', 'qc'].includes(p.role) ? (
+                          ) : (
                             <select 
-                              value={p.managed_region || 'Miền Bắc'} 
+                              value={['Miền Bắc', 'Miền Trung', 'Miền Nam'].includes(p.managed_region) ? p.managed_region : ''}
+                              disabled={isSelf || savingAccess || loading}
                               onChange={e => handleRegionChange(p.id, e.target.value)}
                               className="form-input"
                               style={{
@@ -460,19 +452,17 @@ export default function UserManagement({
                                 borderColor: 'var(--border-color)'
                               }}
                             >
+                              <option value="" disabled>Chọn khu vực</option>
                               <option value="Miền Bắc">Miền Bắc</option>
                               <option value="Miền Trung">Miền Trung</option>
                               <option value="Miền Nam">Miền Nam</option>
-                              <option value="Toàn Quốc">Toàn Quốc</option>
                             </select>
-                          ) : (
-                            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Mặc định theo NPP</span>
                           )}
                         </td>
                         <td style={{ textAlign: 'center' }}>
                           <button
                             onClick={() => handleAccountStatusChange(p.id, p.is_active !== false)}
-                            disabled={isSelf}
+                            disabled={isSelf || savingAccess || loading}
                             className="btn btn-secondary btn-sm"
                             style={{
                               borderColor: 'transparent',

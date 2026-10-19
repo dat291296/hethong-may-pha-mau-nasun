@@ -22,7 +22,7 @@ import { cacheOfflineData, getCachedOfflineData, enqueueOfflineAction, getOfflin
  * Integrated with offline support, local persistence & action queuing.
  */
 function getInitialAssets(key, fallback) {
-  return fallback;
+  return isSupabaseConfigured ? [] : fallback;
 }
 
 function persistAssetsLocal(key, data) {
@@ -74,7 +74,7 @@ export function useAssets() {
   useEffect(() => {
     async function loadCached() {
       try {
-        if (navigator.onLine) return;
+        if (navigator.onLine && !(await getOfflineQueue()).some(isPendingAssetAction)) return;
         const [d, m, c, p, s] = await Promise.all([
           getCachedOfflineData('dispensers', null),
           getCachedOfflineData('mixers', null),
@@ -82,11 +82,11 @@ export function useAssets() {
           getCachedOfflineData('printers', null),
           getCachedOfflineData('system_sets', null),
         ]);
-        if (d && d.length > 0) { setDispensers(d); persistAssetsLocal('dispensers', d); }
-        if (m && m.length > 0) { setMixers(m); persistAssetsLocal('mixers', m); }
-        if (c && c.length > 0) { setComputers(c); persistAssetsLocal('computers', c); }
-        if (p && p.length > 0) { setPrinters(p); persistAssetsLocal('printers', p); }
-        if (s && s.length > 0) { setSystemSets(s); persistAssetsLocal('system_sets', s); }
+        if (Array.isArray(d)) { setDispensers(d); persistAssetsLocal('dispensers', d); }
+        if (Array.isArray(m)) { setMixers(m); persistAssetsLocal('mixers', m); }
+        if (Array.isArray(c)) { setComputers(c); persistAssetsLocal('computers', c); }
+        if (Array.isArray(p)) { setPrinters(p); persistAssetsLocal('printers', p); }
+        if (Array.isArray(s)) { setSystemSets(s); persistAssetsLocal('system_sets', s); }
       } finally {
         setCacheHydrated(true);
       }
@@ -117,7 +117,7 @@ export function useAssets() {
       persistAssetsLocal('dispensers', mapped);
     } else if (dRes.error) {
       const cached = await getCachedOfflineData('dispensers', null);
-      if (cached && cached.length > 0) setDispensers(cached);
+      if (Array.isArray(cached)) setDispensers(cached);
     }
 
     if (Array.isArray(mRes.data)) {
@@ -126,7 +126,7 @@ export function useAssets() {
       persistAssetsLocal('mixers', mapped);
     } else if (mRes.error) {
       const cached = await getCachedOfflineData('mixers', null);
-      if (cached && cached.length > 0) setMixers(cached);
+      if (Array.isArray(cached)) setMixers(cached);
     }
 
     if (Array.isArray(cRes.data)) {
@@ -135,7 +135,7 @@ export function useAssets() {
       persistAssetsLocal('computers', mapped);
     } else if (cRes.error) {
       const cached = await getCachedOfflineData('computers', null);
-      if (cached && cached.length > 0) setComputers(cached);
+      if (Array.isArray(cached)) setComputers(cached);
     }
 
     if (Array.isArray(pRes.data)) {
@@ -144,7 +144,7 @@ export function useAssets() {
       persistAssetsLocal('printers', mapped);
     } else if (pRes.error) {
       const cached = await getCachedOfflineData('printers', null);
-      if (cached && cached.length > 0) setPrinters(cached);
+      if (Array.isArray(cached)) setPrinters(cached);
     }
 
     if (Array.isArray(sRes.data)) {
@@ -153,7 +153,7 @@ export function useAssets() {
       persistAssetsLocal('system_sets', mapped);
     } else if (sRes.error) {
       const cached = await getCachedOfflineData('system_sets', null);
-      if (cached && cached.length > 0) setSystemSets(cached);
+      if (Array.isArray(cached)) setSystemSets(cached);
     }
 
     setLoading(false);
@@ -242,6 +242,7 @@ export function useAssets() {
     const singularCat = cfg ? cfg.singular : category;
 
     const { id: _ignoredId, ...dbUpdates } = mapDeviceToDb({ ...updates, id }, singularCat);
+    if (updates.originalSerial !== undefined && updates.serial === updates.originalSerial) delete dbUpdates.serial;
     const appUpdates = { ...updates, id, isUpdated: true, updatedAt: new Date().toISOString() };
 
     if ('is_assigned' in updates) appUpdates.isAssigned = updates.is_assigned;
@@ -261,10 +262,10 @@ export function useAssets() {
       setSystemSets(prev => prev.map(set => {
         const fields = singularCat === 'dispenser' ? { dispenserId: id, dispenserModel: updates.model, dispenserSerial: updates.serial }
           : singularCat === 'mixer' ? { mixerId: id, mixerModel: updates.model, mixerSerial: updates.serial }
-          : singularCat === 'computer' ? { computerId: id, computerType: updates.type, computerSerial: updates.serial }
+          : singularCat === 'computer' ? { computerId: id, computerType: updates.type, computerSerial: updates.serial, tintingSoftware: updates.tintingSoftware, softwareVersion: updates.softwareVersion }
           : { printerId: id, printerSerial: updates.serial };
         const key = `${singularCat}Id`;
-        if (set.setCode === updates.setCode && updates.isAssigned) return { ...set, ...fields };
+        if (set.setCode === updates.setCode && updates.isAssigned && (!set[key] || set[key] === id)) return { ...set, ...fields };
         if (set[key] === id) return { ...set, ...Object.fromEntries(Object.keys(fields).map(field => [field, field === key ? null : ''])) };
         return set;
       }));
@@ -407,7 +408,7 @@ export function useAssets() {
       if (!navigator.onLine) throw createPersistenceError('Cần kết nối mạng để ráp bộ máy đồng thời. Nội dung được giữ ở bản nháp.');
       const result=await safeQuery(sb=>sb.rpc('assemble_system_set_atomic',{p_operation_id:newSet.operationId,p_payload:dbPayload}),'assembleSystemSet');
       if(result.error)throw result.error;
-      if(!result.data?.ok)throw createPersistenceError('Server chưa xác nhận ráp bộ máy.');
+      if(!result.data?.ok || result.data.setCode !== setCode)throw createPersistenceError('Server chưa xác nhận ráp bộ máy.');
       await fetchAssets();
     } else {
       setSystemSets(prev=>{const updated=[appSetData,...prev.filter(item=>item.setCode!==setCode)];persistAssetsLocal('system_sets',updated);return updated;});
@@ -519,7 +520,9 @@ function mapDbToComputer(row) {
   return { 
     id: row.id, 
     type: cleanType, 
-    os: row.os, 
+    os: row.os,
+    tintingSoftware: row.tinting_software ?? row.tintingSoftware,
+    softwareVersion: row.software_version ?? row.softwareVersion,
     specs: row.specs, 
     serial: row.serial || '—', 
     status: row.status || 'Mới 100%',
@@ -569,7 +572,7 @@ function mapDeviceToDb(obj, category) {
 
   // Basic identification & PK
   if (obj.id !== undefined) dbObj.id = obj.id;
-  if (obj.serial !== undefined && obj.serial !== '' && obj.serial !== '—') dbObj.serial = obj.serial;
+  if (obj.serial !== undefined && obj.serial !== '—') dbObj.serial = obj.serial?.trim() || null;
 
   // Assignment status & system set link
   if (obj.isAssigned !== undefined || obj.is_assigned !== undefined) {
@@ -583,6 +586,8 @@ function mapDeviceToDb(obj, category) {
   if (cat === 'computer' || cat === 'computers') {
     if (obj.type !== undefined) dbObj.type = obj.type === 'Case' ? 'Case' : 'AIO';
     if (obj.os !== undefined) dbObj.os = obj.os;
+    if (obj.tintingSoftware !== undefined) dbObj.tinting_software = String(obj.tintingSoftware).trim();
+    if (obj.softwareVersion !== undefined) dbObj.software_version = String(obj.softwareVersion).trim();
     if (obj.specs !== undefined) dbObj.specs = obj.specs;
     if (obj.network !== undefined) dbObj.network = obj.network;
     if (obj.status !== undefined) dbObj.status = obj.status;
@@ -592,7 +597,7 @@ function mapDeviceToDb(obj, category) {
     if (obj.status !== undefined) dbObj.status = obj.status;
   } else if (cat === 'mixer' || cat === 'mixers') {
     if (obj.model !== undefined) dbObj.model = obj.model;
-    if (obj.type !== undefined) dbObj.type = obj.type;
+    if (obj.type !== undefined) dbObj.type = obj.type === 'Case' ? 'Case' : 'AIO';
     if (obj.status !== undefined) dbObj.status = obj.status;
   } else if (cat === 'printer' || cat === 'printers') {
     if (obj.model !== undefined) dbObj.model = obj.model;
@@ -625,7 +630,7 @@ function sanitizeDeviceForDb(category, data, tempId) {
   if (category === 'dispenser') {
     return {
       ...base,
-      serial: data.serial || 'N/A',
+      serial: data.serial?.trim() || null,
       model: data.model || 'Satint'
     };
   }
@@ -633,7 +638,7 @@ function sanitizeDeviceForDb(category, data, tempId) {
   if (category === 'mixer') {
     return {
       ...base,
-      serial: data.serial || 'N/A',
+      serial: data.serial?.trim() || null,
       model: data.model || 'Satint ST-50',
       type: data.type || 'Lắc xoay khép kín'
     };
@@ -642,7 +647,8 @@ function sanitizeDeviceForDb(category, data, tempId) {
   if (category === 'computer') {
     return {
       ...base,
-      type: data.type || 'AIO',
+      type: data.type === 'Case' ? 'Case' : 'AIO',
+      serial: null,
       os: data.os || 'Windows 11 Pro',
       specs: data.specs || 'Core i5',
       network: data.network || 'Có mạng LAN'
@@ -652,7 +658,7 @@ function sanitizeDeviceForDb(category, data, tempId) {
   if (category === 'printer') {
     return {
       ...base,
-      serial: data.serial || 'N/A',
+      serial: data.serial?.trim() || null,
       model: data.model || 'QL700',
       connection: data.connection || 'USB'
     };

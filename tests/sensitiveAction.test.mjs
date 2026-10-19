@@ -3,7 +3,10 @@ import assert from 'node:assert/strict';
 import { authorizeSensitiveAction, reauthenticateSensitiveAction } from '../src/security/sensitiveAction.js';
 
 test('sensitive actions fail closed for missing server control and rejected authentication', async () => {
-  await assert.rejects(authorizeSensitiveAction({ rpc: async () => ({ error: { code: 'PGRST202' } }) }));
+  for (const code of ['PGRST202', '42883']) {
+    await assert.rejects(authorizeSensitiveAction({ rpc: async () => ({ error: { code } }) }), { code: 'SCHEMA_MIGRATION_REQUIRED' });
+  }
+  await assert.rejects(authorizeSensitiveAction({ rpc: async () => ({ error: { code: '42501', message: 'ADMIN_REQUIRED' } }) }), { code: 'ADMIN_REQUIRED' });
   await assert.rejects(authorizeSensitiveAction({ rpc: async () => ({ data: false }) }));
   await assert.rejects(authorizeSensitiveAction({ rpc: async () => ({ error: { message: 'REAUTHENTICATION_REQUIRED' } }) }), { code: 'REAUTHENTICATION_REQUIRED' });
   await authorizeSensitiveAction({ rpc: async () => ({ data: true }) });

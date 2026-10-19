@@ -1,6 +1,8 @@
 -- Additive only: no existing business rows are updated or deleted by installation.
 BEGIN;
 ALTER TABLE public.computers ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'Đang chạy tốt';
+ALTER TABLE public.computers ADD COLUMN IF NOT EXISTS tinting_software TEXT;
+ALTER TABLE public.computers ADD COLUMN IF NOT EXISTS software_version TEXT;
 
 CREATE OR REPLACE FUNCTION public.edit_device_atomic(
   p_table TEXT, p_id TEXT, p_updates JSONB, p_expected_updated_at TIMESTAMPTZ
@@ -19,12 +21,13 @@ DECLARE
   set_payload JSONB;
   affected INTEGER;
   profile_serial TEXT;
+  conflicting_legacy_link BOOLEAN := FALSE;
 BEGIN
   IF auth.uid() IS NULL THEN RAISE EXCEPTION 'AUTH_REQUIRED' USING ERRCODE = '42501'; END IF;
   allowed := CASE p_table
     WHEN 'dispensers' THEN ARRAY['serial','model','status','is_assigned','set_code']
     WHEN 'mixers' THEN ARRAY['serial','model','type','status','is_assigned','set_code']
-    WHEN 'computers' THEN ARRAY['serial','type','os','specs','network','stabilizer','status','is_assigned','set_code']
+    WHEN 'computers' THEN ARRAY['serial','type','os','specs','network','stabilizer','status','is_assigned','set_code','tinting_software','software_version']
     WHEN 'printers' THEN ARRAY['serial','model','connection','status','is_assigned','set_code'] END;
   IF allowed IS NULL OR jsonb_typeof(p_updates) IS DISTINCT FROM 'object'
     OR EXISTS (SELECT 1 FROM jsonb_object_keys(p_updates) key WHERE NOT key = ANY(allowed))
@@ -37,6 +40,10 @@ BEGIN
     RAISE EXCEPTION 'WRITE_CONFLICT: tải lại thiết bị trước khi lưu' USING ERRCODE = 'PT409';
   END IF;
   revised := original || p_updates;
+  IF p_table = 'computers' AND (length(COALESCE(revised->>'tinting_software', '')) > 120
+    OR length(COALESCE(revised->>'software_version', '')) > 120) THEN
+    RAISE EXCEPTION 'INVALID_SOFTWARE_DETAILS' USING ERRCODE = '22023';
+  END IF;
   old_code := original->>'set_code';
   new_code := NULLIF(revised->>'set_code', '');
   IF COALESCE((revised->>'is_assigned')::BOOLEAN, FALSE) <> (new_code IS NOT NULL) THEN
@@ -49,7 +56,11 @@ BEGIN
     ORDER BY set_code FOR UPDATE LOOP
     IF linked.set_code = new_code AND NULLIF(to_jsonb(linked)->>(prefix || '_id'), '') IS NOT NULL
       AND to_jsonb(linked)->>(prefix || '_id') <> p_id THEN
-      RAISE EXCEPTION 'DEVICE_SLOT_OCCUPIED: bộ máy đã có thiết bị loại này' USING ERRCODE = '23505';
+      IF old_code IS NOT DISTINCT FROM new_code THEN
+        conflicting_legacy_link := TRUE;
+      ELSE
+        RAISE EXCEPTION 'DEVICE_SLOT_OCCUPIED: bộ máy đã có thiết bị loại này' USING ERRCODE = '23505';
+      END IF;
     END IF;
   END LOOP;
   SELECT string_agg(format('%I = (jsonb_populate_record(NULL::public.%I, $1)).%I', key, p_table, key), ', ')
@@ -76,10 +87,14 @@ BEGIN
     GET DIAGNOSTICS affected = ROW_COUNT;
     IF affected <> 1 THEN RAISE EXCEPTION 'OLD_SET_WRITE_DENIED' USING ERRCODE = '42501'; END IF;
   END IF;
-  IF new_code IS NOT NULL THEN
+  IF new_code IS NOT NULL AND NOT conflicting_legacy_link THEN
     set_payload := jsonb_build_object(prefix || '_id', p_id, prefix || '_serial', COALESCE(profile_serial, revised->>'serial'));
     IF prefix IN ('dispenser','mixer') THEN set_payload := set_payload || jsonb_build_object(prefix || '_model', revised->>'model'); END IF;
     IF prefix = 'computer' THEN set_payload := set_payload || jsonb_build_object('computer_type', revised->>'type'); END IF;
+    IF prefix = 'computer' THEN
+      IF p_updates ? 'tinting_software' THEN set_payload := set_payload || jsonb_build_object('tinting_software', revised->>'tinting_software'); END IF;
+      IF p_updates ? 'software_version' THEN set_payload := set_payload || jsonb_build_object('software_version', revised->>'software_version'); END IF;
+    END IF;
     SELECT string_agg(format('%I = (jsonb_populate_record(NULL::public.system_sets, $1)).%I', key, key), ', ')
       INTO fields FROM jsonb_object_keys(set_payload) key;
     EXECUTE format('UPDATE public.system_sets SET %s, updated_at = clock_timestamp() WHERE set_code = $2', fields)

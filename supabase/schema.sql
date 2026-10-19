@@ -213,7 +213,7 @@ CREATE INDEX IF NOT EXISTS idx_sets_status ON system_sets (status);
 CREATE TABLE IF NOT EXISTS dispensers (
   id          TEXT PRIMARY KEY,
   model       TEXT NOT NULL,
-  serial      TEXT NOT NULL UNIQUE,
+  serial      TEXT UNIQUE,
   status      TEXT NOT NULL DEFAULT 'Đang chạy tốt'
                 CHECK (status IN ('Mới 100%','Đang chạy tốt','Cần bảo trì','Hỏng đầu phun','Hỏng nặng')),
   is_assigned BOOLEAN NOT NULL DEFAULT FALSE,
@@ -228,7 +228,7 @@ CREATE TABLE IF NOT EXISTS mixers (
   model       TEXT NOT NULL,
   type        TEXT NOT NULL DEFAULT 'Lắc xoay khép kín'
                 CHECK (type IN ('Lắc xoay khép kín','Lắc rung đứng','Lắc rung ngang','Lắc mâm xoay')),
-  serial      TEXT NOT NULL UNIQUE,
+  serial      TEXT UNIQUE,
   status      TEXT NOT NULL DEFAULT 'Đang chạy tốt'
                 CHECK (status IN ('Mới 100%','Đang chạy tốt','Cần bảo trì','Hỏng motor','Hỏng nặng','Hỏng đầu phun')),
   is_assigned BOOLEAN NOT NULL DEFAULT FALSE,
@@ -244,7 +244,7 @@ CREATE TABLE IF NOT EXISTS computers (
                 CHECK (type IN ('AIO','Case')),
   os          TEXT NOT NULL DEFAULT 'Windows 10 LTSC',
   specs       TEXT DEFAULT '',
-  serial      TEXT NOT NULL UNIQUE,
+  serial      TEXT UNIQUE,
   network     TEXT DEFAULT 'Có mạng LAN'
                 CHECK (network IN ('Có mạng LAN','Có mạng Wifi','Không có mạng')),
   stabilizer  JSONB DEFAULT '{"hasStabilizer":false,"brand":null,"isSelfBought":false}',
@@ -258,7 +258,7 @@ CREATE TABLE IF NOT EXISTS computers (
 CREATE TABLE IF NOT EXISTS printers (
   id          TEXT PRIMARY KEY,
   model       TEXT NOT NULL DEFAULT 'QL700',
-  serial      TEXT NOT NULL UNIQUE,
+  serial      TEXT UNIQUE,
   connection  TEXT DEFAULT 'USB'
                 CHECK (connection IN ('USB','LAN','Bluetooth','Wifi')),
   status      TEXT NOT NULL DEFAULT 'Đang chạy tốt'

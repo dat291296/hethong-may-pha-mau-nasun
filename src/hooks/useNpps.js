@@ -11,7 +11,7 @@ import { cacheOfflineData, getCachedOfflineData, enqueueOfflineAction, getOfflin
  * Uses Supabase when configured, falls back to mock data locally, with offline caching & queuing.
  */
 export function useNpps() {
-  const [npps, setNpps] = useState(INITIAL_NPPS);
+  const [npps, setNpps] = useState(isSupabaseConfigured ? [] : INITIAL_NPPS);
   const [loading, setLoading] = useState(false);
   const [error, setError]   = useState(null);
 
@@ -75,10 +75,10 @@ export function useNpps() {
   // ── CRUD Operations ────────────────────────────────────────────────────────
   const addNpp = useCallback(async (nppData) => {
     const tempId = nppData.id || `NPP-TEMP-${Date.now()}`;
-    const localNpp = { ...nppData, id: tempId, createdAt: new Date().toISOString().split('T')[0] };
-    const mapped = { ...mapNppToDb(localNpp), id: tempId };
+    const localNpp = { ...nppData, code: nppData.code || nppData.previewCode || null, id: tempId, createdAt: new Date().toISOString().split('T')[0] };
+    const mapped = { ...mapNppToDb(localNpp), npp_code: nppData.code || null, id: tempId };
 
-    const result = await persistMutation({
+    const result = !isSupabaseConfigured ? { queued: false } : await persistMutation({
       online: isSupabaseConfigured && navigator.onLine,
       write: () => safeQuery(sb => sb.from('distributors').insert(mapped).select('id'), 'addNpp'),
       queue: () => enqueueOfflineAction('ADD_NPP', mapped)
@@ -88,13 +88,14 @@ export function useNpps() {
       persistNpps(updated, setNpps, false);
       return updated;
     });
-    if (!result.queued) await fetchNpps();
+    if (isSupabaseConfigured && !result.queued) await fetchNpps();
     localNpp.queued = result.queued;
     return localNpp;
   }, [fetchNpps]);
 
   const editNpp = useCallback(async (id, updates) => {
     const mappedUpdates = {};
+    if ('code' in updates) mappedUpdates.npp_code = updates.code || null;
     if ('name' in updates) mappedUpdates.name = updates.name;
     if ('phone' in updates) mappedUpdates.phone = updates.phone;
     if ('contactPerson' in updates) mappedUpdates.contact_person = updates.contactPerson;
@@ -111,7 +112,8 @@ export function useNpps() {
     if ('status' in updates) mappedUpdates.status = updates.status;
     if ('photos' in updates) mappedUpdates.photos = updates.photos;
 
-    const result = await persistMutation({
+    if (isSupabaseConfigured && !navigator.onLine && ('code' in updates || 'region' in updates)) throw new Error('Cần kết nối mạng để xác nhận mã NPP và khu vực. Nội dung chưa được lưu.');
+    const result = !isSupabaseConfigured ? { queued: false } : await persistMutation({
       online: isSupabaseConfigured && navigator.onLine,
       write: () => updateWithRevision({
         runQuery: query => safeQuery(query, 'editNpp'), table: 'distributors', id,
@@ -124,11 +126,12 @@ export function useNpps() {
       persistNpps(updated, setNpps, false);
       return updated;
     });
+    if (isSupabaseConfigured && !result.queued) await fetchNpps();
     return result;
-  }, []);
+  }, [fetchNpps]);
 
   const deleteNpp = useCallback(async (id) => {
-    const result = await persistMutation({
+    const result = !isSupabaseConfigured ? { queued: false } : await persistMutation({
       online: isSupabaseConfigured && navigator.onLine,
       write: () => safeQuery(sb => sb.from('distributors').delete().eq('id', id).select('id'), 'deleteNpp'),
       queue: () => enqueueOfflineAction('DELETE_NPP', { id })
@@ -153,7 +156,7 @@ export function useNpps() {
       persistNpps(updated, setNpps, false);
       return updated;
     });
-    if (!result.queued) await fetchNpps();
+    if (isSupabaseConfigured && !result.queued) await fetchNpps();
     return result;
   }, [fetchNpps]);
   return { npps, setNpps, loading, error, addNpp, editNpp, deleteNpp, importNpps, refetch: fetchNpps };
@@ -168,6 +171,8 @@ function persistNpps(nextNpps, setNpps, shouldSetState = true) {
 function mapDbToNpp(row) {
   return {
     id:                   row.id,
+    code:                 row.npp_code || row.id,
+    storedCode:           row.npp_code || null,
     dbRevision:           row.updated_at || null,
     name:                 row.name,
     phone:                row.phone,
@@ -187,6 +192,7 @@ function mapDbToNpp(row) {
 
 function mapNppToDb(npp) {
   return {
+    npp_code:             npp.code || null,
     name:                 npp.name,
     phone:                npp.phone,
     contact_person:       npp.contactPerson || '',

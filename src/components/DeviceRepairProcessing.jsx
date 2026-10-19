@@ -1,4 +1,7 @@
-import { validateRepairReturn } from '../lib/repairLifecycle.js';
+import {validateRepairReturn} from '../lib/repairLifecycle.js';
+import { repairMissingFields } from '../lib/repairCompleteness.js';
+import { getOwnedCacheEntries } from '../lib/offlineDb.js';
+import { isDraftExpired } from '../lib/teamWorkspace.js';
 import WorkspaceFilterBar from './WorkspaceFilterBar.jsx';
 import { matchesSearch, matchesDateRange, uniqueOptions, canEditRegion } from '../lib/workspaceFilters.js';
 import React, { useState, useMemo, useEffect } from 'react';
@@ -11,27 +14,26 @@ import {
   Edit3,
   Trash2,
   Search,
-  Clock, 
-  Camera, 
-  X, 
+  Clock,
+  X,
   RefreshCw,
   ShieldAlert,
   PackageCheck,
   BarChart2,
   FileSpreadsheet
 } from 'lucide-react';
-import { 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  ResponsiveContainer, 
-  Cell, 
-  PieChart, 
-  Pie, 
-  Legend 
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+  PieChart,
+  Pie,
+  Legend
 } from 'recharts';
 import { sanitizeFormData, validateSerial } from '../security/sanitize.js';
 
@@ -75,38 +77,38 @@ function createFieldWorkflowDefaults() {
     beforePhotos: [],
     afterPhotos: [],
     nppConfirmation: { confirmed: false, confirmedBy: '', confirmedAt: null },
-    slaDueAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 16),
+    slaDueAt: null,
     completedAt: null
   };
 }
 
-import { compressImage } from '../utils/imageCompressor.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useModalScrollLock } from '../hooks/useModalScrollLock.js';
 import { exportExcel } from '../utils/excelExport.js';
 import { useFormDraft } from '../hooks/useFormDraft';
 import DraftNotice from './DraftNotice';
-import { isAssignedTo } from '../lib/teamWorkspace';
 import { useWorkspaceState, useWorkspaceScroll } from '../hooks/useWorkspaceState';
 
-export default function DeviceRepairProcessing({ onReturnToProfile, globalSearch = '', initialFilter = 'ALL',
+export default function DeviceRepairProcessing({ globalSearch = '', initialFilter = 'ALL',
   repairTickets = [],
   npps = [],
   systemSets = [],
   qcUsers = [],
+  ticketCatalog,
   onAddTicket,
   onEditTicket,
   onDeleteTicket,
   onPrintTicket,
   prefilledTicket,
   onClearPrefill,
+  onReturnToProfile,
   onOpenImportModal,
   isDateLocked = () => false
 }) {
   const { user } = useAuth();
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
-  const [mineOnly, setMineOnly] = useState(false);
+  const [saveNotice, setSaveNotice] = useState('');
   const canAssign = ['admin', 'manager'].includes(user?.role);
   const [activeTab, setActiveTab] = useWorkspaceState('repairs:state', 'ALL'); // ALL | PENDING | NOT_RETURNED | REPLACED
   const [searchTerm, setSearchTerm] = useWorkspaceState('repairs:search', '');
@@ -166,7 +168,7 @@ export default function DeviceRepairProcessing({ onReturnToProfile, globalSearch
 
   // Form State
   const defaultTechnician = (user && ['admin', 'manager', 'technician', 'qc'].includes(user.role))
-    ? (user.name || user.full_name) 
+    ? (user.name || user.full_name)
     : (qcUsers && qcUsers.length > 0 ? qcUsers[0].name : 'Nguyễn Văn Hùng');
 
   const getDeviceFromCombo = (assignedSet, category) => {
@@ -242,7 +244,23 @@ export default function DeviceRepairProcessing({ onReturnToProfile, globalSearch
     notes: ''
   });
   const draft = useFormDraft(`${user.id}:repair:${editingTicket?.id || 'new'}`, formData, showModal, saved => setFormData(saved));
-  const closeForm = async () => { if (saving) return; try {await draft.flush();setShowModal(false);onReturnToProfile?.();}catch(error){setSaveError(error.message);} };
+  const [savedDrafts, setSavedDrafts] = useState([]);
+  const [resumeRequested, setResumeRequested] = useState(false);
+  useEffect(() => {
+    let active = true;
+    if (!showModal) getOwnedCacheEntries(`form-draft:${user.id}:repair:`).then(entries => {
+      if (active) setSavedDrafts(entries.filter(entry => entry.value && !isDraftExpired(entry.value)).sort((a, b) => b.value.savedAt - a.value.savedAt));
+    }).catch(() => { if (active) setSaveError('Không đọc được danh sách bản nháp trên thiết bị.'); });
+    return () => { active = false; };
+  }, [showModal, user.id]);
+  useEffect(() => {
+    if (resumeRequested && draft.existing) { draft.resume(); setResumeRequested(false); }
+  }, [resumeRequested, draft.existing]);
+  const closeForm = async () => {
+    if (saving) return;
+    try { await draft.flush(); setShowModal(false); onReturnToProfile?.(); }
+    catch { setSaveError('Chưa lưu được nháp. Hãy giữ phiếu mở và thử lại.'); }
+  };
   const selectedNppRegion = npps.find(item => item.id === formData.nppId)?.region;
   const assignableUsers = qcUsers.filter(item => item.role === 'admin' || (item.region || item.managedRegion) === 'Toàn Quốc' || (item.region || item.managedRegion) === selectedNppRegion);
 
@@ -277,14 +295,6 @@ export default function DeviceRepairProcessing({ onReturnToProfile, globalSearch
     }
   }, [prefilledTicket]);
 
-  // Reset scroll position of modal-body to top when modal opens
-  React.useEffect(() => {
-    if (showModal || editingTicket || selectedTicket) {
-      setTimeout(() => {
-        document.querySelectorAll('.modal-body').forEach(el => el.scrollTop = 0);
-      }, 50);
-    }
-  }, [showModal, editingTicket, selectedTicket]);
 
   const handleOpenAdd = () => {
     setEditingTicket(null);
@@ -339,6 +349,7 @@ export default function DeviceRepairProcessing({ onReturnToProfile, globalSearch
     setFormData({
       ...createFieldWorkflowDefaults(),
       ...ticket,
+      productCategory: ticket.productCategory === 'Máy tính' ? (/aio|all in one/i.test(ticket.machineModel || '') ? 'AIO' : 'Case') : ticket.productCategory === 'Máy in' ? 'QL700' : ['Phụ kiện','Linh kiện'].includes(ticket.productCategory) ? 'Khác / Linh kiện' : ticket.productCategory,
       exchangeType: ticket.exchangeType || (ticket.actionDirection === 'Xuất đổi' ? 'Xuất đổi máy mới 100%' : 'Không xuất đổi')
     });
     setShowModal(true);
@@ -385,52 +396,11 @@ export default function DeviceRepairProcessing({ onReturnToProfile, globalSearch
     }));
   };
 
-  const handlePhotoUpload = async (e) => {
-    const files = Array.from(e.target.files);
-    for (const file of files) {
-      try {
-        const compressedBase64 = await compressImage(file);
-        setFormData(prev => ({
-          ...prev,
-          photos: [...(prev.photos || []), compressedBase64],
-          beforePhotos: [...(prev.beforePhotos || prev.photos || []), compressedBase64]
-        }));
-      } catch (err) {
-        console.error('Error compressing image:', err);
-        alert(`Không thể thêm ảnh ${file.name}: ${err.message}`);
-      }
-    }
-  };
-
-  const handleRemovePhoto = (index) => {
-    setFormData(prev => ({
-      ...prev,
-      photos: prev.photos.filter((_, i) => i !== index),
-      beforePhotos: (prev.beforePhotos || []).filter((_, i) => i !== index)
-    }));
-  };
-
-  const handleAfterPhotoUpload = async (event) => {
-    const files = Array.from(event.target.files || []);
-    for (const file of files) {
-      try {
-        const compressedBase64 = await compressImage(file);
-        setFormData(prev => ({
-          ...prev,
-          afterPhotos: [...(prev.afterPhotos || []), compressedBase64]
-        }));
-      } catch (err) {
-        console.error('Error compressing after-service image:', err);
-        alert(`Không thể thêm ảnh ${file.name}: ${err.message}`);
-      }
-    }
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (saving || draft.existing) return;
     setSaveError('');
-    
+
     // Sanitize input form data
     const sanitized = sanitizeFormData({
       ...formData,
@@ -439,13 +409,14 @@ export default function DeviceRepairProcessing({ onReturnToProfile, globalSearch
         : {})
     });
 
-    const isSerialRequired = !['Màn hình', 'Khác / Linh kiện', 'Khác', 'Phụ kiện'].includes(sanitized.productCategory);
-
-    if (!sanitized.errorDescription || (isSerialRequired && !sanitized.serialNumber)) {
-      alert(isSerialRequired ? 'Vui lòng nhập Số Seri thiết bị và Diễn giải lỗi!' : 'Vui lòng nhập Diễn giải tình trạng lỗi!');
-      return;
-    }
-
+    if (!sanitized.nppId || !sanitized.date) { setSaveError('Vui lòng chọn NPP và ngày xử lý. Các nội dung khác có thể bổ sung sau.'); return; }
+    sanitized.photos = formData.photos || [];
+    sanitized.beforePhotos = formData.beforePhotos || [];
+    sanitized.afterPhotos = formData.afterPhotos || [];
+    sanitized.ticketCode = String(formData.ticketCode || '').trim();
+    if (editingTicket && !sanitized.ticketCode) { setSaveError('Vui lòng nhập mã phiếu.'); return; }
+    const duplicateCode = repairTickets.find(ticket => ticket.id !== editingTicket?.id && ticket.ticketCode?.trim().toLowerCase() === sanitized.ticketCode.toLowerCase());
+    if (sanitized.ticketCode && duplicateCode) { setSaveError(`Mã phiếu đã được dùng tại ${duplicateCode.nppName || 'NPP khác'}: ${duplicateCode.ticketCode}`); return; }
     // Format validation (chỉ kiểm tra nếu có nhập serial)
     if (sanitized.serialNumber && sanitized.serialNumber.trim() && sanitized.serialNumber !== 'Không có seri') {
       const serialCheck = validateSerial(sanitized.serialNumber);
@@ -471,12 +442,6 @@ export default function DeviceRepairProcessing({ onReturnToProfile, globalSearch
       return;
     }
 
-    try { validateRepairReturn(sanitized); } catch (error) { setSaveError(error.message); return; }
-    if (sanitized.nppConfirmation?.confirmed && !sanitized.nppConfirmation.confirmedBy) {
-      alert('Vui lòng nhập tên người đại diện NPP xác nhận hoàn thành.');
-      return;
-    }
-
     if (sanitized.nppConfirmation?.confirmed) {
       sanitized.nppConfirmation = {
         ...sanitized.nppConfirmation,
@@ -485,18 +450,10 @@ export default function DeviceRepairProcessing({ onReturnToProfile, globalSearch
       sanitized.fieldVisitStatus = 'customer_confirmed';
     }
 
+    try {validateRepairReturn(sanitized);} catch(error){setSaveError(error.message);return;}
     const isCompleted = ['completed', 'customer_confirmed'].includes(sanitized.fieldVisitStatus);
-    const checklistComplete = Object.keys(EMPTY_SERVICE_CHECKLIST).every(key => sanitized.serviceChecklist?.[key]);
-    if (isCompleted && !checklistComplete) {
-      alert('Cần hoàn thành toàn bộ checklist trước khi kết thúc công tác.');
-      return;
-    }
-    if (isCompleted && !(sanitized.afterPhotos || []).length) {
-      alert('Cần ít nhất một ảnh sau khi hoàn thành công tác.');
-      return;
-    }
     if (sanitized.fieldVisitStatus === 'customer_confirmed' && !sanitized.nppConfirmation?.confirmed) {
-      alert('Trạng thái NPP đã xác nhận yêu cầu thông tin người xác nhận.');
+      alert('Vui lòng tích xác nhận hoàn thành của đại diện NPP.');
       return;
     }
 
@@ -512,12 +469,14 @@ export default function DeviceRepairProcessing({ onReturnToProfile, globalSearch
     if (editingTicket) {
       await onEditTicket({
         ...sanitized,
+        id: editingTicket.id,
+        recordVersion: editingTicket.recordVersion,
         nppName: finalNppName
       });
     } else {
       const now = new Date();
       const codePrefix = `TICK-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}-`;
-      const sequence = repairTickets.reduce((max, ticket) => {
+      const sequence = (ticketCatalog || repairTickets).reduce((max, ticket) => {
         const match = String(ticket.ticketCode || ticket.id || '').match(new RegExp(`^${codePrefix}(\\d+)$`));
         return match ? Math.max(max, Number(match[1])) : max;
       }, 0) + 1;
@@ -533,6 +492,8 @@ export default function DeviceRepairProcessing({ onReturnToProfile, globalSearch
     }
 
     await draft.clear().catch(() => console.warn('[Repair] Draft cleanup failed'));
+    const missing = repairMissingFields(sanitized);
+    setSaveNotice(missing.length ? `Đã lưu phiếu. Cần bổ sung: ${missing.join(' · ')}` : 'Đã lưu phiếu thành công.');
     setShowModal(false);
     onReturnToProfile?.();
     } catch (error) { console.error('[Repair] Save failed', error.code || error.name); setSaveError(error.message || 'Chưa lưu được phiếu. Bản nháp vẫn được giữ.'); }
@@ -556,7 +517,6 @@ export default function DeviceRepairProcessing({ onReturnToProfile, globalSearch
   React.useEffect(() => { if (initialFilter !== 'ALL') setActiveTab(initialFilter === 'RETURN' ? 'NOT_RETURNED' : initialFilter); }, [initialFilter]);
   // Filtered Tickets
   const filteredTickets = repairTickets.filter(t => {
-    if (mineOnly && !isAssignedTo(t, user)) return false;
     const distributor = npps.find(item => item.id === t.nppId);
     const found = matchesSearch(searchTerm,[t.ticketCode,t.nppName,t.serialNumber,t.technician,t.errorDescription,distributor?.province,distributor?.region]);
     if (provinceFilter !== 'ALL' && distributor?.province !== provinceFilter) return false;
@@ -581,9 +541,15 @@ export default function DeviceRepairProcessing({ onReturnToProfile, globalSearch
 
   return (
     <div className="workspace-screen devicerepairprocessing-screen" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      <div className="workspace-tabs"><button aria-pressed={mineOnly} onClick={() => setMineOnly(value => !value)}>Việc của tôi</button><span className="resource-muted">Hạn xử lý và người nhận hiển thị trong chi tiết phiếu.</span></div>
-      
-      <WorkspaceFilterBar search={searchTerm} onSearch={setSearchTerm} placeholder="Tìm mã phiếu, NPP, seri…" count={filteredTickets.length} fields={[{key:'province',label:'Tỉnh / thành',value:provinceFilter,onChange:setProvinceFilter,options:uniqueOptions(npps.map(item=>item.province))},{key:'owner',label:'Người phụ trách',value:ownerFilter,onChange:setOwnerFilter,options:[...qcUsers.map(item=>({value:item.id,label:item.name || item.full_name || item.id})),...uniqueOptions(repairTickets.filter(item=>!item.assignedUserId).map(item=>item.technician))]},{key:'category',label:'Loại thiết bị',value:categoryFilter,onChange:setCategoryFilter,options:uniqueOptions(PRODUCT_CATEGORIES)},{key:'model',label:'Model',value:modelFilter,onChange:setModelFilter,options:uniqueOptions(MACHINE_MODELS)},{key:'from',label:'Ngày tiếp nhận · từ',type:'date',defaultValue:'',value:dateFrom,onChange:setDateFrom},{key:'to',label:'Ngày tiếp nhận · đến',type:'date',defaultValue:'',value:dateTo,onChange:setDateTo}]} quick={[{value:'ALL',label:'Tất cả',count:repairTickets.length},{value:'PENDING',label:'Chờ sửa',count:pendingCount},{value:'NOT_RETURNED',label:'Chờ trả',count:notReturnedCount},{value:'REPLACED',label:'Xuất đổi',count:replacedCount}]} quickValue={activeTab} onQuick={setActiveTab} onReset={() => { setSearchTerm(''); setActiveTab('ALL'); setMineOnly(false); setCategoryFilter('ALL'); setModelFilter('ALL'); setProvinceFilter('ALL'); setOwnerFilter('ALL'); setDateFrom(''); setDateTo(''); }} actions={<><details className="filter-more-actions"><summary>Thao tác khác</summary><div><button className="btn btn-secondary" onClick={()=>onOpenImportModal?.()}>Nhập Excel</button><button className="btn btn-secondary" onClick={exportRepairs}>Xuất Excel</button></div></details><button className="btn btn-primary" onClick={handleOpenAdd}>Tạo phiếu</button></>}/>
+      {saveNotice && <p role="status" className="repair-save-notice">{saveNotice}</p>}
+
+      {savedDrafts.length > 0 && <section className="glass-panel repair-draft-list" aria-label="Phiếu nháp đã lưu"><h3>Phiếu nháp trên thiết bị ({savedDrafts.length})</h3><p>Chỉ tài khoản này có thể mở các bản nháp trên thiết bị này.</p>{savedDrafts.map(entry => <div className="workspace-task-row" key={entry.key}><div><strong>{entry.value.value.nppName || 'Chưa chọn NPP'} · {entry.value.value.serialNumber || entry.value.value.productCategory}</strong><p>Lưu lúc {new Date(entry.value.savedAt).toLocaleString('vi-VN')}</p></div><button className="btn btn-primary" onClick={() => {
+        const id = entry.key.slice(`form-draft:${user.id}:repair:`.length);
+        if (id === 'new') handleOpenAdd();
+        else { const ticket = repairTickets.find(item => item.id === id); if (!ticket) { alert('Phiếu gốc chưa có trong dữ liệu đã tải. Hãy tải lại trước khi mở nháp.'); return; } if (!isTicketAllowed(ticket.nppId) || isDateLocked(ticket.date)) { alert('Phiếu này không còn cho phép chỉnh sửa.'); return; } handleOpenEdit(ticket); }
+        setResumeRequested(true);
+      }}>Mở bản nháp</button></div>)}</section>}
+      <WorkspaceFilterBar search={searchTerm} onSearch={setSearchTerm} placeholder="Tìm mã phiếu, NPP, seri…" count={filteredTickets.length} fields={[{key:'province',label:'Tỉnh / thành',value:provinceFilter,onChange:setProvinceFilter,options:uniqueOptions(npps.map(item=>item.province))},{key:'owner',label:'Người phụ trách',value:ownerFilter,onChange:setOwnerFilter,options:[...qcUsers.map(item=>({value:item.id,label:item.name || item.full_name || item.id})),...uniqueOptions(repairTickets.filter(item=>!item.assignedUserId).map(item=>item.technician))]},{key:'category',label:'Loại thiết bị',value:categoryFilter,onChange:setCategoryFilter,options:uniqueOptions(PRODUCT_CATEGORIES)},{key:'model',label:'Model',value:modelFilter,onChange:setModelFilter,options:uniqueOptions(MACHINE_MODELS)},{key:'from',label:'Ngày tiếp nhận · từ',type:'date',defaultValue:'',value:dateFrom,onChange:setDateFrom},{key:'to',label:'Ngày tiếp nhận · đến',type:'date',defaultValue:'',value:dateTo,onChange:setDateTo}]} quick={[{value:'ALL',label:'Tất cả',count:repairTickets.length},{value:'PENDING',label:'Chờ sửa',count:pendingCount},{value:'NOT_RETURNED',label:'Chờ trả',count:notReturnedCount},{value:'REPLACED',label:'Xuất đổi',count:replacedCount}]} quickValue={activeTab} onQuick={setActiveTab} onReset={() => { setSearchTerm(''); setActiveTab('ALL'); setCategoryFilter('ALL'); setModelFilter('ALL'); setProvinceFilter('ALL'); setOwnerFilter('ALL'); setDateFrom(''); setDateTo(''); }} actions={<><details className="filter-more-actions"><summary>Thao tác khác</summary><div><button className="btn btn-secondary" onClick={()=>onOpenImportModal?.()}>Nhập Excel</button><button className="btn btn-secondary" onClick={exportRepairs}>Xuất Excel</button></div></details><button className="btn btn-primary" onClick={handleOpenAdd}>Tạo phiếu</button></>}/>
 
       {/* 1-YEAR FAILURE ANALYSIS DASHBOARD CHARTS */}
       <div className="glass-panel" style={{ padding: '20px' }}>
@@ -645,10 +611,10 @@ export default function DeviceRepairProcessing({ onReturnToProfile, globalSearch
                     ))}
                   </Pie>
                   <Tooltip contentStyle={{ background: '#1e293b', border: '1px solid var(--border-color)', borderRadius: '8px', fontSize: '0.8rem' }} />
-                  <Legend 
-                    verticalAlign="bottom" 
-                    height={26} 
-                    formatter={(val) => <span style={{ fontSize: '0.725rem', color: 'var(--text-main)' }}>{val}</span>} 
+                  <Legend
+                    verticalAlign="bottom"
+                    height={26}
+                    formatter={(val) => <span style={{ fontSize: '0.725rem', color: 'var(--text-main)' }}>{val}</span>}
                   />
                 </PieChart>
               </ResponsiveContainer>
@@ -659,7 +625,7 @@ export default function DeviceRepairProcessing({ onReturnToProfile, globalSearch
 
       {/* Stat Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
-        
+
         <div className="glass-panel" style={{ padding: '16px 20px', borderLeft: '4px solid var(--accent-cyan)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: '600' }}>Tổng Số Phiếu Xử Lý</span>
@@ -738,7 +704,7 @@ export default function DeviceRepairProcessing({ onReturnToProfile, globalSearch
                     </td>
                     <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent-blue)' }}>{ticket.serialNumber}</td>
                     <td style={{ maxWidth: '220px', fontSize: '0.825rem' }}>
-                      <div style={{ color: 'var(--text-main)', fontWeight: '500' }}>{ticket.errorDescription}</div>
+                      <div style={{ color: 'var(--text-main)', fontWeight: '500' }}>{ticket.errorDescription}</div>{repairMissingFields(ticket).length > 0 && <p className="repair-missing-fields">⚠ Cần bổ sung: {repairMissingFields(ticket).join(' · ')}</p>}
                       {ticket.errorCategory && (
                         <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>[{ticket.errorCategory}]</span>
                       )}
@@ -772,10 +738,10 @@ export default function DeviceRepairProcessing({ onReturnToProfile, globalSearch
                         <button className="btn btn-secondary btn-sm" style={{ padding: '4px 8px' }} title="Xem chi tiết" onClick={() => setSelectedTicket(ticket)}>
                           <Eye size={14} color="var(--accent-cyan)" />
                         </button>
-                        <button 
-                          className="btn btn-secondary btn-sm" 
-                          style={{ padding: '4px 8px', opacity: (isDateLocked(ticket.date) || !isTicketAllowed(ticket.nppId)) ? 0.4 : 1, cursor: (isDateLocked(ticket.date) || !isTicketAllowed(ticket.nppId)) ? 'not-allowed' : 'pointer' }} 
-                          title={isDateLocked(ticket.date) ? "Tháng đã chốt sổ" : !isTicketAllowed(ticket.nppId) ? "Bạn không phụ trách khu vực này" : "Chỉnh sửa phiếu"} 
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          style={{ padding: '4px 8px', opacity: (isDateLocked(ticket.date) || !isTicketAllowed(ticket.nppId)) ? 0.4 : 1, cursor: (isDateLocked(ticket.date) || !isTicketAllowed(ticket.nppId)) ? 'not-allowed' : 'pointer' }}
+                          title={isDateLocked(ticket.date) ? "Tháng đã chốt sổ" : !isTicketAllowed(ticket.nppId) ? "Bạn không phụ trách khu vực này" : "Chỉnh sửa phiếu"}
                           onClick={() => {
                             if (!isDateLocked(ticket.date) && isTicketAllowed(ticket.nppId)) {
                               handleOpenEdit(ticket);
@@ -784,10 +750,10 @@ export default function DeviceRepairProcessing({ onReturnToProfile, globalSearch
                         >
                           <Edit3 size={14} color={(isDateLocked(ticket.date) || !isTicketAllowed(ticket.nppId)) ? "var(--text-muted)" : "var(--accent-amber)"} />
                         </button>
-                        <button 
-                          className="btn btn-secondary btn-sm" 
-                          style={{ padding: '4px 8px', opacity: (isDateLocked(ticket.date) || !isTicketAllowed(ticket.nppId)) ? 0.4 : 1, cursor: (isDateLocked(ticket.date) || !isTicketAllowed(ticket.nppId)) ? 'not-allowed' : 'pointer' }} 
-                          title={isDateLocked(ticket.date) ? "Tháng đã chốt sổ" : !isTicketAllowed(ticket.nppId) ? "Bạn không phụ trách khu vực này" : "Xóa phiếu"} 
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          style={{ padding: '4px 8px', opacity: (isDateLocked(ticket.date) || !isTicketAllowed(ticket.nppId)) ? 0.4 : 1, cursor: (isDateLocked(ticket.date) || !isTicketAllowed(ticket.nppId)) ? 'not-allowed' : 'pointer' }}
+                          title={isDateLocked(ticket.date) ? "Tháng đã chốt sổ" : !isTicketAllowed(ticket.nppId) ? "Bạn không phụ trách khu vực này" : "Xóa phiếu"}
                           onClick={() => {
                             if (!isDateLocked(ticket.date) && isTicketAllowed(ticket.nppId)) {
                               handleDelete(ticket);
@@ -843,7 +809,7 @@ export default function DeviceRepairProcessing({ onReturnToProfile, globalSearch
                   </div>
                   <div className="mobile-card-row">
                     <span className="mobile-card-label">Lỗi:</span>
-                    <span className="mobile-card-value">{ticket.errorDescription}</span>
+                    <span className="mobile-card-value">{ticket.errorDescription}</span>{repairMissingFields(ticket).length > 0 && <p className="repair-missing-fields">⚠ Cần bổ sung: {repairMissingFields(ticket).join(' · ')}</p>}
                   </div>
                   <div className="mobile-card-row">
                     <span className="mobile-card-label">Kỹ thuật viên:</span>
@@ -869,8 +835,8 @@ export default function DeviceRepairProcessing({ onReturnToProfile, globalSearch
                     <Eye size={14} color="var(--accent-cyan)" />
                     <span>Xem</span>
                   </button>
-                   <button 
-                    className="btn btn-secondary btn-sm" 
+                   <button
+                    className="btn btn-secondary btn-sm"
                     disabled={isDateLocked(ticket.date) || !isTicketAllowed(ticket.nppId)}
                     style={{ opacity: (isDateLocked(ticket.date) || !isTicketAllowed(ticket.nppId)) ? 0.4 : 1 }}
                     onClick={() => {
@@ -882,8 +848,8 @@ export default function DeviceRepairProcessing({ onReturnToProfile, globalSearch
                     <Edit3 size={14} color={(isDateLocked(ticket.date) || !isTicketAllowed(ticket.nppId)) ? "var(--text-muted)" : "var(--accent-amber)"} />
                     <span>Sửa</span>
                   </button>
-                  <button 
-                    className="btn btn-danger btn-sm" 
+                  <button
+                    className="btn btn-danger btn-sm"
                     disabled={isDateLocked(ticket.date) || !isTicketAllowed(ticket.nppId)}
                     style={{ opacity: (isDateLocked(ticket.date) || !isTicketAllowed(ticket.nppId)) ? 0.4 : 1 }}
                     onClick={() => {
@@ -906,48 +872,55 @@ export default function DeviceRepairProcessing({ onReturnToProfile, globalSearch
       {showModal && (
         <SafePortal>
           <div className="modal-overlay">
-            <div className="modal-content" style={{ maxWidth: '720px' }}>
+            <div className="modal-content repair-ticket-modal" style={{ maxWidth: '720px' }}>
               <div className="modal-header">
                 <h3 style={{ fontWeight: '800' }}>
                   {editingTicket ? `Chỉnh Sửa Phiếu Xử Lý Máy [${editingTicket.ticketCode}]` : 'Tạo Phiếu Xử Lý Máy & Sửa Chữa Mới'}
                 </h3>
                 <button className="btn btn-secondary btn-sm" disabled={saving} onClick={closeForm}>✕</button>
               </div>
-              <form onSubmit={handleSubmit}>
+              <form onSubmit={handleSubmit} onInvalidCapture={() => setSaveError('Hãy bổ sung các ô bắt buộc đang được đánh dấu. Nội dung chưa được lưu.')}>
                 <DraftNotice draft={draft} />
+                {repairMissingFields(formData).length > 0 && <div className="repair-missing-fields" role="status"><strong>Cần bổ sung:</strong> {repairMissingFields(formData).join(' · ')}</div>}
                 {saveError && <p className="resource-error" role="alert">{saveError}</p>}
+                <div className="modal-body">
                 <fieldset disabled={saving || Boolean(draft.existing)} className="form-fieldset">
-                <div className="modal-body" ref={el => { if (el) el.scrollTop = 0; }}>
                   <div className="responsive-form-grid">
                     <label>Người nhận công việc<select className="form-select" disabled={!canAssign} value={formData.assignedUserId || ''} onChange={event => setFormData(previous => ({ ...previous, assignedUserId: event.target.value || null }))}><option value="">Chưa phân công</option>{assignableUsers.map(item => <option key={item.id} value={item.id}>{item.name || item.full_name}</option>)}</select></label>
                     <label>Hạn xử lý<input type="date" className="form-input" value={formData.assignmentDueDate || ''} onChange={event => setFormData(previous => ({ ...previous, assignmentDueDate: event.target.value || null }))} /></label>
                   </div>
-                  
+
                   {/* PRIMARY EDIT FIELDS - TOP OF FORM */}
+                  <div className="form-group">
+                    <label className="form-label" htmlFor="repair-ticket-code">Mã phiếu (có thể sửa)</label>
+                    <input id="repair-ticket-code" className="form-input" value={formData.ticketCode || ''} required={Boolean(editingTicket)} maxLength={100} placeholder="Để trống để tự tạo mã phiếu mới" onChange={event => setFormData(previous => ({ ...previous, ticketCode: event.target.value }))} />
+                    <small>Đổi mã phiếu vẫn giữ nguyên hồ sơ và lịch sử liên kết.</small>
+                  </div>
                   {/* FIELD 1: NGÀY XỬ LÝ MÁY & KỸ THUẬT VIÊN */}
                   <div className="responsive-form-grid" style={{ marginBottom: '14px' }}>
                     <div className="form-group">
                       <label className="form-label" style={{ fontWeight: '700', color: 'var(--accent-cyan)' }}>
                         📅 1. Ngày Xử Lý Máy / Báo Hỏng *
                       </label>
-                      <input 
-                        type="date" 
-                        className="form-input" 
-                        required 
-                        value={formData.date || ''} 
-                        onChange={e => setFormData({ ...formData, date: e.target.value })} 
+                      <input
+                        type="date"
+                        className="form-input"
+                        required
+                        value={formData.date || ''}
+                        onChange={e => setFormData({ ...formData, date: e.target.value })}
                       />
                     </div>
                     <div className="form-group">
                       <label className="form-label" style={{ fontWeight: '700' }}>
                         👨‍🔧 Kỹ Thuật Viên Xử Lý / Ghi Phiếu *
                       </label>
-                      <select 
-                        className="form-select" 
-                        required 
-                        value={formData.technician || ''} 
+                      <select
+                        className="form-select"
+                        required
+                        value={formData.technician || ''}
                         onChange={e => setFormData({ ...formData, technician: e.target.value })}
                       >
+                        {formData.technician && !qcUsers?.some(person => (person.name || person.full_name || person.id) === formData.technician) && <option value={formData.technician}>{formData.technician}</option>}
                         {qcUsers && qcUsers.length > 0 ? (
                           qcUsers.map((u, idx) => (
                             <option key={u.id || idx} value={u.name || u.full_name || u.id}>
@@ -971,11 +944,11 @@ export default function DeviceRepairProcessing({ onReturnToProfile, globalSearch
                       </label>
                       {formData.nppId && (
                         <span className="badge badge-info" style={{ fontSize: '0.75rem' }}>
-                          Mã: {formData.nppId}
+                          Mã: {npps.find(npp => npp.id === formData.nppId)?.code || formData.nppId}
                         </span>
                       )}
                     </div>
-                    
+
                     <div style={{ position: 'relative', marginBottom: '8px' }}>
                       <input
                         type="text"
@@ -995,15 +968,15 @@ export default function DeviceRepairProcessing({ onReturnToProfile, globalSearch
                       )}
                     </div>
 
-                    <select 
-                      className="form-select" 
-                      required 
-                      value={formData.nppId} 
+                    <select
+                      className="form-select"
+                      required
+                      value={formData.nppId}
                       onChange={e => handleSelectNpp(e.target.value)}
                     >
                       <option value="">-- Chọn NPP từ danh sách ({filteredNpps.length} NPP) --</option>
                       {filteredNpps.map(n => (
-                        <option key={n.id} value={n.id}>[{n.id}] {n.name} - {n.region}</option>
+                        <option key={n.id} value={n.id}>[{n.code || n.id}] {n.name} - {n.region}</option>
                       ))}
                     </select>
 
@@ -1112,10 +1085,10 @@ export default function DeviceRepairProcessing({ onReturnToProfile, globalSearch
                   <div className="responsive-form-grid">
                     <div className="form-group">
                       <label className="form-label">📂 3. Phân Loại Thiết Bị *</label>
-                      <select 
-                        className="form-select" 
-                        required 
-                        value={formData.productCategory} 
+                      <select
+                        className="form-select"
+                        required
+                        value={formData.productCategory}
                         onChange={e => handleCategoryChange(e.target.value)}
                       >
                         {PRODUCT_CATEGORIES.map(cat => (
@@ -1125,15 +1098,15 @@ export default function DeviceRepairProcessing({ onReturnToProfile, globalSearch
                     </div>
                     <div className="form-group">
                       <label className="form-label">
-                        🏷️ 4. Số Seri Thiết Bị {['Màn hình', 'Khác / Linh kiện'].includes(formData.productCategory) ? '(Không bắt buộc)' : '*'}
+                        🏷️ 4. Số Seri Thiết Bị (có thể bổ sung sau)
                       </label>
-                      <input 
-                        type="text" 
-                        className="form-input" 
-                        required={!['Màn hình', 'Khác / Linh kiện'].includes(formData.productCategory)} 
-                        placeholder={['Màn hình', 'Khác / Linh kiện'].includes(formData.productCategory) ? "Có thể để trống hoặc ghi chú..." : "Nhập số seri duy nhất..."} 
-                        value={formData.serialNumber} 
-                        onChange={e => setFormData({ ...formData, serialNumber: e.target.value })} 
+                      <input
+                        type="text"
+                        className={`form-input ${!formData.serialNumber ? 'field-missing' : ''}`}
+                        required={false}
+                        placeholder={['Màn hình', 'Khác / Linh kiện'].includes(formData.productCategory) ? "Có thể để trống hoặc ghi chú..." : "Nhập số seri duy nhất..."}
+                        value={formData.serialNumber}
+                        onChange={e => setFormData({ ...formData, serialNumber: e.target.value })}
                       />
                     </div>
                   </div>
@@ -1154,7 +1127,7 @@ export default function DeviceRepairProcessing({ onReturnToProfile, globalSearch
 
                   <div className="form-group">
                     <label className="form-label">⚠️ 5. Diễn Giải Tình Trạng Lỗi *</label>
-                    <textarea className="form-input" rows={2} required placeholder="Mô tả chi tiết sự cố kỹ thuật..." value={formData.errorDescription} onChange={e => setFormData({ ...formData, errorDescription: e.target.value })} />
+                    <textarea className={`form-input ${!formData.errorDescription ? 'field-missing' : ''}`} rows={2} placeholder="Mô tả chi tiết sự cố kỹ thuật..." value={formData.errorDescription} onChange={e => setFormData({ ...formData, errorDescription: e.target.value })} />
                   </div>
 
                   {['Máy chiết', 'Máy lắc'].includes(formData.productCategory) && (
@@ -1166,16 +1139,16 @@ export default function DeviceRepairProcessing({ onReturnToProfile, globalSearch
                   <div className="responsive-form-grid">
                     <div className="form-group">
                       <label className="form-label">🛠️ Hướng Xử Lý Kỹ Thuật</label>
-                      <select 
-                        className="form-select" 
-                        value={formData.actionDirection} 
+                      <select
+                        className="form-select"
+                        value={formData.actionDirection}
                         disabled={['Máy chiết', 'Máy lắc'].includes(formData.productCategory)}
                         onChange={e => {
                           const val = e.target.value;
                           setFormData(prev => ({
                             ...prev,
                             actionDirection: val,
-                            exchangeType: val === 'Xuất đổi' 
+                            exchangeType: val === 'Xuất đổi'
                               ? (prev.exchangeType === 'Không xuất đổi' ? 'Xuất đổi máy mới 100%' : prev.exchangeType)
                               : 'Không xuất đổi'
                           }));
@@ -1188,9 +1161,9 @@ export default function DeviceRepairProcessing({ onReturnToProfile, globalSearch
 
                     <div className="form-group">
                       <label className="form-label">📦 Xuất Đổi Máy Mới Hoặc Cũ</label>
-                      <select 
-                        className="form-select" 
-                        value={formData.exchangeType || (formData.actionDirection === 'Xuất đổi' ? 'Xuất đổi máy mới 100%' : 'Không xuất đổi')} 
+                      <select
+                        className="form-select"
+                        value={formData.exchangeType || (formData.actionDirection === 'Xuất đổi' ? 'Xuất đổi máy mới 100%' : 'Không xuất đổi')}
                         disabled={['Máy chiết', 'Máy lắc'].includes(formData.productCategory)}
                         onChange={e => {
                           const val = e.target.value;
@@ -1232,16 +1205,7 @@ export default function DeviceRepairProcessing({ onReturnToProfile, globalSearch
                           onChange={e => setFormData({ ...formData, assetCode: e.target.value })}
                         />
                       </div>
-                      <div className="form-group">
-                        <label className="form-label">Hạn SLA xử lý *</label>
-                        <input
-                          type="datetime-local"
-                          className="form-input"
-                          required
-                          value={(formData.slaDueAt || '').slice(0, 16)}
-                          onChange={e => setFormData({ ...formData, slaDueAt: e.target.value })}
-                        />
-                      </div>
+
                     </div>
                     <div className="form-group">
                       <label className="form-label">Trạng thái công tác</label>
@@ -1291,53 +1255,6 @@ export default function DeviceRepairProcessing({ onReturnToProfile, globalSearch
                     </div>
                   </div>
 
-                  {/* Photo Upload Section */}
-                  <div style={{ marginTop: '16px', borderTop: '1px solid var(--border-color)', paddingTop: '14px' }}>
-                    <label className="form-label">📸 Ảnh Chụp Hiện Trường / Thiết Bị Hỏng</label>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-                      <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer' }}>
-                        <Camera size={14} />
-                        <span>Chụp / Chọn Ảnh</span>
-                        <input type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={handlePhotoUpload} />
-                      </label>
-                    </div>
-                    {formData.photos && formData.photos.length > 0 && (
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: '8px' }}>
-                        {formData.photos.map((url, idx) => (
-                          <div key={idx} style={{ position: 'relative', width: '100%', height: '65px', borderRadius: '6px', overflow: 'hidden', border: '1px solid var(--border-color)' }}>
-                            <img src={url} alt="ticket photo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                            <button
-                              type="button"
-                              onClick={() => handleRemovePhoto(idx)}
-                              style={{ position: 'absolute', top: '2px', right: '2px', background: 'rgba(0,0,0,0.7)', color: '#fff', border: 'none', borderRadius: '50%', width: '18px', height: '18px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                            >
-                              <X size={12} />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  <div style={{ marginTop: '16px' }}>
-                    <label className="form-label">📸 Ảnh Sau Khi Hoàn Thành</label>
-                    <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer' }}>
-                      <Camera size={14} />
-                      <span>Chụp / Chọn Ảnh Sau</span>
-                      <input type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={handleAfterPhotoUpload} />
-                    </label>
-                    {(formData.afterPhotos || []).length > 0 && (
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: '8px', marginTop: '10px' }}>
-                        {formData.afterPhotos.map((url, idx) => (
-                          <div key={idx} style={{ position: 'relative', height: '65px', borderRadius: '6px', overflow: 'hidden', border: '1px solid var(--border-color)' }}>
-                            <img src={url} alt="after service" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                            <button type="button" aria-label="Xóa ảnh sau" onClick={() => setFormData(prev => ({ ...prev, afterPhotos: prev.afterPhotos.filter((_, index) => index !== idx) }))} style={{ position: 'absolute', top: 2, right: 2, border: 0, borderRadius: '50%', background: 'rgba(0,0,0,.7)', color: '#fff' }}><X size={12} /></button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
                   <div className="form-group" style={{ marginTop: '16px', padding: '12px', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
                     <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700 }}>
                       <input
@@ -1350,28 +1267,19 @@ export default function DeviceRepairProcessing({ onReturnToProfile, globalSearch
                       />
                       Đại diện NPP xác nhận đã hoàn thành
                     </label>
-                    {formData.nppConfirmation?.confirmed && (
-                      <input
-                        className="form-input"
-                        style={{ marginTop: '10px' }}
-                        maxLength={120}
-                        required
-                        placeholder="Họ tên người xác nhận"
-                        value={formData.nppConfirmation.confirmedBy || ''}
-                        onChange={e => setFormData(prev => ({
-                          ...prev,
-                          nppConfirmation: { ...(prev.nppConfirmation || {}), confirmedBy: e.target.value }
-                        }))}
-                      />
-                    )}
+
                   </div>
 
+                </fieldset>
                 </div>
                 <div className="modal-footer">
-                  <button type="button" className="btn btn-secondary" onClick={closeForm}>{onReturnToProfile ? '← Quay lại hồ sơ máy' : 'Đóng · Giữ nháp'}</button>
-                  <button type="submit" className="btn btn-primary">{saving ? 'Đang xác nhận lưu...' : editingTicket ? 'Cập Nhật Phiếu' : 'Tạo Phiếu Mới'}</button>
+                  <button type="button" className="btn btn-secondary" disabled={saving} onClick={closeForm}>Đóng · Giữ nháp</button>
+                  {onReturnToProfile && <button type="button" className="btn btn-secondary" disabled={saving} onClick={async () => {
+                    try { await draft.flush(); onReturnToProfile(); }
+                    catch { setSaveError('Chưa lưu được bản nháp. Vui lòng thử lại trước khi quay lại hồ sơ.'); }
+                  }}>← Quay lại hồ sơ máy</button>}
+                  <button type="submit" className="btn btn-primary" disabled={saving || Boolean(draft.existing)}>{saving ? 'Đang xác nhận lưu...' : editingTicket ? 'Cập Nhật Phiếu' : 'Tạo Phiếu Mới'}</button>
                 </div>
-                </fieldset>
               </form>
             </div>
           </div>
@@ -1405,10 +1313,10 @@ export default function DeviceRepairProcessing({ onReturnToProfile, globalSearch
                   <div><strong>Gửi Trả Khách:</strong> {selectedTicket.customerReturnStatus}</div>
                   <div><strong>Mã QR / Mã QL:</strong> {selectedTicket.assetCode || 'Chưa cập nhật'}</div>
                   <div><strong>Trạng thái công tác:</strong> {selectedTicket.fieldVisitStatus || 'scheduled'}</div>
-                  <div><strong>Hạn SLA:</strong> {selectedTicket.slaDueAt ? new Date(selectedTicket.slaDueAt).toLocaleString('vi-VN') : 'Chưa đặt'}</div>
+
                   <div><strong>Checklist:</strong> {Object.values(selectedTicket.serviceChecklist || {}).filter(Boolean).length}/{Object.keys(EMPTY_SERVICE_CHECKLIST).length} mục</div>
                   <div><strong>Vật tư:</strong> {(selectedTicket.materialsUsed || []).join(', ') || 'Không sử dụng'}</div>
-                  <div><strong>NPP xác nhận:</strong> {selectedTicket.nppConfirmation?.confirmed ? `Đã xác nhận - ${selectedTicket.nppConfirmation.confirmedBy}` : 'Chưa xác nhận'}</div>
+                  <div><strong>NPP xác nhận:</strong> {selectedTicket.nppConfirmation?.confirmed ? `Đã xác nhận${selectedTicket.nppConfirmation.confirmedBy ? ` - ${selectedTicket.nppConfirmation.confirmedBy}` : ''}` : 'Chưa xác nhận'}</div>
                 </div>
 
                 {selectedTicket.photos && selectedTicket.photos.length > 0 && (

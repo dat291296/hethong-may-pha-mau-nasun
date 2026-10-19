@@ -1,7 +1,21 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { prepareDeviceEdit, saveDeviceEdit, findAssignedDevice } from '../src/lib/deviceEdit.js';
+import { prepareDeviceEdit, saveDeviceEdit, findAssignedDevice, requireUniqueDeviceSerial } from '../src/lib/deviceEdit.js';
 import { verifyDeviceEdit } from '../scripts/verify-device-edit.mjs';
+
+test('serial conflicts identify the other device and its distributor without rejecting the original device', () => {
+  const devices = [{ id: 'MIX-001', serial: 'SAME', model: 'KMC', setCode: 'SET-1' }];
+  const sets = [{ setCode: 'SET-1', nppId: 'NPP-1' }];
+  const npps = [{ id: 'NPP-1', name: 'Synthetic distributor' }];
+  assert.doesNotThrow(() => requireUniqueDeviceSerial('SAME', 'MIX-001', devices, sets, npps));
+  assert.throws(() => requireUniqueDeviceSerial(' same ', 'MIX-002', devices, sets, npps), error =>
+    error.code === 'DEVICE_SERIAL_CONFLICT' && error.message.includes('MIX-001') && error.message.includes('Synthetic distributor') && error.message.includes('KMC'));
+  assert.throws(() => requireUniqueDeviceSerial('SAME', 'MIX-002', [{ ...devices[0], setCode: null }], [], []), /Trong kho/);
+});
+
+test('serial constraint races remain a rejected write with a readable conflict message', async () => {
+  await assert.rejects(saveDeviceEdit(async () => ({ error: { code: '23505', message: 'duplicate key value violates unique constraint "mixers_serial_key"' } }), 'mixers', 'MIX-1', { serial: 'SAME' }, '2026-10-14T00:00:00Z'), { code: 'DEVICE_SERIAL_CONFLICT' });
+});
 
 test('all device categories preserve identity and explicit assignments', () => {
   for (const category of ['computer', 'dispenser', 'mixer', 'printer']) {
@@ -13,7 +27,7 @@ test('all device categories preserve identity and explicit assignments', () => {
     assert.equal(prepareDeviceEdit(category, { serial: 'SERIAL', isAssigned: false, setCode: 'SET-A' }, { id: 'original' }).setCode, null);
   }
   assert.equal(prepareDeviceEdit('computer', { isAssigned: false }, { id: 'PC', serial: 'PC-OLD' }).serial, 'PC-OLD');
-  assert.throws(() => prepareDeviceEdit('printer', { serial: ' ' }, { id: 'PR' }));
+  assert.equal(prepareDeviceEdit('printer', { serial: ' ' }, { id: 'PR' }).serial, null);
 });
 
 test('atomic edit sends the original revision and never falls back to partial writes', async () => {
@@ -63,4 +77,11 @@ test('staging cleanup reauthenticates, attempts all synthetic sets and preserves
   await assert.rejects(verifyDeviceEdit(admin, {}, async () => { refreshed = true; }), /ORIGINAL_FAILURE/);
   assert.equal(removed.length, 2);
   assert.ok(removed.every(id => id.startsWith('NASUN-STAGING-EDIT-')));
+});
+
+test('unknown serials remain NULL and known serials still require uniqueness', () => {
+  for (const category of ['dispenser', 'mixer', 'printer']) {
+    assert.equal(prepareDeviceEdit(category, { serial: '' }, { id: 'D1', serial: 'OLD' }).serial, null);
+    assert.equal(prepareDeviceEdit(category, { serial: null }, { id: 'D2' }).serial, null);
+  }
 });

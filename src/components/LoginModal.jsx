@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowLeft, CheckCircle2, Eye, EyeOff, KeyRound, LockKeyhole, Mail, UserRound } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Circle, Eye, EyeOff, KeyRound, LockKeyhole, Mail, UserRound } from 'lucide-react';
+import { getAuthErrorMessage, getPasswordRuleState, shouldCountLoginFailure } from '../security/authFeedback.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { supabase } from '../lib/supabase.js';
 import { syncOfflineQueue } from '../lib/offlineSync.js';
 import { clearOfflineStorage } from '../lib/offlineDb.js';
 import { AUTH_REDIRECT_PURPOSES, createPrivateIdentifier, getAuthRedirectUrl } from '../security/authRuntime.js';
-import { completePasswordRecovery, requestPasswordRecovery, resendSignupVerification } from '../security/authEmailFlows.js';
+import { completePasswordRecovery, signInEmailAccount, registerEmailAccount, requestPasswordRecovery, resendSignupVerification } from '../security/authEmailFlows.js';
 
 const isKeycloakEnabled = import.meta.env.VITE_ENABLE_KEYCLOAK === 'true';
 const LOGIN_ATTEMPTS_KEY = 'nasun_login_attempts';
@@ -14,11 +15,12 @@ const LOGIN_LOCK_MS = 15 * 60 * 1000;
 const RESEND_COOLDOWN_SECONDS = 60;
 
 function getPasswordRules(value) {
+  const state = getPasswordRuleState(value);
   return [
-    { id: 'length', label: 'Ít nhất 12 ký tự', passed: value.length >= 12 },
-    { id: 'uppercase', label: 'Có chữ hoa', passed: /[A-Z]/.test(value) },
-    { id: 'lowercase', label: 'Có chữ thường', passed: /[a-z]/.test(value) },
-    { id: 'number', label: 'Có chữ số', passed: /\d/.test(value) },
+    { id: 'length', label: `Ít nhất 12 ký tự (${value.length}/12)`, passed: state.length },
+    { id: 'uppercase', label: 'Có chữ hoa', passed: state.uppercase },
+    { id: 'lowercase', label: 'Có chữ thường', passed: state.lowercase },
+    { id: 'number', label: 'Có chữ số', passed: state.number },
   ];
 }
 
@@ -129,6 +131,7 @@ export default function LoginModal() {
 
   const submitLogin = async (event) => {
     event.preventDefault();
+    if (pending) return;
     resetFeedback();
     setPending(true);
     const normalizedEmail = email.trim().toLowerCase();
@@ -143,10 +146,9 @@ export default function LoginModal() {
         const remainingMinutes = Math.max(1, Math.ceil((LOGIN_LOCK_MS - (Date.now() - attemptState.firstFailureAt)) / 60000));
         throw new Error(`LOCAL_LOGIN_LOCKED:${remainingMinutes}`);
       }
-      const { error: signInError } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password });
-      if (signInError) throw signInError;
+      await signInEmailAccount(supabase.auth, { email: normalizedEmail, password });
       await updateLoginAttemptState(normalizedEmail, true);
-      await syncOfflineQueue();
+      syncOfflineQueue().catch(() => console.warn('[Login] Offline synchronization deferred'));
     } catch (err) {
       console.error('[Login] Password sign-in failed:', err.message);
       if (err.code === 'email_not_confirmed' || /email not confirmed/i.test(err.message || '')) {
@@ -157,8 +159,8 @@ export default function LoginModal() {
       } else if (err.message?.startsWith('LOCAL_LOGIN_LOCKED:')) {
         setError(`Đã tạm khóa đăng nhập trên thiết bị này. Thử lại sau ${err.message.split(':')[1]} phút.`);
       } else {
-        await updateLoginAttemptState(normalizedEmail, false);
-        setError('Không thể đăng nhập. Kiểm tra lại email và mật khẩu.');
+        if (shouldCountLoginFailure(err)) await updateLoginAttemptState(normalizedEmail, false);
+        setError(getAuthErrorMessage(err, 'login'));
       }
     } finally {
       setPending(false);
@@ -184,6 +186,7 @@ export default function LoginModal() {
 
   const submitSignup = async (event) => {
     event.preventDefault();
+    if (pending || resendCooldown > 0) return;
     resetFeedback();
     if (!passwordIsStrong) {
       setError('Mật khẩu chưa đáp ứng đầy đủ các yêu cầu bảo mật.');
@@ -201,12 +204,11 @@ export default function LoginModal() {
         return;
       }
       const emailRedirectTo = await getAuthRedirectUrl(AUTH_REDIRECT_PURPOSES.VERIFIED);
-      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+      const signUpData = await registerEmailAccount(supabase.auth, {
         email: email.trim().toLowerCase(),
         password,
         options: { emailRedirectTo, data: { full_name: fullName.trim() } },
       });
-      if (signUpError) throw signUpError;
       const normalizedEmail = email.trim().toLowerCase();
       setMode('login');
       if (!signUpData.session) {
@@ -219,8 +221,12 @@ export default function LoginModal() {
         ? 'Tài khoản đã được tạo. Bạn có thể đăng nhập.'
         : 'Đã gửi email xác thực. Kiểm tra hộp thư đến hoặc thư rác để kích hoạt tài khoản.');
     } catch (err) {
-      console.error('[Login] Sign-up failed:', err.message);
-      setError(err.message || 'Không thể tạo tài khoản.');
+      console.error('[Login] Sign-up failed:', { code: err?.code, status: err?.status });
+      setError(getAuthErrorMessage(err));
+      if (err?.code === 'AUTH_RESPONSE_TIMEOUT' || err?.code === 'request_timeout' || err?.status >= 500 || err?.name === 'AuthRetryableFetchError' || err instanceof TypeError) {
+        setVerificationEmail(email.trim().toLowerCase());
+        setResendCooldown(RESEND_COOLDOWN_SECONDS);
+      }
     } finally {
       setPending(false);
     }
@@ -237,7 +243,7 @@ export default function LoginModal() {
       setNotice('Đã gửi lại email xác minh. Hãy kiểm tra hộp thư đến hoặc thư rác.');
     } catch (err) {
       console.error('[Login] Verification resend failed:', err.message);
-      setError('Chưa thể gửi lại email xác minh. Vui lòng thử lại sau.');
+      setError(getAuthErrorMessage(err, 'resend'));
     } finally {
       setPending(false);
     }
@@ -245,6 +251,7 @@ export default function LoginModal() {
 
   const submitReset = async (event) => {
     event.preventDefault();
+    if (pending || resetCooldown > 0) return;
     resetFeedback();
     setPending(true);
     try {
@@ -258,7 +265,7 @@ export default function LoginModal() {
       setNotice('Nếu email đã đăng ký, liên kết đặt lại mật khẩu sẽ được gửi. Hãy kiểm tra hộp thư đến hoặc thư rác.');
     } catch (err) {
       console.error('[Login] Password reset failed:', err.message);
-      setError('Không thể gửi yêu cầu đặt lại mật khẩu.');
+      setError(getAuthErrorMessage(err, 'recovery'));
     } finally {
       setPending(false);
     }
@@ -266,6 +273,7 @@ export default function LoginModal() {
 
   const submitNewPassword = async (event) => {
     event.preventDefault();
+    if (pending) return;
     resetFeedback();
     if (!passwordIsStrong) {
       setError('Mật khẩu mới chưa đáp ứng đầy đủ các yêu cầu bảo mật.');
@@ -288,7 +296,7 @@ export default function LoginModal() {
       setNotice('Mật khẩu đã được cập nhật. Bạn có thể đăng nhập bằng mật khẩu mới.');
     } catch (err) {
       console.error('[Login] Password update failed:', err.message);
-      setError('Liên kết đã hết hạn hoặc không hợp lệ. Hãy yêu cầu gửi lại liên kết đặt lại mật khẩu.');
+      setError(getAuthErrorMessage(err, 'update-password'));
     } finally {
       setPending(false);
     }
@@ -309,7 +317,7 @@ export default function LoginModal() {
         <div className="auth-password-rules" aria-live="polite">
           {passwordRules.map(rule => (
             <span key={rule.id} className={rule.passed ? 'is-valid' : ''}>
-              <CheckCircle2 size={13} aria-hidden="true" />{rule.label}
+              {rule.passed ? <CheckCircle2 size={13} aria-hidden="true" /> : <Circle size={13} aria-hidden="true" />}{rule.label}
             </span>
           ))}
         </div>
@@ -369,8 +377,8 @@ export default function LoginModal() {
           </div>
 
           {notice && <div className="auth-alert auth-alert-success"><CheckCircle2 size={18} />{notice}</div>}
-          {error && <div className="auth-alert auth-alert-error">{error}</div>}
-          {mode === 'login' && verificationEmail && (
+          {error && <div className="auth-alert auth-alert-error" role="alert">{error}</div>}
+          {['login', 'signup'].includes(mode) && verificationEmail && (
             <div className="auth-verification-panel">
               <span>Chưa nhận được email xác minh?</span>
               <button type="button" className="auth-text-link" onClick={resendVerificationEmail} disabled={pending || resendCooldown > 0}>
@@ -399,7 +407,7 @@ export default function LoginModal() {
               <label className="auth-field"><span>Email công việc</span><div className="auth-input-wrap"><Mail size={18} aria-hidden="true" /><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required autoComplete="email" /></div></label>
               {renderPasswordInput()}
               {renderConfirmPasswordInput()}
-              <button className="btn btn-primary auth-submit" type="submit" disabled={pending}>{pending ? 'Đang xử lý...' : 'Tạo tài khoản'}</button>
+              <button className="btn btn-primary auth-submit" type="submit" disabled={pending || resendCooldown > 0 || !passwordIsStrong || password !== confirmPassword}>{pending ? 'Đang xử lý...' : resendCooldown > 0 ? `Thử lại sau ${resendCooldown}s` : 'Tạo tài khoản'}</button>
               <p className="auth-privacy-note">Khi tạo tài khoản, bạn đồng ý với <button type="button" className="auth-text-link" onClick={() => setPrivacyOpen(true)}>chính sách quyền riêng tư</button>.</p>
               <button type="button" className="auth-back" onClick={() => changeMode('login')}><ArrowLeft size={16} />Quay lại đăng nhập</button>
             </form>
