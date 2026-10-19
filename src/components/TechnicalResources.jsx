@@ -1,9 +1,10 @@
+import { fetchAllRows } from '../lib/paginatedQuery.js';
 import { useSensitiveActionGate } from './SensitiveActionGate.jsx';
 import { matchesDocumentModel } from '../lib/machineWorkspace';
 import React, { useEffect, useState } from 'react';
 import { FileText, ExternalLink, Upload, Trash2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { supabase } from '../lib/supabase';
+import { supabase, safeQuery } from '../lib/supabase';
 import { DOCUMENT_BUCKET, resourceError, validateDocumentFile, validateDocumentUrl } from '../lib/technicalResources';
 import './technicalResources.css';
 const fields = 'id,title,category,machine_model,url,storage_path,file_name,file_size,created_at';
@@ -14,18 +15,21 @@ export default function TechnicalResources({ machineModel = '', modelOptions = [
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [visibleCount,setVisibleCount] = useState(25);
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('ALL');
   const [modelFilter, setModelFilter] = useState('ALL');
+  useEffect(()=>{setVisibleCount(25);},[search,categoryFilter,modelFilter,machineModel]);
   const [form, setForm] = useState(null);
   const [file, setFile] = useState(null);
   useEffect(() => {
     let cancelled = false;
+    setDocuments([]);setError('');setLoading(false);
     if (!supabase || !user?.id) return;
     setLoading(true);
-    supabase.from('technical_documents').select(fields).order('created_at', { ascending: false }).limit(500).then(({ data, error: loadError }) => {
+    fetchAllRows(sb=>sb.from('technical_documents').select(fields,{count:'exact'}).order('id'),safeQuery,'technicalDocuments').then(data => {
       if (cancelled) return;
-      if (loadError) setError(resourceError(loadError)); else setDocuments(data || []);
+      setDocuments(data || []);
     }).catch(err => { if (!cancelled) setError(resourceError(err)); }).finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [user?.id]);
@@ -87,6 +91,7 @@ export default function TechnicalResources({ machineModel = '', modelOptions = [
       }
     } catch (err) { setError(resourceError(err)); } finally { setBusy(false); }
   }
+  const filteredDocuments = documents.filter(item => (categoryFilter === 'ALL' || item.category === categoryFilter) && (modelFilter === 'ALL' || (modelFilter === 'COMMON' ? !item.machine_model : item.machine_model === modelFilter))).filter(item => (!machineModel || matchesDocumentModel(item.machine_model, machineModel))).filter(item => `${item.title} ${item.machine_model}`.toLocaleLowerCase('vi').includes(search.toLocaleLowerCase('vi')));
   return <section className="technical-resources glass-panel resource-panel" aria-label="Tài liệu và bản vẽ">
     <div className="resource-heading"><h3><FileText size={20} /> Tài liệu & Bản vẽ</h3>{role === 'admin' && <button className="btn btn-primary btn-sm" disabled={busy} onClick={() => { setFile(null); setForm({ title: '', category: 'Tài liệu', machine_model: machineModel }); }}><Upload size={16} /> Tải file lên</button>}</div>
     <p className="resource-muted">PDF, PNG, JPG, WEBP, GIF, BMP, TIFF · Tối đa 20 MB/file.</p>
@@ -103,7 +108,9 @@ export default function TechnicalResources({ machineModel = '', modelOptions = [
       <div className="resource-actions"><button className="btn btn-primary" disabled={busy}>{busy ? 'Đang tải...' : 'Lưu tài liệu'}</button><button type="button" className="btn btn-secondary" disabled={busy} onClick={() => setForm(null)}>Hủy</button></div>
     </form>}
     {!loading && !documents.length && <p className="resource-muted">Chưa có tài liệu. Admin có thể tải file PDF hoặc ảnh bản vẽ lên.</p>}
-    {documents.filter(item => (categoryFilter === 'ALL' || item.category === categoryFilter) && (modelFilter === 'ALL' || (modelFilter === 'COMMON' ? !item.machine_model : item.machine_model === modelFilter))).filter(item => (!machineModel || matchesDocumentModel(item.machine_model, machineModel))).filter(item => `${item.title} ${item.machine_model}`.toLocaleLowerCase('vi').includes(search.toLocaleLowerCase('vi'))).map(document => <div className="resource-row" key={document.id}><FileText size={22} /><div className="resource-content"><strong>{document.title}</strong><small>{document.category}{document.machine_model && ` · ${document.machine_model}`}</small>{document.file_name && <small>{document.file_name} · {(document.file_size / 1048576).toFixed(2)} MB</small>}</div><button className="btn btn-secondary btn-sm" onClick={() => open(document)}><ExternalLink size={16} /> Mở</button>{role === 'admin' && <button className="btn btn-secondary btn-sm" disabled={busy} onClick={() => remove(document)} aria-label={`Xóa ${document.title}`}><Trash2 size={16} /></button>}</div>)}
+    {filteredDocuments.slice(0,visibleCount).map(document => <div className="resource-row" key={document.id}><FileText size={22} /><div className="resource-content"><strong>{document.title}</strong><small>{document.category}{document.machine_model && ` · ${document.machine_model}`}</small>{document.file_name && <small>{document.file_name} · {(document.file_size / 1048576).toFixed(2)} MB</small>}</div><button className="btn btn-secondary btn-sm" onClick={() => open(document)}><ExternalLink size={16} /> Mở</button>{role === 'admin' && <button className="btn btn-secondary btn-sm" disabled={busy} onClick={() => remove(document)} aria-label={`Xóa ${document.title}`}><Trash2 size={16} /></button>}</div>)}
+    {!loading && documents.length > 0 && !filteredDocuments.length && <p className="resource-muted">Không có tài liệu phù hợp bộ lọc.</p>}
+    {filteredDocuments.length > visibleCount && <button className="btn btn-secondary" onClick={()=>setVisibleCount(value=>value+25)}>Xem thêm tài liệu</button>}
     {dialog}
   </section>;
 }

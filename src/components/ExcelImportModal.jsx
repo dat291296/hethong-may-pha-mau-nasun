@@ -177,6 +177,7 @@ export default function ExcelImportModal({
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState(null);
   const fileInputRef = useRef();
+  const importBatchId = useRef(crypto.randomUUID());
 
   const config = IMPORT_CONFIGS[importType];
 
@@ -184,6 +185,7 @@ export default function ExcelImportModal({
   const parseFile = useCallback(async (file) => {
     if (!file) return;
     setFileName(file.name);
+    importBatchId.current = crypto.randomUUID();
     setImportResult(null);
 
     try {
@@ -327,13 +329,13 @@ export default function ExcelImportModal({
     }
 
     setImporting(true);
-    await new Promise(r => setTimeout(r, 600)); // slight delay for UX
+    let outcome;
+    try {
 
-    const timestamp = Date.now();
 
     if (importType === 'npp') {
       const newNpps = rowsToImport.map((row, i) => ({
-        id: `NPP-IMPORT-${String(timestamp + i).slice(-5)}`,
+        id: `NPP-IMPORT-${importBatchId.current}-${i}`,
         name: row.name,
         phone: row.phone,
         contactPerson: row.contactPerson || '',
@@ -346,24 +348,24 @@ export default function ExcelImportModal({
         createdAt: new Date().toISOString().split('T')[0],
         photos: []
       }));
-      onImportNpps(newNpps);
+      outcome = await onImportNpps(newNpps);
     }
 
     if (importType === 'dispenser') {
       const newItems = rowsToImport.map((row, i) => ({
-        id: `DISP-IMP-${String(timestamp + i).slice(-5)}`,
+        id: `DISP-IMP-${importBatchId.current}-${i}`,
         model: row.model,
         serial: row.serial || 'N/A',
         status: row.status || 'Đang chạy tốt',
         isAssigned: false,
         setCode: null
       }));
-      onImportDispensers(newItems);
+      outcome = await onImportDispensers(newItems);
     }
 
     if (importType === 'mixer') {
       const newItems = rowsToImport.map((row, i) => ({
-        id: `MIX-IMP-${String(timestamp + i).slice(-5)}`,
+        id: `MIX-IMP-${importBatchId.current}-${i}`,
         model: row.model,
         type: row.type || 'Lắc xoay khép kín',
         serial: row.serial || 'N/A',
@@ -371,12 +373,12 @@ export default function ExcelImportModal({
         isAssigned: false,
         setCode: null
       }));
-      onImportMixers(newItems);
+      outcome = await onImportMixers(newItems);
     }
 
     if (importType === 'computer') {
       const newItems = rowsToImport.map((row, i) => ({
-        id: `PC-IMP-${String(timestamp + i).slice(-5)}`,
+        id: `PC-IMP-${importBatchId.current}-${i}`,
         type: row.type || 'Case',
         os: row.os,
         specs: row.specs || 'Core i3 / 8GB RAM / 256GB SSD',
@@ -386,12 +388,12 @@ export default function ExcelImportModal({
         setCode: null,
         stabilizer: { hasStabilizer: false, brand: null, isSelfBought: false }
       }));
-      onImportComputers(newItems);
+      outcome = await onImportComputers(newItems);
     }
 
     if (importType === 'printer') {
       const newItems = rowsToImport.map((row, i) => ({
-        id: `PRN-IMP-${String(timestamp + i).slice(-5)}`,
+        id: `PRN-IMP-${importBatchId.current}-${i}`,
         model: row.model || 'QL700',
         serial: row.serial || 'N/A',
         connection: row.connection || 'USB',
@@ -399,18 +401,18 @@ export default function ExcelImportModal({
         isAssigned: false,
         setCode: null
       }));
-      onImportPrinters(newItems);
+      outcome = await onImportPrinters(newItems);
     }
 
     if (importType === 'repair') {
       const newItems = rowsToImport.map((row, i) => ({
-        id: row.ticketCode || `TICK-IMP-${timestamp + i}`, ticketCode: row.ticketCode || `TICK-IMP-${timestamp + i}`,
+        id: row.ticketCode || `TICK-IMP-${importBatchId.current}-${i}`, ticketCode: row.ticketCode || `TICK-IMP-${importBatchId.current}-${i}`,
         date: row.date, nppName: row.nppName, nppId: '', productCategory: row.productCategory, machineModel: row.machineModel || '',
         serialNumber: row.serialNumber || '', errorDescription: row.errorDescription, technician: row.technician || '',
         processingStatus: row.processingStatus || 'Chưa xử lý', errorCategory: '', actionDirection: 'Sửa chữa',
         replacementCondition: 'N/A', customerReturnStatus: 'Chưa gửi trả', notes: row.notes || '', photos: []
       }));
-      await onImportRepairs(newItems);
+      outcome = await onImportRepairs(newItems);
     }
 
     if (importType === 'systemSet') {
@@ -423,15 +425,18 @@ export default function ExcelImportModal({
         technician: row.technician || '', salesperson: row.salesperson || '', stabilizer: row.stabilizer || '', notes: row.notes || '',
         installationPhotos: []
       }));
-      await onImportSystemSets(newItems);
+      outcome = await onImportSystemSets(newItems);
     }
 
-    setImporting(false);
     setImportResult({
+      queued: Boolean(outcome?.queued),
       success: rowsToImport.length,
       skipped: errorRows.length,
       deselected: validRows.length - selectedRows.size
     });
+    } catch (error) {
+      alert(error?.code === 'PERSISTENCE_DENIED' ? 'Server chưa xác nhận đủ dữ liệu. Giữ file để đối chiếu.' : 'Chưa hoàn tất nhập dữ liệu. Giữ file và kiểm tra quyền, mạng hoặc hàng đợi trước khi thử lại.');
+    } finally { setImporting(false); }
   };
 
   // Reset when switching import type
@@ -691,7 +696,7 @@ export default function ExcelImportModal({
                 ✅ Import Dữ Liệu Thành Công!
               </h3>
               <p style={{ fontSize: '0.9rem', color: 'var(--text-main)' }}>
-                Đã thêm <strong style={{ color: '#34d399' }}>{importResult.success}</strong> bản ghi mới vào hệ thống.
+                {importResult.queued ? 'Đã lưu chờ đồng bộ ' : 'Đã ghi nhận '}<strong style={{ color: '#34d399' }}>{importResult.success}</strong>{importResult.queued ? ' bản ghi trên thiết bị · Chưa gửi lên server.' : ' bản ghi.'}
                 {importResult.skipped > 0 && ` Đã bỏ qua ${importResult.skipped} dòng lỗi/trùng.`}
               </p>
               <button className="btn btn-primary" style={{ marginTop: '14px' }} onClick={onClose}>

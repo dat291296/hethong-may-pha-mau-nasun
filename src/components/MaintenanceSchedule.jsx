@@ -38,7 +38,7 @@ function isDateInYear(value, year) {
   return !Number.isNaN(date.getTime()) && date.getFullYear() === year;
 }
 
-export default function MaintenanceSchedule({ globalSearch = '', initialFilter = 'ALL', systemSets, onCompleteMaintenance, onUpdateSystemSet, onDeleteSystemSet, onReturnToProfile }) {
+export default function MaintenanceSchedule({ onReturnToProfile, globalSearch = '', initialFilter = 'ALL', systemSets, onCompleteMaintenance, onUpdateSystemSet, onDeleteSystemSet }) {
   const { user } = useAuth();
   useWorkspaceScroll('maintenance');
   const [filter, setFilter] = useWorkspaceState('maintenance:state', initialFilter); // ALL | DUE_SOON | OVERDUE | OK
@@ -552,7 +552,7 @@ export default function MaintenanceSchedule({ globalSearch = '', initialFilter =
         </div>
       </div>
 
-      {selectedSet && <MaintenanceChecklist machine={selectedSet} onSave={onCompleteMaintenance} onClose={() => setSelectedSet(null)} onReturnToProfile={onReturnToProfile} />}
+      {selectedSet && <MaintenanceChecklist machine={selectedSet} onSave={onCompleteMaintenance} onReturnToProfile={onReturnToProfile} onClose={() => {setSelectedSet(null);onReturnToProfile?.();}} />}
 
       {/* EDIT MAINTENANCE MODAL */}
       {editingMaint && (

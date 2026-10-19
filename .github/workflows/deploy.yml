@@ -12,10 +12,12 @@ concurrency:
 
 jobs:
   rls-gate:
+    if: github.ref == 'refs/heads/main'
     uses: ./.github/workflows/rls-integration.yml
     secrets: inherit
 
   deploy:
+    if: github.ref == 'refs/heads/main'
     needs: rls-gate
     runs-on: ubuntu-latest
     name: Deploy to Cloudflare Workers

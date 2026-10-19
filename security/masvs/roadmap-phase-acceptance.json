@@ -1,0 +1,153 @@
+{
+  "assessedAt": "2026-10-19",
+  "scope": "Local implementation and selected staging SQL checks; no production upgrade performed",
+  "phases": [
+    {
+      "phase": 1,
+      "name": "Environment",
+      "implemented": [
+        "Separate staging",
+        "Production migration guard and encrypted pre-release backup"
+      ],
+      "remainingAcceptance": [
+        "External release authority verification",
+        "Approved release"
+      ],
+      "status": "implemented-pending-acceptance"
+    },
+    {
+      "phase": 2,
+      "name": "Data",
+      "implemented": [
+        "Append-only audit history",
+        "Transactional migration with existing-row preservation comparison",
+        "Restore destination preflight"
+      ],
+      "remainingAcceptance": [
+        "Full Database/Auth/Storage restore on isolated empty target"
+      ],
+      "status": "implemented-pending-acceptance"
+    },
+    {
+      "phase": 3,
+      "name": "Authorization",
+      "implemented": [
+        "Five-role staging SQL workflow probes",
+        "Viewer denial and regional access checks"
+      ],
+      "remainingAcceptance": [
+        "Real JWT acceptance for new workflows"
+      ],
+      "status": "implemented-pending-acceptance"
+    },
+    {
+      "phase": 4,
+      "name": "Writes and synchronization",
+      "implemented": [
+        "Durable import acknowledgement",
+        "Transient-only queueing",
+        "Machine metadata revision check",
+        "Atomic legacy assembly replay"
+      ],
+      "remainingAcceptance": [
+        "Real phone queue and reconnect acceptance"
+      ],
+      "status": "implemented-pending-acceptance"
+    },
+    {
+      "phase": 5,
+      "name": "Machine profile",
+      "implemented": [
+        "Machine context",
+        "Equipment and history",
+        "Persistent metadata and equipment drafts",
+        "Immutable machine code"
+      ],
+      "remainingAcceptance": [
+        "Physical Safari acceptance"
+      ],
+      "status": "implemented-pending-acceptance"
+    },
+    {
+      "phase": 6,
+      "name": "Repairs",
+      "implemented": [
+        "Return requires completed processing in UI and database",
+        "Existing repair workflow retained"
+      ],
+      "remainingAcceptance": [
+        "Physical field acceptance"
+      ],
+      "status": "implemented-pending-acceptance"
+    },
+    {
+      "phase": 7,
+      "name": "Maintenance and QC",
+      "implemented": [
+        "Checklist and photo draft",
+        "Idempotent staging maintenance transaction"
+      ],
+      "remainingAcceptance": [
+        "Field acceptance and QC signoff"
+      ],
+      "status": "implemented-pending-acceptance"
+    },
+    {
+      "phase": 8,
+      "name": "Allocation and withdrawal",
+      "implemented": [
+        "Atomic installation transfer withdrawal and assembly",
+        "Operation identity binds payload",
+        "Replay does not duplicate audit entries"
+      ],
+      "remainingAcceptance": [
+        "Real JWT gate",
+        "Production migration after acceptance"
+      ],
+      "status": "implemented-pending-acceptance"
+    },
+    {
+      "phase": 9,
+      "name": "Mobile PWA",
+      "implemented": [
+        "Pinch zoom enabled",
+        "Home Screen guidance",
+        "Offline synthetic draft checks"
+      ],
+      "remainingAcceptance": [
+        "Physical Safari offline reopen update and camera acceptance"
+      ],
+      "status": "implemented-pending-acceptance"
+    },
+    {
+      "phase": 10,
+      "name": "Performance and operations",
+      "implemented": [
+        "Bundle budgets",
+        "Read-only scheduled health workflow source",
+        "Redacted support export"
+      ],
+      "remainingAcceptance": [
+        "Load acceptance",
+        "Activate health workflow and verify alert delivery"
+      ],
+      "status": "implemented-pending-acceptance"
+    }
+  ],
+  "excluded": [
+    11,
+    12
+  ],
+  "productionDataMutated": false,
+  "verification": {
+    "tests": {
+      "passed": 246,
+      "failed": 0
+    },
+    "build": "passed",
+    "lint": "passed with warnings",
+    "browser": "Chromium machine profile draft close/reopen/restore and 390px no-horizontal-overflow passed",
+    "productionDeployment": "not performed",
+    "stagingJWT": "not performed for new workflow verifier"
+  }
+}

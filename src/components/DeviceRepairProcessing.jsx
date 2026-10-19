@@ -1,3 +1,4 @@
+import {validateRepairReturn} from '../lib/repairLifecycle.js';
 import { repairMissingFields } from '../lib/repairCompleteness.js';
 import { getOwnedCacheEntries } from '../lib/offlineDb.js';
 import { isDraftExpired } from '../lib/teamWorkspace.js';
@@ -257,7 +258,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
   }, [resumeRequested, draft.existing]);
   const closeForm = async () => {
     if (saving) return;
-    try { await draft.flush(); setShowModal(false); }
+    try { await draft.flush(); setShowModal(false); onReturnToProfile?.(); }
     catch { setSaveError('Chưa lưu được nháp. Hãy giữ phiếu mở và thử lại.'); }
   };
   const selectedNppRegion = npps.find(item => item.id === formData.nppId)?.region;
@@ -449,6 +450,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
       sanitized.fieldVisitStatus = 'customer_confirmed';
     }
 
+    try {validateRepairReturn(sanitized);} catch(error){setSaveError(error.message);return;}
     const isCompleted = ['completed', 'customer_confirmed'].includes(sanitized.fieldVisitStatus);
     if (sanitized.fieldVisitStatus === 'customer_confirmed' && !sanitized.nppConfirmation?.confirmed) {
       alert('Vui lòng tích xác nhận hoàn thành của đại diện NPP.');
@@ -493,6 +495,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
     const missing = repairMissingFields(sanitized);
     setSaveNotice(missing.length ? `Đã lưu phiếu. Cần bổ sung: ${missing.join(' · ')}` : 'Đã lưu phiếu thành công.');
     setShowModal(false);
+    onReturnToProfile?.();
     } catch (error) { console.error('[Repair] Save failed', error.code || error.name); setSaveError(error.message || 'Chưa lưu được phiếu. Bản nháp vẫn được giữ.'); }
     finally { setSaving(false); }
   };
@@ -1274,7 +1277,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
                   {onReturnToProfile && <button type="button" className="btn btn-secondary" disabled={saving} onClick={async () => {
                     try { await draft.flush(); onReturnToProfile(); }
                     catch { setSaveError('Chưa lưu được bản nháp. Vui lòng thử lại trước khi quay lại hồ sơ.'); }
-                  }}>← Quay lại hồ sơ bộ máy</button>}
+                  }}>← Quay lại hồ sơ máy</button>}
                   <button type="submit" className="btn btn-primary" disabled={saving || Boolean(draft.existing)}>{saving ? 'Đang xác nhận lưu...' : editingTicket ? 'Cập Nhật Phiếu' : 'Tạo Phiếu Mới'}</button>
                 </div>
               </form>

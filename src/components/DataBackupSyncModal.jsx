@@ -13,6 +13,9 @@ import {
 } from 'lucide-react';
 import { syncOfflineQueue } from '../lib/offlineSync.js';
 import { getSyncHealthSnapshot } from '../lib/syncHealth.js';
+import { getOperationalDiagnostics } from '../lib/operationalDiagnostics.js';
+import { getPerformanceSnapshot } from '../lib/performanceMetrics.js';
+import { buildSupportReport } from '../lib/supportReport.js';
 import { createSecureBackup, parseAndValidateBackup, MAX_BACKUP_BYTES } from '../utils/secureBackup.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { ROLES } from '../security/rbac.js';
@@ -396,6 +399,13 @@ export default function DataBackupSyncModal({
                   ))}
                 </div>
 
+                <button type="button" className="btn btn-secondary" style={{marginTop:12}} onClick={()=>{
+                  const report=buildSupportReport({health:syncHealth,diagnostics:getOperationalDiagnostics(),performance:getPerformanceSnapshot()});
+                  const url=URL.createObjectURL(new Blob([JSON.stringify(report,null,2)],{type:'application/json'}));
+                  const link=document.createElement('a');link.href=url;link.download='nasun-support.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+                }}>Tải chẩn đoán an toàn</button>
+                <p className="resource-muted">Chỉ gồm số lượng hàng chờ, lỗi và chỉ số tải trang; không gồm nội dung bản ghi, mã khách hàng hoặc token.</p>
+                <details style={{marginTop:12}}><summary>Dùng NASUN trên màn hình chính điện thoại</summary><p>iPhone: mở bằng Safari → Chia sẻ → Thêm vào Màn hình chính. Android: mở menu trình duyệt → Cài đặt ứng dụng hoặc Thêm vào màn hình chính.</p><p>Mở app và có mạng để gửi dữ liệu chờ. Không xóa dữ liệu trình duyệt khi còn bản nháp hoặc hàng đợi.</p></details>
                 {syncHealth.queueItems?.length > 0 && (
                   <div style={{ marginTop: '12px', maxHeight: '180px', overflowY: 'auto', borderTop: '1px solid var(--border-color)' }}>
                     {syncHealth.queueItems.map(item => (

@@ -222,9 +222,9 @@ export default function App() {
   const [machineProfileReturn, setMachineProfileReturn] = useState(null);
   const navigateMain = tab => { setWorkspaceFilter('ALL'); setGlobalSearch(''); setActiveTab(tab); };
   const navigateWorkspace = (tab, query = '', filter = 'ALL') => { setGlobalSearch(query); setWorkspaceFilter(filter); setActiveTab(tab); };
-  const rememberMachineProfile = machine => setMachineProfileReturn({ machine: { id: machine.id, setCode: machine.setCode }, search: globalSearch, filter: workspaceFilter });
+  const rememberMachineProfile = (machine,tab='equipment') => setMachineProfileReturn({ machine: { id: machine.id, setCode: machine.setCode, tab }, search: globalSearch, filter: workspaceFilter });
   const returnToMachineProfile = () => { if (machineProfileReturn) navigateWorkspace('assets', machineProfileReturn.search, machineProfileReturn.filter); };
-  const requestMachineRepair = machine => { rememberMachineProfile(machine); setPrefilledRepairData({ nppId: machine.nppId, nppName: machine.nppName, machineModel: machine.dispenserModel, serialNumber: machine.dispenserSerial, productCategory: 'Máy chiết' }); navigateWorkspace('repairs'); };
+  const requestMachineRepair = (machine,tab) => { rememberMachineProfile(machine,tab); setPrefilledRepairData({ nppId: machine.nppId, nppName: machine.nppName, machineModel: machine.dispenserModel, serialNumber: machine.dispenserSerial, productCategory: 'Máy chiết' }); navigateWorkspace('repairs'); };
 
   const handleSelectErrorForRepair = (errorObj) => {
     let cat = errorObj.category;
@@ -478,6 +478,7 @@ export default function App() {
 
     const newSetObj = {
       set_code: setCode,
+      operationId:newCombo.operationId,
       npp_id: newCombo.nppId || null,
       npp_name: newCombo.nppName || 'Kho Tổng Trung Tâm',
       region: newCombo.region || 'Kho Tổng',
@@ -495,7 +496,7 @@ export default function App() {
       printer_model: prn?.model || 'QL700',
       stabilizer: pc?.stabilizer?.hasStabilizer ? pc.stabilizer.brand || 'Có ổn áp' : 'Chưa có ổn áp',
       status: newCombo.status || (newCombo.nppId ? 'DA_LAP_DAT' : 'TRONG_KHO'),
-      install_date: newCombo.nppId ? new Date().toISOString().split('T')[0] : null,
+      install_date: newCombo.nppId ? (newCombo.installDate || new Date().toLocaleDateString('en-CA')) : null,
       last_maintenance_date: null,
       next_maintenance_due: null,
       technician: newCombo.technician || 'Quản lý Kho',
@@ -508,10 +509,10 @@ export default function App() {
 
     try {
       await assembleSet(newSetObj);
-      if (disp) await editDevice('dispensers', disp.id, { is_assigned: true, set_code: setCode });
-      if (mix) await editDevice('mixers', mix.id, { is_assigned: true, set_code: setCode });
-      if (pc) await editDevice('computers', pc.id, { is_assigned: true, set_code: setCode });
-      if (prn) await editDevice('printers', prn.id, { is_assigned: true, set_code: setCode });
+      if (!isSupabaseConfigured && disp) await editDevice('dispensers', disp.id, { is_assigned: true, set_code: setCode });
+      if (!isSupabaseConfigured && mix) await editDevice('mixers', mix.id, { is_assigned: true, set_code: setCode });
+      if (!isSupabaseConfigured && pc) await editDevice('computers', pc.id, { is_assigned: true, set_code: setCode });
+      if (!isSupabaseConfigured && prn) await editDevice('printers', prn.id, { is_assigned: true, set_code: setCode });
     } catch (err) {
       console.error(err);
       throw err;
@@ -797,7 +798,7 @@ export default function App() {
           <WorkspaceRegionContext.Provider value={workspaceRegion}><Suspense key={`${regionalIdentity}:${workspaceRegion}`} fallback={<div className="glass-panel" style={{ padding: '28px', color: 'var(--text-muted)' }}>Đang tải màn hình...</div>}>
           {machineProfileReturn && ['repairs', 'maintenance'].includes(activeTab) && (
             <div className="glass-panel" style={{ padding: 12, marginBottom: 16 }}>
-              <button className="btn btn-secondary" onClick={() => navigateWorkspace('assets', machineProfileReturn.search, machineProfileReturn.filter)}>← Quay lại hồ sơ bộ máy {machineProfileReturn.machine.setCode}</button>
+              <button className="btn btn-secondary" onClick={() => navigateWorkspace('assets', machineProfileReturn.search, machineProfileReturn.filter)}>← Quay lại hồ sơ máy {machineProfileReturn.machine.setCode}</button>
             </div>
           )}
 
@@ -842,7 +843,7 @@ export default function App() {
               repairTickets={regionalData.repairTickets}
               auditLogs={regionalData.auditLogs}
               onRequestRepair={requestMachineRepair}
-              onRequestMaintenance={machine => { rememberMachineProfile(machine); navigateWorkspace('maintenance', machine.setCode); }}
+              onRequestMaintenance={(machine,tab) => { rememberMachineProfile(machine,tab); navigateWorkspace('maintenance', machine.setCode); }}
               initialProfile={machineProfileReturn?.machine}
               onProfileRestored={() => setMachineProfileReturn(null)}
               systemSets={regionalData.systemSets}
@@ -1027,7 +1028,7 @@ export default function App() {
           existingComputers={computers}
           existingPrinters={printers}
           onImportNpps={async (newItems) => {
-            await importNpps(newItems);
+            const result = await importNpps(newItems);
             await addAuditLog({
               type: 'IMPORT EXCEL – NPP',
               setCode: '—',
@@ -1038,9 +1039,10 @@ export default function App() {
               reason: 'Nhập hàng loạt từ file Excel',
               notes: `Tổng ${newItems.length} NPP mới được thêm vào danh sách`
             });
+            return result;
           }}
           onImportDispensers={async (newItems) => {
-            await importDevices('dispenser', newItems);
+            const result = await importDevices('dispenser', newItems);
             await addAuditLog({
               type: 'IMPORT EXCEL – MÁY CHIẾT',
               setCode: '—', nppId: '—',
@@ -1050,9 +1052,10 @@ export default function App() {
               reason: 'Nhập hàng loạt từ file Excel',
               notes: `Tổng ${newItems.length} Máy Chiết mới vào kho`
             });
+            return result;
           }}
           onImportMixers={async (newItems) => {
-            await importDevices('mixer', newItems);
+            const result = await importDevices('mixer', newItems);
             await addAuditLog({
               type: 'IMPORT EXCEL – MÁY LẮC',
               setCode: '—', nppId: '—',
@@ -1062,9 +1065,10 @@ export default function App() {
               reason: 'Nhập hàng loạt từ file Excel',
               notes: `Tổng ${newItems.length} Máy Lắc mới vào kho`
             });
+            return result;
           }}
           onImportComputers={async (newItems) => {
-            await importDevices('computer', newItems);
+            const result = await importDevices('computer', newItems);
             await addAuditLog({
               type: 'IMPORT EXCEL – MÁY TÍNH',
               setCode: '—', nppId: '—',
@@ -1074,9 +1078,10 @@ export default function App() {
               reason: 'Nhập hàng loạt từ file Excel',
               notes: `Tổng ${newItems.length} Máy Tính mới vào kho`
             });
+            return result;
           }}
           onImportPrinters={async (newItems) => {
-            await importDevices('printer', newItems);
+            const result = await importDevices('printer', newItems);
             await addAuditLog({
               type: 'IMPORT EXCEL – MÁY IN',
               setCode: '—', nppId: '—',
@@ -1086,6 +1091,7 @@ export default function App() {
               reason: 'Nhập hàng loạt từ file Excel',
               notes: `Tổng ${newItems.length} Máy In QL700 mới vào kho`
             });
+            return result;
           }}
           onImportRepairs={async (newItems) => {
             const normalizedItems = newItems.map((item) => {
@@ -1093,8 +1099,9 @@ export default function App() {
               const npp = npps.find(entry => entry.name?.trim().toLowerCase() === item.nppName?.trim().toLowerCase());
               return { ...item, id: previousTicket?.id || item.id, nppId: npp?.id || previousTicket?.nppId || '' };
             });
-            await importTickets(normalizedItems);
+            const result = await importTickets(normalizedItems);
             await addAuditLog({ type: 'IMPORT EXCEL – SỬA CHỮA', setCode: '—', nppId: '—', nppName: `Đã import ${normalizedItems.length} phiếu sửa chữa`, serialList: normalizedItems.map(item => item.ticketCode).join(', '), technician: 'Hệ thống – Import Excel', reason: 'Nhập phiếu sửa chữa từ Excel', notes: 'Dữ liệu được gộp theo mã phiếu, không xóa dữ liệu đang có' });
+            return result;
           }}
           onImportSystemSets={async (newItems) => {
             const normalizedItems = newItems.map((item) => {
@@ -1110,8 +1117,9 @@ export default function App() {
                 printerId: printer?.id || null
               };
             });
-            await importSystemSets(normalizedItems);
+            const result = await importSystemSets(normalizedItems);
             await addAuditLog({ type: 'IMPORT EXCEL – BỘ MÁY', setCode: '—', nppId: '—', nppName: `Đã import ${normalizedItems.length} bộ máy`, serialList: normalizedItems.map(item => item.setCode).join(', '), technician: 'Hệ thống – Import Excel', reason: 'Nhập bộ máy từ Excel', notes: 'Dữ liệu được gộp theo mã bộ máy, không xóa dữ liệu đang có' });
+            return result;
           }}
           onClose={() => setShowImportModal(false)}
         />

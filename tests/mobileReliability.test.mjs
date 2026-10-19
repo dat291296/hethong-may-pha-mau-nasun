@@ -30,7 +30,8 @@ test('corrected computer sequences continue after COMP-102', () => {
 test('assembly acknowledgement uses the real set primary key and preserves blank serials', async () => {
   const hook = await readFile(new URL('../src/hooks/useAssets.js', import.meta.url), 'utf8');
   const app = await readFile(new URL('../src/App.jsx', import.meta.url), 'utf8');
-  assert.match(hook, /insert\(dbPayload\)\.select\('set_code'\)/);
+  assert.match(hook, /rpc\('assemble_system_set_atomic'/);
+  assert.match(hook, /result.data\.setCode !== setCode/);
   assert.doesNotMatch(hook, /select\('id,set_code'\)/);
   for (const device of ['disp', 'mix', 'prn']) assert.ok(app.includes(`${device}?.serial || ''`));
 });

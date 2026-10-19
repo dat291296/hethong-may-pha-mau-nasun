@@ -9,6 +9,8 @@ import { resolveMachine, resolveMachineCode } from '../lib/machineWorkspace';
 import { resolveMachineProfile, sameMachine } from '../lib/machineProfile.js';
 import { MachineProfileSummary, MachineProfileHistory } from './MachineProfileSummary.jsx';
 import { recordOperationalError } from '../lib/operationalDiagnostics.js';
+import { useFormDraft } from '../hooks/useFormDraft.js';
+import DraftNotice from './DraftNotice.jsx';
 import { searchText, missingMachineFields } from '../lib/teamWorkspace';
 import React, { useState, useEffect } from 'react';
 import SafePortal from './SafePortal.jsx';
@@ -52,7 +54,7 @@ import { exportExcel } from '../utils/excelExport.js';
 import { getSystemSetMissingFields } from '../utils/systemSetValidation.js';
 import { useWorkspaceState, useWorkspaceScroll } from '../hooks/useWorkspaceState';
 
-export default function AssetManagement({ globalSearch = '', initialFilter = 'ALL', initialProfile, onProfileRestored, repairTickets = [], auditLogs = [], onRequestRepair, onRequestMaintenance,
+export default function AssetManagement({ initialProfile, onProfileRestored, globalSearch = '', initialFilter = 'ALL', repairTickets = [], auditLogs = [], onRequestRepair, onRequestMaintenance,
   systemSets,
   catalog,
   npps = [],
@@ -203,6 +205,7 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
   const [profileTab, setProfileTab] = useState('equipment');
   useEffect(() => {
     if (!initialProfile) return;
+    setProfileTab(initialProfile.tab || 'equipment');
     const matches = systemSets.filter(machine => sameMachine(machine, initialProfile));
     if (matches.length !== 1) return;
     setSelectedSetDetails(matches[0]);
@@ -222,7 +225,7 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
     const machine = resolveMachine(systemSets, globalSearch);
     if (machine) { openedSearch.current = globalSearch; setSelectedSetDetails(machine); }
   }, [globalSearch, systemSets]);
-  useEffect(() => { setProfileTab('equipment'); }, [selectedSetDetails?.setCode]);
+
   const openScannedMachine = value => {
     const code = String(value || '').trim();
     setScanInput(code);
@@ -371,12 +374,22 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
     return nextWarehouseId(category, source);
   };
 
+  const stockSavingRef=React.useRef(false);
+  const stockDraft=useFormDraft(`${user?.id}:stock:${addDeviceCategory}`,addFormData,showAddDeviceModal,saved=>{setAddFormData(saved);return true;});
+  const closeStockEditor=async()=>{if(stockSavingRef.current)return;try {await stockDraft.flush();setShowAddDeviceModal(false);}catch(error){alert(error.message);}};
+  const assemblingRef=React.useRef(false);
+  const [assembling,setAssembling]=useState(false);
+  const assemblyDraft=useFormDraft(`${user?.id}:assembly`,newSetData,showAssembleModal,saved=>{setNewSetData(saved);return true;});
+  const closeAssembly=async()=>{if(assemblingRef.current)return;try {await assemblyDraft.flush();setShowAssembleModal(false);}catch(error){alert(error.message);}};
+
   const handleOpenAssembleModal = () => {
     const defaultTech = (user && ['admin', 'manager', 'technician', 'qc'].includes(user.role)) ? (user.name || user.full_name) : (qcUsers[0]?.name || '');
     const autoCode = generateNextSetCode(fullCatalog.systemSets);
     setNppSearchTerm('');
     setNewSetData({
       setCode: autoCode,
+      operationId:crypto.randomUUID(),
+      installDate:new Date().toLocaleDateString('en-CA'),
       dispenserId: '',
       mixerId: '',
       computerId: '',
@@ -395,10 +408,9 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
   const existingNppSets = assignedSetsForNpp(systemSets, newSetData.nppId);
   const handleAssembleSubmit = async (e) => {
     e.preventDefault();
-    if (assemblySaving) return;
+    if(assemblingRef.current || assemblyDraft.existing)return;
     setAssemblyError('');
-    try { assertAdditionalSetConfirmed(systemSets, newSetData.nppId, newSetData.confirmAdditionalSet); }
-    catch (error) { setAssemblyError(error.message); return; }
+    try {assertAdditionalSetConfirmed(systemSets,newSetData.nppId,newSetData.confirmAdditionalSet);} catch(error){setAssemblyError(error.message);return;}
     if (!newSetData.dispenserId || !newSetData.mixerId || !newSetData.computerId || !newSetData.printerId) {
       alert('Vui lòng chọn đủ 4 thiết bị: 1 Máy Chiết + 1 Máy Lắc + 1 Máy Tính + 1 Máy In QL700!');
       return;
@@ -412,17 +424,18 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
     if (missingSerialDevices.length > 0 && !window.confirm(`⚠️ CẢNH BÁO SERI\n\n${missingSerialDevices.map(item => `• ${item.label}`).join('\n')} chưa có số seri. Khi ghép xong, thiết bị sẽ được đánh dấu nổi bật trong danh mục đã cấp phát.\n\nBạn vẫn muốn ghép bộ máy?`)) {
       return;
     }
-    setAssemblySaving(true);
+    assemblingRef.current=true;setAssembling(true);setAssemblySaving(true);
     try {
     await onAssembleSet(newSetData);
+    await assemblyDraft.clear();
     setShowAssembleModal(false);
     setNewSetData({
       dispenserId: '', mixerId: '', computerId: '', printerId: '',
       nppId: '', nppName: '', region: '', province: '', salesperson: '',
       technician: '', installationPhotos: []
     });
-    } catch (error) { setAssemblyError(error.message || 'Chưa lưu được bộ máy.'); }
-    finally { setAssemblySaving(false); }
+    } catch(error){alert(error.message || 'Không ráp được bộ máy. Bản nháp được giữ nguyên.');}
+    finally {assemblingRef.current=false;setAssembling(false);setAssemblySaving(false);}
   };
 
   const handleOpenAddDevice = (category) => {
@@ -443,13 +456,6 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
     setShowAddDeviceModal(true);
   };
 
-  const returnToProfile = React.useRef(null);
-  useEffect(() => {
-    if (editingDevice || !returnToProfile.current) return;
-    const matches = systemSets.filter(item => sameMachine(item, returnToProfile.current));
-    returnToProfile.current = null;
-    if (matches.length === 1) setSelectedSetDetails(matches[0]);
-  }, [editingDevice, systemSets]);
   useEffect(() => {
     if (!selectedSetDetails) return;
     const matches = systemSets.filter(item => sameMachine(item, selectedSetDetails));
@@ -457,12 +463,24 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
   }, [systemSets, selectedSetDetails]);
   const machineProfile = selectedSetDetails ? resolveMachineProfile(selectedSetDetails, systemSets,
     {dispenser:dispensers,mixer:mixers,computer:computers,printer:printers}, npps, repairTickets, auditLogs) : null;
+  const deviceDraftValue = React.useMemo(() => ({ deviceId:editingDevice?.data.id, category:editingDevice?.category,
+    revision:editingDevice?.data.updatedAt, form:editFormData }), [editingDevice,editFormData]);
+  const deviceDraft = useFormDraft(editingDevice ? `${user?.id}:device:${editingDevice.category}:${editingDevice.data.id}` : null,
+    deviceDraftValue, Boolean(editingDevice), saved => {
+      if (saved.deviceId !== editingDevice?.data.id || saved.category !== editingDevice?.category || saved.revision !== editingDevice?.data.updatedAt) {
+        alert('Bản nháp thuộc phiên bản thiết bị cũ. Đối chiếu nội dung trước khi sửa; chưa ghi đè dữ liệu.'); return false;
+      }
+      setEditFormData(saved.form); return true;
+    });
+  const closeDeviceEditor = async () => {
+    try { await deviceDraft.flush(); setEditingDevice(null); }
+    catch (error) { alert(error.message); }
+  };
 
   const modelOptions = category => [...new Set([...(category === 'dispenser' ? ['Satint', 'First-1', 'Satint A2', 'Hero', 'Corob', 'Fast & Fluid'] : category === 'mixer' ? ['Satint', 'First-1', 'Satint ST-50', 'KMC', 'Evoshake-200', 'YSA-2A'] : ['QL700']), ...({ dispenser: dispensers, mixer: mixers, printer: printers }[category] || []).map(device => device.model)].filter(Boolean))].sort((a, b) => a.localeCompare(b));
   const handleOpenEditDevice = (category, data) => {
     const machine = systemSets.find(item=>item.setCode === data.setCode);
     if (!can('asset:edit') || !canEditRegion(user,machine?.region)) { alert('Thiết bị chưa có khu vực hoặc thuộc miền khác cần quản trị viên xử lý.'); return; }
-    if (selectedSetDetails) { returnToProfile.current = {id:selectedSetDetails.id,setCode:selectedSetDetails.setCode}; setSelectedSetDetails(null); }
     setEditingDevice({ category, data });
     const cleanType = category === 'computer' 
       ? (data.type === 'Case' ? 'Case' : 'All In One')
@@ -486,6 +504,7 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
   const handleEditSubmit = async (e) => {
     e.preventDefault();
     if (!editingDevice || isSavingDevice) return;
+    if (deviceDraft.existing) { alert('Khôi phục hoặc bỏ bản nháp cũ trước khi lưu.'); return; }
     const isAssigned = !!editFormData.isAssigned && !!editFormData.setCode;
     const cleanType = editingDevice.category === 'computer'
       ? (editFormData.type === 'Case' ? 'Case' : 'All In One')
@@ -505,6 +524,7 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
       }
       setIsSavingDevice(true);
       await onEditDevice(editingDevice.category, finalData);
+      await deviceDraft.clear().catch(() => recordOperationalError('draft',{code:'DRAFT_WRITE_FAILED'}));
       const conflictingSet = finalData.setCode && systemSets.find(set => set.setCode === finalData.setCode && set[`${editingDevice.category}Id`] && set[`${editingDevice.category}Id`] !== finalData.id);
       if (conflictingSet) alert('Đã lưu thiết bị. Liên kết cũ với bộ máy chưa khớp; hãy đối chiếu hồ sơ NPP. Thiết bị đang gán chính thức không bị thay thế.');
       alert(finalData.serial ? '✅ Đã lưu thông tin chỉnh sửa thành công!' : 'Đã lưu thiết bị. ⚠️ Chưa có serial; cần kỹ thuật viên phụ trách khu vực bổ sung trong hồ sơ máy.');
@@ -540,10 +560,9 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
     }
   };
 
-  const [isAddingDevice, setIsAddingDevice] = useState(false);
   const handleAddDeviceSubmit = async (e) => {
     e.preventDefault();
-    if (isAddingDevice) return;
+    if(stockSavingRef.current || stockDraft.existing)return;
     if (!addFormData.id) {
       alert('Chưa tạo được mã quản lý. Vui lòng tải lại kho rồi thử lại.');
       return;
@@ -561,17 +580,14 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
       model: addDeviceCategory === 'computer' ? cleanType : addFormData.model,
       serial: addDeviceCategory === 'computer' ? '—' : (addFormData.serial?.trim() || null)
     };
-    setIsAddingDevice(true);
+    stockSavingRef.current=true;setIsSavingDevice(true);
     try {
-      const result = await onAddStockDevice(addDeviceCategory, finalData);
-      alert(result?.queued ? 'Đã lưu ngoại tuyến. Thiết bị đang chờ đồng bộ lên server.' : !finalData.serial ? 'Đã thêm thiết bị. ⚠️ Chưa có serial; cần bổ sung khi gán khu vực hoặc lắp đặt tại NPP.' : '✅ Đã thêm thiết bị vào kho thành công!');
+      const result=await onAddStockDevice(addDeviceCategory, finalData);
+      await stockDraft.clear();
+      alert(result?.queued ? 'Đã lưu trên thiết bị, chờ đồng bộ.' : 'Đã thêm thiết bị vào kho thành công.');
       setShowAddDeviceModal(false);
-    } catch (error) {
-      recordOperationalError('device', error);
-      alert('Không thêm được thiết bị: ' + error.message);
-    } finally {
-      setIsAddingDevice(false);
-    }
+    } catch(error){alert(error.message || 'Không thêm được thiết bị. Bản nháp được giữ nguyên.');}
+    finally {stockSavingRef.current=false;setIsSavingDevice(false);}
   };
 
   const handleOpenEditSet = (set) => {
@@ -580,6 +596,7 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
     setEditNppSearchTerm('');
     setEditingSet(set);
     setEditSetFormData({
+      expectedRevision:set.updatedAt,
       setCode: set.setCode || set.set_code || '',
       nppId: set.nppId || '',
       nppName: set.nppName || '',
@@ -599,17 +616,26 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
     });
   };
 
+  const setSavingRef=React.useRef(false);
+  const [setSaving,setSetSaving]=useState(false);
+  const setDraft=useFormDraft(editingSet?`${user?.id}:system-set:${editingSet.setCode}`:null,editSetFormData,Boolean(editingSet),saved=>{
+    if(saved.expectedRevision!==editingSet?.updatedAt){alert('Hồ sơ đã thay đổi. Giữ nháp cũ để đối chiếu trước khi lưu.');return false;}
+    setEditSetFormData(saved);return true;
+  });
+  const closeSetEditor=async()=>{if(setSavingRef.current)return;try {await setDraft.flush();setEditingSet(null);}catch(error){alert(error.message);}};
   const handleEditSetSubmit = async (e) => {
     e.preventDefault();
-    if (!editingSet) return;
+    if (!editingSet || setSavingRef.current || setDraft.existing) return;
+    setSavingRef.current=true;setSetSaving(true);
     try {
-      await onEditSet(editingSet.setCode, editSetFormData);
-      alert('✅ Đã lưu thông tin bộ máy thành công!');
+      const result=await onEditSet(editingSet.setCode, editSetFormData);
+      await setDraft.clear().catch(()=>console.warn('[SystemSet] Draft cleanup failed'));
+      alert(result?.queued?'Đã lưu trên thiết bị, chờ đồng bộ.':'Đã lưu thông tin bộ máy.');
       setEditingSet(null);
     } catch (err) {
       console.error('Lỗi khi lưu bộ máy:', err);
-      alert('⚠️ Không thể lưu bộ máy. Dữ liệu vẫn được giữ để đồng bộ lại.');
-    }
+      alert(err.message || 'Không thể lưu bộ máy. Giữ bản nháp để đối chiếu.');
+    } finally {setSavingRef.current=false;setSetSaving(false);}
   };
 
   const handleDeleteSet = async (setCode) => {
@@ -1924,7 +1950,7 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
                 {addDeviceCategory === 'computer' && '💻 Máy Tính'}
                 {addDeviceCategory === 'printer' && '🖨️ Máy In QL700'}
               </h3>
-              <button className="btn btn-secondary btn-sm" disabled={isAddingDevice} onClick={() => setShowAddDeviceModal(false)}>✕</button>
+              <button className="btn btn-secondary btn-sm" onClick={closeStockEditor} disabled={isSavingDevice}>✕</button>
             </div>
             <form onSubmit={handleAddDeviceSubmit}>
               <div className="modal-body">
@@ -2059,8 +2085,8 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
 
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" disabled={isAddingDevice} onClick={() => setShowAddDeviceModal(false)}>Hủy Bỏ</button>
-                <button type="submit" className="btn btn-primary" disabled={isAddingDevice}>{isAddingDevice ? 'Đang lưu…' : '✅ Thêm Vào Kho'}</button>
+                <button type="button" className="btn btn-secondary" onClick={closeStockEditor} disabled={isSavingDevice}>Hủy Bỏ</button>
+                <button type="submit" className="btn btn-primary" disabled={isSavingDevice || Boolean(stockDraft.existing)}>✅ Thêm Vào Kho</button>
               </div>
             </form>
           </div>
@@ -2076,10 +2102,10 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
                 <h3 style={{ fontWeight: '800' }}>
                   Chỉnh Sửa Thông Tin {editingDevice.category === 'computer' ? `Máy Tính [Mã: ${editFormData.id}]` : `Thiết Bị [${editFormData.serial || 'Không seri'}]`}
                 </h3>
-                <button className="btn btn-secondary btn-sm" disabled={isSavingDevice} onClick={() => setEditingDevice(null)}>✕</button>
+                <button className="btn btn-secondary btn-sm" disabled={isSavingDevice} onClick={closeDeviceEditor}>✕</button>
               </div>
               <form onSubmit={handleEditSubmit}>
-                <div className="modal-body" ref={el => { if (el) el.scrollTop = 0; }}>
+                <div className="modal-body" ref={el => { if (el) el.scrollTop = 0; }}><DraftNotice draft={deviceDraft} />
                   
                   {/* ROW 1: SERIAL NUMBER & MODEL - TOP OF FORM */}
                   <div className="responsive-form-grid">
@@ -2274,7 +2300,7 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
 
                 </div>
                 <div className="modal-footer">
-                  <button type="button" className="btn btn-secondary" disabled={isSavingDevice} onClick={() => setEditingDevice(null)}>Hủy Bỏ</button>
+                  <button type="button" className="btn btn-secondary" disabled={isSavingDevice} onClick={closeDeviceEditor}>{selectedSetDetails ? '← Quay lại hồ sơ máy' : 'Hủy Bỏ'}</button>
                   <button type="submit" className="btn btn-primary" disabled={isSavingDevice}>{isSavingDevice ? 'Đang lưu…' : 'Lưu Thay Đổi'}</button>
                 </div>
               </form>
@@ -2290,10 +2316,10 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
             <div className="modal-content">
               <div className="modal-header">
                 <h3 style={{ fontWeight: '800' }}>Ghép Bộ Máy Pha Màu Mới (Combo Set)</h3>
-                <button className="btn btn-secondary btn-sm" onClick={() => setShowAssembleModal(false)}>✕</button>
+                <button className="btn btn-secondary btn-sm" onClick={closeAssembly} disabled={assembling}>✕</button>
               </div>
               <form onSubmit={handleAssembleSubmit}>
-                <div className="modal-body">
+                <div className="modal-body" ref={el => { if (el) el.scrollTop = 0; }}><DraftNotice draft={assemblyDraft}/>
                   <div style={{ padding: '12px', background: 'rgba(56, 189, 248, 0.1)', border: '1px solid var(--accent-blue)', borderRadius: '8px', marginBottom: '16px', fontSize: '0.825rem' }}>
                     💡 Quy chuẩn 1 Bộ Máy Pha Màu bao gồm: 1 Máy Chiết + 1 Máy Lắc + 1 Máy Tính + 1 Máy In QL700. (Ổn áp sẽ ghi nhận thêm khi lắp đặt tại NPP).
                   </div>
@@ -2429,7 +2455,7 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
                             <button 
                               type="button" 
                               style={{ background: 'none', border: 'none', color: 'var(--accent-cyan)', fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline' }}
-                              onClick={() => { setShowAssembleModal(false); handleOpenAddDevice('dispenser'); }}
+                              onClick={async () => { try { await assemblyDraft.flush(); setShowAssembleModal(false); handleOpenAddDevice('dispenser'); } catch(error) { alert(error.message); } }}
                             >
                               + Thêm máy chiết mới vào kho
                             </button>
@@ -2450,7 +2476,7 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
                             <button 
                               type="button" 
                               style={{ background: 'none', border: 'none', color: 'var(--accent-cyan)', fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline' }}
-                              onClick={() => { setShowAssembleModal(false); handleOpenAddDevice('mixer'); }}
+                              onClick={async () => { try { await assemblyDraft.flush(); setShowAssembleModal(false); handleOpenAddDevice('mixer'); } catch(error) { alert(error.message); } }}
                             >
                               + Thêm máy lắc mới vào kho
                             </button>
@@ -2471,7 +2497,7 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
                             <button 
                               type="button" 
                               style={{ background: 'none', border: 'none', color: 'var(--accent-cyan)', fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline' }}
-                              onClick={() => { setShowAssembleModal(false); handleOpenAddDevice('computer'); }}
+                              onClick={async () => { try { await assemblyDraft.flush(); setShowAssembleModal(false); handleOpenAddDevice('computer'); } catch(error) { alert(error.message); } }}
                             >
                               + Thêm máy tính mới vào kho
                             </button>
@@ -2492,7 +2518,7 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
                             <button 
                               type="button" 
                               style={{ background: 'none', border: 'none', color: 'var(--accent-cyan)', fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline' }}
-                              onClick={() => { setShowAssembleModal(false); handleOpenAddDevice('printer'); }}
+                              onClick={async () => { try { await assemblyDraft.flush(); setShowAssembleModal(false); handleOpenAddDevice('printer'); } catch(error) { alert(error.message); } }}
                             >
                               + Thêm máy in mới vào kho
                             </button>
@@ -2567,8 +2593,8 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
                   })()}
                 </div>
                 <div className="modal-footer">
-                  <button type="button" className="btn btn-secondary" onClick={() => setShowAssembleModal(false)}>Hủy Bỏ</button>
-                  <button type="submit" className="btn btn-primary" disabled={assemblySaving || (existingNppSets.length > 0 && newSetData.confirmAdditionalSet !== true)}>{assemblySaving ? 'Đang lưu...' : 'Xác Nhận Tạo Bộ Combo'}</button>
+                  <button type="button" className="btn btn-secondary" onClick={closeAssembly} disabled={assembling}>Hủy Bỏ</button>
+                  <button type="submit" className="btn btn-primary" disabled={assembling || Boolean(assemblyDraft.existing) || (existingNppSets.length>0 && newSetData.confirmAdditionalSet!==true)}>Xác Nhận Tạo Bộ Combo</button>
                 </div>
               </form>
             </div>
@@ -2583,10 +2609,10 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
             <div className="modal-content" style={{ maxWidth: '600px' }}>
               <div className="modal-header">
                 <h3 style={{ fontWeight: '800' }}>Chỉnh Sửa Thông Tin Bộ Máy [{editingSet.setCode}]</h3>
-                <button className="btn btn-secondary btn-sm" onClick={() => setEditingSet(null)}>✕</button>
+                <button className="btn btn-secondary btn-sm" onClick={closeSetEditor}>✕</button>
               </div>
-              <form onSubmit={handleEditSetSubmit}>
-                <div className="modal-body" ref={el => { if (el) el.scrollTop = 0; }}>
+              <form onSubmit={handleEditSetSubmit} aria-busy={setSaving}>
+                <div className="modal-body" ref={el => { if (el) el.scrollTop = 0; }}><DraftNotice draft={setDraft} />
                   <div className="responsive-form-grid">{[['computerSerial','Seri máy tính'],['tintingSoftware','Phần mềm pha màu'],['softwareVersion','Phiên bản phần mềm']].map(([key,label]) => <label key={key}>{label}<input className="form-input" maxLength={120} value={editSetFormData[key] || ''} onChange={event => setEditSetFormData(previous => ({ ...previous, [key]: event.target.value.trimStart() }))} /></label>)}</div>
                   
                   {/* PRIMARY EDIT FIELDS - TOP OF FORM */}
@@ -2598,7 +2624,7 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
                         className="form-input" 
                         required
                         placeholder="VD: SET-2026-002"
-                        value={editSetFormData.setCode || ''} 
+                        value={editSetFormData.setCode || ''} readOnly title="Mã bộ máy được giữ cố định để bảo toàn lịch sử"
                         onChange={e => setEditSetFormData({ ...editSetFormData, setCode: e.target.value })} 
                       />
                     </div>
@@ -2801,7 +2827,7 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
                   </div>
                 </div>
                 <div className="modal-footer">
-                  <button type="button" className="btn btn-secondary" onClick={() => setEditingSet(null)}>Hủy Bỏ</button>
+                  <button type="button" className="btn btn-secondary" onClick={closeSetEditor}>{selectedSetDetails ? '← Quay lại hồ sơ máy' : 'Hủy Bỏ'}</button>
                   <button type="submit" className="btn btn-primary" disabled={isSavingDevice}>{isSavingDevice ? 'Đang lưu…' : 'Lưu Thay Đổi'}</button>
                 </div>
               </form>
@@ -3015,7 +3041,7 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
       )}
 
       {/* COMBO SET DETAIL & FULL PHOTO GALLERY MODAL */}
-      {selectedSetDetails && (
+      {selectedSetDetails && !editingDevice && !editingSet && (
         <SafePortal>
           <div className="modal-overlay">
             <div className="modal-content machine-profile-modal" style={{ maxWidth: '820px', width: '95%' }}>
@@ -3034,8 +3060,8 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
                 <button className="btn btn-secondary btn-sm" aria-label="Đóng hồ sơ máy" onClick={() => setSelectedSetDetails(null)}>✕</button>
               </div>
 
-              <div className="modal-body machine-profile-body">
-<div className="workspace-tabs">{[['equipment','Thiết bị'],['history','Lịch sử'],['documents','Tài liệu & Ảnh']].map(([key,label]) => <button key={key} aria-pressed={profileTab === key} onClick={() => setProfileTab(key)}>{label}</button>)}<button disabled={!can('repair:create') || !onRequestRepair} onClick={() => { onRequestRepair(selectedSetDetails); setSelectedSetDetails(null); }}>Tạo phiếu sửa chữa</button><button disabled={!can('asset:edit') || !onRequestMaintenance} onClick={() => { onRequestMaintenance(selectedSetDetails); setSelectedSetDetails(null); }}>Bảo trì</button></div>
+              <div className="modal-body machine-profile-body">{profileTab!=='equipment' && <button className="btn btn-secondary btn-sm" onClick={()=>setProfileTab('equipment')}>← Quay lại hồ sơ máy</button>}
+<div className="workspace-tabs">{[['equipment','Thiết bị'],['history','Lịch sử'],['documents','Tài liệu & Ảnh']].map(([key,label]) => <button key={key} aria-pressed={profileTab === key} onClick={() => setProfileTab(key)}>{label}</button>)}<button disabled={!can('repair:create') || !onRequestRepair} onClick={() => { onRequestRepair(selectedSetDetails,profileTab); }}>Tạo phiếu sửa chữa</button><button disabled={!can('asset:edit') || !onRequestMaintenance} onClick={() => { onRequestMaintenance(selectedSetDetails,profileTab); }}>Bảo trì</button></div>
                 {profileTab === 'history' && <MachineProfileHistory items={machineProfile.history} />}
                 {profileTab === 'documents' && <TechnicalResources machineModel={selectedSetDetails.dispenserModel} modelOptions={[...new Set(systemSets.map(machine => machine.dispenserModel).filter(Boolean))]} />}
                 <div hidden={profileTab !== 'equipment'}>
@@ -3069,7 +3095,6 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
                       style={{ fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
                       onClick={() => {
                         const set = selectedSetDetails;
-                        setSelectedSetDetails(null);
                         handleOpenEditSet(set);
                       }}
                     >
@@ -3136,7 +3161,6 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
                         style={{ marginTop: '12px', fontSize: '0.75rem' }}
                         onClick={() => {
                           const set = selectedSetDetails;
-                          setSelectedSetDetails(null);
                           handleOpenEditSet(set);
                         }}
                       >
@@ -3154,7 +3178,6 @@ export default function AssetManagement({ globalSearch = '', initialFilter = 'AL
                   className="btn btn-primary" 
                   onClick={() => {
                     const set = selectedSetDetails;
-                    setSelectedSetDetails(null);
                     handleOpenEditSet(set);
                   }}
                 >

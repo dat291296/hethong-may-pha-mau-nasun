@@ -1,4 +1,4 @@
-import { persistMutation } from '../lib/durableMutation.js';
+import { persistMutation, persistBatchMutation } from '../lib/durableMutation.js';
 import { fetchAllRows } from '../lib/paginatedQuery.js';
 import { useState, useEffect, useCallback } from 'react';
 import { supabase, isSupabaseConfigured, safeQuery } from '../lib/supabase.js';
@@ -201,29 +201,17 @@ export function useRepairs() {
     const dbItems = items.map(mapRepairToDb).filter(item => item.id && item.ticket_code);
     if (dbItems.length !== items.length) throw new Error('Every imported repair ticket must include an ID and ticket code');
 
-    setRepairTickets(prev => {
-      const merged = new Map(prev.map(item => [item.id, item]));
-      dbItems.map(mapDbToRepair).forEach(item => merged.set(item.id, item));
-      const updated = Array.from(merged.values());
-      cacheOfflineData('repair_tickets', updated);
-      return updated;
+    const result = !isSupabaseConfigured ? {queued:false} : await persistBatchMutation({ items:dbItems, online:isSupabaseConfigured && navigator.onLine,
+      write: rows => safeQuery(sb => sb.from('repair_tickets').upsert(rows, {onConflict:'id'}).select('id'), 'importRepairTickets'),
+      queue: item => enqueueOfflineAction('ADD_REPAIR', item),
     });
-
-    if (!isSupabaseConfigured) return;
-    if (!navigator.onLine) {
-      dbItems.forEach(item => enqueueOfflineAction('ADD_REPAIR', item));
-      return;
-    }
-    try {
-      const { error } = await safeQuery(
-        sb => sb.from('repair_tickets').upsert(dbItems, { onConflict: 'id' }),
-        'importRepairTickets'
-      );
-      if (error) throw error;
-      await fetchRepairs();
-    } catch (err) {
-      dbItems.forEach(item => enqueueOfflineAction('ADD_REPAIR', item));
-    }
+    setRepairTickets(prev => {
+      const merged = new Map(prev.map(item => [item.id,item]));
+      dbItems.map(mapDbToRepair).forEach(item => merged.set(item.id,item));
+      const updated = Array.from(merged.values()); cacheOfflineData('repair_tickets',updated); return updated;
+    });
+    if (isSupabaseConfigured && !result.queued) await fetchRepairs();
+    return result;
   }, [fetchRepairs]);
 
   return {
