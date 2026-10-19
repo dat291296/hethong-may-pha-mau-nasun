@@ -1,3 +1,4 @@
+import { validateRepairReturn } from '../lib/repairLifecycle.js';
 import WorkspaceFilterBar from './WorkspaceFilterBar.jsx';
 import { matchesSearch, matchesDateRange, uniqueOptions, canEditRegion } from '../lib/workspaceFilters.js';
 import React, { useState, useMemo, useEffect } from 'react';
@@ -88,7 +89,7 @@ import DraftNotice from './DraftNotice';
 import { isAssignedTo } from '../lib/teamWorkspace';
 import { useWorkspaceState, useWorkspaceScroll } from '../hooks/useWorkspaceState';
 
-export default function DeviceRepairProcessing({ globalSearch = '', initialFilter = 'ALL',
+export default function DeviceRepairProcessing({ onReturnToProfile, globalSearch = '', initialFilter = 'ALL',
   repairTickets = [],
   npps = [],
   systemSets = [],
@@ -241,7 +242,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
     notes: ''
   });
   const draft = useFormDraft(`${user.id}:repair:${editingTicket?.id || 'new'}`, formData, showModal, saved => setFormData(saved));
-  const closeForm = async () => { if (saving) return; await draft.flush(); setShowModal(false); };
+  const closeForm = async () => { if (saving) return; try {await draft.flush();setShowModal(false);onReturnToProfile?.();}catch(error){setSaveError(error.message);} };
   const selectedNppRegion = npps.find(item => item.id === formData.nppId)?.region;
   const assignableUsers = qcUsers.filter(item => item.role === 'admin' || (item.region || item.managedRegion) === 'Toàn Quốc' || (item.region || item.managedRegion) === selectedNppRegion);
 
@@ -470,6 +471,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
       return;
     }
 
+    try { validateRepairReturn(sanitized); } catch (error) { setSaveError(error.message); return; }
     if (sanitized.nppConfirmation?.confirmed && !sanitized.nppConfirmation.confirmedBy) {
       alert('Vui lòng nhập tên người đại diện NPP xác nhận hoàn thành.');
       return;
@@ -532,6 +534,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
 
     await draft.clear().catch(() => console.warn('[Repair] Draft cleanup failed'));
     setShowModal(false);
+    onReturnToProfile?.();
     } catch (error) { console.error('[Repair] Save failed', error.code || error.name); setSaveError(error.message || 'Chưa lưu được phiếu. Bản nháp vẫn được giữ.'); }
     finally { setSaving(false); }
   };
@@ -1365,7 +1368,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
 
                 </div>
                 <div className="modal-footer">
-                  <button type="button" className="btn btn-secondary" onClick={closeForm}>Đóng · Giữ nháp</button>
+                  <button type="button" className="btn btn-secondary" onClick={closeForm}>{onReturnToProfile ? '← Quay lại hồ sơ máy' : 'Đóng · Giữ nháp'}</button>
                   <button type="submit" className="btn btn-primary">{saving ? 'Đang xác nhận lưu...' : editingTicket ? 'Cập Nhật Phiếu' : 'Tạo Phiếu Mới'}</button>
                 </div>
                 </fieldset>

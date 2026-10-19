@@ -1,0 +1,32 @@
+{
+  "assessedAt": "2026-10-19",
+  "scope": "Local source and isolated staging; production release pending demo acceptance",
+  "productionMutated": false,
+  "checks": {
+    "unitTests": {
+      "passed": 243,
+      "failed": 0
+    },
+    "build": "passed with chunk warning",
+    "lint": "exit 0 with warnings",
+    "stagingSQL": "five-role database claims, workflow and maintenance replay, assembly, serial retention, immutable machine code and repair return guard passed; all synthetic writes rolled back",
+    "realJWTForNewWorkflows": "not executed",
+    "browser": "Chromium synthetic demo: device draft restored after close and simulated network loss",
+    "restore": "not executed; no isolated empty restore project"
+  },
+  "resolvedInStaging": [
+    "assembly schema mismatch",
+    "legacy ledger hash search path",
+    "workflow authorization error classification",
+    "workflow replay and append-only audit consistency",
+    "repair return and machine code guards"
+  ],
+  "pending": [
+    "production migration and application release after demo acceptance",
+    "new workflow real JWT gate",
+    "physical iPhone Safari acceptance",
+    "full Database Auth Storage restore drill"
+  ],
+  "readiness": "controlled internal pilot; operational acceptance not complete",
+  "upgradeRoadmap": "local implementation in progress; external acceptance gates remain"
+}

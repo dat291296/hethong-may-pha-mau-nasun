@@ -1,3 +1,4 @@
+import {saveSystemSetEdit} from './systemSetEdit.js';
 import { assertAuditAppendOnly } from './auditPolicy.js';
 import { supabase, isSupabaseConfigured } from './supabase';
 import { addToQueue, getQueue, removeFromQueue, clearQueue, setCache, getCache, getOfflineOwner } from './offlineDb';
@@ -885,6 +886,22 @@ const ATOMIC_SYNC_ACTIONS = new Set([
 ]);
 
 async function executeAtomicSyncMutation(item, assertOwner = () => {}) {
+  if(item.action==='ASSEMBLE_SET') {
+    const payload=normalizeSystemSetPayload(item.payload,true);
+    if(!['dispenser_id','mixer_id','computer_id','printer_id'].every(key=>payload[key])) return {handled:true,error:{code:'PERSISTENCE_DENIED',message:'Bản ráp bộ cũ thiếu mã bốn thiết bị. Giữ hàng đợi để đối chiếu.'},deferredLink:null};
+    const result=await supabase.rpc('assemble_system_set_atomic',{p_operation_id:item.operationId||item.id,p_payload:payload});
+    assertOwner();
+    if(['42883','PGRST202'].includes(result.error?.code)) return {handled:true,error:{code:'SCHEMA_MIGRATION_REQUIRED',message:'Cần cập nhật giao dịch ráp bộ trước khi đồng bộ. Hàng đợi được giữ nguyên.'},deferredLink:null};
+    return {handled:true,error:result.error,deferredLink:null};
+  }
+
+  if(item.action==='UPDATE_SYSTEM_SET' && item.payload?.expectedRevision) {
+    try {
+      const result=await saveSystemSetEdit(query=>query(supabase),item.payload.targetSetCode,item.payload.data,item.payload.expectedRevision);
+      assertOwner();return {handled:true,error:result.error,deferredLink:null};
+    } catch(error) {return {handled:true,error,deferredLink:null};}
+  }
+
   // Set deletion must include device release and audit in the dedicated transaction.
   if (item.action === 'DELETE_SYSTEM_SET') return { handled: false, error: null, deferredLink: null };
   if (!ATOMIC_SYNC_ACTIONS.has(item.action)) return { handled: false, error: null, deferredLink: null };

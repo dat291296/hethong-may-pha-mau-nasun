@@ -1,3 +1,21 @@
+export async function persistBatchMutation({ items, key = 'id', online, write, queue }) {
+  const identities = items.map(item => item[key]);
+  if (identities.some(id => !id) || new Set(identities).size !== identities.length) {
+    throw Object.assign(new Error('Dữ liệu nhập có mã trống hoặc trùng. Kiểm tra lại file.'), { code: 'INVALID_BATCH_IDENTITIES' });
+  }
+  if (!items.length) return { queued:false, data:[] };
+  return persistMutation({ online, write:async () => {
+    const result = await write(items);
+    if (!result.error) {
+      const saved = new Set((result.data || []).map(item => item[key]));
+      if (saved.size !== identities.length || identities.some(id => !saved.has(id))) {
+        throw Object.assign(new Error('Chưa xác nhận đủ bản ghi trên server. Giữ file nhập để đối chiếu.'), {code:'PERSISTENCE_DENIED'});
+      }
+    }
+    return result;
+  }, queue:async () => { for (const item of items) await queue(item); } });
+}
+
 export function isTransientMutationError(error) {
   const code = String(error?.code || '');
   if (code === 'QUERY_TIMEOUT') return true;

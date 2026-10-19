@@ -1,9 +1,10 @@
+import {saveSystemSetEdit} from '../lib/systemSetEdit.js';
 import { recordOperationalError } from '../lib/operationalDiagnostics.js';
 import { saveDeviceEdit } from '../lib/deviceEdit.js';
 import { requireCompleteWrite } from '../lib/guardedWrite.js';
 import { fetchAllRows } from '../lib/paginatedQuery.js';
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { persistMutation } from '../lib/durableMutation.js';
+import { persistMutation, persistBatchMutation } from '../lib/durableMutation.js';
 import { createOperationId } from '../lib/syncQueue.js';
 import { supabase, isSupabaseConfigured, safeQuery } from '../lib/supabase.js';
 import {
@@ -213,26 +214,14 @@ export function useAssets() {
     const dbPayload = sanitizeDeviceForDb(category, deviceData, tempId);
     const localDevice = cfg.mapper(dbPayload);
 
-    // Update local state immediately for instant feedback
-    cfg.setter(prev => {
-      const updated = [localDevice, ...prev];
-      persistAssetsLocal(cfg.cacheKey, updated);
-      return updated;
+    const result = !isSupabaseConfigured ? {queued:false} : await persistMutation({
+      online:navigator.onLine,
+      write:()=>safeQuery(sb=>sb.from(cfg.table).insert(dbPayload).select('id'),'addStockDevice'),
+      queue:()=>enqueueOfflineAction('ADD_DEVICE',dbPayload,cfg.table),
     });
-
-    if (isSupabaseConfigured && navigator.onLine) {
-      try {
-        await writeDeviceStrict(cfg.table, dbPayload);
-        await fetchAssets();
-      } catch (err) {
-        recordOperationalError('device', err);
-        console.warn(`[Offline] Failed online addStockDevice for ${category}. Queueing action.`);
-        enqueueOfflineAction('ADD_DEVICE', dbPayload, cfg.table);
-      }
-    } else if (isSupabaseConfigured && !navigator.onLine) {
-      console.log(`[Offline] Network down. Enqueueing addStockDevice for ${category}.`);
-      enqueueOfflineAction('ADD_DEVICE', dbPayload, cfg.table);
-    }
+    cfg.setter(prev=>{const updated=[localDevice,...prev.filter(item=>item.id!==localDevice.id)];persistAssetsLocal(cfg.cacheKey,updated);return updated;});
+    if(isSupabaseConfigured && !result.queued) await fetchAssets();
+    return result;
   }, [fetchAssets]);
 
   // ── Generic edit device ────────────────────────────────────────────────────
@@ -350,35 +339,13 @@ export function useAssets() {
 
     const cfg = tableMap[category];
     const targetTable = cfg ? cfg.table : category;
-    if (cfg) {
-      cfg.setter(prev => {
-        const updated = prev.filter(d => d.id !== id);
-        persistAssetsLocal(cfg.cacheKey, updated);
-        return updated;
-      });
-    }
-
-    if (isSupabaseConfigured && navigator.onLine) {
-      try {
-        const { data, error } = await safeQuery(
-          sb => sb.from(targetTable).delete().eq('id', id).select('id'),
-          `deleteDevice:${targetTable}`
-        );
-        if (error) throw error;
-        if (!data || data.length === 0) throw createPersistenceError('Không có quyền xóa hoặc thiết bị không tồn tại trên Supabase');
-      } catch (err) {
-        recordOperationalError('device', err);
-        console.warn(`[Offline] Failed online deleteDevice for ${targetTable}. Queueing action.`);
-        if (!canRetryOffline(err)) {
-          await fetchAssets();
-          throw err;
-        }
-        await enqueueOfflineAction('DELETE_DEVICE', { id }, targetTable);
-      }
-    } else if (isSupabaseConfigured && !navigator.onLine) {
-      console.log(`[Offline] Network down. Enqueueing deleteDevice for ${targetTable}.`);
-      await enqueueOfflineAction('DELETE_DEVICE', { id }, targetTable);
-    }
+    if(!cfg) throw createPersistenceError('Loại thiết bị không hợp lệ.');
+    const result = !isSupabaseConfigured ? {queued:false} : await persistMutation({online:navigator.onLine,
+      write:()=>safeQuery(sb=>sb.from(targetTable).delete().eq('id',id).select('id'),'deleteDevice'),
+      queue:()=>enqueueOfflineAction('DELETE_DEVICE',{id},targetTable),
+    });
+    cfg.setter(prev=>{const updated=prev.filter(item=>item.id!==id);persistAssetsLocal(cfg.cacheKey,updated);return updated;});
+    return result;
   }, [fetchAssets]);
 
   // ── Batch Import Devices from Excel ────────────────────────────────────────
@@ -399,56 +366,35 @@ export function useAssets() {
     const nowIso = new Date().toISOString();
     const markedItems = items.map(item => ({ ...item, createdAt: nowIso, isNew: true }));
 
-    cfg.setter(prev => {
-      const updated = [...markedItems, ...prev];
-      persistAssetsLocal(cfg.cacheKey, updated);
-      return updated;
+    const dbItems = items.map(item => mapDeviceToDb(item,cfg.table));
+    const result = !isSupabaseConfigured ? {queued:false} : await persistBatchMutation({items:dbItems, online:isSupabaseConfigured && navigator.onLine,
+      write:rows => safeQuery(sb => sb.from(cfg.table).upsert(rows,{onConflict:'id'}).select('id'), 'importDevices'),
+      queue:item => enqueueOfflineAction('ADD_DEVICE',item,cfg.table),
     });
-
-    if (isSupabaseConfigured) {
-      const dbItems = items.map(item => mapDeviceToDb(item, cfg.table));
-      if (navigator.onLine) {
-        try {
-          for (const item of dbItems) {
-            await writeDeviceStrict(cfg.table, item, 'upsert');
-          }
-          await fetchAssets();
-        } catch (err) {
-          dbItems.forEach(item => enqueueOfflineAction('ADD_DEVICE', item, cfg.table));
-        }
-      } else {
-        dbItems.forEach(item => enqueueOfflineAction('ADD_DEVICE', item, cfg.table));
-      }
-    }
+    cfg.setter(prev => {
+      const ids = new Set(markedItems.map(item => item.id));
+      const updated = [...markedItems,...prev.filter(item => !ids.has(item.id))];
+      persistAssetsLocal(cfg.cacheKey,updated); return updated;
+    });
+    if (isSupabaseConfigured && !result.queued) await fetchAssets();
+    return result;
   }, [fetchAssets]);
 
   const importSystemSets = useCallback(async (items) => {
     const dbItems = items.map(mapSystemSetToDb).filter(item => item.set_code);
     if (dbItems.length !== items.length) throw new Error('Every imported system set must include a set code');
 
-    setSystemSets(prev => {
-      const merged = new Map(prev.map(item => [item.setCode || item.set_code, item]));
-      dbItems.map(mapDbToSystemSet).forEach(item => merged.set(item.setCode, item));
-      const updated = Array.from(merged.values());
-      persistAssetsLocal('system_sets', updated);
-      return updated;
+    const result = !isSupabaseConfigured ? {queued:false} : await persistBatchMutation({items:dbItems, key:'set_code', online:isSupabaseConfigured && navigator.onLine,
+      write:rows => safeQuery(sb => sb.from('system_sets').upsert(rows,{onConflict:'set_code'}).select('set_code'), 'importSystemSets'),
+      queue:item => enqueueOfflineAction('ASSEMBLE_SET',item),
     });
-
-    if (!isSupabaseConfigured) return;
-    if (!navigator.onLine) {
-      dbItems.forEach(item => enqueueOfflineAction('ASSEMBLE_SET', item));
-      return;
-    }
-    try {
-      const { error } = await safeQuery(
-        sb => sb.from('system_sets').upsert(dbItems, { onConflict: 'set_code' }),
-        'importSystemSets'
-      );
-      if (error) throw error;
-      await fetchAssets();
-    } catch (err) {
-      dbItems.forEach(item => enqueueOfflineAction('ASSEMBLE_SET', item));
-    }
+    setSystemSets(prev => {
+      const merged = new Map(prev.map(item => [item.setCode || item.set_code,item]));
+      dbItems.map(mapDbToSystemSet).forEach(item => merged.set(item.setCode,item));
+      const updated = Array.from(merged.values()); persistAssetsLocal('system_sets',updated); return updated;
+    });
+    if (isSupabaseConfigured && !result.queued) await fetchAssets();
+    return result;
   }, [fetchAssets]);
 
   // ── Assemble new system set ────────────────────────────────────────────────
@@ -457,85 +403,34 @@ export function useAssets() {
     const dbPayload = mapSystemSetToDb({ ...newSet, setCode });
     const appSetData = mapDbToSystemSet(dbPayload);
 
-    setSystemSets(prev => {
-      const updated = [appSetData, ...prev];
-      persistAssetsLocal('system_sets', updated);
-      return updated;
-    });
-
-    if (isSupabaseConfigured && navigator.onLine) {
-      try {
-        const { error } = await safeQuery(
-          sb => sb.from('system_sets').insert(dbPayload),
-          'assembleSet'
-        );
-        if (error) throw error;
-        await fetchAssets();
-      } catch (err) {
-        console.warn('[Offline] Failed online assembleSet. Queueing action.', err);
-        enqueueOfflineAction('ASSEMBLE_SET', dbPayload);
-      }
-    } else if (isSupabaseConfigured && !navigator.onLine) {
-      console.log('[Offline] Network down. Enqueueing assembleSet.');
-      enqueueOfflineAction('ASSEMBLE_SET', dbPayload);
+    if (isSupabaseConfigured) {
+      if (!navigator.onLine) throw createPersistenceError('Cần kết nối mạng để ráp bộ máy đồng thời. Nội dung được giữ ở bản nháp.');
+      const result=await safeQuery(sb=>sb.rpc('assemble_system_set_atomic',{p_operation_id:newSet.operationId,p_payload:dbPayload}),'assembleSystemSet');
+      if(result.error)throw result.error;
+      if(!result.data?.ok)throw createPersistenceError('Server chưa xác nhận ráp bộ máy.');
+      await fetchAssets();
+    } else {
+      setSystemSets(prev=>{const updated=[appSetData,...prev.filter(item=>item.setCode!==setCode)];persistAssetsLocal('system_sets',updated);return updated;});
     }
+    return {queued:false};
   }, [fetchAssets]);
 
   // ── Update system set ──────────────────────────────────────────────────────
   const updateSystemSet = useCallback(async (oldSetCode, updates) => {
     const newSetCode = (updates.setCode || updates.set_code || oldSetCode).trim();
     const isCodeChanged = newSetCode !== oldSetCode;
-
-    setSystemSets(prev => {
-      const updated = prev.map(s => (s.setCode === oldSetCode || s.set_code === oldSetCode) ? { ...s, ...updates, setCode: newSetCode, set_code: newSetCode, isUpdated: true } : s);
-      persistAssetsLocal('system_sets', updated);
-      return updated;
-    });
-
-    if (isCodeChanged) {
-      const syncDeviceSetCode = (setter, key) => {
-        setter(prev => {
-          const updated = prev.map(d => (d.setCode === oldSetCode || d.set_code === oldSetCode) ? { ...d, setCode: newSetCode, set_code: newSetCode } : d);
-          persistAssetsLocal(key, updated);
-          return updated;
-        });
-      };
-      syncDeviceSetCode(setDispensers, 'dispensers');
-      syncDeviceSetCode(setMixers, 'mixers');
-      syncDeviceSetCode(setComputers, 'computers');
-      syncDeviceSetCode(setPrinters, 'printers');
-    }
+    if(isCodeChanged)throw createPersistenceError('Mã bộ máy được giữ cố định để bảo toàn lịch sử và liên kết thiết bị.');
 
     const dbPayload = mapSystemSetToDb({ ...updates, set_code: newSetCode, setCode: newSetCode });
-
-    if (isSupabaseConfigured && navigator.onLine) {
-      try {
-        const { data, error } = await safeQuery(
-          sb => sb.from('system_sets').update(dbPayload).eq('set_code', oldSetCode).select('set_code'),
-          'updateSystemSet'
-        );
-        if (error) throw error;
-        if (!data || data.length === 0) throw createPersistenceError('Không có quyền cập nhật hoặc bộ máy không tồn tại trên Supabase');
-
-        if (isCodeChanged) {
-          await safeQuery(sb => sb.from('dispensers').update({ set_code: newSetCode }).eq('set_code', oldSetCode), 'updateDeviceSetCode');
-          await safeQuery(sb => sb.from('mixers').update({ set_code: newSetCode }).eq('set_code', oldSetCode), 'updateDeviceSetCode');
-          await safeQuery(sb => sb.from('computers').update({ set_code: newSetCode }).eq('set_code', oldSetCode), 'updateDeviceSetCode');
-          await safeQuery(sb => sb.from('printers').update({ set_code: newSetCode }).eq('set_code', oldSetCode), 'updateDeviceSetCode');
-        }
-        await fetchAssets();
-      } catch (err) {
-        console.warn('[Offline] Failed online updateSystemSet. Queueing action.', err);
-        if (!canRetryOffline(err)) {
-          await fetchAssets();
-          throw err;
-        }
-        await enqueueOfflineAction('UPDATE_SYSTEM_SET', { targetSetCode: oldSetCode, data: dbPayload });
-      }
-    } else if (isSupabaseConfigured && !navigator.onLine) {
-      console.log('[Offline] Network down. Enqueueing updateSystemSet.');
-      await enqueueOfflineAction('UPDATE_SYSTEM_SET', { targetSetCode: oldSetCode, data: dbPayload });
-    }
+    if(isSupabaseConfigured && (!updates.expectedRevision || !Number.isFinite(Date.parse(updates.expectedRevision)))) throw Object.assign(new Error('Giữ bản nháp và tải lại hồ sơ máy trước khi lưu.'),{code:'REVISION_REQUIRED'});
+    const result = !isSupabaseConfigured ? {queued:false} : await persistMutation({
+      online:navigator.onLine,
+      write:async()=>{try {return await saveSystemSetEdit(query=>safeQuery(query,'updateSystemSet'),oldSetCode,dbPayload,updates.expectedRevision);}catch(error){return {data:null,error};}},
+      queue:()=>enqueueOfflineAction('UPDATE_SYSTEM_SET',{targetSetCode:oldSetCode,data:dbPayload,expectedRevision:updates.expectedRevision})
+    });
+    setSystemSets(prev=>{const next=prev.map(item=>item.setCode===oldSetCode?{...item,...updates,isUpdated:true}:item);persistAssetsLocal('system_sets',next);return next;});
+    if(isSupabaseConfigured && !result.queued)await fetchAssets();
+    return result;
   }, [fetchAssets]);
 
   // ── Delete system set ──────────────────────────────────────────────────────
@@ -655,7 +550,7 @@ function mapDbToPrinter(row) {
 }
 function mapDbToSystemSet(row) {
   return {
-    setCode: row.set_code || row.setCode, nppId: row.npp_id || row.nppId, nppName: row.npp_name || row.nppName, region: row.region, province: row.province,
+    updatedAt: row.updated_at || row.updatedAt, setCode: row.set_code || row.setCode, nppId: row.npp_id || row.nppId, nppName: row.npp_name || row.nppName, region: row.region, province: row.province,
     status: row.status, dispenserId: row.dispenser_id || row.dispenserId, dispenserModel: row.dispenser_model || row.dispenserModel, dispenserSerial: row.dispenser_serial || row.dispenserSerial,
     mixerId: row.mixer_id || row.mixerId, mixerModel: row.mixer_model || row.mixerModel, mixerSerial: row.mixer_serial || row.mixerSerial,
     computerSerial: row.computer_serial || row.computerSerial || '', tintingSoftware: row.tinting_software || row.tintingSoftware || '', softwareVersion: row.software_version || row.softwareVersion || '', agentStatus: row.agent_status || row.agentStatus || '',

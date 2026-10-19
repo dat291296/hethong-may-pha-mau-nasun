@@ -8,6 +8,7 @@ export function useFormDraft(key, value, enabled, onRestore) {
   const [status, setStatus] = useState('');
   const ready = useRef(false);
   const queue = useRef(Promise.resolve());
+  const writeError = useRef(null);
   const generation = useRef(0);
   const latest = useRef(value);
   latest.current = value;
@@ -20,6 +21,7 @@ export function useFormDraft(key, value, enabled, onRestore) {
     if (!enabled || !key) { ready.current = false; return; }
     let active = true;
     generation.current += 1;
+    writeError.current = null;
     ready.current = false;
     setExisting(null);
     setStatus('Đang kiểm tra bản nháp...');
@@ -44,8 +46,8 @@ export function useFormDraft(key, value, enabled, onRestore) {
       queue.current = queue.current.catch(() => {}).then(async () => {
         if (token !== generation.current) return;
         if (!await setCache(`form-draft:${key}`, { value: snapshot, savedAt: Date.now() })) throw new Error('DRAFT_WRITE_FAILED');
-        if (token === generation.current) setStatus('Đã lưu nháp trên thiết bị · Chưa gửi');
-      }).catch(error => { setStatus('Không lưu được nháp; giữ màn hình mở và thử lại'); recordOperationalError('draft',error); console.warn('[FormDraft] Write failed without payload'); });
+        if (token === generation.current) { writeError.current = null; setStatus('Đã lưu nháp trên thiết bị · Chưa gửi'); }
+      }).catch(error => { if (token === generation.current) { writeError.current = error; setStatus('Không lưu được nháp; giữ màn hình mở và thử lại'); } recordOperationalError('draft',error); console.warn('[FormDraft] Write failed without payload'); });
     };
     persistRef.current = persist;
     const timer = window.setTimeout(persist, 350);
@@ -55,19 +57,23 @@ export function useFormDraft(key, value, enabled, onRestore) {
     return () => { window.clearTimeout(timer); window.removeEventListener('pagehide', persist); document.removeEventListener('visibilitychange', onHide); };
   }, [key, enabled, value, existing]);
 
-  const resume = () => { if (existing) restoreRef.current(existing.value); setExisting(null); ready.current = true; setStatus('Đã khôi phục bản nháp · Chưa gửi'); };
+  const resume = () => { if (existing && restoreRef.current(existing.value) === false) return; setExisting(null); ready.current = true; setStatus('Đã khôi phục bản nháp · Chưa gửi'); };
   const discard = async () => {
     ready.current = false; generation.current += 1;
     await queue.current;
-    if (!await setCache(`form-draft:${key}`, null)) throw new Error('DRAFT_CLEAR_FAILED');
+    if (!await setCache(`form-draft:${key}`, null)) { setStatus('Không xóa được bản nháp; bản cũ được giữ nguyên'); throw new Error('DRAFT_CLEAR_FAILED'); }
     setExisting(null); ready.current = true; setStatus('Chưa gửi lên hệ thống');
   };
   const clear = async () => {
     ready.current = false; generation.current += 1;
     await queue.current;
-    if (!await setCache(`form-draft:${key}`, null)) throw new Error('DRAFT_CLEAR_FAILED');
+    if (!await setCache(`form-draft:${key}`, null)) { setStatus('Không xóa được bản nháp; bản cũ được giữ nguyên'); throw new Error('DRAFT_CLEAR_FAILED'); }
     setExisting(null); setStatus('Đã lưu lên hệ thống');
   };
-  const flush = async () => { persistRef.current(); await queue.current; };
+  const flush = async () => {
+    if (!ready.current && !existing) throw new Error('Chưa đọc xong bản nháp. Giữ màn hình mở và thử lại.');
+    persistRef.current(); await queue.current;
+    if (writeError.current) throw new Error('Không lưu được bản nháp. Giữ màn hình mở và kiểm tra dung lượng thiết bị.');
+  };
   return { existing, status, resume, discard, clear, flush };
 }

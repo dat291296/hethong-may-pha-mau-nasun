@@ -17,7 +17,7 @@ function isRetryable(error) {
 }
 
 export async function executeWorkflowTransaction(workflow, data) {
-  const operationId = createOperationId();
+  const operationId = data.operationId || createOperationId();
   const queuePayload = { operationId, workflow, data };
 
   if (!isSupabaseConfigured || !navigator.onLine) {

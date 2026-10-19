@@ -2,7 +2,7 @@ import { updateWithRevision } from '../lib/guardedWrite.js';
 import { fetchAllRows } from '../lib/paginatedQuery.js';
 import { useState, useEffect, useCallback } from 'react';
 import { supabase, isSupabaseConfigured, safeQuery } from '../lib/supabase.js';
-import { persistMutation } from '../lib/durableMutation.js';
+import { persistMutation, persistBatchMutation } from '../lib/durableMutation.js';
 import { INITIAL_NPPS } from '../data/mockData.js';
 import { cacheOfflineData, getCachedOfflineData, enqueueOfflineAction, getOfflineQueue } from '../lib/offlineSync.js';
 
@@ -142,12 +142,10 @@ export function useNpps() {
   }, []);
   const importNpps = useCallback(async (newNpps) => {
     const mapped = newNpps.map(npp => ({ ...mapNppToDb(npp), id: npp.id || `NPP-${crypto.randomUUID()}` }));
-    const result = await persistMutation({
-      online: isSupabaseConfigured && navigator.onLine,
-      write: () => safeQuery(sb => sb.from('distributors').upsert(mapped, { onConflict: 'id' }).select('id'), 'importNpps'),
-      queue: async () => {
-        for (const item of mapped) await enqueueOfflineAction('ADD_NPP', item);
-      }
+    const result = !isSupabaseConfigured ? {queued:false} : await persistBatchMutation({items:mapped,
+      online:navigator.onLine,
+      write:rows=>safeQuery(sb=>sb.from('distributors').upsert(rows,{onConflict:'id'}).select('id'),'importNpps'),
+      queue:item=>enqueueOfflineAction('ADD_NPP',item),
     });
     setNpps(prev => {
       const importedIds = new Set(mapped.map(item => item.id));

@@ -1,4 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
+import { useFormDraft } from '../hooks/useFormDraft.js';
+import DraftNotice from './DraftNotice.jsx';
+import { validateDocumentFile } from '../lib/technicalResources.js';
 import { ArrowLeftRight, CheckCircle2, AlertTriangle, ShieldCheck, Printer, Calendar, Camera, X, Search } from 'lucide-react';
 import { compressImage } from '../utils/imageCompressor.js';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -31,7 +34,7 @@ export default function WorkflowModal({
   // Common states
   const [selectedSetCode, setSelectedSetCode] = useState('');
   const [targetNppId, setTargetNppId] = useState('');
-  const [technician, setTechnician] = useState('Nguyễn Văn Hùng');
+  const [technician, setTechnician] = useState(user?.name || user?.full_name || '');
   const [handoverDate, setHandoverDate] = useState(new Date().toISOString().split('T')[0]);
   const [reason, setReason] = useState('');
   const [withdrawNppSearch, setWithdrawNppSearch] = useState('');
@@ -47,11 +50,32 @@ export default function WorkflowModal({
   // For withdrawal
   const [deviceCondition, setDeviceCondition] = useState('Bình thường - Đang chạy tốt');
   const [returnToStock, setReturnToStock] = useState(true);
+  const operationId = useRef(crypto.randomUUID());
+  const submitting = useRef(false);
+  const [busy,setBusy] = useState(false);
+  const [saveError,setSaveError] = useState('');
+  const draftValue = useMemo(() => ({operationId:operationId.current,selectedSetCode,targetNppId,technician,handoverDate,reason,notes,stabilizerBrand,hasStabilizer,photos,deviceCondition,returnToStock}),
+    [selectedSetCode,targetNppId,technician,handoverDate,reason,notes,stabilizerBrand,hasStabilizer,photos,deviceCondition,returnToStock]);
+  const draft = useFormDraft(`${user?.id}:workflow:${mode}`,draftValue,true,saved=>{
+    if ((saved.selectedSetCode && !filteredSets.some(item=>item.setCode===saved.selectedSetCode)) ||
+      (saved.targetNppId && !filteredNpps.some(item=>item.id===saved.targetNppId))) {
+      setSaveError('Máy hoặc NPP của bản nháp không còn trong phạm vi được phép. Giữ bản nháp để đối chiếu.'); return false;
+    }
+    operationId.current=saved.operationId || crypto.randomUUID();
+    setSelectedSetCode(saved.selectedSetCode || '');setTargetNppId(saved.targetNppId || '');setTechnician(saved.technician || '');
+    setHandoverDate(saved.handoverDate || '');setReason(saved.reason || '');setNotes(saved.notes || '');
+    setStabilizerBrand(saved.stabilizerBrand || '');setHasStabilizer(Boolean(saved.hasStabilizer));setPhotos(saved.photos || []);
+    setDeviceCondition(saved.deviceCondition || '');setReturnToStock(saved.returnToStock !== false);return true;
+  });
+  const closeSafely = async()=>{if(submitting.current)return;try {await draft.flush();onClose();}catch(error){setSaveError(error.message);}};
 
   const handlePhotoUpload = async (e) => {
     const files = Array.from(e.target.files);
+    if (files.length + photos.length > 6) { setSaveError('Tối đa 6 ảnh cho một nghiệp vụ.'); return; }
     for (const file of files) {
       try {
+        const checked = await validateDocumentFile(file);
+        if (!checked.mime.startsWith('image/')) throw new Error('Chỉ nhận tệp ảnh.');
         const compressedBase64 = await compressImage(file);
         setPhotos(prev => [...prev, compressedBase64]);
       } catch (err) {
@@ -67,6 +91,9 @@ export default function WorkflowModal({
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (submitting.current || draft.existing) return;
+    submitting.current=true;setBusy(true);setSaveError('');
+    try {
 
     if (isDateLocked(handoverDate)) {
       alert(`Thao tác bị khóa: Tháng ${handoverDate.substring(0, 7)} đã chốt sổ kế toán!`);
@@ -83,6 +110,7 @@ export default function WorkflowModal({
       const nextDue = dateObj.toISOString().split('T')[0];
 
       await onSubmitInstall({
+        operationId:operationId.current,
         setCode: selectedSetCode,
         nppId: targetNppId,
         technician,
@@ -98,6 +126,7 @@ export default function WorkflowModal({
         return;
       }
       await onSubmitWithdraw({
+        operationId:operationId.current,
         setCode: selectedSetCode,
         reason,
         deviceCondition,
@@ -113,6 +142,7 @@ export default function WorkflowModal({
         return;
       }
       await onSubmitTransfer({
+        operationId:operationId.current,
         setCode: selectedSetCode,
         newNppId: targetNppId,
         reason,
@@ -122,7 +152,10 @@ export default function WorkflowModal({
         photos
       });
     }
+    await draft.clear();
     onClose();
+    } catch(error) {setSaveError(error.message || 'Không lưu được nghiệp vụ. Bản nháp được giữ nguyên.');}
+    finally {submitting.current=false;setBusy(false);}
   };
 
   const selectedSet = systemSets.find(s => s.setCode === selectedSetCode);
@@ -165,11 +198,11 @@ export default function WorkflowModal({
               {mode === 'TRANSFER' && 'Nghiệp Vụ Điều Chuyển Bộ Máy Giữa Các NPP'}
             </h3>
           </div>
-          <button className="btn btn-secondary btn-sm" onClick={onClose}>✕</button>
+          <button className="btn btn-secondary btn-sm" disabled={busy} onClick={closeSafely}>✕</button>
         </div>
 
         <form onSubmit={handleSubmit}>
-          <div className="modal-body" ref={el => { if (el) el.scrollTop = 0; }}>
+          <div className="modal-body" ref={el => { if (el) el.scrollTop = 0; }}><DraftNotice draft={draft}/>{saveError && <p role="alert" className="resource-error">{saveError}</p>}
             
             {/* INSTALLATION FORM */}
             {mode === 'INSTALL' && (
@@ -391,8 +424,8 @@ export default function WorkflowModal({
                 <span>Xem & In Biên Bản</span>
               </button>
             )}
-            <button type="button" className="btn btn-secondary" onClick={onClose}>Hủy</button>
-            <button type="submit" className="btn btn-primary">
+            <button type="button" className="btn btn-secondary" disabled={busy} onClick={closeSafely}>Hủy</button>
+            <button type="submit" className="btn btn-primary" disabled={busy || Boolean(draft.existing)}>
               Xác Nhận Thực Hiện
             </button>
           </div>

@@ -77,6 +77,8 @@ async function main() {
   });
   const { verifySessionRevocation } = await import('./verify-session-revocation.mjs');
   await verifySessionRevocation(client, env);
+  const { verifyEquipmentWorkflows } = await import('./verify-equipment-workflows.mjs');
+  await verifyEquipmentWorkflows(client, env);
 }
 
 try {
