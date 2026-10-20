@@ -241,7 +241,7 @@ DO $$ DECLARE item record; definition text; guarded text; BEGIN
  FOR item IN SELECT p.oid FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
  JOIN pg_language l ON l.oid=p.prolang WHERE n.nspname='public' AND l.lanname='plpgsql'
  AND p.proname IN ('get_sync_change_feed','get_sync_server_health','get_enterprise_preflight_snapshot',
- 'register_sync_operation','complete_sync_operation','read_sync_entity_version','get_npp_region') LOOP
+ 'register_sync_operation','complete_sync_operation','read_sync_entity_version','get_npp_region','get_session_security_state') LOOP
    definition:=pg_get_functiondef(item.oid);
    IF position('NOT public.has_active_app_session()' in definition)>0 THEN CONTINUE; END IF;
    guarded:=regexp_replace(definition,E'(^|\\n)BEGIN\\r?\\n',E'\\1BEGIN\n  IF NOT public.has_active_app_session() THEN RAISE EXCEPTION ''SESSION_REJECTED'' USING ERRCODE=''42501''; END IF;\n');

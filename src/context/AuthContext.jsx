@@ -62,9 +62,8 @@ export function AuthProvider({ children }) {
       }
 
       if (errorMsg) {
-        const cleanMsg = decodeURIComponent(errorMsg.replace(/\+/g, ' '));
         setPasswordRecovery(false);
-        setAuthRedirectError(cleanMsg);
+        setAuthRedirectError('Liên kết xác thực không hợp lệ hoặc đã hết hạn. Hãy yêu cầu liên kết mới.');
 
         clearOfflineStorage().then(() => supabase.auth.signOut()).then(() => {
           const newUrl = window.location.origin + window.location.pathname;
@@ -190,6 +189,10 @@ export function AuthProvider({ children }) {
           throw Object.assign(new Error('SESSION_REJECTED'), { code: 'SESSION_REJECTED' });
         }
         trustedSessionRegistered.current = true;
+        if (registration.state?.anomaly_detected && !sessionStorage.getItem('nasun-device-alert-shown')) {
+          sessionStorage.setItem('nasun-device-alert-shown', 'true');
+          window.alert('Phát hiện đăng nhập từ thiết bị hoặc vị trí mới. Sự kiện đã được ghi lại để quản trị viên kiểm tra.');
+        }
       }
       const { data: profile, error } = await supabase
         .from('profiles')
@@ -383,7 +386,7 @@ export function AuthProvider({ children }) {
         const { data: state, error } = await supabase.rpc('get_session_security_state');
         if (cancelled || sessionOwner.current !== user.id) return;
         if (error) {
-          if ([401, 403].includes(error.status) || ['PGRST301', '28000'].includes(error.code)) {
+          if ([401, 403].includes(error.status) || ['PGRST301', '28000', '42501'].includes(error.code)) {
             await clearInvalidSession(error.code || 'AUTH_REJECTED');
           } else {
             console.warn('[Auth] Session validation deferred:', error.message);
