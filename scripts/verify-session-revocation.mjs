@@ -38,7 +38,7 @@ export async function verifySessionRevocation(service, environment) {
     assert.ifError(revoked.error);
     assert.equal(revoked.data.length, 1);
     assert.equal((await validate()).state.valid, false);
-    await assert.rejects(requireReplaySession(client, owner, () => owner, validate), /SESSION_REJECTED/);
+    await assert.rejects(requireReplaySession(client, owner, () => owner, validate), error => error?.message === 'SESSION_REJECTED' && ['42501','SESSION_REJECTED'].includes(error?.code));
     const denied = await client.from('distributors').update({ name: 'Synthetic revoked writer' }).eq('id', distributorId).select('id');
     assert.ok(denied.error?.code === '42501' || (!denied.error && denied.data?.length === 0), 'Server must reject revoked JWT writes even when client replay checks are bypassed');
     const preserved = await service.from('distributors').select('name').eq('id', distributorId).single();
