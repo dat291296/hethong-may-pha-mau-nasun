@@ -1,3 +1,4 @@
+import { userErrorMessage } from '../security/userError.js';
 import { resolveSyncEntity, SYNC_CONTRACT_VERSION } from './syncContract.js';
 
 export const QUEUE_SCHEMA_VERSION = 3;
@@ -54,7 +55,8 @@ export function resolveFailureState(item, error, now = Date.now()) {
   return {
     status,
     attempts,
-    lastError: String(error?.message || error || 'UNKNOWN_SYNC_ERROR'),
+    lastError: userErrorMessage(error),
+    lastErrorCode: String(error?.code || 'SYNC_OPERATION_FAILED'),
     nextAttemptAt: status === 'retry_wait' ? now + getRetryDelay(attempts) : 0,
     updatedAt: now
   };

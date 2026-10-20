@@ -48,3 +48,9 @@ test('worker rejects foreign/null origins and never sends wildcard CORS',async()
  assert.equal(same.status,204);assert.equal(same.headers.get('Access-Control-Allow-Origin'),'https://kythuat.nasun.workers.dev');
  assert.equal((await worker.fetch(new Request('https://kythuat.nasun.workers.dev/'),env)).status,200);
 });
+
+import { resolveFailureState } from '../src/lib/syncQueue.js';
+test('sync review keeps failure classification without retaining raw SQL errors',()=>{
+ const failure=resolveFailureState({attempts:0},{code:'22P02',message:'invalid input syntax for customer-private-value'},1000);
+ assert.equal(failure.status,'needs_review');assert.equal(failure.lastErrorCode,'22P02');assert.doesNotMatch(failure.lastError,/customer-private-value|invalid input/);
+});
