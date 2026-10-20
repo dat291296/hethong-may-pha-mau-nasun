@@ -1,6 +1,8 @@
+import {recordOperationalError} from '../lib/operationalDiagnostics.js';
+import {normalizeCalendarDate,normalizeOptionalTimestamp} from '../utils/dateUtils.js';
 import { persistMutation, persistBatchMutation } from '../lib/durableMutation.js';
 import { fetchAllRows } from '../lib/paginatedQuery.js';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase, isSupabaseConfigured, safeQuery } from '../lib/supabase.js';
 import { INITIAL_REPAIR_TICKETS } from '../data/mockData.js';
 import { matchesSavedRepair } from '../lib/teamWorkspace';
@@ -27,6 +29,8 @@ export function filterRepairTicketsById(tickets, idToRemove) {
 export function useRepairs() {
   const [repairTickets, setRepairTickets] = useState(INITIAL_REPAIR_TICKETS);
   const [loading, setLoading] = useState(false);
+  const [loadError,setLoadError]=useState('');
+  const fetchVersion=useRef(0);
 
   const persistRepairTickets = useCallback((nextTickets) => {
     setRepairTickets(nextTickets);
@@ -47,25 +51,30 @@ export function useRepairs() {
 
   const fetchRepairs = useCallback(async () => {
     if (!isSupabaseConfigured) return;
-    const pendingQueue = await getOfflineQueue();
-    if (pendingQueue.some(item => ['ADD_REPAIR', 'EDIT_REPAIR', 'DELETE_REPAIR'].includes(item.action))) {
-      console.info('[useRepairs] Keeping local repair cache while changes are waiting to sync.');
-      return;
-    }
-    setLoading(true);
-    const { data, error } = await fetchAllRows(
-      sb => sb.from('repair_tickets').select('*', { count: 'exact' }).order('date', { ascending: false }).order('id'),
-      safeQuery, 'fetchRepairs', { key: 'id' }
-    );
-    if (error) {
-      const cached = await getCachedOfflineData('repair_tickets', null);
-      if (cached) setRepairTickets(cached);
-    } else if (Array.isArray(data)) {
-      const mapped = data.map(mapDbToRepair);
-      persistRepairTickets(mapped);
-    }
-    setLoading(false);
-  }, [persistRepairTickets]);
+    const version=++fetchVersion.current;
+    setLoading(true);setLoadError('');
+    try {
+      const pendingQueue = await getOfflineQueue();
+      if (pendingQueue.some(item => ['ADD_REPAIR','EDIT_REPAIR','DELETE_REPAIR'].includes(item.action))) {
+        if(version===fetchVersion.current)setLoadError('Có thay đổi đang chờ đồng bộ. Giữ dữ liệu trên thiết bị; kiểm tra hàng chờ trước khi tải bản server.');
+        return;
+      }
+      const {data,error}=await fetchAllRows(sb=>sb.from('repair_tickets').select('*',{count:'exact'}).order('date',{ascending:false}).order('id'),safeQuery,'fetchRepairs',{key:'id'});
+      if(version!==fetchVersion.current)return;
+      if(error)throw error;
+      if(!Array.isArray(data))throw Error('INCOMPLETE_REPAIR_RESPONSE');
+      persistRepairTickets(data.map(mapDbToRepair));
+    } catch(error) {
+      recordOperationalError('runtime',error);
+      if(version===fetchVersion.current){
+        setLoadError('Chưa tải được phiếu từ server. Dữ liệu đã có được giữ nguyên; kiểm tra kết nối và thử lại.');
+        try {
+          const cached=await getCachedOfflineData('repair_tickets',null);
+          if(version===fetchVersion.current&&Array.isArray(cached))setRepairTickets(cached);
+        } catch(cacheError) {recordOperationalError('runtime',cacheError);}
+      }
+    } finally {if(version===fetchVersion.current)setLoading(false);}
+  },[persistRepairTickets]);
 
   useEffect(() => {
     fetchRepairs();
@@ -146,6 +155,9 @@ export function useRepairs() {
     for (const key of ['assignment_due_date', 'sla_due_at', 'completed_at', 'assigned_user_id']) {
       if (key in dbUpdates && dbUpdates[key] === '') dbUpdates[key] = null;
     }
+    if ('date' in dbUpdates) dbUpdates.date=normalizeCalendarDate(dbUpdates.date,'Ngày tiếp nhận',true);
+    if ('assignment_due_date' in dbUpdates) dbUpdates.assignment_due_date=normalizeCalendarDate(dbUpdates.assignment_due_date,'Hạn xử lý');
+    for(const key of ['sla_due_at','completed_at']) if(key in dbUpdates)dbUpdates[key]=normalizeOptionalTimestamp(dbUpdates[key]);
     const exchangeType = updates.exchangeType ?? updates.exchange_type;
     if (exchangeType !== undefined) {
       const exchangeText = String(exchangeType).toLocaleLowerCase('vi');
@@ -218,6 +230,7 @@ export function useRepairs() {
     repairTickets,
     setRepairTickets,
     loading,
+    loadError,
     addTicket,
     editTicket,
     deleteTicket,
@@ -266,7 +279,7 @@ function mapRepairToDb(r) {
   return {
     ...(r.id ? { id: r.id } : {}),
     ticket_code:            r.ticketCode,
-    date:                   r.date,
+    date:                   normalizeCalendarDate(r.date,'Ngày tiếp nhận',true),
     technician:             r.technician,
     npp_id:                 r.nppId,
     npp_name:               r.nppName,
@@ -288,9 +301,9 @@ function mapRepairToDb(r) {
     before_photos:          r.beforePhotos || r.photos || [],
     after_photos:           r.afterPhotos || [],
     npp_confirmation:       r.nppConfirmation || {},
-    sla_due_at:             r.slaDueAt || null,
-    completed_at:           r.completedAt || null,
+    sla_due_at:             normalizeOptionalTimestamp(r.slaDueAt,'Hạn xử lý'),
+    completed_at:           normalizeOptionalTimestamp(r.completedAt,'Thời gian hoàn tất'),
     ...(r.assignedUserId !== undefined ? { assigned_user_id: r.assignedUserId || null } : {}),
-    ...(r.assignmentDueDate !== undefined ? { assignment_due_date: r.assignmentDueDate || null } : {}),
+    ...(r.assignmentDueDate !== undefined ? { assignment_due_date: normalizeCalendarDate(r.assignmentDueDate,'Hạn xử lý') } : {}),
   };
 }

@@ -1,3 +1,5 @@
+import {normalizeDateFields} from '../utils/dateUtils.js';
+import {saveEquipmentReplacement,resolveEquipmentSlot,replacementCandidates,equipmentFields,EQUIPMENT_SLOTS} from '../lib/equipmentReplacement.js';
 import {normalizeDeviceType} from '../lib/deviceType.js';
 import {saveSystemSetEdit} from '../lib/systemSetEdit.js';
 import { recordOperationalError } from '../lib/operationalDiagnostics.js';
@@ -417,6 +419,28 @@ export function useAssets() {
     return {queued:false};
   }, [fetchAssets]);
 
+  const replaceEquipment=useCallback(async payload=>{
+    if(isSupabaseConfigured){
+      if(!navigator.onLine)throw createPersistenceError('Cần có mạng để thay thiết bị đồng thời. Bản nháp được giữ nguyên.');
+      const result=await saveEquipmentReplacement(query=>safeQuery(query,'replaceEquipment'),payload);
+      await fetchAssets();return result;
+    }
+    const machine=systemSets.find(item=>item.setCode===payload.p_set_code);
+    if(!machine||machine.updatedAt!==payload.p_expected_updated_at)throw Object.assign(new Error('Hồ sơ máy đã thay đổi. Tải lại để đối chiếu.'),{code:'PT409'});
+    const catalog={computer:computers,dispenser:dispensers,mixer:mixers,printer:printers};
+    const setters={computer:setComputers,dispenser:setDispensers,mixer:setMixers,printer:setPrinters};
+    const list=catalog[payload.p_category];if(!list)throw Error('Loại thiết bị không hợp lệ');
+    const slot=resolveEquipmentSlot(machine,payload.p_category,list);
+    const incoming=replacementCandidates(list,machine,payload.p_action).find(item=>item.id===payload.p_device_id);
+    if(!incoming||slot.device?.id===incoming.id&&payload.p_action!=='relink')throw Object.assign(new Error('Thiết bị không còn sẵn sàng.'),{code:'PT409'});
+    if(systemSets.some(item=>item.setCode!==machine.setCode&&item[payload.p_category+'Id']===incoming.id))throw Error('Thiết bị đã được tham chiếu ở bộ máy khác.');
+    const changedAt=new Date().toISOString();
+    const table=EQUIPMENT_SLOTS.find(item=>item.category===payload.p_category).table;
+    setters[payload.p_category](previous=>{const next=previous.map(device=>device.id===incoming.id?{...device,isAssigned:true,setCode:machine.setCode,updatedAt:changedAt}:device.id===slot.device?.id?{...device,isAssigned:false,setCode:null,status:payload.p_old_condition,updatedAt:changedAt}:device);persistAssetsLocal(table,next);return next;});
+    setSystemSets(previous=>{const next=previous.map(item=>item.setCode===machine.setCode?{...item,...equipmentFields(payload.p_category,incoming),updatedAt:changedAt}:item);persistAssetsLocal('system_sets',next);return next;});
+    return {ok:true,setCode:machine.setCode,newDeviceId:incoming.id,event:{operation_id:payload.p_operation_id,set_code:machine.setCode,npp_id:machine.nppId,region:machine.region,category:payload.p_category,action:payload.p_action,old_device_id:slot.device?.id||null,new_device_id:incoming.id,old_snapshot:slot.device,new_snapshot:incoming,old_condition:payload.p_old_condition,reason:payload.p_reason,changed_at:changedAt}};
+  },[systemSets,computers,dispensers,mixers,printers,fetchAssets]);
+
   // ── Update system set ──────────────────────────────────────────────────────
   const updateSystemSet = useCallback(async (oldSetCode, updates) => {
     const newSetCode = (updates.setCode || updates.set_code || oldSetCode).trim();
@@ -478,6 +502,7 @@ export function useAssets() {
     importDevices,
     importSystemSets,
     assembleSet,
+    replaceEquipment,
     updateSystemSet,
     refetch: fetchAssets,
   };
@@ -708,7 +733,7 @@ function mapSystemSetToDb(obj) {
   if ('notes' in obj) dbObj.notes = obj.notes ?? '';
   if ('installationPhotos' in obj || 'installation_photos' in obj) dbObj.installation_photos = obj.installationPhotos ?? obj.installation_photos ?? [];
 
-  return dbObj;
+  return normalizeDateFields(dbObj,{install_date:'Ngày lắp đặt',last_maintenance_date:'Ngày bảo trì gần nhất',next_maintenance_due:'Hạn bảo trì'});
 }
 
 export function generateNextSetCode(systemSets = []) {

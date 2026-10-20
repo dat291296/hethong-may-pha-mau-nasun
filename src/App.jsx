@@ -1,3 +1,5 @@
+import RepairWorkspaceBoundary from './components/RepairWorkspaceBoundary.jsx';
+import {useReplacementEvents} from './hooks/useReplacementEvents.js';
 import { WorkspaceRegionContext } from './hooks/useWorkspaceState.js';
 import RegionalWorkspaceBar from './components/RegionalWorkspaceBar.jsx';
 import { defaultWorkspaceRegion, resolveWorkspaceRegion, scopeWorkspace } from './lib/regionalWorkspace.js';
@@ -132,9 +134,19 @@ export default function App() {
   const { npps, setNpps, addNpp, editNpp, deleteNpp, importNpps, refetch: refetchNpps } = useNpps();
   const {
     dispensers, setDispensers, mixers, setMixers, computers, setComputers, printers, setPrinters, systemSets, setSystemSets,
-    addStockDevice, editDevice, editDeviceDetails, deleteDevice, deleteSystemSet, assembleSet, updateSystemSet, importDevices, importSystemSets, refetch: refetchAssets
+    addStockDevice, editDevice, editDeviceDetails, deleteDevice, deleteSystemSet, assembleSet, replaceEquipment, updateSystemSet, importDevices, importSystemSets, refetch: refetchAssets
   } = useAssets();
-  const { repairTickets, addTicket, editTicket, deleteTicket, importTickets, refetch: refetchRepairs } = useRepairs();
+  const replacementHistory=useReplacementEvents();
+  const handleReplaceEquipment=async payload=>{
+    if(!can('asset:edit'))throw Error('Bạn không có quyền thay thiết bị.');
+    if(payload.p_action==='relink'&&user?.role!=='admin')throw Error('Chỉ quản trị viên được đối chiếu liên kết.');
+    const result=await replaceEquipment(payload);
+    if(result.event)replacementHistory.addLocalEvent(result.event);
+    else await Promise.all([replacementHistory.refresh(),refetchAuditLogs()]);
+    return result;
+  };
+
+  const { repairTickets, addTicket, editTicket, deleteTicket, importTickets, loading: repairsLoading, loadError: repairsLoadError, refetch: refetchRepairs } = useRepairs();
   const { auditLogs, addAuditLog, importAuditLogs, refetch: refetchAuditLogs } = useAuditLogs();
   const { lockedMonths, lockMonth, unlockMonth, isDateLocked, loading: lockLoading, error: lockError } = useLockedMonths();
   const { tintingLogs, importLogs, refetch: refetchTintingLogs } = useTintingLogs();
@@ -224,7 +236,7 @@ export default function App() {
   const navigateWorkspace = (tab, query = '', filter = 'ALL') => { setGlobalSearch(query); setWorkspaceFilter(filter); setActiveTab(tab); };
   const rememberMachineProfile = (machine,tab='equipment') => setMachineProfileReturn({ machine: { id: machine.id, setCode: machine.setCode, tab }, search: globalSearch, filter: workspaceFilter });
   const returnToMachineProfile = () => { if (machineProfileReturn) navigateWorkspace('assets', machineProfileReturn.search, machineProfileReturn.filter); };
-  const requestMachineRepair = (machine,tab) => { rememberMachineProfile(machine,tab); setPrefilledRepairData({ nppId: machine.nppId, nppName: machine.nppName, machineModel: machine.dispenserModel, serialNumber: machine.dispenserSerial, productCategory: 'Máy chiết' }); navigateWorkspace('repairs'); };
+  const requestMachineRepair = (machine,tab) => { rememberMachineProfile(machine,tab); setPrefilledRepairData({ assetCode:machine.dispenserId||'', nppId: machine.nppId, nppName: machine.nppName, machineModel: machine.dispenserModel, serialNumber: machine.dispenserSerial, productCategory: 'Máy chiết' }); navigateWorkspace('repairs'); };
 
   const handleSelectErrorForRepair = (errorObj) => {
     let cat = errorObj.category;
@@ -804,6 +816,8 @@ export default function App() {
 
           {activeTab === 'dashboard' && (
             <Dashboard
+              replacementEvents={replacementHistory.events}
+              replacementHistoryError={replacementHistory.error}
               teamUsers={qcUsers}
               systemSets={regionalData.systemSets}
               npps={regionalData.npps}
@@ -854,6 +868,9 @@ export default function App() {
               printers={regionalData.printers}
               onAssembleSet={handleAssembleSet}
               onAddStockDevice={handleAddStockDevice}
+              onReplaceEquipment={handleReplaceEquipment}
+              replacementEvents={replacementHistory.events}
+              replacementHistoryError={replacementHistory.error}
               onEditDevice={handleEditDevice}
               onDeleteDevice={handleDeleteDevice}
               onOpenImportModal={openImportModal}
@@ -863,7 +880,10 @@ export default function App() {
           )}
 
           {activeTab === 'repairs' && (
-            <DeviceRepairProcessing
+            <RepairWorkspaceBoundary><DeviceRepairProcessing
+              loading={repairsLoading}
+              loadError={repairsLoadError}
+              onReload={refetchRepairs}
               ticketCatalog={repairTickets}
               globalSearch={globalSearch}
               initialFilter={workspaceFilter}
@@ -879,7 +899,7 @@ export default function App() {
               onClearPrefill={() => setPrefilledRepairData(null)}
               onOpenImportModal={() => openImportModal('repair')}
               isDateLocked={isDateLocked}
-            />
+            /></RepairWorkspaceBoundary>
           )}
 
           {activeTab === 'techHandbook' && (

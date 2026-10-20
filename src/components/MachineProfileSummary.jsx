@@ -2,15 +2,15 @@ import React from 'react';
 import { contactLinks } from '../lib/technicalResources.js';
 const labels = {dispenser:'Máy chiết', mixer:'Máy lắc', computer:'Máy tính', printer:'Máy in'};
 
-export function MachineProfileSummary({machine, profile}) {
+export function MachineProfileSummary({machine, profile, showEquipment=true}) {
   const links = contactLinks(profile.npp || {});
   return <section className="machine-summary" aria-label="Tổng quan hồ sơ máy">
     <div className="machine-summary-context"><strong>{machine.setCode}</strong><span>{profile.npp?.name || machine.nppName || 'Kho tổng trung tâm'}</span><span>{machine.province || machine.region || 'Chưa ghi nhận khu vực'}</span></div>
-    <div className="machine-summary-grid">{profile.devices.map(({category,device}) => <article key={category}>
+    {showEquipment && <div className="machine-summary-grid">{profile.devices.map(({category,device}) => <article key={category}>
       <span>{labels[category]}</span><strong>{device?.model || machine[category+'Model'] || (category === 'computer' && machine.computerType) || 'Chưa có model'}</strong>
       <code>Seri: {device?.serial || machine[category+'Serial'] || 'Chưa ghi nhận'}</code>
       {!device && <small>Chưa xác định được liên kết thiết bị. Cần kiểm tra trước khi sửa.</small>}
-    </article>)}</div>
+    </article>)}</div>}
     <div className="machine-summary-contact"><strong>Liên hệ NPP</strong><span>{profile.npp?.contactPerson || 'Chưa ghi nhận người liên hệ'}</span><span>{profile.npp?.phone || 'Chưa ghi nhận số điện thoại'}</span><span>{profile.npp?.address || 'Chưa ghi nhận địa chỉ'}</span><div className="machine-contact-actions">{links.phone && <a className="btn btn-secondary" href={links.phone}>Gọi NPP</a>}{links.email && <a className="btn btn-secondary" href={links.email}>Email NPP</a>}</div></div>
   </section>;
 }

@@ -1,3 +1,5 @@
+import {EQUIPMENT_SLOTS,resolveEquipmentSlot} from '../lib/equipmentReplacement.js';
+import EquipmentReplacementDialog from './EquipmentReplacementDialog.jsx';
 import {missingSystemSetFields} from '../lib/dataCompleteness.js';
 import { assignedSetsForNpp, assertAdditionalSetConfirmed } from '../lib/assemblyGuard.js';
 import { isUnknownSerial } from '../lib/deviceSerial.js';
@@ -55,7 +57,7 @@ import { exportExcel } from '../utils/excelExport.js';
 import { getSystemSetMissingFields } from '../utils/systemSetValidation.js';
 import { useWorkspaceState, useWorkspaceScroll } from '../hooks/useWorkspaceState';
 
-export default function AssetManagement({ initialProfile, onProfileRestored, globalSearch = '', initialFilter = 'ALL', repairTickets = [], auditLogs = [], onRequestRepair, onRequestMaintenance,
+export default function AssetManagement({ onReplaceEquipment,replacementEvents=[],replacementHistoryError='', initialProfile, onProfileRestored, globalSearch = '', initialFilter = 'ALL', repairTickets = [], auditLogs = [], onRequestRepair, onRequestMaintenance,
   systemSets,
   catalog,
   npps = [],
@@ -203,6 +205,7 @@ export default function AssetManagement({ initialProfile, onProfileRestored, glo
 
   // Set Details & Full Photo Gallery Modal State
   const [selectedSetDetails, setSelectedSetDetails] = useState(null);
+  const [replacement,setReplacement]=useState(null);
   const openedSearch = React.useRef('');
   const [profileTab, setProfileTab] = useState('equipment');
   useEffect(() => {
@@ -248,7 +251,7 @@ export default function AssetManagement({ initialProfile, onProfileRestored, glo
   const [addDeviceCategory, setAddDeviceCategory] = useState('dispenser');
 
   // Auto scroll lock & reset position when any modal opens
-  useModalScrollLock(showAssembleModal || !!editingSet || !!editingDevice || showAddDeviceModal || !!selectedPhotoViewer || !!selectedSetDetails);
+  useModalScrollLock(showAssembleModal || !!editingSet || !!editingDevice || showAddDeviceModal || !!selectedPhotoViewer || !!selectedSetDetails || !!replacement);
 
   // Keyboard navigation for Lightbox Photo Viewer
   useEffect(() => {
@@ -2258,12 +2261,14 @@ export default function AssetManagement({ initialProfile, onProfileRestored, glo
                   )}
 
                   {/* ASSIGNMENT & NPP SECTION */}
+                  {selectedSetDetails && <p className="resource-muted">Sửa thông tin giữ nguyên bộ máy đang gán. Dùng nút Thay thiết bị trong hồ sơ để chọn máy khác từ kho.</p>}
                   <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px dashed var(--border-color)' }}>
                     <div className="responsive-form-grid">
                       <div className="form-group">
                         <label className="form-label">📌 Trạng Thái Cấp Phát</label>
                         <select
                           className="form-select"
+                          disabled={Boolean(selectedSetDetails)}
                           value={editFormData.isAssigned ? 'ASSIGNED' : 'FREE'}
                           onChange={e => {
                             const isAssigned = e.target.value === 'ASSIGNED';
@@ -2284,6 +2289,7 @@ export default function AssetManagement({ initialProfile, onProfileRestored, glo
                           <label className="form-label">🏢 Bộ Máy & NPP Gán Cho *</label>
                           <select
                             className="form-select"
+                            disabled={Boolean(selectedSetDetails)}
                             required={editFormData.isAssigned}
                             value={editFormData.setCode || ''}
                             onChange={e => setEditFormData({ ...editFormData, setCode: e.target.value })}
@@ -3043,7 +3049,7 @@ export default function AssetManagement({ initialProfile, onProfileRestored, glo
       )}
 
       {/* COMBO SET DETAIL & FULL PHOTO GALLERY MODAL */}
-      {selectedSetDetails && !editingDevice && !editingSet && (
+      {selectedSetDetails && !editingDevice && !editingSet && !replacement && (
         <SafePortal>
           <div className="modal-overlay">
             <div className="modal-content machine-profile-modal" style={{ maxWidth: '820px', width: '95%' }}>
@@ -3064,12 +3070,12 @@ export default function AssetManagement({ initialProfile, onProfileRestored, glo
 
               <div className="modal-body machine-profile-body">{profileTab!=='equipment' && <button className="btn btn-secondary btn-sm" onClick={()=>setProfileTab('equipment')}>← Quay lại hồ sơ máy</button>}
 <div className="workspace-tabs">{[['equipment','Thiết bị'],['history','Lịch sử'],['documents','Tài liệu & Ảnh']].map(([key,label]) => <button key={key} aria-pressed={profileTab === key} onClick={() => setProfileTab(key)}>{label}</button>)}<button disabled={!can('repair:create') || !onRequestRepair} onClick={() => { onRequestRepair(selectedSetDetails,profileTab); }}>Tạo phiếu sửa chữa</button><button disabled={!can('asset:edit') || !onRequestMaintenance} onClick={() => { onRequestMaintenance(selectedSetDetails,profileTab); }}>Bảo trì</button></div>
-                {profileTab === 'history' && <MachineProfileHistory items={machineProfile.history} />}
+                {profileTab === 'history' && <>{replacementHistoryError&&<p role="alert" className="resource-error">{replacementHistoryError}</p>}<MachineProfileHistory items={[...machineProfile.history.filter(item=>!replacementEvents.some(event=>item.key==='audit:AUDIT-'+event.operation_id)),...replacementEvents.filter(event=>event.set_code===selectedSetDetails.setCode).map(event=>({key:'replacement:'+event.operation_id,title:event.action==='relink'?'Đối chiếu liên kết':'Lắp / tháo thiết bị',at:event.changed_at,detail:`${event.category}: ${event.old_device_id||'Chưa gán'} → ${event.new_device_id}. ${event.reason}`,status:event.old_condition}))].sort((a,b)=>(Date.parse(b.at)||0)-(Date.parse(a.at)||0))}/></>}
                 {profileTab === 'documents' && <TechnicalResources machineModel={selectedSetDetails.dispenserModel} modelOptions={[...new Set(systemSets.map(machine => machine.dispenserModel).filter(Boolean))]} />}
                 <div hidden={profileTab !== 'equipment'}>
                 <p className="resource-muted">Cần bổ sung: {missingSystemSetFields(selectedSetDetails).join(' · ') || 'Đã có các trường thông tin chính'}</p>
-                <div className="workspace-tabs">{[['computer','Máy tính',computers,selectedSetDetails.computerId],['dispenser','Máy chiết',dispensers,selectedSetDetails.dispenserId],['mixer','Máy lắc',mixers,selectedSetDetails.mixerId],['printer','Máy in',printers,selectedSetDetails.printerId]].map(([category,label,list,id]) => { const matches = list.filter(item => id ? item.id === id : item.setCode === selectedSetDetails.setCode); const device = matches.length === 1 ? matches[0] : null; return device && <button key={category} disabled={!can('asset:edit')} onClick={() => { handleOpenEditDevice(category,device); }}>Chỉnh sửa {label.toLocaleLowerCase('vi')}</button>; })}</div>
-                <MachineProfileSummary machine={selectedSetDetails} profile={machineProfile} />
+                <div className="equipment-slot-grid">{EQUIPMENT_SLOTS.map(spec=>{const devices={computer:computers,dispenser:dispensers,mixer:mixers,printer:printers}[spec.category];const slot={...spec,...resolveEquipmentSlot(selectedSetDetails,spec.category,devices)};return <article className="equipment-slot" key={slot.category}><h4>{slot.label}</h4>{slot.device?<><strong>{slot.device.model||slot.device.type}</strong><code>{slot.device.id} · {slot.device.serial||'Chưa có seri'}</code><small>{slot.device.status}</small></>:<p role="status" className="repair-missing-fields">{slot.state==='empty'?'Chưa gán thiết bị':'Liên kết chưa khớp — cần đối chiếu'}{slot.pointer&&<small> Mã đang ghi nhận: {slot.pointer}</small>}</p>}<div className="workspace-actions"><button className="btn btn-secondary btn-sm" disabled={!can('asset:edit')||!slot.device} onClick={()=>handleOpenEditDevice(slot.category,slot.device)}>Chỉnh sửa {slot.label.toLocaleLowerCase('vi')}</button><button className="btn btn-primary btn-sm" disabled={!can('asset:edit')||!onReplaceEquipment||(slot.state==='conflict'&&user?.role!=='admin')} onClick={()=>setReplacement({machine:selectedSetDetails,slot,devices})}>{slot.state==='conflict'?'Đối chiếu liên kết':slot.device?'Thay thiết bị':'Chọn từ kho'}</button></div></article>;})}</div>
+                <MachineProfileSummary machine={selectedSetDetails} profile={machineProfile} showEquipment={false} />
 
                 <div className="machine-profile-extra">{[['computerSerial','Seri máy tính'],['tintingSoftware','Phần mềm pha màu'],['softwareVersion','Phiên bản'],['agentStatus','Trạng thái kết nối'],['lastMaintenanceDate','Bảo trì gần nhất'],['province','Tỉnh / Thành'],['region','Khu vực'],['notes','Ghi chú']].map(([key,label]) => <div key={key}><strong>{label}:</strong> {selectedSetDetails[key] || 'Chưa ghi nhận'}</div>)}</div>
                 {/* Additional details bar */}
@@ -3191,6 +3197,7 @@ export default function AssetManagement({ initialProfile, onProfileRestored, glo
         </SafePortal>
       )}
 
+      {replacement && <EquipmentReplacementDialog machine={replacement.machine} slot={replacement.slot} devices={replacement.devices} onSave={onReplaceEquipment} onClose={()=>setReplacement(null)}/>}
       {/* QR & BARCODE CAMERA SCANNER MODAL */}
       {showScanSerialModal && (
         <QrScannerModal
