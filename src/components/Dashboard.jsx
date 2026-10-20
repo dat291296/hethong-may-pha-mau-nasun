@@ -1,3 +1,4 @@
+import SystemHealthPanel from './SystemHealthPanel.jsx';
 import {matchesSearch} from '../lib/workspaceFilters.js';
 import { WorkspaceRegionContext } from '../hooks/useWorkspaceState.js';
 import { nppCoverage } from '../lib/nppCoverage.js';
@@ -46,6 +47,7 @@ import SafePortal from './SafePortal.jsx';
 import TeamWorkPanel from './TeamWorkPanel';
 
 export default function Dashboard({
+  replacementEvents=[],replacementHistoryError='',
   teamUsers = [],
   systemSets = [], 
   npps = [], 
@@ -259,6 +261,7 @@ export default function Dashboard({
     repairPage * repairPageSize
   );
 
+  const [healthOpen,setHealthOpen]=useState(false);
   return (
     <div className="workspace-screen dashboard-screen" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
 
@@ -406,6 +409,10 @@ export default function Dashboard({
       <div className="workspace-tabs" aria-label="Thống kê nhanh">{[['assets','STOCK','Trong kho',stockSetsCount],['repairs','PENDING','Chờ sửa',pendingTasks.length],['repairs','RETURN','Chờ gửi trả',returnTasks.length],['maintenance','OVERDUE','Quá hạn bảo trì',systemSets.filter(set => set.nextMaintenanceDue && set.nextMaintenanceDue < new Date().toLocaleDateString('en-CA')).length]].map(([tab,filter,label,count]) => <button key={filter} onClick={() => onNavigateWorkspace?.(tab, '', filter)}>{label} ({count})</button>)}</div>
 
 
+      <details className="dashboard-chart-group health-chart-group" open={healthOpen} onToggle={event=>setHealthOpen(event.currentTarget.open)}>
+        <summary>Sức khỏe hệ thống máy pha màu</summary>
+        {healthOpen&&<SystemHealthPanel machines={systemSets} devices={{computer:computers,dispenser:dispensers,mixer:mixers,printer:printers}} tickets={repairTickets} events={replacementEvents} npps={npps} historyError={replacementHistoryError} onNavigate={onNavigateWorkspace}/>}
+      </details>
       {/* Charts Section */}
       <details className="dashboard-chart-group" open={!window.matchMedia('(max-width: 600px)').matches}>
       <summary>Biểu đồ tổng quan</summary>

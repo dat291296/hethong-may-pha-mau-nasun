@@ -1,3 +1,4 @@
+import {repairListPage,repairStringList,hasMalformedRepairLists,uniqueAssignedMachine} from '../lib/repairList.js';
 import {validateDocumentFile} from '../lib/technicalResources.js';
 import {compressImage} from '../utils/imageCompressor.js';
 import {validateRepairReturn} from '../lib/repairLifecycle.js';
@@ -6,9 +7,9 @@ import { getOwnedCacheEntries } from '../lib/offlineDb.js';
 import { isDraftExpired } from '../lib/teamWorkspace.js';
 import WorkspaceFilterBar from './WorkspaceFilterBar.jsx';
 import { matchesSearch, matchesDateRange, uniqueOptions, canEditRegion } from '../lib/workspaceFilters.js';
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useDeferredValue } from 'react';
 import SafePortal from './SafePortal.jsx';
-import { formatDateVN } from '../utils/dateUtils.js';
+import { formatDateVN, getTodayIsoDate } from '../utils/dateUtils.js';
 import {
   PlusCircle,
   Wrench,
@@ -97,6 +98,9 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
   systemSets = [],
   qcUsers = [],
   ticketCatalog,
+  loading=false,
+  loadError='',
+  onReload,
   onAddTicket,
   onEditTicket,
   onDeleteTicket,
@@ -113,7 +117,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
   async function addErrorPhotos(event){
     const files=Array.from(event.target.files||[]);event.target.value='';setSaveError('');setPhotoBusy(true);
     try {
-      if(files.length+(formData.photos||[]).length>6)throw new Error('Tối đa 6 ảnh lỗi cho mỗi phiếu.');
+      if(files.length+repairStringList(formData.photos).length>6)throw new Error('Tối đa 6 ảnh lỗi cho mỗi phiếu.');
       const images=[];for(const file of files){if(!file.type.startsWith('image/'))throw new Error('Chỉ nhận ảnh JPG, PNG hoặc WebP.');await validateDocumentFile(file);images.push(await compressImage(file));}
       setFormData(previous=>({...previous,photos:[...(previous.photos||[]),...images]}));
     }catch(error){setSaveError(error.message);}finally{setPhotoBusy(false);}
@@ -125,7 +129,11 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
   useEffect(() => { if (globalSearch) setSearchTerm(globalSearch); }, [globalSearch, setSearchTerm]);
   const [nppSearchTerm, setNppSearchTerm] = useState('');
 
-  const isTicketAllowed = ticketNppId => canEditRegion(user, npps.find(item=>item.id === ticketNppId)?.region);
+  const nppById=useMemo(()=>new Map(npps.map(item=>[item.id,item])),[npps]);
+  const deferredSearch=useDeferredValue(searchTerm);
+  const [listPage,setListPage]=useWorkspaceState('repairs:page',1);
+  const [listSize,setListSize]=useWorkspaceState('repairs:page-size',20);
+  const isTicketAllowed = ticketNppId => canEditRegion(user, nppById.get(ticketNppId)?.region);
   useWorkspaceScroll('repairs');
   const [categoryFilter, setCategoryFilter] = useWorkspaceState('repairs:category', 'ALL');
   const [modelFilter, setModelFilter] = useWorkspaceState('repairs:model', 'ALL');
@@ -234,7 +242,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
 
   const [formData, setFormData] = useState({
     ...createFieldWorkflowDefaults(),
-    date: new Date().toLocaleDateString('en-CA'),
+    date: getTodayIsoDate(),
     technician: defaultTechnician,
     assignedUserId: user?.id || null,
     assignmentDueDate: '',
@@ -279,7 +287,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
       setNppSearchTerm('');
       setFormData({
         ...createFieldWorkflowDefaults(),
-        date: new Date().toLocaleDateString('en-CA'),
+        date: getTodayIsoDate(),
         technician: defaultTechnician,
     assignedUserId: user?.id || null,
     assignmentDueDate: '',
@@ -288,6 +296,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
         productCategory: prefilledTicket.productCategory || 'Máy chiết',
         machineModel: prefilledTicket.machineModel || 'Satint A2',
         serialNumber: prefilledTicket.serialNumber || '',
+        assetCode: prefilledTicket.assetCode || '',
         errorCategory: prefilledTicket.errorCategory || 'Lỗi phần cứng',
         errorDescription: prefilledTicket.errorDescription || '',
         photos: [],
@@ -309,7 +318,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
     setNppSearchTerm('');
     setFormData({
       ...createFieldWorkflowDefaults(),
-      date: new Date().toLocaleDateString('en-CA'),
+      date: getTodayIsoDate(),
       technician: defaultTechnician,
     assignedUserId: user?.id || null,
     assignmentDueDate: '',
@@ -352,6 +361,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
       alert('Bạn không có quyền chỉnh sửa phiếu sửa chữa ở khu vực này!');
       return;
     }
+    if(hasMalformedRepairLists(ticket)){setSaveError('Phiếu có dữ liệu ảnh hoặc vật tư cũ sai định dạng. Chưa mở sửa để tránh ghi mất dữ liệu; báo quản trị viên đối chiếu.');return;}
     setEditingTicket(ticket);
     setNppSearchTerm('');
     setFormData({
@@ -366,7 +376,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
   // Helper when NPP is chosen: auto detect linked system set
   const currentAssignedSet = useMemo(() => {
     if (!formData.nppId) return null;
-    return systemSets.find(s => s.nppId === formData.nppId);
+    return uniqueAssignedMachine(systemSets,formData.nppId);
   }, [systemSets, formData.nppId]);
 
   const filteredNpps = useMemo(() => {
@@ -375,14 +385,14 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
   }, [npps, nppSearchTerm]);
 
   const handleCategoryChange = (newCat) => {
-    const assignedSet = systemSets.find(s => s.nppId === formData.nppId);
+    const assignedSet = uniqueAssignedMachine(systemSets,formData.nppId);
     const { model, serial, assetCode } = getDeviceFromCombo(assignedSet, newCat);
     setFormData(prev => ({
       ...prev,
       productCategory: newCat,
-      machineModel: model !== undefined && model !== '' ? model : (newCat === 'Màn hình' ? 'Màn hình' : prev.machineModel),
+      machineModel: model !== undefined && model !== '' ? model : (newCat === 'Màn hình' ? 'Màn hình' : ''),
       serialNumber: serial !== undefined ? serial : prev.serialNumber,
-      assetCode: assetCode || prev.assetCode,
+      assetCode: assetCode || '',
       actionDirection: ['Máy chiết', 'Máy lắc'].includes(newCat) ? 'Sửa chữa' : prev.actionDirection,
       exchangeType: ['Máy chiết', 'Máy lắc'].includes(newCat) ? 'Không xuất đổi' : prev.exchangeType
     }));
@@ -390,7 +400,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
 
   const handleSelectNpp = (selectedId) => {
     const targetNpp = npps.find(n => n.id === selectedId);
-    const assignedSet = systemSets.find(s => s.nppId === selectedId);
+    const assignedSet = uniqueAssignedMachine(systemSets,selectedId);
     const currentCat = formData.productCategory || 'Máy chiết';
     const { model, serial, assetCode } = getDeviceFromCombo(assignedSet, currentCat);
 
@@ -398,9 +408,9 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
       ...prev,
       nppId: selectedId,
       nppName: targetNpp ? targetNpp.name : '',
-      machineModel: model || prev.machineModel,
+      machineModel: model || '',
       serialNumber: serial !== undefined ? serial : prev.serialNumber,
-      assetCode: assetCode || prev.assetCode
+      assetCode: assetCode || ''
     }));
   };
 
@@ -408,6 +418,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
     e.preventDefault();
     if (saving || photoBusy || draft.existing) return;
     setSaveError('');
+    if(hasMalformedRepairLists(formData)){setSaveError('Dữ liệu ảnh hoặc vật tư trong bản nháp chưa đúng định dạng. Bản gốc được giữ nguyên; cần đối chiếu trước khi lưu.');return;}
 
     // Sanitize input form data
     const sanitized = sanitizeFormData({
@@ -418,7 +429,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
     });
 
     if (!sanitized.nppId || !sanitized.date) { setSaveError('Vui lòng chọn NPP và ngày xử lý. Các nội dung khác có thể bổ sung sau.'); return; }
-    sanitized.materialsUsed=(formData.materialsUsed || []).map(item=>item.trim()).filter(Boolean);
+    sanitized.materialsUsed=repairStringList(formData.materialsUsed).map(item=>item.trim()).filter(Boolean);
     sanitized.photos = formData.photos || [];
     sanitized.beforePhotos = formData.beforePhotos || [];
     sanitized.afterPhotos = formData.afterPhotos || [];
@@ -525,9 +536,9 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
 
   React.useEffect(() => { if (initialFilter !== 'ALL') setActiveTab(initialFilter === 'RETURN' ? 'NOT_RETURNED' : initialFilter); }, [initialFilter]);
   // Filtered Tickets
-  const filteredTickets = repairTickets.filter(t => {
-    const distributor = npps.find(item => item.id === t.nppId);
-    const found = matchesSearch(searchTerm,[t.ticketCode,t.nppName,t.serialNumber,t.technician,t.errorDescription,distributor?.province,distributor?.region]);
+  const filteredTickets = useMemo(()=>repairTickets.filter(t => {
+    const distributor = nppById.get(t.nppId);
+    const found = matchesSearch(deferredSearch,[t.ticketCode,t.nppName,t.serialNumber,t.technician,t.errorDescription,distributor?.province,distributor?.region]);
     if (provinceFilter !== 'ALL' && distributor?.province !== provinceFilter) return false;
     if (ownerFilter !== 'ALL' && (t.assignedUserId || t.technician) !== ownerFilter) return false;
     if (!matchesDateRange(t.date,dateFrom,dateTo)) return false;
@@ -541,7 +552,9 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
     if (activeTab === 'REPLACED') matchesTab = t.actionDirection === 'Xuất đổi';
 
     return found && matchesCategory && matchesModel && matchesTab;
-  });
+  }),[repairTickets,nppById,deferredSearch,provinceFilter,ownerFilter,dateFrom,dateTo,categoryFilter,modelFilter,activeTab]);
+  useEffect(()=>setListPage(1),[deferredSearch,provinceFilter,ownerFilter,dateFrom,dateTo,categoryFilter,modelFilter,activeTab,listSize,setListPage]);
+  const pageData=repairListPage(filteredTickets,listPage,listSize);
 
   // Calculate statistics
   const pendingCount = repairTickets.filter(t => t.processingStatus === 'Chưa xử lý').length;
@@ -550,6 +563,9 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
 
   return (
     <div className="workspace-screen devicerepairprocessing-screen" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      {loading&&<p role="status">Đang tải phiếu xử lý máy; dữ liệu đã có vẫn được giữ để xem.</p>}
+      {loadError&&<div className="resource-error" role="alert">{loadError}<button className="btn btn-secondary" disabled={loading} onClick={onReload}>Thử tải lại</button></div>}
+      {saveError&&!showModal&&<p role="alert" className="resource-error">{saveError}</p>}
       {saveNotice && <p role="status" className="repair-save-notice">{saveNotice}</p>}
 
       {savedDrafts.length > 0 && <section className="glass-panel repair-draft-list" aria-label="Phiếu nháp đã lưu"><h3>Phiếu nháp trên thiết bị ({savedDrafts.length})</h3><p>Chỉ tài khoản này có thể mở các bản nháp trên thiết bị này.</p>{savedDrafts.map(entry => <div className="workspace-task-row" key={entry.key}><div><strong>{entry.value.value.nppName || 'Chưa chọn NPP'} · {entry.value.value.serialNumber || entry.value.value.productCategory}</strong><p>Lưu lúc {new Date(entry.value.savedAt).toLocaleString('vi-VN')}</p></div><button className="btn btn-primary" onClick={() => {
@@ -699,7 +715,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
                   </td>
                 </tr>
               ) : (
-                filteredTickets.map(ticket => (
+                pageData.rows.map(ticket => (
                   <tr key={ticket.id}>
                     <td style={{ fontWeight: '700', color: 'var(--accent-cyan)', fontFamily: 'var(--font-mono)' }}>
                       {ticket.ticketCode}
@@ -713,7 +729,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
                     </td>
                     <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent-blue)' }}>{ticket.serialNumber}</td>
                     <td style={{ maxWidth: '220px', fontSize: '0.825rem' }}>
-                      <div style={{ color: 'var(--text-main)', fontWeight: '500' }}>{ticket.errorDescription}</div><div className="repair-inline-photos">{(ticket.photos||[]).slice(0,3).map((url,index)=><button type="button" key={index} onClick={()=>setSelectedTicket(ticket)} aria-label={`Xem ảnh lỗi ${index+1}`}><img loading="lazy" src={url} alt={ticket.errorCategory||'Ảnh lỗi thiết bị'}/></button>)}</div>{repairMissingFields(ticket).length > 0 && <p className="repair-missing-fields">⚠ Cần bổ sung: {repairMissingFields(ticket).join(' · ')}</p>}
+                      <div style={{ color: 'var(--text-main)', fontWeight: '500' }}>{ticket.errorDescription}</div><div className="repair-inline-photos">{repairStringList(ticket.photos).slice(0,3).map((url,index)=><button type="button" key={index} onClick={()=>setSelectedTicket(ticket)} aria-label={`Xem ảnh lỗi ${index+1}`}><img loading="lazy" src={url} alt={ticket.errorCategory||'Ảnh lỗi thiết bị'}/></button>)}</div>{repairMissingFields(ticket).length > 0 && <p className="repair-missing-fields">⚠ Cần bổ sung: {repairMissingFields(ticket).join(' · ')}</p>}
                       {ticket.errorCategory && (
                         <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>[{ticket.errorCategory}]</span>
                       )}
@@ -787,7 +803,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
               Không tìm thấy phiếu xử lý máy nào phù hợp với bộ lọc.
             </div>
           ) : (
-            filteredTickets.map(ticket => (
+            pageData.rows.map(ticket => (
               <div className="mobile-card" key={ticket.id}>
                 <div className="mobile-card-header">
                   <div>
@@ -818,7 +834,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
                   </div>
                   <div className="mobile-card-row">
                     <span className="mobile-card-label">Lỗi:</span>
-                    <span className="mobile-card-value">{ticket.errorDescription}<span className="repair-inline-photos">{(ticket.photos||[]).slice(0,3).map((url,index)=><button type="button" key={index} onClick={()=>setSelectedTicket(ticket)} aria-label={`Xem ảnh lỗi ${index+1}`}><img loading="lazy" src={url} alt={ticket.errorCategory||'Ảnh lỗi thiết bị'}/></button>)}</span></span>{repairMissingFields(ticket).length > 0 && <p className="repair-missing-fields">⚠ Cần bổ sung: {repairMissingFields(ticket).join(' · ')}</p>}
+                    <span className="mobile-card-value">{ticket.errorDescription}<span className="repair-inline-photos">{repairStringList(ticket.photos).slice(0,3).map((url,index)=><button type="button" key={index} onClick={()=>setSelectedTicket(ticket)} aria-label={`Xem ảnh lỗi ${index+1}`}><img loading="lazy" src={url} alt={ticket.errorCategory||'Ảnh lỗi thiết bị'}/></button>)}</span></span>{repairMissingFields(ticket).length > 0 && <p className="repair-missing-fields">⚠ Cần bổ sung: {repairMissingFields(ticket).join(' · ')}</p>}
                   </div>
                   <div className="mobile-card-row">
                     <span className="mobile-card-label">Kỹ thuật viên:</span>
@@ -877,6 +893,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
         </div>
       </div>
 
+      <nav className="repair-pagination" aria-label="Phân trang phiếu xử lý máy"><label>Số phiếu mỗi trang<select className="form-select" value={pageData.size} onChange={event=>setListSize(Number(event.target.value))}>{[10,20,50].map(size=><option key={size} value={size}>{size}</option>)}</select></label><span>{pageData.total?((pageData.page-1)*pageData.size+1):0}–{Math.min(pageData.page*pageData.size,pageData.total)} / {pageData.total} phiếu · Trang {pageData.page}/{pageData.pages}</span><button className="btn btn-secondary" disabled={pageData.page<=1} onClick={()=>setListPage(pageData.page-1)}>‹ Trước</button><button className="btn btn-secondary" disabled={pageData.page>=pageData.pages} onClick={()=>setListPage(pageData.page+1)}>Sau ›</button></nav>
       {/* CREATE / EDIT TICKET MODAL */}
       {showModal && (
         <SafePortal>
@@ -1125,7 +1142,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
 
                   <div className="form-group">
                     <label className="form-label">⚠️ 5. Diễn Giải Tình Trạng Lỗi *</label>
-                    <textarea className={`form-input ${!formData.errorDescription ? 'field-missing' : ''}`} rows={2} placeholder="Mô tả chi tiết sự cố kỹ thuật..." value={formData.errorDescription} onChange={e => setFormData({ ...formData, errorDescription: e.target.value })} /><label className="error-photo-upload">Ảnh minh họa lỗi (tối đa 6)<input aria-label="Thêm ảnh lỗi" type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={photoBusy} onChange={addErrorPhotos}/></label><div className="repair-error-photos">{(formData.photos||[]).map((url,index)=><figure key={index}><img src={url} alt={`Ảnh lỗi ${index+1}`}/><button type="button" className="btn btn-secondary btn-sm" aria-label={`Bỏ ảnh lỗi ${index+1}`} onClick={()=>setFormData(previous=>({...previous,photos:previous.photos.filter((_,position)=>position!==index)}))}>Bỏ ảnh</button></figure>)}</div>{photoBusy && <p role="status">Đang xử lý ảnh...</p>}
+                    <textarea className={`form-input ${!formData.errorDescription ? 'field-missing' : ''}`} rows={2} placeholder="Mô tả chi tiết sự cố kỹ thuật..." value={formData.errorDescription} onChange={e => setFormData({ ...formData, errorDescription: e.target.value })} /><label className="error-photo-upload">Ảnh minh họa lỗi (tối đa 6)<input aria-label="Thêm ảnh lỗi" type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={photoBusy} onChange={addErrorPhotos}/></label><div className="repair-error-photos">{repairStringList(formData.photos).map((url,index)=><figure key={index}><img src={url} alt={`Ảnh lỗi ${index+1}`}/><button type="button" className="btn btn-secondary btn-sm" aria-label={`Bỏ ảnh lỗi ${index+1}`} onClick={()=>setFormData(previous=>({...previous,photos:previous.photos.filter((_,position)=>position!==index)}))}>Bỏ ảnh</button></figure>)}</div>{photoBusy && <p role="status">Đang xử lý ảnh...</p>}
                   </div>
 
                   {['Máy chiết', 'Máy lắc'].includes(formData.productCategory) && (
@@ -1244,7 +1261,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
                         className="form-input"
                         rows={3}
                         placeholder="Ví dụ: Dây nguồn x1"
-                        value={(formData.materialsUsed || []).join('\n')}
+                        value={repairStringList(formData.materialsUsed).join('\n')}
                         onChange={e => setFormData({
                           ...formData,
                           materialsUsed: e.target.value.split('\n')
@@ -1313,7 +1330,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
                   <div><strong>Trạng thái công tác:</strong> {selectedTicket.fieldVisitStatus || 'scheduled'}</div>
 
                   <div><strong>Checklist:</strong> {Object.values(selectedTicket.serviceChecklist || {}).filter(Boolean).length}/{Object.keys(EMPTY_SERVICE_CHECKLIST).length} mục</div>
-                  <div><strong>Vật tư:</strong> {(selectedTicket.materialsUsed || []).join(', ') || 'Không sử dụng'}</div>
+                  <div><strong>Vật tư:</strong> {repairStringList(selectedTicket.materialsUsed).join(', ') || 'Không sử dụng'}</div>
                   <div><strong>NPP xác nhận:</strong> {selectedTicket.nppConfirmation?.confirmed ? `Đã xác nhận${selectedTicket.nppConfirmation.confirmedBy ? ` - ${selectedTicket.nppConfirmation.confirmedBy}` : ''}` : 'Chưa xác nhận'}</div>
                 </div>
 
@@ -1321,7 +1338,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
                   <div style={{ marginTop: '16px', borderTop: '1px solid var(--border-color)', paddingTop: '12px' }}>
                     <h4 style={{ fontSize: '0.85rem', fontWeight: '700', marginBottom: '8px' }}>📸 Ảnh Đính Kèm:</h4>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '8px' }}>
-                      {selectedTicket.photos.map((url, idx) => (
+                      {repairStringList(selectedTicket.photos).map((url, idx) => (
                         <a key={idx} href={url} target="_blank" rel="noreferrer" style={{ height: '90px', borderRadius: '6px', overflow: 'hidden', display: 'block', border: '1px solid var(--border-color)' }}>
                           <img src={url} alt="error photo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                         </a>
@@ -1333,7 +1350,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
                   <div style={{ marginTop: '16px', borderTop: '1px solid var(--border-color)', paddingTop: '12px' }}>
                     <h4 style={{ fontSize: '0.85rem', fontWeight: '700', marginBottom: '8px' }}>📸 Ảnh Sau Khi Hoàn Thành:</h4>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '8px' }}>
-                      {selectedTicket.afterPhotos.map((url, idx) => (
+                      {repairStringList(selectedTicket.afterPhotos).map((url, idx) => (
                         <a key={idx} href={url} target="_blank" rel="noreferrer" style={{ height: '90px', borderRadius: '6px', overflow: 'hidden', display: 'block', border: '1px solid var(--border-color)' }}>
                           <img src={url} alt="after service" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                         </a>
