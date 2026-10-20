@@ -25,6 +25,10 @@ export async function verifySecurityHardening(service, env) {
       check(await service.from('account_sessions').update({expires_at:new Date(Date.now()+3600000).toISOString(),idle_expires_at:new Date(Date.now()+3600000).toISOString(),revoked_at:null,...update}).eq('user_id',owner).eq('session_id',sid));
       const denied=await client.from('distributors').select('id').limit(1);
       assert.ok(denied.error || denied.data?.length===0,'Expired/idle/revoked JWT must not read business data');
+      for (const [name,args] of [['get_sync_change_feed',{p_after_cursor:0,p_limit:1}],['get_sync_server_health',{}]]) {
+        const rpcDenied=await client.rpc(name,args);
+        assert.ok(rpcDenied.error,'Rejected JWT must not bypass RLS through '+name);
+      }
       const registration=await client.rpc('register_trusted_device_session',{p_device_id:'SYN-REPLAY-'+sid,p_device_label:'Synthetic rejected replay',p_timezone:'UTC'});
       assert.ok(registration.error || registration.data?.valid===false,'Rejected session must not revive through registration');
     }

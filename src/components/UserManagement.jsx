@@ -79,8 +79,8 @@ export default function UserManagement({
       if (fetchErr) throw fetchErr;
       setProfiles((data || []).map(profile => ({ ...profile, email: profile.email || 'Chưa có email đăng ký' })));
     } catch (err) {
-      console.error('[UserManagement] Error loading profiles:', err.message);
-      setError('Lỗi tải danh sách tài khoản: ' + err.message);
+      console.error('[UserManagement] Error loading profiles:', userErrorMessage(err));
+      setError('Lỗi tải danh sách tài khoản: ' + userErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -99,8 +99,8 @@ export default function UserManagement({
       if (fetchErr) throw fetchErr;
       setSecurityEvents(data || []);
     } catch (err) {
-      console.error('[UserManagement] Error loading security events:', err.message);
-      setError('Lỗi tải nhật ký bảo mật: ' + err.message);
+      console.error('[UserManagement] Error loading security events:', userErrorMessage(err));
+      setError('Lỗi tải nhật ký bảo mật: ' + userErrorMessage(err));
     } finally {
       setSecurityLoading(false);
     }
@@ -165,7 +165,7 @@ export default function UserManagement({
       fetchProfiles();
     } catch (err) {
       console.error(err);
-      setError('Lỗi cập nhật vai trò: ' + err.message);
+      setError('Lỗi cập nhật vai trò: ' + userErrorMessage(err));
     } finally { setSavingAccess(false); }
   };
 
@@ -200,7 +200,7 @@ export default function UserManagement({
       fetchProfiles();
     } catch (err) {
       console.error(err);
-      setError('Lỗi cập nhật vùng quản lý: ' + err.message);
+      setError('Lỗi cập nhật vùng quản lý: ' + userErrorMessage(err));
     } finally { setSavingAccess(false); }
   };
 
@@ -244,7 +244,7 @@ export default function UserManagement({
       fetchProfiles();
     } catch (err) {
       console.error(err);
-      setError('Lỗi cập nhật trạng thái tài khoản: ' + err.message);
+      setError('Lỗi cập nhật trạng thái tài khoản: ' + userErrorMessage(err));
     } finally { setSavingAccess(false); }
   };
 

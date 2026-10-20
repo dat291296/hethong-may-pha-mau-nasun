@@ -1,3 +1,4 @@
+import { userErrorMessage } from '../security/userError.js';
 import { calculateRoadRoute } from '../lib/routeEstimate.js';
 import React, { useState, useMemo, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
@@ -73,7 +74,7 @@ export default function FieldRouteMap({
       const result = await getRobustUserLocation({ purpose: PERMISSION_PURPOSES.ROUTE_ORIGIN, allowIpFallback: false });
       if (!result.success || !result.coords) throw new Error(result.errorMessage || 'Không lấy được vị trí GPS. Kiểm tra quyền vị trí của trình duyệt.');
       setUserLocation(result.coords);
-    } catch(error) { setRouteError(error.message); }
+    } catch(error) { setRouteError(userErrorMessage(error)); }
     finally { setLocationBusy(false); }
   };
 
@@ -258,7 +259,7 @@ export default function FieldRouteMap({
     try {
       const result = await calculateRoadRoute(userLocation, tripNppObjects);
       if (generation === routeGeneration.current) setRouteResult(result);
-    } catch(error) { if (generation === routeGeneration.current) setRouteError(error.message); }
+    } catch(error) { if (generation === routeGeneration.current) setRouteError(userErrorMessage(error)); }
     finally { setRouteBusy(false); }
   };
   // Total route distance calculation

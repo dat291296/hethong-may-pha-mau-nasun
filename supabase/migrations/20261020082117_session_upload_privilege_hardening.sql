@@ -225,5 +225,28 @@ END $$;
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;
 REVOKE ALL ON ALL TABLES IN SCHEMA public FROM anon;
 
+-- SECURITY DEFINER RPCs bypass RLS: enforce the same session at their entry point.
+-- Preserve deployed bodies, ownership, signatures and search_path rather than restoring older definitions.
+DO $$ DECLARE item record; definition text; guarded text; BEGIN
+ FOR item IN SELECT p.oid FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+ JOIN pg_language l ON l.oid=p.prolang WHERE n.nspname='public' AND l.lanname='plpgsql'
+ AND p.proname IN ('get_sync_change_feed','get_sync_server_health','get_enterprise_preflight_snapshot',
+ 'register_sync_operation','complete_sync_operation','read_sync_entity_version','get_npp_region') LOOP
+   definition:=pg_get_functiondef(item.oid);
+   IF position('NOT public.has_active_app_session()' in definition)>0 THEN CONTINUE; END IF;
+   guarded:=regexp_replace(definition,E'(^|\\n)BEGIN\\r?\\n',E'\\1BEGIN\n  IF NOT public.has_active_app_session() THEN RAISE EXCEPTION ''SESSION_REJECTED'' USING ERRCODE=''42501''; END IF;\n');
+   IF guarded=definition THEN RAISE EXCEPTION 'SESSION_GUARD_FUNCTION_SHAPE_CHANGED'; END IF;
+   EXECUTE guarded;
+ END LOOP;
+END $$;
+ALTER FUNCTION public.read_sync_entity_version(text,text) SECURITY INVOKER;
+-- Trigger functions are invoked by PostgreSQL, never by browser RPC callers.
+DO $$ DECLARE item record; BEGIN
+ FOR item IN SELECT p.oid::regprocedure AS signature FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+ WHERE n.nspname='public' AND p.prorettype IN ('trigger'::regtype,'event_trigger'::regtype) LOOP
+   EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC,anon,authenticated',item.signature);
+ END LOOP;
+END $$;
+
 NOTIFY pgrst,'reload schema';
 COMMIT;

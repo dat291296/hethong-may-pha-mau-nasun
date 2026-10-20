@@ -262,7 +262,7 @@ export default function NppManagement({ globalSearch = '', coverageFilter = 'ALL
     setShowAddModal(false);
     } catch (error) {
       console.error('[NppManagement] Create failed:', error.code || error.name);
-      setSaveNotice(error.message || 'Chưa lưu được NPP. Nội dung được giữ nguyên.');
+      setSaveNotice(userErrorMessage(error) || 'Chưa lưu được NPP. Nội dung được giữ nguyên.');
     } finally {
       setIsSaving(false);
     }
@@ -297,7 +297,7 @@ export default function NppManagement({ globalSearch = '', coverageFilter = 'ALL
       setEditingNpp(null);
     } catch (err) {
       console.error('[NppManagement] Update failed:', err.code || 'WRITE_FAILED');
-      setSaveNotice(err.message || 'Không lưu được. Nội dung đang nhập được giữ lại.');
+      setSaveNotice(userErrorMessage(err) || 'Không lưu được. Nội dung đang nhập được giữ lại.');
     } finally {
       setIsSaving(false);
     }

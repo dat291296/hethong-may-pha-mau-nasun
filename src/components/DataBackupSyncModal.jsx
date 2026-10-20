@@ -198,7 +198,7 @@ export default function DataBackupSyncModal({
       }
     } catch (err) {
       setSyncStatus('error');
-      setSyncMsg(`Lỗi kết nối đồng bộ: ${err.message}`);
+      setSyncMsg(`Lỗi kết nối đồng bộ: ${userErrorMessage(err)}`);
     } finally {
       await refreshSyncHealth();
     }

@@ -1,3 +1,5 @@
+import { registerTrustedDeviceSession } from '../security/trustedDevice.js';
+import { userErrorMessage } from '../security/userError.js';
 import React, { useEffect, useRef, useState } from 'react';
 import { supabase, isDevelopmentFallback } from '../lib/supabase.js';
 import { authorizeSensitiveAction, reauthenticateSensitiveAction } from '../security/sensitiveAction.js';
@@ -32,10 +34,10 @@ export function useSensitiveActionGate() {
       if (isDevelopmentFallback) {
         if (password !== 'DEMO-NASUN') throw new Error('Dùng mã DEMO-NASUN để thử giao diện. Không nhập mật khẩu thật.');
       } else {
-        await reauthenticateSensitiveAction(supabase, password);
+        await reauthenticateSensitiveAction(supabase, password, registerTrustedDeviceSession);
       }
       pending.current?.resolve(); pending.current = null; setOpen(false);
-    } catch (failure) { setError(failure.message); }
+    } catch (failure) { setError(userErrorMessage(failure)); }
     finally { setPassword(''); setBusy(false); }
   };
   useEffect(() => {
