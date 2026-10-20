@@ -1,8 +1,18 @@
 -- Preserve existing rows. Enforce active sessions and least privilege.
 BEGIN;
+-- Origin checking complements JWT/RLS; it is not an authentication boundary.
+-- Requests without Origin remain supported for CI and future native clients.
+CREATE OR REPLACE FUNCTION public.is_allowed_request_origin()
+RETURNS boolean LANGUAGE sql STABLE SET search_path='' AS $$
+ SELECT coalesce(nullif(current_setting('request.headers',true),'')::jsonb->>'origin','')
+ IN ('','https://kythuat.nasun.workers.dev','https://kythuat-staging.nasun.workers.dev');
+$$;
+REVOKE ALL ON FUNCTION public.is_allowed_request_origin() FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION public.is_allowed_request_origin() TO authenticated;
+
 CREATE OR REPLACE FUNCTION public.has_valid_auth_session()
 RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path='' AS $$
- SELECT auth.uid() IS NOT NULL
+ SELECT auth.uid() IS NOT NULL AND public.is_allowed_request_origin()
  AND coalesce(auth.jwt()->>'is_anonymous','false') = 'false'
  AND CASE WHEN coalesce(auth.jwt()->>'exp','') ~ '^[0-9]{1,12}$'
    THEN (auth.jwt()->>'exp')::bigint > extract(epoch FROM now()) ELSE false END

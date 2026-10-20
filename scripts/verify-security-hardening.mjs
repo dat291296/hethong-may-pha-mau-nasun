@@ -15,6 +15,13 @@ export async function verifySecurityHardening(service, env) {
     await registerTestSession(client);
     const allowed=check(await client.from('distributors').select('id').eq('region','Miền Bắc').limit(1));
     assert.ok(allowed.length,'Registered technician must read fixture');
+    for (const origin of ['https://untrusted.invalid','null']) {
+      const foreign=createClient(env.RLS_TEST_URL,env.RLS_TEST_ANON_KEY,{auth:{persistSession:false,autoRefreshToken:false},global:{headers:{Origin:origin,Authorization:'Bearer '+login.data.session.access_token}}});
+      const denied=await foreign.from('distributors').select('id').limit(1);
+      assert.ok(denied.error || denied.data?.length===0,'Foreign browser origin must not read business data with a valid JWT');
+    }
+    const approved=createClient(env.RLS_TEST_URL,env.RLS_TEST_ANON_KEY,{auth:{persistSession:false,autoRefreshToken:false},global:{headers:{Origin:'https://kythuat-staging.nasun.workers.dev',Authorization:'Bearer '+login.data.session.access_token}}});
+    assert.ok(check(await approved.from('distributors').select('id').limit(1)).length,'Approved staging origin must remain usable');
     const otherProfile=await client.from('profiles').select('id').neq('id',owner).limit(1);
     assert.ok(otherProfile.error || otherProfile.data.length===0,'IDOR: other profiles must be hidden');
     const escalation=await client.rpc('update_user_access',{target_user_id:owner,target_role:'admin',target_region:'Toàn Quốc'});
