@@ -1,3 +1,4 @@
+import { userErrorMessage } from '../security/userError.js';
 import {repairListPage,repairStringList,hasMalformedRepairLists,uniqueAssignedMachine} from '../lib/repairList.js';
 import {validateDocumentFile} from '../lib/technicalResources.js';
 import {compressImage} from '../utils/imageCompressor.js';
@@ -120,7 +121,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
       if(files.length+repairStringList(formData.photos).length>6)throw new Error('Tối đa 6 ảnh lỗi cho mỗi phiếu.');
       const images=[];for(const file of files){if(!file.type.startsWith('image/'))throw new Error('Chỉ nhận ảnh JPG, PNG hoặc WebP.');await validateDocumentFile(file);images.push(await compressImage(file));}
       setFormData(previous=>({...previous,photos:[...(previous.photos||[]),...images]}));
-    }catch(error){setSaveError(error.message);}finally{setPhotoBusy(false);}
+    }catch(error){setSaveError(userErrorMessage(error));}finally{setPhotoBusy(false);}
   }
   const [saveError, setSaveError] = useState('');
   const [saveNotice, setSaveNotice] = useState('');
@@ -470,7 +471,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
       sanitized.fieldVisitStatus = 'customer_confirmed';
     }
 
-    try {validateRepairReturn(sanitized);} catch(error){setSaveError(error.message);return;}
+    try {validateRepairReturn(sanitized);} catch(error){setSaveError(userErrorMessage(error));return;}
     const isCompleted = ['completed', 'customer_confirmed'].includes(sanitized.fieldVisitStatus);
     if (sanitized.fieldVisitStatus === 'customer_confirmed' && !sanitized.nppConfirmation?.confirmed) {
       alert('Vui lòng tích xác nhận hoàn thành của đại diện NPP.');
@@ -516,7 +517,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
     setSaveNotice(missing.length ? `Đã lưu phiếu. Cần bổ sung: ${missing.join(' · ')}` : 'Đã lưu phiếu thành công.');
     setShowModal(false);
     onReturnToProfile?.();
-    } catch (error) { console.error('[Repair] Save failed', error.code || error.name); setSaveError(error.message || 'Chưa lưu được phiếu. Bản nháp vẫn được giữ.'); }
+    } catch (error) { console.error('[Repair] Save failed', error.code || error.name); setSaveError(userErrorMessage(error) || 'Chưa lưu được phiếu. Bản nháp vẫn được giữ.'); }
     finally { setSaving(false); }
   };
 

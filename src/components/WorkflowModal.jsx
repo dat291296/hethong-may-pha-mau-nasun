@@ -1,3 +1,4 @@
+import { userErrorMessage } from '../security/userError.js';
 import React, { useState, useRef, useMemo } from 'react';
 import { useFormDraft } from '../hooks/useFormDraft.js';
 import DraftNotice from './DraftNotice.jsx';
@@ -67,7 +68,7 @@ export default function WorkflowModal({
     setStabilizerBrand(saved.stabilizerBrand || '');setHasStabilizer(Boolean(saved.hasStabilizer));setPhotos(saved.photos || []);
     setDeviceCondition(saved.deviceCondition || '');setReturnToStock(saved.returnToStock !== false);return true;
   });
-  const closeSafely = async()=>{if(submitting.current)return;try {await draft.flush();onClose();}catch(error){setSaveError(error.message);}};
+  const closeSafely = async()=>{if(submitting.current)return;try {await draft.flush();onClose();}catch(error){setSaveError(userErrorMessage(error));}};
 
   const handlePhotoUpload = async (e) => {
     const files = Array.from(e.target.files);
@@ -80,7 +81,7 @@ export default function WorkflowModal({
         setPhotos(prev => [...prev, compressedBase64]);
       } catch (err) {
         console.error('Error compressing image:', err);
-        alert(`Không thể thêm ảnh ${file.name}: ${err.message}`);
+        alert(`Không thể thêm ảnh ${file.name}: ${userErrorMessage(err)}`);
       }
     }
   };
@@ -154,7 +155,7 @@ export default function WorkflowModal({
     }
     await draft.clear();
     onClose();
-    } catch(error) {setSaveError(error.message || 'Không lưu được nghiệp vụ. Bản nháp được giữ nguyên.');}
+    } catch(error) {setSaveError(userErrorMessage(error) || 'Không lưu được nghiệp vụ. Bản nháp được giữ nguyên.');}
     finally {submitting.current=false;setBusy(false);}
   };
 

@@ -1,3 +1,4 @@
+import { userErrorMessage } from '../security/userError.js';
 import WorkspaceFilterBar from './WorkspaceFilterBar.jsx';
 import { matchesSearch, matchesDateRange, uniqueOptions, REGIONS, canEditRegion } from '../lib/workspaceFilters.js';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -78,7 +79,7 @@ export default function MaintenanceSchedule({ onReturnToProfile, globalSearch = 
     try {
       await onUpdateSystemSet(editingMaint.setCode, editMaintFormData);
       setEditingMaint(null);
-    } catch (error) { console.error('[Maintenance] Edit rejected', error); alert(error.message); }
+    } catch (error) { console.error('[Maintenance] Edit rejected', error); alert(userErrorMessage(error)); }
   };
 
   const handleDeleteMaint = async (setCode) => {
@@ -86,7 +87,7 @@ export default function MaintenanceSchedule({ onReturnToProfile, globalSearch = 
       try { await onUpdateSystemSet(setCode, {
         lastMaintenanceDate: null,
         nextMaintenanceDue: null
-      }); } catch (error) { console.error('[Maintenance] Clear rejected', error); alert(error.message); }
+      }); } catch (error) { console.error('[Maintenance] Clear rejected', error); alert(userErrorMessage(error)); }
     }
   };
 

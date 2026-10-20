@@ -1,3 +1,4 @@
+import { registerTestSession } from './register-test-session.mjs';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
@@ -25,7 +26,7 @@ export async function verifyEquipmentWorkflows(service, env) {
       const created=await service.from('system_sets').insert({set_code:code,npp_name:'Synthetic warehouse',region:'Miền Bắc',status:'TRONG_KHO'});
       assert.ifError(created.error);setCodes.push(code);
       const invoke=(workflow,payload,operationId=randomUUID())=>client.rpc('execute_equipment_workflow',{p_operation_id:operationId,p_workflow:workflow,p_payload:payload});
-      const payload={setCode:code,nppId:distributorIds[0],installedDate:new Date().toISOString().slice(0,10),photos:['data:image/png;base64,U1lOVEhFVElD']};
+      const payload={setCode:code,nppId:distributorIds[0],installedDate:new Date().toISOString().slice(0,10),photos:['data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jr1cAAAAASUVORK5CYII=']};
       const operationId=randomUUID();
       const install=await invoke('INSTALL',payload,operationId);
       if(role==='viewer') {assert.ok(install.error,'Viewer must not install');continue;}
@@ -56,6 +57,7 @@ export async function verifyEquipmentWorkflows(service, env) {
         assert.ok(cleanupAdmin,'Synthetic administrator client required for cleanup');
         const login=await cleanupAdmin.auth.signInWithPassword({email:env.RLS_TEST_ADMIN_EMAIL,password:env.RLS_TEST_ADMIN_PASSWORD});
         assert.ifError(login.error);
+        await registerTestSession(cleanupAdmin);
         assert.ifError((await cleanupAdmin.from('system_sets').delete().in('set_code',setCodes)).error);
       }
     } catch(error) {cleanupError=error;}

@@ -1,3 +1,4 @@
+import { userErrorMessage } from '../security/userError.js';
 import {missingNppFields} from '../lib/dataCompleteness.js';
 import { isSupabaseConfigured } from '../lib/supabase.js';
 import { nextNppCode, validateNppCode } from '../lib/nppCodes.js';
@@ -161,7 +162,7 @@ export default function NppManagement({ globalSearch = '', coverageFilter = 'ALL
         }));
       } catch (err) {
         console.error('Error compressing image:', err);
-        alert(`Không thể thêm ảnh ${file.name}: ${err.message}`);
+        alert(`Không thể thêm ảnh ${file.name}: ${userErrorMessage(err)}`);
       }
     }
   };

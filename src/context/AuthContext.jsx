@@ -184,6 +184,13 @@ export function AuthProvider({ children }) {
       sessionOwner.current = authUser.id;
       await initializeOfflineStorage(authUser.id);
 
+      if (navigator.onLine) {
+        const registration = await registerTrustedDeviceSession();
+        if (!registration.supported || registration.state?.valid !== true) {
+          throw Object.assign(new Error('SESSION_REJECTED'), { code: 'SESSION_REJECTED' });
+        }
+        trustedSessionRegistered.current = true;
+      }
       const { data: profile, error } = await supabase
         .from('profiles')
         .select('id, full_name, role, avatar_url, managed_region, is_active')
@@ -239,7 +246,8 @@ export function AuthProvider({ children }) {
     } catch (err) {
       if (sessionOwner.current !== authUser.id) return;
       console.error('[Auth] Failed to load user profile:', err.message);
-      if (err?.code === 'ACCOUNT_DISABLED' || err?.message === 'ACCOUNT_DISABLED') {
+      if (['ACCOUNT_DISABLED','SESSION_REJECTED','42501','PGRST301','PGRST303'].includes(err?.code) || err?.message === 'ACCOUNT_DISABLED') {
+        await supabase.auth.signOut({ scope: 'local' });
         setUser(null);
         setRole(ROLES.VIEWER);
         await clearOfflineStorage(authUser.id);

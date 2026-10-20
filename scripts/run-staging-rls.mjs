@@ -78,6 +78,11 @@ async function main() {
     child.on('exit', code => code === 0 ? resolve() : reject(new Error('Staging RLS verification failed')));
   });
   const { verifySessionRevocation } = await import('./verify-session-revocation.mjs');
+  if (env.VERIFY_SECURITY_HARDENING === 'true') {
+    await import('./run-security-hardening-rollback.mjs');
+    const { verifySecurityHardening } = await import('./verify-security-hardening.mjs');
+    await verifySecurityHardening(client, env);
+  }
   await verifySessionRevocation(client, env);
   const { verifyEquipmentWorkflows } = await import('./verify-equipment-workflows.mjs');
   await verifyEquipmentWorkflows(client, env);

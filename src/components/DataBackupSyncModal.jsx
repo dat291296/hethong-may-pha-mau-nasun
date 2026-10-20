@@ -1,3 +1,4 @@
+import { userErrorMessage } from '../security/userError.js';
 import React, { useState } from 'react';
 import { 
   Database, 
@@ -111,7 +112,7 @@ export default function DataBackupSyncModal({
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (error) {
-      alert(`Không thể tạo tệp sao lưu: ${error.message}`);
+      alert(`Không thể tạo tệp sao lưu: ${userErrorMessage(error)}`);
     }
   };
 
@@ -125,7 +126,7 @@ export default function DataBackupSyncModal({
       setCopied(true);
       setTimeout(() => setCopied(false), 2500);
     } catch (error) {
-      alert(`Không thể sao chép dữ liệu: ${error.message}`);
+      alert(`Không thể sao chép dữ liệu: ${userErrorMessage(error)}`);
     }
   };
 
@@ -172,7 +173,7 @@ export default function DataBackupSyncModal({
       setImportJsonText('');
       onClose();
     } catch (err) {
-      alert(`Không thể nhập tệp sao lưu: ${err.message}`);
+      alert(`Không thể nhập tệp sao lưu: ${userErrorMessage(err)}`);
     }
   };
 

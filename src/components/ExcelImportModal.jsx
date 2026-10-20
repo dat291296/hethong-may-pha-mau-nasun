@@ -1,3 +1,4 @@
+import { userErrorMessage } from '../security/userError.js';
 import React, { useState, useCallback, useRef } from 'react';
 import {
   Upload,
@@ -287,7 +288,7 @@ export default function ExcelImportModal({
         setSelectedRows(new Set(valid.map((_, i) => i)));
     } catch (err) {
       console.error('[ExcelImport] File rejected:', err.message);
-      alert(`Lỗi đọc file: ${err.message}\nChỉ sử dụng file .xlsx hoặc .csv hợp lệ, tối đa 5 MB.`);
+      alert(`Lỗi đọc file: ${userErrorMessage(err)}\nChỉ sử dụng file .xlsx hoặc .csv hợp lệ, tối đa 5 MB.`);
     }
   }, [config, importType, existingNpps, existingDispensers, existingMixers, existingComputers, existingPrinters]);
 

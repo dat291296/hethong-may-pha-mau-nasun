@@ -1,3 +1,4 @@
+import { validateInlineImage } from '../security/imageEvidence.js';
 import { IMAGE_FILE_POLICY, validateSelectedFile } from '../security/permissionPolicy.js';
 
 /**
@@ -17,6 +18,10 @@ export function compressImage(file, maxWidth = 1280, maxHeight = 720, quality = 
     reader.onload = (event) => {
       const img = new Image();
       img.onload = () => {
+        if (!img.width || !img.height || img.width * img.height > 40_000_000) {
+          reject(new Error('Kích thước ảnh không hợp lệ hoặc quá lớn.'));
+          return;
+        }
         // Calculate target dimensions keeping aspect ratio
         let width = img.width;
         let height = img.height;
@@ -48,7 +53,7 @@ export function compressImage(file, maxWidth = 1280, maxHeight = 720, quality = 
 
         // Convert canvas back to compressed base64 JPEG
         const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
-        resolve(compressedBase64);
+        try { resolve(validateInlineImage(compressedBase64)); } catch (error) { reject(error); }
       };
       
       img.onerror = (err) => reject(err);

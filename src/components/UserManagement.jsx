@@ -1,3 +1,4 @@
+import { userErrorMessage } from '../security/userError.js';
 import React, { useState, useEffect } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase.js';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -42,7 +43,7 @@ export default function UserManagement({
       setLockReason('');
       setNewLockMonth('');
     } catch (err) {
-      alert('Lỗi khóa sổ tháng: ' + err.message);
+      alert('Lỗi khóa sổ tháng: ' + userErrorMessage(err));
     }
   };
 
@@ -55,7 +56,7 @@ export default function UserManagement({
       await unlockMonth(monthKey);
       setLockSuccess(`Đã mở khóa sổ tháng ${monthKey} thành công!`);
     } catch (err) {
-      alert('Lỗi mở khóa sổ tháng: ' + err.message);
+      alert('Lỗi mở khóa sổ tháng: ' + userErrorMessage(err));
     }
   };
 

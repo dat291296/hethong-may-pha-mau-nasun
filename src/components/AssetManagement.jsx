@@ -1,3 +1,4 @@
+import { userErrorMessage } from '../security/userError.js';
 import {EQUIPMENT_SLOTS,resolveEquipmentSlot} from '../lib/equipmentReplacement.js';
 import EquipmentReplacementDialog from './EquipmentReplacementDialog.jsx';
 import {missingSystemSetFields} from '../lib/dataCompleteness.js';
@@ -292,6 +293,7 @@ export default function AssetManagement({ onReplaceEquipment,replacementEvents=[
   // Photo handlers for editing a set
   const handleUploadEditSetPhotos = async (e) => {
     const files = Array.from(e.target.files || []);
+    if (files.length + (editSetFormData.installationPhotos || []).length > 6) { alert('Tối đa 6 ảnh cho mỗi bộ máy.'); return; }
     for (const file of files) {
       try {
         const compressed = await compressImage(file);
@@ -301,7 +303,7 @@ export default function AssetManagement({ onReplaceEquipment,replacementEvents=[
         }));
       } catch (err) {
         console.error('Lỗi nén ảnh:', err);
-        alert(`Không thể thêm ảnh ${file.name}: ${err.message}`);
+        alert(`Không thể thêm ảnh ${file.name}: ${userErrorMessage(err)}`);
       }
     }
   };
@@ -316,6 +318,7 @@ export default function AssetManagement({ onReplaceEquipment,replacementEvents=[
   // Photo handlers for assembling a new combo set
   const handleUploadNewSetPhotos = async (e) => {
     const files = Array.from(e.target.files || []);
+    if (files.length + (newSetData.installationPhotos || []).length > 6) { alert('Tối đa 6 ảnh cho mỗi bộ máy.'); return; }
     for (const file of files) {
       try {
         const compressed = await compressImage(file);
@@ -325,7 +328,7 @@ export default function AssetManagement({ onReplaceEquipment,replacementEvents=[
         }));
       } catch (err) {
         console.error('Lỗi nén ảnh:', err);
-        alert(`Không thể thêm ảnh ${file.name}: ${err.message}`);
+        alert(`Không thể thêm ảnh ${file.name}: ${userErrorMessage(err)}`);
       }
     }
   };
@@ -381,11 +384,11 @@ export default function AssetManagement({ onReplaceEquipment,replacementEvents=[
 
   const stockSavingRef=React.useRef(false);
   const stockDraft=useFormDraft(`${user?.id}:stock:${addDeviceCategory}`,addFormData,showAddDeviceModal,saved=>{setAddFormData(saved);return true;});
-  const closeStockEditor=async()=>{if(stockSavingRef.current)return;try {await stockDraft.flush();setShowAddDeviceModal(false);}catch(error){alert(error.message);}};
+  const closeStockEditor=async()=>{if(stockSavingRef.current)return;try {await stockDraft.flush();setShowAddDeviceModal(false);}catch(error){alert(userErrorMessage(error));}};
   const assemblingRef=React.useRef(false);
   const [assembling,setAssembling]=useState(false);
   const assemblyDraft=useFormDraft(`${user?.id}:assembly`,newSetData,showAssembleModal,saved=>{setNewSetData(saved);return true;});
-  const closeAssembly=async()=>{if(assemblingRef.current)return;try {await assemblyDraft.flush();setShowAssembleModal(false);}catch(error){alert(error.message);}};
+  const closeAssembly=async()=>{if(assemblingRef.current)return;try {await assemblyDraft.flush();setShowAssembleModal(false);}catch(error){alert(userErrorMessage(error));}};
 
   const handleOpenAssembleModal = () => {
     const defaultTech = (user && ['admin', 'manager', 'technician', 'qc'].includes(user.role)) ? (user.name || user.full_name) : (qcUsers[0]?.name || '');
@@ -415,7 +418,7 @@ export default function AssetManagement({ onReplaceEquipment,replacementEvents=[
     e.preventDefault();
     if(assemblingRef.current || assemblyDraft.existing)return;
     setAssemblyError('');
-    try {assertAdditionalSetConfirmed(systemSets,newSetData.nppId,newSetData.confirmAdditionalSet);} catch(error){setAssemblyError(error.message);return;}
+    try {assertAdditionalSetConfirmed(systemSets,newSetData.nppId,newSetData.confirmAdditionalSet);} catch(error){setAssemblyError(userErrorMessage(error));return;}
     if (!newSetData.dispenserId || !newSetData.mixerId || !newSetData.computerId || !newSetData.printerId) {
       alert('Vui lòng chọn đủ 4 thiết bị: 1 Máy Chiết + 1 Máy Lắc + 1 Máy Tính + 1 Máy In QL700!');
       return;
@@ -439,7 +442,7 @@ export default function AssetManagement({ onReplaceEquipment,replacementEvents=[
       nppId: '', nppName: '', region: '', province: '', salesperson: '',
       technician: '', installationPhotos: []
     });
-    } catch(error){alert(error.message || 'Không ráp được bộ máy. Bản nháp được giữ nguyên.');}
+    } catch(error){alert(userErrorMessage(error) || 'Không ráp được bộ máy. Bản nháp được giữ nguyên.');}
     finally {assemblingRef.current=false;setAssembling(false);setAssemblySaving(false);}
   };
 
@@ -479,7 +482,7 @@ export default function AssetManagement({ onReplaceEquipment,replacementEvents=[
     });
   const closeDeviceEditor = async () => {
     try { await deviceDraft.flush(); setEditingDevice(null); }
-    catch (error) { alert(error.message); }
+    catch (error) { alert(userErrorMessage(error)); }
   };
 
   const modelOptions = category => [...new Set([...(category === 'dispenser' ? ['Satint', 'First-1', 'Satint A2', 'Hero', 'Corob', 'Fast & Fluid'] : category === 'mixer' ? ['Satint', 'First-1', 'Satint ST-50', 'KMC', 'Evoshake-200', 'YSA-2A'] : ['QL700']), ...({ dispenser: dispensers, mixer: mixers, printer: printers }[category] || []).map(device => device.model)].filter(Boolean))].sort((a, b) => a.localeCompare(b));
@@ -537,7 +540,7 @@ export default function AssetManagement({ onReplaceEquipment,replacementEvents=[
     } catch (err) {
       recordOperationalError('device',err);
       console.error('[Device] Save failed without payload');
-      alert('⚠️ ' + (err.message || 'Không lưu được thiết bị. Giữ nội dung đang nhập và thử lại.'));
+      alert('⚠️ ' + (userErrorMessage(err) || 'Không lưu được thiết bị. Giữ nội dung đang nhập và thử lại.'));
     } finally {
       setIsSavingDevice(false);
     }
@@ -591,7 +594,7 @@ export default function AssetManagement({ onReplaceEquipment,replacementEvents=[
       await stockDraft.clear();
       alert(result?.queued ? 'Đã lưu trên thiết bị, chờ đồng bộ.' : 'Đã thêm thiết bị vào kho thành công.');
       setShowAddDeviceModal(false);
-    } catch(error){alert(error.message || 'Không thêm được thiết bị. Bản nháp được giữ nguyên.');}
+    } catch(error){alert(userErrorMessage(error) || 'Không thêm được thiết bị. Bản nháp được giữ nguyên.');}
     finally {stockSavingRef.current=false;setIsSavingDevice(false);}
   };
 
@@ -627,7 +630,7 @@ export default function AssetManagement({ onReplaceEquipment,replacementEvents=[
     if(saved.expectedRevision!==editingSet?.updatedAt){alert('Hồ sơ đã thay đổi. Giữ nháp cũ để đối chiếu trước khi lưu.');return false;}
     setEditSetFormData(saved);return true;
   });
-  const closeSetEditor=async()=>{if(setSavingRef.current)return;try {await setDraft.flush();setEditingSet(null);}catch(error){alert(error.message);}};
+  const closeSetEditor=async()=>{if(setSavingRef.current)return;try {await setDraft.flush();setEditingSet(null);}catch(error){alert(userErrorMessage(error));}};
   const handleEditSetSubmit = async (e) => {
     e.preventDefault();
     if (!editingSet || setSavingRef.current || setDraft.existing) return;
@@ -639,7 +642,7 @@ export default function AssetManagement({ onReplaceEquipment,replacementEvents=[
       setEditingSet(null);
     } catch (err) {
       console.error('Lỗi khi lưu bộ máy:', err);
-      alert(err.message || 'Không thể lưu bộ máy. Giữ bản nháp để đối chiếu.');
+      alert(userErrorMessage(err) || 'Không thể lưu bộ máy. Giữ bản nháp để đối chiếu.');
     } finally {setSavingRef.current=false;setSetSaving(false);}
   };
 
@@ -2463,7 +2466,7 @@ export default function AssetManagement({ onReplaceEquipment,replacementEvents=[
                             <button 
                               type="button" 
                               style={{ background: 'none', border: 'none', color: 'var(--accent-cyan)', fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline' }}
-                              onClick={async () => { try { await assemblyDraft.flush(); setShowAssembleModal(false); handleOpenAddDevice('dispenser'); } catch(error) { alert(error.message); } }}
+                              onClick={async () => { try { await assemblyDraft.flush(); setShowAssembleModal(false); handleOpenAddDevice('dispenser'); } catch(error) { alert(userErrorMessage(error)); } }}
                             >
                               + Thêm máy chiết mới vào kho
                             </button>
@@ -2484,7 +2487,7 @@ export default function AssetManagement({ onReplaceEquipment,replacementEvents=[
                             <button 
                               type="button" 
                               style={{ background: 'none', border: 'none', color: 'var(--accent-cyan)', fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline' }}
-                              onClick={async () => { try { await assemblyDraft.flush(); setShowAssembleModal(false); handleOpenAddDevice('mixer'); } catch(error) { alert(error.message); } }}
+                              onClick={async () => { try { await assemblyDraft.flush(); setShowAssembleModal(false); handleOpenAddDevice('mixer'); } catch(error) { alert(userErrorMessage(error)); } }}
                             >
                               + Thêm máy lắc mới vào kho
                             </button>
@@ -2505,7 +2508,7 @@ export default function AssetManagement({ onReplaceEquipment,replacementEvents=[
                             <button 
                               type="button" 
                               style={{ background: 'none', border: 'none', color: 'var(--accent-cyan)', fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline' }}
-                              onClick={async () => { try { await assemblyDraft.flush(); setShowAssembleModal(false); handleOpenAddDevice('computer'); } catch(error) { alert(error.message); } }}
+                              onClick={async () => { try { await assemblyDraft.flush(); setShowAssembleModal(false); handleOpenAddDevice('computer'); } catch(error) { alert(userErrorMessage(error)); } }}
                             >
                               + Thêm máy tính mới vào kho
                             </button>
@@ -2526,7 +2529,7 @@ export default function AssetManagement({ onReplaceEquipment,replacementEvents=[
                             <button 
                               type="button" 
                               style={{ background: 'none', border: 'none', color: 'var(--accent-cyan)', fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline' }}
-                              onClick={async () => { try { await assemblyDraft.flush(); setShowAssembleModal(false); handleOpenAddDevice('printer'); } catch(error) { alert(error.message); } }}
+                              onClick={async () => { try { await assemblyDraft.flush(); setShowAssembleModal(false); handleOpenAddDevice('printer'); } catch(error) { alert(userErrorMessage(error)); } }}
                             >
                               + Thêm máy in mới vào kho
                             </button>
