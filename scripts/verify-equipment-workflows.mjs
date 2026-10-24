@@ -34,7 +34,8 @@ export async function verifyEquipmentWorkflows(service, env) {
       const replay=await invoke('INSTALL',payload,operationId);
       assert.ifError(replay.error);assert.deepEqual(replay.data,install.data);
       assert.ok((await invoke('INSTALL',{...payload,notes:'mismatch'},operationId)).error,'Operation identity must bind content');
-      const maintenanceArgs={p_operation_id:randomUUID(),p_set_code:code,p_date:payload.installedDate,p_next_date:new Date(Date.now()+365*86400000).toISOString().slice(0,10),p_notes:'Synthetic checklist acceptance',p_photos:Array(6).fill(payload.photos[0]),p_has_issues:false};
+      // Signature-only synthetic JPEG fixture matches the browser compressor output MIME.
+      const maintenanceArgs={p_operation_id:randomUUID(),p_set_code:code,p_date:payload.installedDate,p_next_date:new Date(Date.now()+365*86400000).toISOString().slice(0,10),p_notes:'Synthetic checklist acceptance',p_photos:Array(6).fill('data:image/jpeg;base64,/9j/2Q=='),p_has_issues:false};
       const maintenance=await client.rpc('complete_machine_maintenance',maintenanceArgs);
       assert.ifError(maintenance.error);
       assert.ifError((await client.rpc('complete_machine_maintenance',maintenanceArgs)).error);
