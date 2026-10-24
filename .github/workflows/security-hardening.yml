@@ -34,6 +34,8 @@ jobs:
       - run: node scripts/apply-production-safety.mjs --staging --security
       - name: Verify real JWT access and workflow replay on isolated staging
         run: node scripts/run-staging-rls.mjs
+      - name: Verify hosted Auth throttling on isolated staging
+        run: node scripts/verify-login-rate-limit.mjs
 
   apply:
     if: github.ref == 'refs/heads/main'
