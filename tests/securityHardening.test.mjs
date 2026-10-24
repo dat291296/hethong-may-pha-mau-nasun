@@ -59,3 +59,10 @@ test('machine albums validate new batches while retaining cumulative historical 
  const sql=await readFile(new URL('../supabase/migrations/20261020082117_session_upload_privilege_hardening.sql',import.meta.url),'utf8');
  assert.match(sql,/field='installation_photos'/);assert.match(sql,/EXCEPT ALL/);assert.match(sql,/validate_inline_image_list\(added_images\)/);
 });
+
+import { retainEncryptedDraft } from '../src/lib/offlineRetention.js';
+test('session cleanup retains encrypted own drafts but not master cache or foreign/unprotected rows',()=>{
+ const draft={ownerId:'synthetic-A',encrypted:true,logicalKey:'form-draft:synthetic-A:repair'};
+ assert.equal(retainEncryptedDraft(draft,'synthetic-A'),true);
+ for(const row of [{...draft,ownerId:'synthetic-B'},{...draft,encrypted:false},{...draft,logicalKey:'repair_tickets'},null]) assert.equal(retainEncryptedDraft(row,'synthetic-A'),false);
+});
