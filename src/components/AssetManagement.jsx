@@ -293,7 +293,7 @@ export default function AssetManagement({ onReplaceEquipment,replacementEvents=[
   // Photo handlers for editing a set
   const handleUploadEditSetPhotos = async (e) => {
     const files = Array.from(e.target.files || []);
-    if (files.length + (editSetFormData.installationPhotos || []).length > 6) { alert('Tối đa 6 ảnh cho mỗi bộ máy.'); return; }
+    if (files.length > 6) { alert('Tối đa 6 ảnh cho mỗi bộ máy.'); return; }
     for (const file of files) {
       try {
         const compressed = await compressImage(file);

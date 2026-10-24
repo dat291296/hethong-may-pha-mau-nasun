@@ -34,10 +34,12 @@ export async function verifyEquipmentWorkflows(service, env) {
       const replay=await invoke('INSTALL',payload,operationId);
       assert.ifError(replay.error);assert.deepEqual(replay.data,install.data);
       assert.ok((await invoke('INSTALL',{...payload,notes:'mismatch'},operationId)).error,'Operation identity must bind content');
-      const maintenanceArgs={p_operation_id:randomUUID(),p_set_code:code,p_date:payload.installedDate,p_next_date:new Date(Date.now()+365*86400000).toISOString().slice(0,10),p_notes:'Synthetic checklist acceptance',p_photos:[],p_has_issues:false};
+      const maintenanceArgs={p_operation_id:randomUUID(),p_set_code:code,p_date:payload.installedDate,p_next_date:new Date(Date.now()+365*86400000).toISOString().slice(0,10),p_notes:'Synthetic checklist acceptance',p_photos:Array(6).fill(payload.photos[0]),p_has_issues:false};
       const maintenance=await client.rpc('complete_machine_maintenance',maintenanceArgs);
       assert.ifError(maintenance.error);
       assert.ifError((await client.rpc('complete_machine_maintenance',maintenanceArgs)).error);
+      const album=await service.from('system_sets').select('installation_photos').eq('set_code',code).single();
+      assert.ifError(album.error);assert.equal(album.data.installation_photos.length,7,'Maintenance must preserve the existing album and append six photos exactly once');
 
       if(role!=='admin') assert.ok((await invoke('TRANSFER',{setCode:code,newNppId:distributorIds[2]})).error,'Cross-region transfer must fail');
       assert.ifError((await invoke('TRANSFER',{setCode:code,newNppId:distributorIds[1]})).error);

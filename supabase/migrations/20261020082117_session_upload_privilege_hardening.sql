@@ -86,14 +86,24 @@ BEGIN
 END $$;
 CREATE OR REPLACE FUNCTION public.guard_inline_image_fields()
 RETURNS trigger LANGUAGE plpgsql SET search_path='' AS $$
-DECLARE field text; current_value jsonb; previous_value jsonb;
+DECLARE field text; current_value jsonb; previous_value jsonb; added_images jsonb;
 BEGIN
  FOREACH field IN ARRAY TG_ARGV LOOP
    current_value:=to_jsonb(NEW)->field;
    IF TG_OP='UPDATE' THEN previous_value:=to_jsonb(OLD)->field;
      IF current_value IS NOT DISTINCT FROM previous_value THEN CONTINUE; END IF;
    END IF;
-   IF NOT public.validate_inline_image_list(current_value) THEN
+   IF field='installation_photos' AND jsonb_typeof(current_value)='array' THEN
+     -- Album history is cumulative; validate the multiset of newly added images only.
+     -- EXCEPT ALL counts duplicates so copying an old image cannot bypass the batch limit.
+     SELECT coalesce(jsonb_agg(value),'[]'::jsonb) INTO added_images FROM (
+       SELECT value FROM jsonb_array_elements(current_value)
+       EXCEPT ALL
+       SELECT value FROM jsonb_array_elements(CASE WHEN jsonb_typeof(previous_value)='array' THEN previous_value ELSE '[]'::jsonb END)
+     ) added;
+   ELSE added_images:=current_value;
+   END IF;
+   IF NOT public.validate_inline_image_list(added_images) THEN
      RAISE EXCEPTION 'INVALID_IMAGE_UPLOAD' USING ERRCODE='23514';
    END IF;
  END LOOP;

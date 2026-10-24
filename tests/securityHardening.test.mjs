@@ -54,3 +54,8 @@ test('sync review keeps failure classification without retaining raw SQL errors'
  const failure=resolveFailureState({attempts:0},{code:'22P02',message:'invalid input syntax for customer-private-value'},1000);
  assert.equal(failure.status,'needs_review');assert.equal(failure.lastErrorCode,'22P02');assert.doesNotMatch(failure.lastError,/customer-private-value|invalid input/);
 });
+
+test('machine albums validate new batches while retaining cumulative historical photos',async()=>{
+ const sql=await readFile(new URL('../supabase/migrations/20261020082117_session_upload_privilege_hardening.sql',import.meta.url),'utf8');
+ assert.match(sql,/field='installation_photos'/);assert.match(sql,/EXCEPT ALL/);assert.match(sql,/validate_inline_image_list\(added_images\)/);
+});
