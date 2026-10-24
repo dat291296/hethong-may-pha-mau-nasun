@@ -7,12 +7,13 @@ assert.ok(key,'Staging publishable key required');
 // Unknown synthetic identity: no real account lockout, signup or email delivery.
 const email=`nasun-rate-${randomUUID()}@example.invalid`;
 let limited=false;
-for(let attempt=1;attempt<=36;attempt++) {
- const response=await fetch(new URL('/auth/v1/token?grant_type=password',url),{
+// A bounded burst avoids sequential network latency refilling the token bucket.
+for(let attempt=0;attempt<36;attempt+=6) {
+ const responses=await Promise.all(Array.from({length:6},()=>fetch(new URL('/auth/v1/token?grant_type=password',url),{
   method:'POST',headers:{apikey:key,'Content-Type':'application/json'},
   body:JSON.stringify({email,password:randomBytes(32).toString('base64url')}),signal:AbortSignal.timeout(20000),
- });
- if(response.status===429){limited=true;console.log(`Staging Auth rate limit verified: HTTP 429 after ${attempt} synthetic requests. No production requests or real account credentials used.`);break;}
- assert.equal(response.status,400,'Expected invalid credentials or HTTP 429; unexpected provider response is not acceptance');
+ })));
+ for(const response of responses) assert.ok([400,429].includes(response.status),'Expected invalid credentials or HTTP 429; unexpected provider response is not acceptance');
+ if(responses.some(response=>response.status===429)){limited=true;console.log(`Staging Auth rate limit verified: HTTP 429 within ${attempt+6} synthetic requests. No production requests or real account credentials used.`);break;}
 }
 assert.ok(limited,'AUTH_RATE_LIMIT_NOT_VERIFIED_WITHIN_BOUNDED_PROBE');
