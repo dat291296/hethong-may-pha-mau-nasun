@@ -1,3 +1,4 @@
+import { userErrorMessage } from '../security/userError.js';
 import React, { useState } from 'react';
 import { 
   Database, 
@@ -111,7 +112,7 @@ export default function DataBackupSyncModal({
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (error) {
-      alert(`Không thể tạo tệp sao lưu: ${error.message}`);
+      alert(`Không thể tạo tệp sao lưu: ${userErrorMessage(error)}`);
     }
   };
 
@@ -125,7 +126,7 @@ export default function DataBackupSyncModal({
       setCopied(true);
       setTimeout(() => setCopied(false), 2500);
     } catch (error) {
-      alert(`Không thể sao chép dữ liệu: ${error.message}`);
+      alert(`Không thể sao chép dữ liệu: ${userErrorMessage(error)}`);
     }
   };
 
@@ -172,7 +173,7 @@ export default function DataBackupSyncModal({
       setImportJsonText('');
       onClose();
     } catch (err) {
-      alert(`Không thể nhập tệp sao lưu: ${err.message}`);
+      alert(`Không thể nhập tệp sao lưu: ${userErrorMessage(err)}`);
     }
   };
 
@@ -197,7 +198,7 @@ export default function DataBackupSyncModal({
       }
     } catch (err) {
       setSyncStatus('error');
-      setSyncMsg(`Lỗi kết nối đồng bộ: ${err.message}`);
+      setSyncMsg(`Lỗi kết nối đồng bộ: ${userErrorMessage(err)}`);
     } finally {
       await refreshSyncHealth();
     }
@@ -276,7 +277,7 @@ export default function DataBackupSyncModal({
               <div className="card" style={{ padding: '0.85rem', marginBottom: '1rem', fontSize: '0.82rem' }}>
                 <div><strong>Sync Engine:</strong> v{syncHealth.engineVersion} · {syncHealth.online ? 'Online' : 'Offline'}</div>
                 <div><strong>Hàng chờ:</strong> {syncHealth.queueTotal} · cần duyệt {syncHealth.counts.needs_review || 0} · dừng retry {syncHealth.counts.dead_letter || 0}</div>
-                <div><strong>Realtime:</strong> {syncHealth.transport.status}{syncHealth.transport.error ? ` · ${syncHealth.transport.error}` : ''}</div>
+                <div><strong>Realtime:</strong> {syncHealth.transport.status}{syncHealth.transport.error ? ` · ${userErrorMessage({code:"REALTIME_UNAVAILABLE"})}` : ''}</div>
                 {syncHealth.server && <div><strong>Cloud 24h:</strong> thành công {syncHealth.server.applied24h || 0} · lỗi {syncHealth.server.failed24h || 0}</div>}
               </div>
             )}
@@ -417,7 +418,7 @@ export default function DataBackupSyncModal({
                         <div style={{ color: 'var(--text-muted)', marginTop: '3px' }}>
                           Thử {item.attempts} lần · chờ {Math.floor(item.ageSeconds / 60)} phút{item.nextRetryInSeconds ? ` · retry sau ${item.nextRetryInSeconds}s` : ''}
                         </div>
-                        {item.lastError && <div style={{ color: 'var(--accent-rose)', marginTop: '3px', overflowWrap: 'anywhere' }}>{item.lastError}</div>}
+                        {item.lastError && <div style={{ color: 'var(--accent-rose)', marginTop: '3px', overflowWrap: 'anywhere' }}>{userErrorMessage({code:item.lastErrorCode || "SYNC_OPERATION_FAILED"})}</div>}
                       </div>
                     ))}
                   </div>

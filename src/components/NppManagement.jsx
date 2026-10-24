@@ -1,3 +1,4 @@
+import { userErrorMessage } from '../security/userError.js';
 import {missingNppFields} from '../lib/dataCompleteness.js';
 import { isSupabaseConfigured } from '../lib/supabase.js';
 import { nextNppCode, validateNppCode } from '../lib/nppCodes.js';
@@ -161,7 +162,7 @@ export default function NppManagement({ globalSearch = '', coverageFilter = 'ALL
         }));
       } catch (err) {
         console.error('Error compressing image:', err);
-        alert(`Không thể thêm ảnh ${file.name}: ${err.message}`);
+        alert(`Không thể thêm ảnh ${file.name}: ${userErrorMessage(err)}`);
       }
     }
   };
@@ -261,7 +262,7 @@ export default function NppManagement({ globalSearch = '', coverageFilter = 'ALL
     setShowAddModal(false);
     } catch (error) {
       console.error('[NppManagement] Create failed:', error.code || error.name);
-      setSaveNotice(error.message || 'Chưa lưu được NPP. Nội dung được giữ nguyên.');
+      setSaveNotice(userErrorMessage(error) || 'Chưa lưu được NPP. Nội dung được giữ nguyên.');
     } finally {
       setIsSaving(false);
     }
@@ -296,7 +297,7 @@ export default function NppManagement({ globalSearch = '', coverageFilter = 'ALL
       setEditingNpp(null);
     } catch (err) {
       console.error('[NppManagement] Update failed:', err.code || 'WRITE_FAILED');
-      setSaveNotice(err.message || 'Không lưu được. Nội dung đang nhập được giữ lại.');
+      setSaveNotice(userErrorMessage(err) || 'Không lưu được. Nội dung đang nhập được giữ lại.');
     } finally {
       setIsSaving(false);
     }

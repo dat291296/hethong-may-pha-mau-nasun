@@ -1,3 +1,4 @@
+import { registerTestSession } from './register-test-session.mjs';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {createClient} from '@supabase/supabase-js';
@@ -10,6 +11,7 @@ export async function verifyEquipmentReplacement(service,env){
   for(const role of ['admin','manager','technician','qc','viewer']){
    const client=createClient(env.RLS_TEST_URL,env.RLS_TEST_ANON_KEY,{auth:{persistSession:false,autoRefreshToken:false},global:{fetch:(url,options={})=>fetch(url,{...options,signal:AbortSignal.timeout(30000)})}});clients.push(client);if(role==='admin')admin=client;
    check(await client.auth.signInWithPassword({email:env[`RLS_TEST_${role.toUpperCase()}_EMAIL`],password:env[`RLS_TEST_${role.toUpperCase()}_PASSWORD`]}));
+   await registerTestSession(client);
    check(await client.rpc('register_trusted_device_session',{p_device_id:prefix+'-'+role,p_device_label:'Synthetic replacement acceptance',p_timezone:'UTC'}));
    const code=prefix+'-'+role;const south=code+'-SOUTH';
    check(await service.from('system_sets').insert([{set_code:code,npp_id:nppId,npp_name:'Synthetic acceptance',region:'Miền Bắc',status:'DA_LAP_DAT'},{set_code:south,npp_name:'Synthetic south',region:'Miền Nam',status:'TRONG_KHO'}]));sets.push(code,south);
@@ -41,7 +43,7 @@ export async function verifyEquipmentReplacement(service,env){
  finally{
   let cleanupError;const cleanup=async operation=>{try{check(await operation());}catch(error){cleanupError ||= error;}};
   for(const [table,ids]of Object.entries(devices))if(ids.length)await cleanup(()=>service.from(table).update({set_code:null,is_assigned:false}).in('id',ids));
-  if(admin&&sets.length){await cleanup(()=>admin.auth.signInWithPassword({email:env.RLS_TEST_ADMIN_EMAIL,password:env.RLS_TEST_ADMIN_PASSWORD}));await cleanup(()=>admin.from('system_sets').delete().in('set_code',sets));}
+  if(admin&&sets.length){await cleanup(()=>admin.auth.signInWithPassword({email:env.RLS_TEST_ADMIN_EMAIL,password:env.RLS_TEST_ADMIN_PASSWORD}));try{await registerTestSession(admin);}catch(error){cleanupError ||= error;}await cleanup(()=>admin.from('system_sets').delete().in('set_code',sets));}
   for(const [table,ids]of Object.entries(devices))if(ids.length)await cleanup(()=>service.from(table).delete().in('id',ids));
   await cleanup(()=>service.from('distributors').delete().eq('id',nppId));
   for(const client of clients){try{await client.auth.signOut({scope:'local'});}catch(error){cleanupError ||= error;}}

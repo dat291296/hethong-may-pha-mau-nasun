@@ -10,6 +10,7 @@ export async function verifySessionRevocation(service, environment) {
   const signedIn = await client.auth.signInWithPassword({ email: environment.RLS_TEST_MANAGER_EMAIL, password: environment.RLS_TEST_MANAGER_PASSWORD });
   assert.ifError(signedIn.error);
   const owner = signedIn.data.user.id;
+  const sessionId = JSON.parse(Buffer.from(signedIn.data.session.access_token.split('.')[1], 'base64url')).session_id;
   const deviceId = `NASUN-STAGING-SESSION-${crypto.randomUUID()}`;
   const distributorId = `NASUN-STAGING-SESSION-${crypto.randomUUID()}`;
   let inserted = false;
@@ -33,13 +34,13 @@ export async function verifySessionRevocation(service, environment) {
     const fixture = await service.auth.admin.getUserById(owner);
     assert.ifError(fixture.error);
     assert.equal(fixture.data.user.app_metadata.nasun_rls_fixture, true, 'Only disposable fixture sessions may be revoked');
-    const revoked = await service.from('account_sessions').update({ revoked_at: new Date().toISOString(), revoked_reason: 'STAGING_VERIFICATION' }).eq('user_id', owner).select('session_id');
+    const revoked = await service.from('account_sessions').update({ revoked_at: new Date().toISOString(), revoked_reason: 'STAGING_VERIFICATION' }).eq('user_id', owner).eq('session_id', sessionId).select('session_id');
     assert.ifError(revoked.error);
     assert.equal(revoked.data.length, 1);
     assert.equal((await validate()).state.valid, false);
-    await assert.rejects(requireReplaySession(client, owner, () => owner, validate), /SESSION_REJECTED/);
+    await assert.rejects(requireReplaySession(client, owner, () => owner, validate), error => error?.message === 'SESSION_REJECTED' && ['42501','SESSION_REJECTED'].includes(error?.code));
     const denied = await client.from('distributors').update({ name: 'Synthetic revoked writer' }).eq('id', distributorId).select('id');
-    assert.equal(denied.error?.code, '42501', 'Server must reject revoked JWT writes even when client replay checks are bypassed');
+    assert.ok(denied.error?.code === '42501' || (!denied.error && denied.data?.length === 0), 'Server must reject revoked JWT writes even when client replay checks are bypassed');
     const preserved = await service.from('distributors').select('name').eq('id', distributorId).single();
     assert.ifError(preserved.error);
     assert.equal(preserved.data.name, 'Synthetic accepted writer');

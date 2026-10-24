@@ -1,3 +1,4 @@
+import { userErrorMessage } from '../security/userError.js';
 import React, { useState, useEffect } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase.js';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -42,7 +43,7 @@ export default function UserManagement({
       setLockReason('');
       setNewLockMonth('');
     } catch (err) {
-      alert('Lỗi khóa sổ tháng: ' + err.message);
+      alert('Lỗi khóa sổ tháng: ' + userErrorMessage(err));
     }
   };
 
@@ -55,7 +56,7 @@ export default function UserManagement({
       await unlockMonth(monthKey);
       setLockSuccess(`Đã mở khóa sổ tháng ${monthKey} thành công!`);
     } catch (err) {
-      alert('Lỗi mở khóa sổ tháng: ' + err.message);
+      alert('Lỗi mở khóa sổ tháng: ' + userErrorMessage(err));
     }
   };
 
@@ -78,8 +79,8 @@ export default function UserManagement({
       if (fetchErr) throw fetchErr;
       setProfiles((data || []).map(profile => ({ ...profile, email: profile.email || 'Chưa có email đăng ký' })));
     } catch (err) {
-      console.error('[UserManagement] Error loading profiles:', err.message);
-      setError('Lỗi tải danh sách tài khoản: ' + err.message);
+      console.error('[UserManagement] Error loading profiles:', userErrorMessage(err));
+      setError('Lỗi tải danh sách tài khoản: ' + userErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -98,8 +99,8 @@ export default function UserManagement({
       if (fetchErr) throw fetchErr;
       setSecurityEvents(data || []);
     } catch (err) {
-      console.error('[UserManagement] Error loading security events:', err.message);
-      setError('Lỗi tải nhật ký bảo mật: ' + err.message);
+      console.error('[UserManagement] Error loading security events:', userErrorMessage(err));
+      setError('Lỗi tải nhật ký bảo mật: ' + userErrorMessage(err));
     } finally {
       setSecurityLoading(false);
     }
@@ -164,7 +165,7 @@ export default function UserManagement({
       fetchProfiles();
     } catch (err) {
       console.error(err);
-      setError('Lỗi cập nhật vai trò: ' + err.message);
+      setError('Lỗi cập nhật vai trò: ' + userErrorMessage(err));
     } finally { setSavingAccess(false); }
   };
 
@@ -199,7 +200,7 @@ export default function UserManagement({
       fetchProfiles();
     } catch (err) {
       console.error(err);
-      setError('Lỗi cập nhật vùng quản lý: ' + err.message);
+      setError('Lỗi cập nhật vùng quản lý: ' + userErrorMessage(err));
     } finally { setSavingAccess(false); }
   };
 
@@ -243,7 +244,7 @@ export default function UserManagement({
       fetchProfiles();
     } catch (err) {
       console.error(err);
-      setError('Lỗi cập nhật trạng thái tài khoản: ' + err.message);
+      setError('Lỗi cập nhật trạng thái tài khoản: ' + userErrorMessage(err));
     } finally { setSavingAccess(false); }
   };
 

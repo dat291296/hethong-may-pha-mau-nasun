@@ -16,7 +16,7 @@ export async function authorizeSensitiveAction(client) {
   if (data !== true) throw new Error('Máy chủ chưa xác nhận quyền thao tác.');
 }
 
-export async function reauthenticateSensitiveAction(client, password) {
+export async function reauthenticateSensitiveAction(client, password, registerSession) {
   const { data: identity, error: identityError } = await client.auth.getUser();
   if (identityError || !identity?.user?.email) throw new Error('Phiên đăng nhập không hợp lệ.');
   const { data, error } = await client.auth.signInWithPassword({ email: identity.user.email, password });
@@ -25,5 +25,8 @@ export async function reauthenticateSensitiveAction(client, password) {
     await client.auth.signOut({ scope: 'local' });
     throw new Error('Danh tính phiên thay đổi. Vui lòng đăng nhập lại.');
   }
+  if (typeof registerSession !== 'function') throw new Error('Chưa xác minh được phiên đăng nhập mới.');
+  const registration = await registerSession();
+  if (!registration?.supported || registration.state?.valid !== true) throw new Error('Phiên đăng nhập mới chưa được máy chủ chấp nhận.');
   await authorizeSensitiveAction(client);
 }

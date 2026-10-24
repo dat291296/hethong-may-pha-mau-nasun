@@ -9,8 +9,10 @@ export default defineConfig({
     sourcemap: false,
     minify: 'oxc',
     reportCompressedSize: true,
+    // Strip browser logs from public artifacts; diagnostics retain only allowlisted codes.
     rolldownOptions: {
       output: {
+        minify: { compress: { dropConsole: true, dropDebugger: true } },
         manualChunks(id) {
           if (id.includes('node_modules/@supabase/')) return 'supabase';
           return undefined;

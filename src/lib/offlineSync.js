@@ -1,3 +1,4 @@
+import { userErrorMessage } from '../security/userError.js';
 import {saveSystemSetEdit} from './systemSetEdit.js';
 import { normalizeOptionalSerial } from './deviceSerial.js';
 import { assertAuditAppendOnly } from './auditPolicy.js';
@@ -150,7 +151,7 @@ function sortQueueByDependency(queue) {
 function describeQueueError(item, error) {
   const payload = item?.payload || {};
   const recordId = payload.id || payload.set_code || payload.setCode || payload.targetSetCode || 'không có mã';
-  return `${item.action}${item.category ? `/${item.category}` : ''} (${recordId}): ${error.message}`;
+  return `${item.action}${item.category ? `/${item.category}` : ''} (${recordId}): ${userErrorMessage(error)}`;
 }
 
 function normalizeRepairCategory(category, machineModel = '') {
@@ -786,7 +787,7 @@ async function processOfflineQueue(onStatusChange) {
       console.error(`[OfflineSync] Failed to sync action ${item.id}:`, err);
       await saveQueueState(item, classifySyncError(err), err);
       syncErrors.push(describeQueueError(item, err));
-      if (onStatusChange) onStatusChange('syncing', queue.length - successCount, err.message);
+      if (onStatusChange) onStatusChange('syncing', queue.length - successCount, userErrorMessage(err));
     }
   }
 

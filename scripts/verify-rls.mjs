@@ -1,3 +1,4 @@
+import { registerTestSession } from './register-test-session.mjs';
 import { verifyDeviceEdit } from './verify-device-edit.mjs';
 import { verifyAccountAccess } from './verify-account-access.mjs';
 import { verifyStorageAccess } from './verify-storage-access.mjs';
@@ -31,6 +32,7 @@ async function signIn(role) {
     password: requireEnvironment(`${prefix}_PASSWORD`),
   });
   if (error) throw new Error(`${role} login failed: ${error.code || error.status || 'AUTH_FAILED'}`);
+  await registerTestSession(client);
   return client;
 }
 
@@ -65,6 +67,7 @@ async function main() {
         email: requireEnvironment('RLS_TEST_ADMIN_EMAIL'), password: requireEnvironment('RLS_TEST_ADMIN_PASSWORD'),
       });
       assert.ifError(result.error);
+      await registerTestSession(admin);
     });
     console.log('Staging device edits verified: four categories, stock, assignment, move, stale-write rejection and rollback.');
     await verifyWriteIntegrity(admin);

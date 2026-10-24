@@ -1,3 +1,4 @@
+import { registerTestSession } from './register-test-session.mjs';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
@@ -25,7 +26,7 @@ export async function verifyEquipmentWorkflows(service, env) {
       const created=await service.from('system_sets').insert({set_code:code,npp_name:'Synthetic warehouse',region:'Miền Bắc',status:'TRONG_KHO'});
       assert.ifError(created.error);setCodes.push(code);
       const invoke=(workflow,payload,operationId=randomUUID())=>client.rpc('execute_equipment_workflow',{p_operation_id:operationId,p_workflow:workflow,p_payload:payload});
-      const payload={setCode:code,nppId:distributorIds[0],installedDate:new Date().toISOString().slice(0,10),photos:['data:image/png;base64,U1lOVEhFVElD']};
+      const payload={setCode:code,nppId:distributorIds[0],installedDate:new Date().toISOString().slice(0,10),photos:['data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jr1cAAAAASUVORK5CYII=']};
       const operationId=randomUUID();
       const install=await invoke('INSTALL',payload,operationId);
       if(role==='viewer') {assert.ok(install.error,'Viewer must not install');continue;}
@@ -33,10 +34,13 @@ export async function verifyEquipmentWorkflows(service, env) {
       const replay=await invoke('INSTALL',payload,operationId);
       assert.ifError(replay.error);assert.deepEqual(replay.data,install.data);
       assert.ok((await invoke('INSTALL',{...payload,notes:'mismatch'},operationId)).error,'Operation identity must bind content');
-      const maintenanceArgs={p_operation_id:randomUUID(),p_set_code:code,p_date:payload.installedDate,p_next_date:new Date(Date.now()+365*86400000).toISOString().slice(0,10),p_notes:'Synthetic checklist acceptance',p_photos:[],p_has_issues:false};
+      // Signature-only synthetic JPEG fixture matches the browser compressor output MIME.
+      const maintenanceArgs={p_operation_id:randomUUID(),p_set_code:code,p_date:payload.installedDate,p_next_date:new Date(Date.now()+365*86400000).toISOString().slice(0,10),p_notes:'Synthetic checklist acceptance',p_photos:Array(6).fill('data:image/jpeg;base64,/9j/2Q=='),p_has_issues:false};
       const maintenance=await client.rpc('complete_machine_maintenance',maintenanceArgs);
       assert.ifError(maintenance.error);
       assert.ifError((await client.rpc('complete_machine_maintenance',maintenanceArgs)).error);
+      const album=await service.from('system_sets').select('installation_photos').eq('set_code',code).single();
+      assert.ifError(album.error);assert.equal(album.data.installation_photos.length,7,'Maintenance must preserve the existing album and append six photos exactly once');
 
       if(role!=='admin') assert.ok((await invoke('TRANSFER',{setCode:code,newNppId:distributorIds[2]})).error,'Cross-region transfer must fail');
       assert.ifError((await invoke('TRANSFER',{setCode:code,newNppId:distributorIds[1]})).error);
@@ -56,6 +60,7 @@ export async function verifyEquipmentWorkflows(service, env) {
         assert.ok(cleanupAdmin,'Synthetic administrator client required for cleanup');
         const login=await cleanupAdmin.auth.signInWithPassword({email:env.RLS_TEST_ADMIN_EMAIL,password:env.RLS_TEST_ADMIN_PASSWORD});
         assert.ifError(login.error);
+        await registerTestSession(cleanupAdmin);
         assert.ifError((await cleanupAdmin.from('system_sets').delete().in('set_code',setCodes)).error);
       }
     } catch(error) {cleanupError=error;}

@@ -21,6 +21,8 @@ test('reauthentication binds the current identity and requires server confirmati
   await assert.rejects(reauthenticateSensitiveAction(client, 'synthetic-password'));
   assert.equal(calls, 0);
   client.auth.signInWithPassword = async () => ({ data: { user: { id: 'synthetic-user' } } });
-  await reauthenticateSensitiveAction(client, 'synthetic-password');
+  await assert.rejects(reauthenticateSensitiveAction(client, 'synthetic-password'));
+  await assert.rejects(reauthenticateSensitiveAction(client, 'synthetic-password', async()=>({supported:true,state:{valid:false}})));
+  await reauthenticateSensitiveAction(client, 'synthetic-password', async()=>({supported:true,state:{valid:true}}));
   assert.equal(calls, 1);
 });

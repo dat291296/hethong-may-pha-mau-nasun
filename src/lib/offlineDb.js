@@ -1,3 +1,4 @@
+import { retainEncryptedDraft } from './offlineRetention.js';
 import {
   getMobileSecurityCapabilities,
   getNativeKeyAlias,
@@ -446,17 +447,20 @@ export async function clearOfflineStorage(userId = activeOwnerId) {
     const completed = transactionDone(transaction);
     const queueRequest = transaction.objectStore('offline_queue').getAll();
     queueRequest.onsuccess = () => {
-      const preservePending = queueRequest.result.some(record => record.ownerId === ownerId);
+      let preservePending = queueRequest.result.some(record => record.ownerId === ownerId);
       const cursorRequest = transaction.objectStore('cached_data').openCursor();
       cursorRequest.onsuccess = () => {
         const cursor = cursorRequest.result;
-        if (!cursor) return;
-        if (cursor.value.ownerId === ownerId) cursor.delete();
+        if (!cursor) {
+          // Decide key deletion only after both queued edits and encrypted drafts
+          // have been checked inside the same transaction.
+          if (!preservePending && !usesNativeCrypto()) transaction.objectStore('crypto_keys').delete(ownerId);
+          return;
+        }
+        if (retainEncryptedDraft(cursor.value, ownerId)) preservePending = true;
+        else if (cursor.value.ownerId === ownerId) cursor.delete();
         cursor.continue();
       };
-      // Native key deletion cannot participate in the IndexedDB transaction.
-      // Retain that key to avoid destroying a concurrently queued native edit.
-      if (!preservePending && !usesNativeCrypto()) transaction.objectStore('crypto_keys').delete(ownerId);
     };
     await completed;
     encryptionKeyPromises.delete(ownerId);
