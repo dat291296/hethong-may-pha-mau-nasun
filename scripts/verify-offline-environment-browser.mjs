@@ -24,7 +24,7 @@ try {
   await cli('run-code',`async page=>{
     await page.locator('#result[data-complete="true"]').waitFor({timeout:60000});
     const report=JSON.parse(await page.locator('#result').textContent());
-    if(report.passed!==true || report.backendConnected!==false || Object.keys(report.checks).length<17 || Object.values(report.checks).some(value=>value!==true))throw Error('STAGE1_BROWSER_REGRESSION');
+    if(report.passed!==true || report.backendConnected!==false || Object.keys(report.checks).length<32 || Object.values(report.checks).some(value=>value!==true))throw Error('STAGE1_BROWSER_REGRESSION');
     await page.reload();
     await page.locator('#result[data-passed="true"]').waitFor({timeout:60000});
     await page.context().setOffline(true);
@@ -33,11 +33,34 @@ try {
     await page.context().setOffline(false);
     await page.getByRole('button',{name:'Kiểm tra kết nối trở lại',exact:true}).click();
     await page.locator('#reconnect-result[data-passed="true"]').waitFor();
+    await page.setViewportSize({width:390,height:844});
+    await page.goto('${instance.origin}/');
+    await page.getByRole('button',{name:'Nghiệp vụ mới',exact:true}).click();
+    await page.getByLabel('Nội dung nghiệp vụ mới',{exact:true}).fill('Synthetic field materials with spaces');
+    await page.getByLabel('Tình huống mạng',{exact:true}).selectOption('lost');
+    await page.getByRole('button',{name:'Lưu vào hàng chờ',exact:true}).click();
+    await page.getByRole('button',{name:'Gửi / thử lại cùng mã',exact:true}).click();
+    await page.getByText('Server mô phỏng ghi 1 lần.',{exact:false}).waitFor();
+    await page.getByLabel('Tình huống mạng',{exact:true}).selectOption('online');
+    await page.getByRole('button',{name:'Gửi / thử lại cùng mã',exact:true}).click();
+    if(!/Hàng chờ\\s*0/.test(await page.locator('.stats').last().textContent()))throw Error('FIELD_OUTBOX_NOT_ACKNOWLEDGED');
+    await page.getByLabel('Giả lập hết dung lượng khi lưu hàng chờ',{exact:true}).check();
+    await page.getByLabel('Nội dung nghiệp vụ mới',{exact:true}).fill('Synthetic changed field notes');
+    await page.getByRole('button',{name:'Lưu vào hàng chờ',exact:true}).click();
+    await page.getByText('Không lưu được hàng chờ. Nội dung còn trên màn hình, chưa được coi là đã lưu.',{exact:true}).waitFor();
+    await page.getByLabel('Giả lập hết dung lượng khi lưu hàng chờ',{exact:true}).uncheck();
+    await page.getByRole('button',{name:'Đồng nghiệp sửa phiếu',exact:true}).click();
+    await page.getByRole('button',{name:'Lưu vào hàng chờ',exact:true}).click();
+    await page.getByRole('button',{name:'Gửi / thử lại cùng mã',exact:true}).click();
+    await page.getByRole('button',{name:'Giữ bản gốc để đối chiếu và làm lại',exact:true}).click();
+    await page.getByText('Bản gốc đã giữ trên thiết bị (1)',{exact:true}).waitFor();
+    if(await page.evaluate(()=>document.documentElement.scrollWidth>window.innerWidth))throw Error('FIELD_MOBILE_OVERFLOW');
   }`);
   await mkdir('output/stage1-evidence',{recursive:true});
   await writeFile(`output/stage1-evidence/${engine}.json`,JSON.stringify({passed:true,engine,commit:process.env.GITHUB_SHA||null,
     synthetic:true,backendConnected:false,realSafariVerified:false,fullSupabaseRestoreVerified:false,
     browserNetworkOfflineVerified:true,
+    newFieldOutboxUiVerified:true,mobileViewport:{width:390,height:844},minimumRegressionChecks:32,
     scope:'Schema v3 fixture -> page reload -> current storage, old/future queue compatibility, owner isolation, lease, network faults and offline/reconnect in browser context',
   },null,2));
   console.log(`[stage1] ${engine} isolated browser environment passed; real Safari and live restore remain separate.`);

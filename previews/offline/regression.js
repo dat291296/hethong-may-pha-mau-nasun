@@ -2,6 +2,10 @@ import { migrateQueueItem } from '../../src/lib/syncQueue.js';
 import {sealDataSnapshot,verifyDataSnapshot,requireUniqueDataRows} from '../../src/lib/dataIntegrity.js';
 import {createOfflineAccessGrant,offlineAccessDecision} from '../../src/security/offlineAccess.js';
 import {requireOfflineReplayPermission} from '../../src/security/offlineReplayPolicy.js';
+import {makeFieldCommand,createFieldOutbox,requireFieldReceipt} from '../../src/lib/fieldCommands.js';
+import {attachFieldFiles} from '../../src/lib/fieldAttachments.js';
+import {retainReviewedCommand} from '../../src/lib/fieldReview.js';
+import {flushBeforeAppUpdate} from '../../src/lib/appUpdateSafety.js';
 const result = document.getElementById('result');
 const checks = {};
 const owner = 'stage1-synthetic-owner';
@@ -84,6 +88,32 @@ async function inspectCurrent() {
   verify('stage3DowngradeStopsReplayWithoutDroppingQueue',downgradeRejected&&(await storage.getQueue()).length===1);
   let wrongRegionRejected=false;try{requireOfflineReplayPermission(profile,{action:'EDIT_NPP',ownerId:owner,payload:{region:'Miền Nam'}});}catch{wrongRegionRejected=true;}
   verify('stage3ForeignRegionStopsReplay',wrongRegionRejected);
+  const command=await makeFieldCommand({owner,kind:'REPAIR_EDIT',entityId:'SYN-NEW-REPAIR',expected:1,payload:{id:'SYN-NEW-REPAIR',notes:'Synthetic field materials with spaces'}});
+  const outbox=createFieldOutbox({owner:storage.getOfflineOwner,loadQueue:storage.getQueue,saveQueue:storage.addToQueue,loadReceipt:async()=>null});
+  await outbox(command);await outbox(command);
+  const staged=(await storage.getQueue()).filter(item=>item.action==='FIELD_OPERATION');
+  verify('stage4StableOutboxNoDuplicate',staged.length===1&&staged[0].payload.payload.notes.includes('with spaces'));
+  let incompleteReceipt=false;try{requireFieldReceipt(command,{ok:true,operationId:command.operationId,kind:command.kind,entityId:command.entityId,version:1,checksum:command.checksum});}catch{incompleteReceipt=true;}
+  verify('stage4UnchangedRevisionIsNotAcknowledged',incompleteReceipt);
+  const original={...staged[0],status:'needs_review',lastErrorCode:'PT409'};await storage.addToQueue(original);
+  await retainReviewedCommand(original,{saveArchive:value=>storage.setCache('field-review-original:browser-proof',value),remove:storage.removeFromQueue});
+  const retained=await storage.getCacheStrict('field-review-original:browser-proof');
+  verify('stage4ConflictOriginalRetainedBeforeQueueRemoval',retained.item.payload.checksum===command.checksum&&(await storage.getQueue()).length===1);
+  const packed=await attachFieldFiles({machines:[{setCode:'SYN-FILE-MACHINE'}]},{documents:[{id:'SYN-DOC',title:'Synthetic manual',setCode:'SYN-FILE-MACHINE',data:'data:application/pdf;base64,JVBERi0xLjQKJSVFT0Y='}]});
+  const sealedPack=await sealDataSnapshot(packed);await storage.setCache('stage5-document-proof',sealedPack);
+  const storedPack=await storage.getCacheStrict('stage5-document-proof');
+  verify('stage5SelectedPdfSurvivesEncryptedStorage',storedPack.attachments.length===1&&await verifyDataSnapshot(storedPack));
+  let unsafePdf=false;try{await attachFieldFiles({machines:[{setCode:'SYN-FILE-MACHINE'}]},{documents:[{id:'SYN-DOC',title:'Unsafe',setCode:'SYN-FILE-MACHINE',data:'data:text/html;base64,PHNjcmlwdD4='}]});}catch{unsafePdf=true;}
+  verify('stage5NonPdfDocumentRejected',unsafePdf);
+  let allocationBlocked=false;
+  try{await outbox(await makeFieldCommand({owner,kind:'INSTALL',entityId:'SYN-INSTALL',expected:'2026-10-27T01:00:00Z',payload:{setCode:'SYN-INSTALL'}}),{online:false,confirmed:true});}catch{allocationBlocked=true;}
+  verify('stage8OfflineAllocationCannotEnterOutbox',allocationBlocked&&(await storage.getQueue()).length===1);
+  let flushed=false;const prepare=event=>event.detail.waitUntil(Promise.resolve().then(()=>{flushed=true;}));window.addEventListener('nasun-prepare-update',prepare);
+  const update=await flushBeforeAppUpdate();window.removeEventListener('nasun-prepare-update',prepare);
+  verify('stage9UpdateWaitsForDraftFlush',flushed&&update.requiresAllTabsClosed);
+  const failing=event=>event.detail.waitUntil(Promise.reject(Error('QUOTA')));window.addEventListener('nasun-prepare-update',failing);
+  let updateBlocked=false;try{await flushBeforeAppUpdate();}catch{updateBlocked=true;}window.removeEventListener('nasun-prepare-update',failing);
+  verify('stage9QuotaPreventsUpdateAcknowledgement',updateBlocked);
   const report={passed:true,checks,scope:'Synthetic browser/schema/environment tests; not live JWT, restore or physical iOS',backendConnected:false};
   result.textContent=JSON.stringify(report,null,2);result.dataset.complete='true';result.dataset.passed='true';
   const offlineButton=document.getElementById('offline-read');offlineButton.disabled=false;
