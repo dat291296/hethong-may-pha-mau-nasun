@@ -22,7 +22,7 @@ export async function verifyFieldCommands(service,env){
    const result=await clients[role].client.rpc('execute_field_command',{p_command:command});return {command,...result};
   };
   const day=new Date().toISOString().slice(0,10);phase='CONCURRENT_CREATE';const started=performance.now();
-  await Promise.all(Object.keys(clients).map(async role=>{
+  const createResults=await Promise.allSettled(Object.keys(clients).map(async role=>{
    const id=`${prefix}-${role}`;const payload={id,ticket_code:id,date:day,technician:'Synthetic technician',npp_id:nppIds[0],npp_name:'Synthetic field acceptance',product_category:'Máy lắc',machine_model:'Synthetic shaker',serial_number:'SYN-FIELD-001',error_description:'Synthetic field fault',materials_used:['Dây nguồn có dấu cách']};
    const request={kind:'REPAIR_CREATE',entityId:id,payload};
    const saved=await invoke(role,request);
@@ -30,7 +30,9 @@ export async function verifyFieldCommands(service,env){
    checked(saved,'CREATE');tickets.push(id);requireFieldReceipt(saved.command,saved.data);
    const replay=await invoke(role,request);checked(replay,'CREATE_REPLAY');assert.deepEqual(replay.data,saved.data);
    const audit=await service.from('audit_logs').select('id',{head:true,count:'exact'}).eq('id',`AUDIT-FIELD-${saved.command.operationId}`);checked(audit,'AUDIT');assert.equal(audit.count,1);
-  }));timings.fiveClientsCreateMs=Math.round(performance.now()-started);
+  }));
+  const createFailure=createResults.find(result=>result.status==='rejected');if(createFailure)throw createFailure.reason;
+  timings.fiveClientsCreateMs=Math.round(performance.now()-started);
   phase='REPAIR_CONCURRENCY';
   const id=`${prefix}-technician`,original=checked(await service.from('repair_tickets').select('record_version').eq('id',id).single(),'VERSION');
   const updates=await Promise.all(['technician','admin'].map(role=>invoke(role,{kind:'REPAIR_EDIT',entityId:id,expected:original.record_version,payload:{id,notes:`Synthetic writer ${role}`}})));

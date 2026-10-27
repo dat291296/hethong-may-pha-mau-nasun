@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {makeFieldCommand,requireFieldReceipt,createFieldOutbox,validateMaintenanceChecklist} from '../src/lib/fieldCommands.js';
 import {attachFieldFiles,fieldQueueSummary} from '../src/lib/fieldAttachments.js';
 import {flushBeforeAppUpdate} from '../src/lib/appUpdateSafety.js';
+import {retainReviewedCommand} from '../src/lib/fieldReview.js';
 const base={owner:'synthetic-A',kind:'REPAIR_EDIT',entityId:'ticket-A',expected:3,payload:{id:'ticket-A',notes:'Thay linh kiện tại hiện trường'}};
 const receipt=command=>({ok:true,operationId:command.operationId,kind:command.kind,entityId:command.entityId,version:4,checksum:command.checksum});
 test('field identity survives reload and changes for a changed revision, actor or payload',async()=>{
@@ -75,4 +76,11 @@ test('application updates wait for every active draft and stop if one cannot be 
  assert.deepEqual(await flushBeforeAppUpdate(target),{draftsFlushed:2,requiresAllTabsClosed:true});assert.equal(saved,2);
  target.addEventListener('nasun-prepare-update',event=>event.detail.waitUntil(Promise.reject(Error('QUOTA'))));
  await assert.rejects(flushBeforeAppUpdate(target),/QUOTA/);
+});
+test('reviewed outbox edits only leave the active queue after the entire original is retained',async()=>{
+ const command=await makeFieldCommand(base);const item={id:'local-item',action:'FIELD_OPERATION',status:'needs_review',payload:command};
+ let removed=false;await assert.rejects(retainReviewedCommand(item,{saveArchive:async()=>false,remove:async()=>{removed=true;return true;}}));assert.equal(removed,false);
+ let archive;await retainReviewedCommand(item,{saveArchive:async value=>{archive=value;return true;},remove:async()=>{assert.deepEqual(archive.item,item);removed=true;return true;}});assert.equal(removed,true);
+ assert.deepEqual(archive.item.payload.payload,base.payload);
+ await assert.rejects(retainReviewedCommand({...item,status:'pending'},{saveArchive:async()=>true,remove:async()=>true}));
 });

@@ -18,8 +18,9 @@ export async function attachFieldFiles(pack,{photos=false,documents=[]}={}) {
   }
   for(const document of documents){
     if(!pack.machines.some(machine=>machine.setCode===document.setCode)||typeof document.id!=='string'||!document.id
-      ||typeof document.title!=='string'||document.title.length>160||!document.data?.startsWith('data:application/pdf;base64,JVBERi0')
+      ||typeof document.title!=='string'||document.title.length>160||!/^data:application\/pdf;base64,JVBERi0[A-Za-z0-9+/]*={0,2}$/.test(document.data||'')
       ||document.data.length>Math.ceil(2*1024*1024*4/3)+40)throw Error('Tài liệu offline không khớp hồ sơ hoặc vượt giới hạn.');
+    try{const decoded=atob(document.data.split(',')[1]);if(!decoded.startsWith('%PDF-'))throw Error();}catch{throw Error('Nội dung PDF offline chưa hợp lệ.');}
     attachments.push({...document,mime:'application/pdf'});
   }
   if(attachments.length>12||new Set(attachments.map(file=>file.id)).size!==attachments.length)throw Error('Tối đa 12 ảnh/tài liệu trong một gói, không nhận tệp trùng.');

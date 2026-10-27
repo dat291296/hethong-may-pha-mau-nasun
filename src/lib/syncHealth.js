@@ -38,7 +38,7 @@ export async function getSyncHealthSnapshot() {
       ? 'critical'
       : waitingCount > 0
         ? 'warning'
-        : 'healthy';
+        : serverError ? 'warning' : 'healthy';
   return {
     online: navigator.onLine,
     state,
