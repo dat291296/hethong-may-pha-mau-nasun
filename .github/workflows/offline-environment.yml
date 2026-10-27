@@ -41,6 +41,10 @@ jobs:
         with: {node-version: 22, cache: npm}
       - run: npm ci --ignore-scripts
       - run: npm run preview:offline:build
+      - name: Bound Ubuntu mirror download waits
+        run: |
+          sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' /etc/apt/apt-mirrors.txt
+          printf 'Acquire::Retries "2";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\n' | sudo tee /etc/apt/apt.conf.d/80nasun-download-timeouts > /dev/null
       - run: npx --yes --package @playwright/cli@0.1.22 playwright-cli install-browser ${{ matrix.engine }} --with-deps
       - run: node scripts/verify-offline-environment-browser.mjs
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
