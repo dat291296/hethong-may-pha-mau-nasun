@@ -10,6 +10,12 @@ on:
       - scripts/restore-preflight.mjs
       - src/lib/offlineDb.js
       - src/lib/syncQueue.js
+      - src/lib/field*.js
+      - src/lib/appUpdateSafety.js
+      - src/components/Field*.jsx
+      - src/components/Field*.css
+      - src/hooks/useFormDraft.js
+      - tests/fieldCommands.test.mjs
       - tests/*offline*
       - .github/workflows/offline-environment.yml
 permissions:

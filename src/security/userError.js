@@ -1,4 +1,5 @@
 const MESSAGES = Object.freeze({
+  'OFFLINE_DOCUMENT_FULL':'Hàng chờ đã đạt giới hạn dung lượng hoặc số thao tác. Giữ nháp đang mở; đồng bộ hoặc đối chiếu các mục cũ trước khi lưu thêm.',
   'FIELD_PENDING_EDIT':'Phiếu hoặc bộ máy này còn thay đổi đang chờ xác nhận. Đồng bộ và đối chiếu trước khi sửa tiếp.',
   'PT409':'Dữ liệu đã được người khác thay đổi. Bản sửa được giữ trong hàng chờ cần duyệt; tải lại và đối chiếu, không ghi đè.',
   'FIELD_INTENT_CONFLICT':'Mã thao tác đã gắn với nội dung khác. Giữ bản gốc và đối chiếu hàng chờ trước khi tạo bản sửa mới.',

@@ -1,6 +1,7 @@
 import { canonicalData, dataChecksum } from './dataIntegrity.js';
 
 export const FIELD_COMMAND_VERSION = 1;
+export const MAX_FIELD_OUTBOX_BYTES=32*1024*1024;
 export const FIELD_COMMAND_KINDS = ['REPAIR_CREATE','REPAIR_EDIT','MAINTENANCE','INSTALL','TRANSFER','WITHDRAW'];
 export const ONLINE_FIELD_KINDS = ['INSTALL','TRANSFER','WITHDRAW'];
 export function fieldError(code) { return Object.assign(new Error(code), {code}); }
@@ -33,7 +34,7 @@ export function validateMaintenanceChecklist(checklist) {
 }
 
 // A durable entry is created before any network call; pending and confirmed are distinct.
-export function createFieldOutbox({owner,loadQueue,saveQueue,loadReceipt,notify=()=>{},now=Date.now}) {
+export function createFieldOutbox({owner,loadQueue,saveQueue,loadReceipt,notify=()=>{},now=Date.now,maxBytes=MAX_FIELD_OUTBOX_BYTES}) {
   return async(command,{online=false,confirmed=false}={})=>{
     const account=owner();
     const assertOwner=()=>{if(!account||account!==command.owner||owner()!==account)throw fieldError('OFFLINE_OWNER_CHANGED');};
@@ -50,6 +51,9 @@ export function createFieldOutbox({owner,loadQueue,saveQueue,loadReceipt,notify=
     }
     if(queue.some(item=>item.action==='FIELD_OPERATION'&&item.payload?.entityId===command.entityId))throw fieldError('FIELD_PENDING_EDIT');
     if(queue.length>=250)throw fieldError('OFFLINE_DOCUMENT_FULL');
+    let bytes=new TextEncoder().encode(canonicalData(command)).byteLength;
+    for(const item of queue){bytes+=new TextEncoder().encode(JSON.stringify(item.payload||{})).byteLength;if(bytes>maxBytes)break;}
+    if(bytes>maxBytes)throw fieldError('OFFLINE_DOCUMENT_FULL');
     const at=now();
     const item={id:`field:${command.operationId}`,operationId:command.operationId,ownerId:account,action:'FIELD_OPERATION',payload:command,
       entityType:command.kind.startsWith('REPAIR')?'repair_tickets':'system_sets',entityId:command.entityId,

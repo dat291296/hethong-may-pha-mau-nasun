@@ -84,3 +84,8 @@ test('reviewed outbox edits only leave the active queue after the entire origina
  assert.deepEqual(archive.item.payload.payload,base.payload);
  await assert.rejects(retainReviewedCommand({...item,status:'pending'},{saveArchive:async()=>true,remove:async()=>true}));
 });
+test('outbox byte budget rejects a new photo-heavy intent without discarding older entries',async()=>{
+ const command=await makeFieldCommand(base);const original={id:'old',payload:{notes:'Legacy entry retained'}};let writes=0;
+ const stage=createFieldOutbox({owner:()=>base.owner,loadQueue:async()=>[original],loadReceipt:async()=>null,saveQueue:async()=>{writes++;return true;},maxBytes:100});
+ await assert.rejects(stage(command),{code:'OFFLINE_DOCUMENT_FULL'});assert.equal(writes,0);assert.equal(original.payload.notes,'Legacy entry retained');
+});
