@@ -1,6 +1,8 @@
-// Mock data for Paint Tinting & Mixing Machine Management System
+// Demo fixtures remain available in development and Node-based checks.
+// Production loads authorized data from Supabase or the owner-bound offline cache.
+const includeDemoData = !(import.meta.env && import.meta.env.PROD);
 
-export const INITIAL_NPPS = [
+export const INITIAL_NPPS = includeDemoData ? [
   {
     id: "NPP-HN-001",
     name: "Nhà Phân Phối Sơn Minh Phát",
@@ -104,9 +106,9 @@ export const INITIAL_NPPS = [
     createdAt: "2024-02-28",
     photos: []
   },
-];
+] : [];
 
-export const INITIAL_DISPENSERS = [
+export const INITIAL_DISPENSERS = includeDemoData ? [
   { id: "DISP-001", model: "Satint A2", serial: "ST-A2-99801", status: "Mới 100%", isAssigned: true, setCode: "SET-2024-001" },
   { id: "DISP-002", model: "Hero Eurotint", serial: "HERO-EU-5541", status: "Đang chạy tốt", isAssigned: true, setCode: "SET-2024-002" },
   { id: "DISP-003", model: "Corob F1", serial: "COROB-F1-1049", status: "Đang chạy tốt", isAssigned: true, setCode: "SET-2024-003" },
@@ -115,9 +117,9 @@ export const INITIAL_DISPENSERS = [
   { id: "DISP-006", model: "Hero Eurotint", serial: "HERO-EU-6620", status: "Hỏng đầu phun", isAssigned: true, setCode: "SET-2023-005" },
   { id: "DISP-007", model: "Corob F1", serial: "COROB-F1-1102", status: "Đang chạy tốt", isAssigned: true, setCode: "SET-2024-006" },
   { id: "DISP-008", model: "Satint A2", serial: "ST-A2-99810", status: "Mới 100%", isAssigned: false, setCode: null },
-];
+] : [];
 
-export const INITIAL_MIXERS = [
+export const INITIAL_MIXERS = includeDemoData ? [
   { id: "MIX-001", model: "Satint ST-50", type: "Lắc xoay khép kín", serial: "MIX-ST-1001", status: "Mới 100%", isAssigned: true, setCode: "SET-2024-001" },
   { id: "MIX-002", model: "AI88", type: "Lắc rung đứng", serial: "MIX-AI88-882", status: "Đang chạy tốt", isAssigned: true, setCode: "SET-2024-002" },
   { id: "MIX-003", model: "Evoshake-200", type: "Lắc xoay khép kín", serial: "EVO-200-449", status: "Đang chạy tốt", isAssigned: true, setCode: "SET-2024-003" },
@@ -125,9 +127,9 @@ export const INITIAL_MIXERS = [
   { id: "MIX-005", model: "YSA-2A", type: "Lắc xoay khép kín", serial: "YSA-2A-332", status: "Cần bảo trì", isAssigned: true, setCode: "SET-2023-005" },
   { id: "MIX-006", model: "Evoshake-200", type: "Lắc xoay khép kín", serial: "EVO-200-501", status: "Đang chạy tốt", isAssigned: true, setCode: "SET-2024-006" },
   { id: "MIX-007", model: "Satint ST-50", type: "Lắc xoay khép kín", serial: "MIX-ST-1008", status: "Mới 100%", isAssigned: false, setCode: null },
-];
+] : [];
 
-export const INITIAL_COMPUTERS = [
+export const INITIAL_COMPUTERS = includeDemoData ? [
   { id: "PC-001", type: "All In One", os: "Windows 11 Pro", specs: "Core i5 / 16GB RAM / 512GB SSD", status: "Mới 100%", network: "Có mạng LAN", serial: "—", isAssigned: true, setCode: "SET-2024-001", stabilizer: { hasStabilizer: true, brand: "Lioa 2000VA", isSelfBought: true } },
   { id: "PC-002", type: "Case", os: "Windows 10 LTSC", specs: "Core i3 / 8GB RAM / 256GB SSD", status: "Đã đổi trả máy mới", network: "Có mạng Wifi", serial: "—", isAssigned: true, setCode: "SET-2024-002", stabilizer: { hasStabilizer: true, brand: "Standa 3000VA", isSelfBought: true } },
   { id: "PC-003", type: "All In One", os: "Windows 10 Pro", specs: "Core i5 / 8GB RAM / 256GB SSD", status: "Đang chạy tốt", network: "Có mạng LAN", serial: "—", isAssigned: true, setCode: "SET-2024-003", stabilizer: { hasStabilizer: false, brand: null, isSelfBought: false } },
@@ -135,9 +137,9 @@ export const INITIAL_COMPUTERS = [
   { id: "PC-005", type: "All In One", os: "Windows 10 LTSC", specs: "Core i3 / 8GB RAM / 256GB SSD", status: "Đang chạy tốt", network: "Có mạng LAN", serial: "—", isAssigned: true, setCode: "SET-2023-005", stabilizer: { hasStabilizer: false, brand: null, isSelfBought: false } },
   { id: "PC-006", type: "Case", os: "Windows 11 Pro", specs: "Core i5 / 16GB RAM / 512GB SSD", status: "Đã đổi trả máy mới", network: "Có mạng LAN", serial: "—", isAssigned: true, setCode: "SET-2024-006", stabilizer: { hasStabilizer: true, brand: "Robot 2000VA", isSelfBought: true } },
   { id: "PC-007", type: "Case", os: "Windows 10 Pro", specs: "Core i3 / 8GB RAM / 256GB SSD", status: "Mới 100%", network: "Không có mạng", serial: "—", isAssigned: false, setCode: null, stabilizer: { hasStabilizer: false, brand: null, isSelfBought: false } },
-];
+] : [];
 
-export const INITIAL_PRINTERS = [
+export const INITIAL_PRINTERS = includeDemoData ? [
   { id: "PRN-001", model: "QL700", serial: "QL700-SN-8801", connection: "USB", status: "Đang chạy tốt", isAssigned: true, setCode: "SET-2024-001" },
   { id: "PRN-002", model: "QL700", serial: "QL700-SN-8802", connection: "USB", status: "Đang chạy tốt", isAssigned: true, setCode: "SET-2024-002" },
   { id: "PRN-003", model: "QL700", serial: "QL700-SN-8803", connection: "LAN", status: "Đang chạy tốt", isAssigned: true, setCode: "SET-2024-003" },
@@ -145,9 +147,9 @@ export const INITIAL_PRINTERS = [
   { id: "PRN-005", model: "QL700", serial: "QL700-SN-8805", connection: "USB", status: "Cần bảo trì", isAssigned: true, setCode: "SET-2023-005" },
   { id: "PRN-006", model: "QL700", serial: "QL700-SN-8806", connection: "Bluetooth", status: "Đang chạy tốt", isAssigned: true, setCode: "SET-2024-006" },
   { id: "PRN-007", model: "QL700", serial: "QL700-SN-8807", connection: "USB", status: "Mới 100%", isAssigned: false, setCode: null },
-];
+] : [];
 
-export const INITIAL_SYSTEM_SETS = [
+export const INITIAL_SYSTEM_SETS = includeDemoData ? [
   {
     id: "SET-2024-001",
     setCode: "SET-2024-001",
@@ -326,9 +328,9 @@ export const INITIAL_SYSTEM_SETS = [
     softwareVersion: "Standard Stock",
     installationPhotos: []
   },
-];
+] : [];
 
-export const INITIAL_REPAIR_TICKETS = [
+export const INITIAL_REPAIR_TICKETS = includeDemoData ? [
   {
     id: "TICK-202607-001",
     ticketCode: "TICK-202607-001",
@@ -445,9 +447,9 @@ export const INITIAL_REPAIR_TICKETS = [
     notes: "Đã thay phớt bơm số 3, vệ sinh sạch cụm van chiết và hiệu chuẩn lại định lượng màu.",
     photos: []
   }
-];
+] : [];
 
-export const INITIAL_TINTING_LOGS = [
+export const INITIAL_TINTING_LOGS = includeDemoData ? [
   {
     id: "TINT-20260726-001",
     nppId: "NPP-HN-001",
@@ -556,9 +558,9 @@ export const INITIAL_TINTING_LOGS = [
     status: "HỦY BỎ",
     operator: "Kỹ thuật viên Hải Phòng",
   },
-];
+] : [];
 
-export const INITIAL_AUDIT_LOGS = [
+export const INITIAL_AUDIT_LOGS = includeDemoData ? [
   {
     id: "AUDIT-001",
     type: "LẮP ĐẶT MỚI",
@@ -607,4 +609,4 @@ export const INITIAL_AUDIT_LOGS = [
     reason: "Thu hồi thiết bị về kho trung tâm để kiểm tra và bảo dưỡng",
     notes: "Thiết bị đã được đóng thùng chuyển về kho an toàn.",
   }
-];
+] : [];
