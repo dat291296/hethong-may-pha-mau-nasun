@@ -1,3 +1,4 @@
+import { getOfflineOwner } from '../lib/offlineDb.js';
 import {normalizeDateFields} from '../utils/dateUtils.js';
 import {saveEquipmentReplacement,resolveEquipmentSlot,replacementCandidates,equipmentFields,EQUIPMENT_SLOTS} from '../lib/equipmentReplacement.js';
 import {normalizeDeviceType} from '../lib/deviceType.js';
@@ -29,7 +30,7 @@ function getInitialAssets(key, fallback) {
 }
 
 function persistAssetsLocal(key, data) {
-  cacheOfflineData(key, data);
+  return cacheOfflineData(key, data);
 }
 
 function isPendingAssetAction(item) {
@@ -99,6 +100,7 @@ export function useAssets() {
 
   // ── Fetch all asset tables ────────────────────────────────────────────────
   const performFetchAssets = useCallback(async () => {
+    const requestOwner = getOfflineOwner();
     if (!isSupabaseConfigured) return;
     const pendingQueue = await getOfflineQueue();
     if (pendingQueue.some(isPendingAssetAction)) {
@@ -114,10 +116,12 @@ export function useAssets() {
       fetchAllRows(sb => sb.from('system_sets').select('*', { count: 'exact' }).order('set_code'), safeQuery, 'fetchSystemSets', { key: 'set_code' }),
     ]);
 
+    if (requestOwner !== getOfflineOwner()) return false;
+    const cacheWrites = [];
     if (Array.isArray(dRes.data)) {
       const mapped = dRes.data.map(mapDbToDispenser);
       setDispensers(mapped);
-      persistAssetsLocal('dispensers', mapped);
+      cacheWrites.push(persistAssetsLocal('dispensers', mapped));
     } else if (dRes.error) {
       const cached = await getCachedOfflineData('dispensers', null);
       if (Array.isArray(cached)) setDispensers(cached);
@@ -126,7 +130,7 @@ export function useAssets() {
     if (Array.isArray(mRes.data)) {
       const mapped = mRes.data.map(mapDbToMixer);
       setMixers(mapped);
-      persistAssetsLocal('mixers', mapped);
+      cacheWrites.push(persistAssetsLocal('mixers', mapped));
     } else if (mRes.error) {
       const cached = await getCachedOfflineData('mixers', null);
       if (Array.isArray(cached)) setMixers(cached);
@@ -135,7 +139,7 @@ export function useAssets() {
     if (Array.isArray(cRes.data)) {
       const mapped = cRes.data.map(mapDbToComputer);
       setComputers(mapped);
-      persistAssetsLocal('computers', mapped);
+      cacheWrites.push(persistAssetsLocal('computers', mapped));
     } else if (cRes.error) {
       const cached = await getCachedOfflineData('computers', null);
       if (Array.isArray(cached)) setComputers(cached);
@@ -144,7 +148,7 @@ export function useAssets() {
     if (Array.isArray(pRes.data)) {
       const mapped = pRes.data.map(mapDbToPrinter);
       setPrinters(mapped);
-      persistAssetsLocal('printers', mapped);
+      cacheWrites.push(persistAssetsLocal('printers', mapped));
     } else if (pRes.error) {
       const cached = await getCachedOfflineData('printers', null);
       if (Array.isArray(cached)) setPrinters(cached);
@@ -153,13 +157,15 @@ export function useAssets() {
     if (Array.isArray(sRes.data)) {
       const mapped = sRes.data.map(mapDbToSystemSet);
       setSystemSets(mapped);
-      persistAssetsLocal('system_sets', mapped);
+      cacheWrites.push(persistAssetsLocal('system_sets', mapped));
     } else if (sRes.error) {
       const cached = await getCachedOfflineData('system_sets', null);
       if (Array.isArray(cached)) setSystemSets(cached);
     }
 
     setLoading(false);
+    if ([dRes, mRes, cRes, pRes, sRes].some(result => result.error || !Array.isArray(result.data))) return false;
+    return (await Promise.all(cacheWrites)).every(Boolean);
   }, []);
 
   const fetchAssets = useCallback(() => {

@@ -1,3 +1,4 @@
+import { getOfflineOwner } from '../lib/offlineDb.js';
 import { updateWithRevision } from '../lib/guardedWrite.js';
 import { fetchAllRows } from '../lib/paginatedQuery.js';
 import { useState, useEffect, useCallback } from 'react';
@@ -29,6 +30,7 @@ export function useNpps() {
 
   // ── Fetch all NPPs ─────────────────────────────────────────────────────────
   const fetchNpps = useCallback(async () => {
+    const requestOwner = getOfflineOwner();
     if (!isSupabaseConfigured) {
       const cached = await getCachedOfflineData('npps', null);
       if (cached && cached.length > 0) persistNpps(cached, setNpps);
@@ -44,6 +46,8 @@ export function useNpps() {
       sb => sb.from('distributors').select('*', { count: 'exact' }).order('created_at', { ascending: false }).order('id'),
       safeQuery, 'fetchNpps', { key: 'id' }
     );
+    if (requestOwner !== getOfflineOwner()) return false;
+    let cacheSaved = false;
     if (err) { 
       setError(err.message); 
       // Loading cached data on network error
@@ -53,9 +57,10 @@ export function useNpps() {
     else if (data) { 
       const mapped = data.map(mapDbToNpp);
       // Supabase is authoritative while online, including an empty table.
-      persistNpps(mapped, setNpps);
+      cacheSaved = await persistNpps(mapped, setNpps);
     }
     setLoading(false);
+    return cacheSaved;
   }, []);
 
   useEffect(() => { fetchNpps(); }, [fetchNpps]);
@@ -164,7 +169,7 @@ export function useNpps() {
 
 function persistNpps(nextNpps, setNpps, shouldSetState = true) {
   if (shouldSetState) setNpps(nextNpps);
-  cacheOfflineData('npps', nextNpps);
+  return cacheOfflineData('npps', nextNpps);
 }
 
 // ─── Field Mappers ─────────────────────────────────────────────────────────────

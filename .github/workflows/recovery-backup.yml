@@ -64,12 +64,16 @@ jobs:
         run: node scripts/export-storage-backup.mjs backup/recovery/storage
       - name: Independently verify exported Storage files
         run: node scripts/verify-storage-archive.mjs backup/recovery/storage
+      - name: Bind database, roles and Storage files to one recovery manifest
+        run: |
+          printf '%s\n' 'Includes public/auth/storage, grants, role definitions without passwords, and Storage contents.' 'Full Supabase restore drill has not been performed by this export job.' > backup/recovery/coverage.txt
+          node scripts/recovery-integrity.mjs create backup/recovery
+          node scripts/recovery-integrity.mjs verify backup/recovery
       - name: Encrypt recovery archive
         env:
           BACKUP_ENCRYPTION_PASSPHRASE: ${{ secrets.BACKUP_ENCRYPTION_PASSPHRASE }}
         run: |
           set -euo pipefail
-          printf '%s\n' 'Includes public/auth/storage, grants, role definitions without passwords, and Storage contents.' 'Full Supabase restore drill has not been performed by this export job.' > backup/recovery/coverage.txt
           tar -czf backup/recovery.tar.gz -C backup recovery
           node scripts/encrypt-recovery-backup.mjs backup/recovery.tar.gz backup/recovery.tar.gz.enc
           sha256sum backup/recovery.tar.gz.enc > backup/recovery.tar.gz.enc.sha256

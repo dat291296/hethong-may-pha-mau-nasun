@@ -5,7 +5,7 @@ import { classifySyncError } from '../src/lib/syncQueue.js';
 
 test('replay requires a matching server user, active profile and trusted session', async () => {
   const client = { auth: { getUser: async () => ({ data: { user: { id: 'A' } } }) },
-    rpc: async () => ({ data: { profile_found: true, is_active: true } }) };
+    rpc: async () => ({ data: { user_id:'A', role:'technician', managed_region:'Miền Bắc', profile_found: true, is_active: true } }) };
   assert.equal(await requireReplaySession(client, 'A', () => 'A', async () => ({ supported: true, state: { valid: true } })), true);
   await assert.rejects(requireReplaySession(client, 'A', () => 'B', async () => ({})), /OFFLINE_OWNER_CHANGED/);
   await assert.rejects(requireReplaySession(client, 'B', () => 'B', async () => ({})), /SESSION_REJECTED/);

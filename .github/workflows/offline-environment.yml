@@ -1,0 +1,60 @@
+name: Offline stage 1 environment acceptance
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches: [main, 'codex/**']
+    paths:
+      - previews/offline/**
+      - scripts/*offline*
+      - scripts/restore-preflight.mjs
+      - src/lib/offlineDb.js
+      - src/lib/syncQueue.js
+      - src/lib/field*.js
+      - src/lib/appUpdateSafety.js
+      - src/components/Field*.jsx
+      - src/components/Field*.css
+      - src/hooks/useFormDraft.js
+      - tests/fieldCommands.test.mjs
+      - tests/*offline*
+      - .github/workflows/offline-environment.yml
+permissions:
+  contents: read
+jobs:
+  contracts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with: {node-version: 22, cache: npm}
+      - run: npm ci --ignore-scripts
+      - run: npm run test:environment
+      - run: npm run preview:offline:build
+  browsers:
+    needs: contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        engine: [chrome, webkit]
+    env:
+      UI_TEST_ENGINE: ${{ matrix.engine }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with: {node-version: 22, cache: npm}
+      - run: npm ci --ignore-scripts
+      - run: npm run preview:offline:build
+      - name: Bound Ubuntu mirror download waits
+        run: |
+          sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' /etc/apt/apt-mirrors.txt
+          printf 'Acquire::Retries "2";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\n' | sudo tee /etc/apt/apt.conf.d/80nasun-download-timeouts > /dev/null
+      - run: npx --yes --package @playwright/cli@0.1.22 playwright-cli install-browser ${{ matrix.engine }} --with-deps
+      - run: node scripts/verify-offline-environment-browser.mjs
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: stage1-${{ matrix.engine }}-${{ github.run_id }}
+          path: output/stage1-evidence/*.json
+          if-no-files-found: error

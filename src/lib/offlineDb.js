@@ -6,7 +6,7 @@ import {
 } from '../platform/mobileSecurityBridge.js';
 
 const DB_NAME = 'nasun_offline_db';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 const CRYPTO_VERSION = 2;
 const OWNER_STORAGE_KEY = 'nasun_offline_owner';
 const CACHE_SEPARATOR = '::';
@@ -116,6 +116,7 @@ function openDb() {
       if (!db.objectStoreNames.contains('crypto_keys')) {
         db.createObjectStore('crypto_keys', { keyPath: 'ownerId' });
       }
+      if (!db.objectStoreNames.contains('sync_leases')) db.createObjectStore('sync_leases', { keyPath: 'key' });
     };
     request.onsuccess = (event) => {
       const db = event.target.result;
@@ -351,17 +352,66 @@ export async function setCache(key, data) {
 
 export async function getCache(key, fallback = []) {
   try {
-    const ownerId = await waitForOwner();
-    const db = await openDb();
-    const record = await requestResult(db.transaction('cached_data', 'readonly').objectStore('cached_data').get(scopedKey(ownerId, key)));
-    if (!record) return fallback;
-    const value = await decryptValue(ownerId, record, 'cached_data', key);
-    assertCurrentOwner(ownerId);
-    return value;
+    return await getCacheStrict(key, fallback);
   } catch (error) {
     if (error.message !== 'OFFLINE_STORAGE_OWNER_REQUIRED') console.error('[offlineDb] Error reading encrypted cache:', error.message);
     return fallback;
   }
+}
+
+// Drafts and sync checkpoints must distinguish missing data from failed reads.
+export async function getCacheStrict(key, fallback = null) {
+  const ownerId = await waitForOwner();
+  const db = await openDb();
+  assertCurrentOwner(ownerId);
+  const record = await requestResult(db.transaction('cached_data', 'readonly').objectStore('cached_data').get(scopedKey(ownerId, key)));
+  assertCurrentOwner(ownerId);
+  if (!record) return fallback;
+  const value = await decryptValue(ownerId, record, 'cached_data', key);
+  assertCurrentOwner(ownerId);
+  return value;
+}
+
+export async function removeCache(key) {
+  const ownerId=requireOwner();
+  await deleteRecord('cached_data',scopedKey(ownerId,key));
+  assertCurrentOwner(ownerId);
+  return true;
+}
+
+export async function withOfflineLease(name, task, { ttl = 60000 } = {}) {
+  const ownerId = requireOwner();
+  const db = await openDb();
+  const key = scopedKey(ownerId, name);
+  const token = crypto.randomUUID();
+  let deadline = 0;
+  async function change(mode) {
+    const transaction = db.transaction('sync_leases', 'readwrite');
+    const done = transactionDone(transaction);
+    const store = transaction.objectStore('sync_leases');
+    let accepted = false;
+    const request = store.get(key);
+    request.onsuccess = () => {
+      const previous = request.result;
+      if (mode === 'acquire' ? !previous || previous.expiresAt <= Date.now() : previous?.token === token) {
+        accepted = true;
+        if (mode === 'release') store.delete(key);
+        else { deadline = Date.now() + ttl; store.put({ key, token, expiresAt: deadline }); }
+      }
+    };
+    await done;
+    return accepted;
+  }
+  assertCurrentOwner(ownerId);
+  if (!await change('acquire')) return { acquired: false };
+  let lost = false;
+  const timer = setInterval(() => { change('renew').then(ok => { if (!ok) lost = true; }).catch(() => { lost = true; }); }, Math.max(1000, ttl / 3));
+  const assertLease = () => {
+    assertCurrentOwner(ownerId);
+    if (lost || Date.now() >= deadline) throw Object.assign(new Error('SYNC_LEASE_LOST'), { code: 'SYNC_LEASE_LOST' });
+  };
+  try { assertLease(); return { acquired: true, value: await task(assertLease) }; }
+  finally { clearInterval(timer); await change('release'); }
 }
 
 export async function addToQueue(actionItem) {

@@ -12,6 +12,17 @@ export function createOperationId() {
 }
 
 export function migrateQueueItem(item, now = Date.now()) {
+  const invalidPayload=item && Object.hasOwn(item,'payload') && (!item.payload || typeof item.payload!=='object' || Array.isArray(item.payload));
+  const invalidVersion=['schemaVersion','engineVersion','contractVersion'].some(key=>item?.[key]!=null&&(!Number.isSafeInteger(Number(item[key]))||Number(item[key])<1));
+  const invalidBase=item?.baseVersion!=null&&(!Number.isSafeInteger(item.baseVersion)||item.baseVersion<0);
+  if(invalidPayload||invalidVersion||invalidBase)return {...item,status:'needs_review',lastErrorCode:'INVALID_OFFLINE_DATA',lastError:'Dữ liệu chờ gửi chưa hợp lệ. Bản gốc được giữ để kiểm tra, không tự động gửi.'};
+  // An older client must never downgrade or reinterpret a newer queued intent.
+  if (Number(item?.schemaVersion || 0) > QUEUE_SCHEMA_VERSION
+    || Number(item?.engineVersion || 0) > SYNC_ENGINE_VERSION
+    || Number(item?.contractVersion || 0) > SYNC_CONTRACT_VERSION) {
+    return { ...item, status: 'needs_review', lastErrorCode: 'OFFLINE_APP_UPDATE_REQUIRED',
+      lastError: 'Thao tác được tạo bằng phiên bản mới hơn. Cập nhật ứng dụng để tiếp tục; dữ liệu vẫn được giữ.' };
+  }
   const needsEngineReset = Number(item?.engineVersion || 0) < SYNC_ENGINE_VERSION;
   const entity = resolveSyncEntity(item?.action, item?.payload, item?.category);
   return {
@@ -35,8 +46,9 @@ export function migrateQueueItem(item, now = Date.now()) {
 
 export function classifySyncError(error) {
   const code = String(error?.code || '');
+  if(['FIELD_RECEIPT_INVALID','FIELD_INTENT_CONFLICT','FIELD_REVIEW_REQUIRED','INVALID_FIELD_COMMAND','INVALID_CHECKLIST','FIELD_PENDING_EDIT'].includes(code))return 'needs_review';
   const message = String(error?.message || error || '').toLowerCase();
-  const needsReviewCodes = new Set(['REVISION_REQUIRED','SCHEMA_MIGRATION_REQUIRED','WORKFLOW_MIGRATION_REQUIRED','23502', '23503', '23505', '23514', '22P02', 'PGRST204', '42501', 'PGRST301', 'PGRST302', 'PT409', 'WRITE_CONFLICT', 'PERSISTENCE_DENIED', 'AUDIT_IMMUTABLE', 'OFFLINE_OWNER_CHANGED', 'SESSION_REJECTED', '401', '403', '409', '422']);
+  const needsReviewCodes = new Set(['OFFLINE_SCOPE_INVALID','OFFLINE_GRANT_WRITE_FAILED','REVISION_REQUIRED','SCHEMA_MIGRATION_REQUIRED','WORKFLOW_MIGRATION_REQUIRED','23502', '23503', '23505', '23514', '22P02', 'PGRST204', '42501', 'PGRST301', 'PGRST302', 'PT409', 'WRITE_CONFLICT', 'PERSISTENCE_DENIED', 'AUDIT_IMMUTABLE', 'OFFLINE_OWNER_CHANGED', 'SESSION_REJECTED', '401', '403', '409', '422']);
   if ([400, 401, 403, 409, 422].includes(Number(error?.status))) return 'needs_review';
   if (needsReviewCodes.has(code) || /schema cache|constraint|invalid input syntax|duplicate key|sync_conflict|permission denied|jwt expired|account_disabled|reauthentication_required/.test(message)) {
     return 'needs_review';

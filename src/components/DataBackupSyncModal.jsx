@@ -1,4 +1,7 @@
 import { userErrorMessage } from '../security/userError.js';
+import FieldOfflinePanel from './FieldOfflinePanel.jsx';
+import FieldReviewPanel from './FieldReviewPanel.jsx';
+import {loadFieldDocuments} from '../lib/fieldDocumentClient.js';
 import React, { useState } from 'react';
 import { 
   Database, 
@@ -370,6 +373,8 @@ export default function DataBackupSyncModal({
         {/* Tab 3: SYNC */}
         {activeTab === 'sync' && (
           <div className="modal-body">
+            <FieldOfflinePanel machines={systemSets} npps={npps} repairs={repairTickets} online={syncHealth?.online ?? navigator.onLine} documentLoader={loadFieldDocuments} />
+            <FieldReviewPanel/>
             {syncHealth && (
               <div className="card" style={{ padding: '0.9rem', marginBottom: '1rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>

@@ -2,7 +2,8 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { createAuthEventScheduler } from '../security/authEventScheduler.js';
 import { ROLES, ROLE_LABELS, hasPermission } from '../security/rbac.js';
 import { supabase, isSupabaseConfigured, isDevelopmentFallback } from '../lib/supabase.js';
-import { clearOfflineStorage, getCache, getQueue, initializeOfflineStorage, setCache } from '../lib/offlineDb.js';
+import { clearOfflineStorage, getCacheStrict, getQueue, initializeOfflineStorage, setCache, removeCache } from '../lib/offlineDb.js';
+import { OFFLINE_GRANT_KEY, createOfflineAccessGrant, offlineAccessDecision, requireCurrentReplayScope } from '../security/offlineAccess.js';
 import { syncOfflineQueue } from '../lib/offlineSync.js';
 import { registerTrustedDeviceSession, validateTrustedDeviceSession } from '../security/trustedDevice.js';
 
@@ -13,12 +14,20 @@ const SESSION_VALIDATION_MS = 5 * 60 * 1000;
 const TOKEN_REFRESH_WINDOW_SECONDS = 5 * 60;
 
 async function getOfflineUser(authUser) {
-  const cached = await getCache(OFFLINE_USER_KEY, null);
-  return cached?.id === authUser?.id ? cached : null;
+  const [cached,grant] = await Promise.all([getCacheStrict(OFFLINE_USER_KEY,null),getCacheStrict(OFFLINE_GRANT_KEY,null)]);
+  return cached?.id === authUser?.id && offlineAccessDecision(grant,cached).allowed ? cached : null;
 }
 
 async function persistOfflineUser(user) {
-  if (user) await setCache(OFFLINE_USER_KEY, user);
+  return user ? await setCache(OFFLINE_USER_KEY, user) : false;
+}
+
+async function persistOfflineAuthorization(user,limits={}) {
+  // Invalidate the previous scope before replacing profile and authorization.
+  await removeCache(OFFLINE_GRANT_KEY);
+  if (!await persistOfflineUser(user) || !await setCache(OFFLINE_GRANT_KEY,createOfflineAccessGrant(user,Date.now(),limits))) {
+    throw Object.assign(new Error('OFFLINE_GRANT_WRITE_FAILED'),{code:'OFFLINE_GRANT_WRITE_FAILED'});
+  }
 }
 
 // Default dev user (used when Supabase not configured)
@@ -94,15 +103,9 @@ export function AuthProvider({ children }) {
           await initializeOfflineStorage(session.user.id);
           if (!navigator.onLine) {
             const cachedUser = await getOfflineUser(session.user);
-            const fallbackUser = cachedUser || {
-              id: session.user.id,
-              email: session.user.email,
-              name: session.user.email,
-              role: ROLES.VIEWER,
-              managedRegion: 'Miền Bắc'
-            };
-            setUser(fallbackUser);
-            setRole(fallbackUser.role || ROLES.VIEWER);
+            if (!cachedUser) setAuthRedirectError('Cần kết nối mạng để xác minh quyền. Bản nháp và hàng chờ vẫn được giữ.');
+            setUser(cachedUser);
+            setRole(cachedUser?.role || ROLES.VIEWER);
             setLoading(false);
           } else {
             loadUserProfile(session.user);
@@ -131,15 +134,9 @@ export function AuthProvider({ children }) {
             await initializeOfflineStorage(session.user.id);
             if (!navigator.onLine) {
               const cachedUser = await getOfflineUser(session.user);
-              const fallbackUser = cachedUser || {
-                id: session.user.id,
-                email: session.user.email,
-                name: session.user.email,
-                role: ROLES.VIEWER,
-                managedRegion: 'Miền Bắc'
-              };
-              setUser(fallbackUser);
-              setRole(fallbackUser.role || ROLES.VIEWER);
+              if (!cachedUser) setAuthRedirectError('Cần kết nối mạng để xác minh quyền. Bản nháp và hàng chờ vẫn được giữ.');
+              setUser(cachedUser);
+              setRole(cachedUser?.role || ROLES.VIEWER);
               setLoading(false);
             } else {
               await loadUserProfile(session.user);
@@ -183,12 +180,16 @@ export function AuthProvider({ children }) {
       sessionOwner.current = authUser.id;
       await initializeOfflineStorage(authUser.id);
 
+      let verifiedLimits={};
       if (navigator.onLine) {
         const registration = await registerTrustedDeviceSession();
         if (!registration.supported || registration.state?.valid !== true) {
           throw Object.assign(new Error('SESSION_REJECTED'), { code: 'SESSION_REJECTED' });
         }
         trustedSessionRegistered.current = true;
+        const validation=await validateTrustedDeviceSession();
+        if(!validation.supported||validation.state?.valid!==true)throw Object.assign(new Error('SESSION_REJECTED'),{code:'SESSION_REJECTED'});
+        verifiedLimits={...registration.state,...validation.state};
         if (registration.state?.anomaly_detected && !sessionStorage.getItem('nasun-device-alert-shown')) {
           sessionStorage.setItem('nasun-device-alert-shown', 'true');
           window.alert('Phát hiện đăng nhập từ thiết bị hoặc vị trí mới. Sự kiện đã được ghi lại để quản trị viên kiểm tra.');
@@ -212,7 +213,7 @@ export function AuthProvider({ children }) {
 
       if (error) throw error;
       const finalRole = profile?.role || ROLES.VIEWER;
-      const finalRegion = profile?.managed_region || 'Miền Bắc';
+      const finalRegion = profile?.managed_region || (finalRole===ROLES.ADMIN ? 'Toàn Quốc' : '');
 
       const resolvedUser = {
         id: authUser.id,
@@ -223,7 +224,7 @@ export function AuthProvider({ children }) {
         managedRegion: finalRegion,
       };
       setUser(resolvedUser);
-      await persistOfflineUser(resolvedUser);
+      await persistOfflineAuthorization(resolvedUser,verifiedLimits);
       if (sessionOwner.current !== authUser.id) return;
       setRole(finalRole);
       if (navigator.onLine && !trustedSessionRegistered.current) {
@@ -256,21 +257,33 @@ export function AuthProvider({ children }) {
         await clearOfflineStorage(authUser.id);
         return;
       }
-      const fallbackUser = await getOfflineUser(authUser) || {
-        id: authUser.id, 
-        email: authUser.email, 
-        name: authUser.email, 
-        role: ROLES.VIEWER,
-        managedRegion: 'Miền Bắc'
-      };
+      const fallbackUser = await getOfflineUser(authUser).catch(() => null);
       if (sessionOwner.current !== authUser.id) return;
       setUser(fallbackUser);
-      await persistOfflineUser(fallbackUser);
-      setRole(fallbackUser.role || ROLES.VIEWER);
+      setRole(fallbackUser?.role || ROLES.VIEWER);
+      if (!fallbackUser) setAuthRedirectError('Chưa xác minh được quyền hiện tại. Kết nối mạng và đăng nhập lại; nháp chưa gửi được giữ nguyên.');
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (!isSupabaseConfigured || !user?.id) return undefined;
+    let cancelled=false;
+    const validateOfflineRead=async()=>{
+      if (navigator.onLine) return;
+      const cached=await getOfflineUser({id:user.id}).catch(()=>null);
+      if (cancelled || cached) return;
+      setUser(null);setRole(ROLES.VIEWER);
+      setAuthRedirectError('Quyền đọc offline đã hết hạn. Kết nối lại để xác minh; nháp và hàng chờ được giữ.');
+      await clearOfflineStorage(user.id);
+    };
+    const timer=setInterval(validateOfflineRead,30000);
+    window.addEventListener('offline',validateOfflineRead);
+    document.addEventListener('visibilitychange',validateOfflineRead);
+    validateOfflineRead();
+    return ()=>{cancelled=true;clearInterval(timer);window.removeEventListener('offline',validateOfflineRead);document.removeEventListener('visibilitychange',validateOfflineRead);};
+  },[user?.id]);
 
   // ── Dev-only: switch role via dropdown ─────────────────────────────────────
   const switchDevRole = useCallback(async (newRole) => {
@@ -394,7 +407,7 @@ export function AuthProvider({ children }) {
           return;
         }
 
-        if (!state?.profile_found || !state?.is_active) {
+        if (!state?.profile_found || !state?.is_active || state.user_id !== user.id) {
           await clearInvalidSession('ACCOUNT_DISABLED_OR_MISSING');
           return;
         }
@@ -408,6 +421,10 @@ export function AuthProvider({ children }) {
           await clearInvalidSession(trustedResult.state.reason || 'TRUSTED_SESSION_REJECTED');
           return;
         }
+
+        if (!trustedResult.supported || trustedResult.state?.valid !== true) { await clearInvalidSession('TRUSTED_SESSION_UNVERIFIED'); return; }
+        const currentScope=requireCurrentReplayScope(state,user.id);
+        if (state.role===user.role && state.managed_region===user.managedRegion) await persistOfflineAuthorization({...user,...currentScope},trustedResult.state);
 
         const expiresIn = Number(state.token_expires_at || 0) - Math.floor(Date.now() / 1000);
         if (expiresIn <= TOKEN_REFRESH_WINDOW_SECONDS) {

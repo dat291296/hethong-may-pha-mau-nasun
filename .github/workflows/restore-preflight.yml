@@ -20,3 +20,12 @@ jobs:
           node-version: 22
       - name: Check destination identity and empty data stores without restoring
         run: node scripts/restore-preflight.mjs
+      - name: Save credential-free inspection receipt
+        run: |
+          mkdir -p output/stage1-evidence
+          node --input-type=module -e "import{writeFileSync}from'node:fs';writeFileSync('output/stage1-evidence/restore-preflight.json',JSON.stringify({passed:true,readOnly:true,isolatedDestination:true,emptyDestination:true,fullRestoreVerified:false,commit:process.env.GITHUB_SHA},null,2))"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: restore-preflight-${{ github.run_id }}
+          path: output/stage1-evidence/restore-preflight.json
+          if-no-files-found: error

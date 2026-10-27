@@ -1,6 +1,7 @@
 import { isSupabaseConfigured, safeQuery } from './supabase.js';
 import { enqueueOfflineAction } from './offlineSync.js';
 import { isTransientMutationError } from './durableMutation.js';
+import {submitFieldCommand} from './fieldCommandClient.js';
 
 function createOperationId() {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
@@ -17,6 +18,11 @@ function isRetryable(error) {
 }
 
 export async function executeWorkflowTransaction(workflow, data) {
+  if(isSupabaseConfigured){
+    if(!navigator.onLine||data.confirmedOnline!==true)throw Object.assign(new Error('Kết nối mạng và xác nhận lại bộ máy/NPP trước khi thực hiện.'),{code:'ONLINE_CONFIRMATION_REQUIRED'});
+    const {operationId,expectedRevision,confirmedOnline,...payload}=data;
+    return submitFieldCommand({kind:workflow,entityId:data.setCode,expected:expectedRevision,payload,operationId},{confirmed:confirmedOnline});
+  }
   const operationId = data.operationId || createOperationId();
   const queuePayload = { operationId, workflow, data };
 

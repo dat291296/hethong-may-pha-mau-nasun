@@ -1,3 +1,5 @@
+import { getOfflineOwner } from '../lib/offlineDb.js';
+import {submitFieldCommand} from '../lib/fieldCommandClient.js';
 import {recordOperationalError} from '../lib/operationalDiagnostics.js';
 import {normalizeCalendarDate,normalizeOptionalTimestamp} from '../utils/dateUtils.js';
 import { persistMutation, persistBatchMutation } from '../lib/durableMutation.js';
@@ -5,7 +7,6 @@ import { fetchAllRows } from '../lib/paginatedQuery.js';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase, isSupabaseConfigured, safeQuery } from '../lib/supabase.js';
 import { INITIAL_REPAIR_TICKETS } from '../data/mockData.js';
-import { matchesSavedRepair } from '../lib/teamWorkspace';
 import { cacheOfflineData, getCachedOfflineData, enqueueOfflineAction, getOfflineQueue } from '../lib/offlineSync.js';
 
 function normalizeProductCategory(category, machineModel = '') {
@@ -34,7 +35,7 @@ export function useRepairs() {
 
   const persistRepairTickets = useCallback((nextTickets) => {
     setRepairTickets(nextTickets);
-    cacheOfflineData('repair_tickets', nextTickets);
+    return cacheOfflineData('repair_tickets', nextTickets);
   }, []);
 
   // Hydrate cache from IndexedDB on mount
@@ -50,29 +51,33 @@ export function useRepairs() {
   }, []);
 
   const fetchRepairs = useCallback(async () => {
+    const requestOwner = getOfflineOwner();
     if (!isSupabaseConfigured) return;
     const version=++fetchVersion.current;
     setLoading(true);setLoadError('');
     try {
       const pendingQueue = await getOfflineQueue();
-      if (pendingQueue.some(item => ['ADD_REPAIR','EDIT_REPAIR','DELETE_REPAIR'].includes(item.action))) {
+      if (pendingQueue.some(item => ['ADD_REPAIR','EDIT_REPAIR','DELETE_REPAIR'].includes(item.action)||(item.action==='FIELD_OPERATION'&&item.payload?.kind?.startsWith('REPAIR')))) {
+        const cached=await getCachedOfflineData('repair_tickets',null);
+        if(version===fetchVersion.current&&requestOwner===getOfflineOwner()&&Array.isArray(cached))setRepairTickets(cached);
         if(version===fetchVersion.current)setLoadError('Có thay đổi đang chờ đồng bộ. Giữ dữ liệu trên thiết bị; kiểm tra hàng chờ trước khi tải bản server.');
         return;
       }
       const {data,error}=await fetchAllRows(sb=>sb.from('repair_tickets').select('*',{count:'exact'}).order('date',{ascending:false}).order('id'),safeQuery,'fetchRepairs',{key:'id'});
-      if(version!==fetchVersion.current)return;
+      if(version!==fetchVersion.current || requestOwner !== getOfflineOwner())return false;
       if(error)throw error;
       if(!Array.isArray(data))throw Error('INCOMPLETE_REPAIR_RESPONSE');
-      persistRepairTickets(data.map(mapDbToRepair));
+      return await persistRepairTickets(data.map(mapDbToRepair));
     } catch(error) {
       recordOperationalError('runtime',error);
-      if(version===fetchVersion.current){
+      if(version===fetchVersion.current && requestOwner === getOfflineOwner()){
         setLoadError('Chưa tải được phiếu từ server. Dữ liệu đã có được giữ nguyên; kiểm tra kết nối và thử lại.');
         try {
           const cached=await getCachedOfflineData('repair_tickets',null);
           if(version===fetchVersion.current&&Array.isArray(cached))setRepairTickets(cached);
         } catch(cacheError) {recordOperationalError('runtime',cacheError);}
       }
+      return false;
     } finally {if(version===fetchVersion.current)setLoading(false);}
   },[persistRepairTickets]);
 
@@ -96,21 +101,17 @@ export function useRepairs() {
     const dbPayload = { ...mapRepairToDb(localTicket), id: tempId };
 
     if (isSupabaseConfigured) {
-      if (!navigator.onLine) throw new Error('Mất mạng. Phiếu được giữ ở bản nháp; kết nối lại rồi lưu.');
-      let { data, error } = await safeQuery(sb => sb.from('repair_tickets').insert(dbPayload).select('*').single(), 'addTicket');
-      if (error) {
-        const existing = await safeQuery(sb => sb.from('repair_tickets').select('*').eq('id', tempId).maybeSingle(), 'verifyRepairRetry');
-        if (!existing.error && matchesSavedRepair(existing.data, dbPayload)) data = existing.data;
-        else throw error;
-      }
-      const saved = mapDbToRepair(data);
+      const payload=Object.fromEntries(Object.entries(dbPayload).filter(([key,value])=>value!==undefined&&!['assigned_user_id','assignment_due_date'].includes(key)));
+      const result=await submitFieldCommand({kind:'REPAIR_CREATE',entityId:tempId,payload});
+      const saved={...localTicket,recordVersion:result.receipt?.version||0,syncPending:result.queued};
       setRepairTickets(previous => [saved, ...previous.filter(item => item.id !== saved.id)]);
-      await fetchRepairs();
+      await cacheOfflineData('repair_tickets',[saved,...repairTickets.filter(item=>item.id!==saved.id)]);
+      if(!result.queued)await fetchRepairs();
       return saved;
     }
     setRepairTickets(previous => [localTicket, ...previous]);
     return localTicket;
-  }, [fetchRepairs]);
+  }, [fetchRepairs,repairTickets]);
 
   const editTicket = useCallback(async (id, updates) => {
     const dbUpdates = {};
@@ -168,18 +169,10 @@ export function useRepairs() {
     }
 
     if (isSupabaseConfigured) {
-      if (!navigator.onLine) throw new Error('Mất mạng. Bản sửa được giữ ở bản nháp; kết nối lại rồi lưu.');
       if (!Number.isSafeInteger(updates.recordVersion)) throw new Error('Thiếu phiên bản phiếu. Mở lại phiếu trước khi sửa.');
-      const { data, error } = await safeQuery(
-        sb => sb.from('repair_tickets').update(dbUpdates).eq('id', id).eq('record_version', updates.recordVersion).select('*'), 'editTicket'
-      );
-      if (error?.code === '23505') throw new Error('Mã phiếu đã tồn tại. Hãy dùng mã khác; nội dung đang sửa vẫn được giữ.');
-      if (error) throw error;
-      if (!data?.length) {
-        await fetchRepairs();
-        throw new Error('Phiếu đã được người khác cập nhật hoặc bạn không còn quyền sửa. Bản nháp vẫn được giữ; đóng và mở lại phiếu để đối chiếu, không ghi đè.');
-      }
-      const saved = mapDbToRepair(data[0]);
+      const payload={id,...Object.fromEntries(Object.entries(dbUpdates).filter(([key,value])=>value!==undefined&&!['assigned_user_id','assignment_due_date'].includes(key)))};
+      const result=await submitFieldCommand({kind:'REPAIR_EDIT',entityId:id,expected:updates.recordVersion,payload});
+      const saved={...repairTickets.find(ticket=>ticket.id===id),...updates,recordVersion:result.receipt?.version||updates.recordVersion,syncPending:result.queued};
       setRepairTickets(previous => previous.map(ticket => ticket.id === id ? saved : ticket));
       cacheOfflineData('repair_tickets', repairTickets.map(ticket => ticket.id === id ? saved : ticket));
       return saved;
