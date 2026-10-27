@@ -10,6 +10,7 @@ import { getTrustedDeviceId, validateTrustedDeviceSession } from '../security/tr
 import { requireReplaySession } from '../security/replaySession.js';
 import { requireOfflineReplayPermission } from '../security/offlineReplayPolicy.js';
 import { persistQueueReplacement } from './durableMutation.js';
+import {replayFieldCommand} from './fieldCommandClient.js';
 
 let activeSyncPromise = null;
 const deviceIdPools = new Map();
@@ -649,6 +650,9 @@ async function processOfflineQueue(onStatusChange, assertLease = () => {}) {
       } else {
 
       switch (item.action) {
+        case 'FIELD_OPERATION':
+          await replayFieldCommand(item.payload,assertOwner);
+          break;
         case 'ADD_NPP':
           const { error: addNppErr } = await supabase.from('distributors').upsert(item.payload, { onConflict: 'id' });
           error = addNppErr;

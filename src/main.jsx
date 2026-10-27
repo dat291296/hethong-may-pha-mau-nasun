@@ -24,15 +24,15 @@ createRoot(document.getElementById('root')).render(
 // Register Service Worker with update check & error recovery
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    let refreshing = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (refreshing) return;
-      refreshing = true;
-      window.location.reload();
+      window.dispatchEvent(new CustomEvent('nasun-field-notice',{detail:'Ứng dụng đã có phiên bản mới. Lưu bản nháp, đóng các tab rồi mở lại khi thuận tiện.'}));
     });
 
     navigator.serviceWorker.register('/sw.js?v=7.0', { updateViaCache: 'none' })
       .then(reg => {
+        const notify=()=>window.dispatchEvent(new Event('nasun-app-update-ready'));
+        if(reg.waiting)notify();
+        reg.addEventListener('updatefound',()=>{const worker=reg.installing;worker?.addEventListener('statechange',()=>{if(worker.state==='installed'&&navigator.serviceWorker.controller)notify();});});
         console.log('[SW] Registered successfully:', reg.scope);
         return reg.update();
       })

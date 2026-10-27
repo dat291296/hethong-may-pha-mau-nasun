@@ -16,9 +16,9 @@ export function buildFieldPack({ owner, machines, npps = [], repairs = [], selec
   const nppIds = new Set(rows.map(row => row.nppId));
   const pack = {
     version: 1, owner, savedAt: now, expiresAt: now + FIELD_PACK_TTL,
-    machines: rows.map(row => copyFields(row, ['setCode','nppId','nppName','region','status','dispenserModel','dispenserSerial','mixerModel','mixerSerial','computerModel','computerSerial','printerModel','printerSerial','lastMaintenanceDate','nextMaintenanceDue','dbRevision'])),
+    machines: rows.map(row => copyFields(row, ['setCode','nppId','nppName','region','status','dispenserModel','dispenserSerial','mixerModel','mixerSerial','computerModel','computerSerial','printerModel','printerSerial','lastMaintenanceDate','nextMaintenanceDue','dbRevision','updatedAt'])),
     npps: npps.filter(row => nppIds.has(row.id)).map(row => copyFields(row, ['id','code','name','region','address','contactPerson','phone'])),
-    repairs: repairs.filter(row => requested.has(row.setCode) || nppIds.has(row.nppId)).slice(0, 100).map(row => copyFields(row, ['id','setCode','nppId','date','productCategory','machineModel','serial','issue','problemDescription','processingStatus','customerReturnStatus'])),
+    repairs: repairs.filter(row => requested.has(row.setCode) || nppIds.has(row.nppId)).slice(0, 100).map(row => copyFields(row, ['id','setCode','nppId','date','productCategory','machineModel','serial','issue','problemDescription','errorDescription','processingStatus','customerReturnStatus'])),
     excluded: ['Ảnh và tài liệu chưa được tải riêng không có trong gói này.'],
     warnings:rows.filter(row=>row.nppId&&!npps.some(npp=>npp.id===row.nppId)).map(row=>({code:'NPP_NOT_IN_SNAPSHOT',setCode:row.setCode})),
   };

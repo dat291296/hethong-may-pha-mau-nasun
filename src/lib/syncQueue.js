@@ -46,6 +46,7 @@ export function migrateQueueItem(item, now = Date.now()) {
 
 export function classifySyncError(error) {
   const code = String(error?.code || '');
+  if(['FIELD_RECEIPT_INVALID','FIELD_INTENT_CONFLICT','FIELD_REVIEW_REQUIRED','INVALID_FIELD_COMMAND','INVALID_CHECKLIST','FIELD_PENDING_EDIT'].includes(code))return 'needs_review';
   const message = String(error?.message || error || '').toLowerCase();
   const needsReviewCodes = new Set(['OFFLINE_SCOPE_INVALID','OFFLINE_GRANT_WRITE_FAILED','REVISION_REQUIRED','SCHEMA_MIGRATION_REQUIRED','WORKFLOW_MIGRATION_REQUIRED','23502', '23503', '23505', '23514', '22P02', 'PGRST204', '42501', 'PGRST301', 'PGRST302', 'PT409', 'WRITE_CONFLICT', 'PERSISTENCE_DENIED', 'AUDIT_IMMUTABLE', 'OFFLINE_OWNER_CHANGED', 'SESSION_REJECTED', '401', '403', '409', '422']);
   if ([400, 401, 403, 409, 422].includes(Number(error?.status))) return 'needs_review';

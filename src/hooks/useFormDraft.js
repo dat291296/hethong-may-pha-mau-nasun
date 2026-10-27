@@ -70,10 +70,17 @@ export function useFormDraft(key, value, enabled, onRestore) {
     if (!await setCache(`form-draft:${key}`, null)) { setStatus('Không xóa được bản nháp; bản cũ được giữ nguyên'); throw new Error('DRAFT_CLEAR_FAILED'); }
     setExisting(null); setStatus('Đã lưu lên hệ thống');
   };
-  const flush = async () => {
+  const flush = async (snapshot) => {
+    if(snapshot!==undefined)latest.current=snapshot;
     if (!ready.current && !existing) throw new Error('Chưa đọc xong bản nháp. Giữ màn hình mở và thử lại.');
     persistRef.current(); await queue.current;
     if (writeError.current) throw new Error('Không lưu được bản nháp. Giữ màn hình mở và kiểm tra dung lượng thiết bị.');
   };
+  useEffect(()=>{
+    if(!enabled||!key)return;
+    const prepare=event=>event.detail?.waitUntil(flush());
+    window.addEventListener('nasun-prepare-update',prepare);
+    return()=>window.removeEventListener('nasun-prepare-update',prepare);
+  },[enabled,key]);
   return { existing, status, resume, discard, clear, flush };
 }

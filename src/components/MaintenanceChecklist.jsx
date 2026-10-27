@@ -7,6 +7,7 @@ import SafePortal from './SafePortal';
 import { maintenanceNotes, maintenanceSteps } from '../lib/machineWorkspace';
 import { compressImage } from '../utils/imageCompressor';
 import { validateDocumentFile } from '../lib/technicalResources';
+import {validateMaintenanceChecklist} from '../lib/fieldCommands.js';
 
 export default function MaintenanceChecklist({ onReturnToProfile, machine, onSave, onClose }) {
   const operationId = useRef(crypto.randomUUID());
@@ -19,12 +20,14 @@ export default function MaintenanceChecklist({ onReturnToProfile, machine, onSav
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const { user } = useAuth();
-  const draftValue = useMemo(() => ({ model: machine.dispenserModel, serial: machine.dispenserSerial, operationId: operationId.current, results, date, parts, notes, photos }), [machine.dispenserModel, machine.dispenserSerial, results, date, parts, notes, photos]);
+  const [expectedRevision,setExpectedRevision]=useState(machine.dbRevision||machine.updatedAt||null);
+  const draftValue = useMemo(() => ({ model: machine.dispenserModel, serial: machine.dispenserSerial, expectedRevision, operationId: operationId.current, results, date, parts, notes, photos }), [machine.dispenserModel, machine.dispenserSerial, expectedRevision, results, date, parts, notes, photos]);
   const draft = useFormDraft(`${user.id}:maintenance:${machine.setCode}`, draftValue, true, saved => {
     if (saved.results?.length !== steps.length || saved.model !== machine.dispenserModel || saved.serial !== machine.dispenserSerial) {
       setError('Thông tin máy đã thay đổi từ lúc lưu nháp. Hãy đánh giá lại checklist cho đúng máy.'); return false;
     }
     operationId.current = saved.operationId || crypto.randomUUID();
+    setExpectedRevision(saved.expectedRevision||null);
     setResults(saved.results); setDate(saved.date); setParts(saved.parts || ''); setNotes(saved.notes || ''); setPhotos(saved.photos || { before: [], after: [] });
   });
   async function selectPhotos(event, phase) {
@@ -48,7 +51,11 @@ export default function MaintenanceChecklist({ onReturnToProfile, machine, onSav
       const offset = (machine.installationPhotos || []).length;
       const indexes = (start, count) => Array.from({ length: count }, (_, index) => `#${start + index + 1}`).join(', ');
       const summary = `Ảnh trong hồ sơ: trước ${indexes(offset, photos.before.length) || 'chưa có'}; sau ${indexes(offset + photos.before.length, photos.after.length) || 'chưa có'}.`;
-      await onSave({ operationId: operationId.current, setCode: machine.setCode, lastMaintenanceDate: date, nextMaintenanceDue: next.toLocaleDateString('en-CA'), notes: maintenanceNotes(machine.dispenserModel, results, parts, notes, summary), photos: [...photos.before, ...photos.after], hasIssues: results.includes('ISSUE') });
+      const checklist={version:1,model:machine.dispenserModel||'',serial:machine.dispenserSerial||'',steps:steps.map((label,index)=>({id:String(index+1),label,result:results[index]}))};
+      validateMaintenanceChecklist(checklist);
+      await draft.flush();
+      const outcome=await onSave({ operationId: operationId.current, expectedRevision, checklist, setCode: machine.setCode, lastMaintenanceDate: date, nextMaintenanceDue: next.toLocaleDateString('en-CA'), notes: maintenanceNotes(machine.dispenserModel, results, parts, notes, summary), photos: [...photos.before, ...photos.after], hasIssues: results.includes('ISSUE') });
+      if(outcome?.queued)window.dispatchEvent(new CustomEvent('nasun-field-notice',{detail:'Checklist đã lưu trên thiết bị, đang chờ server xác nhận. Chưa cập nhật lịch bảo trì.'}));
       await draft.clear().catch(() => console.warn('[MaintenanceChecklist] Draft cleanup failed'));
       onClose();
     } catch (err) { console.error('[MaintenanceChecklist] Save failed', err.code || err.name); setError(userErrorMessage(err) || 'Không lưu được bảo trì.'); } finally { setBusy(false); }

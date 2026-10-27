@@ -7,6 +7,7 @@ const permissions=Object.freeze({ADD_NPP:'npp:create',EDIT_NPP:'npp:edit',DELETE
 export function requireOfflineReplayPermission(scope,item){
  if(item.ownerId&&item.ownerId!==scope.id)throw Object.assign(new Error('OFFLINE_OWNER_CHANGED'),{code:'OFFLINE_OWNER_CHANGED'});
  let permission=permissions[item.action];
+ if(item.action==='FIELD_OPERATION')permission={REPAIR_CREATE:'repair:create',REPAIR_EDIT:'repair:edit',MAINTENANCE:'asset:edit',INSTALL:'workflow:install',TRANSFER:'workflow:transfer',WITHDRAW:'workflow:withdraw'}[item.payload?.kind];
  if(item.action==='EXECUTE_WORKFLOW')permission={INSTALL:'workflow:install',TRANSFER:'workflow:transfer',WITHDRAW:'workflow:withdraw'}[item.payload?.workflow];
  if(!permission||!hasPermission(scope.role,permission))throw Object.assign(new Error('OFFLINE_PERMISSION_CHANGED'),{code:'42501'});
  const region=item.payload?.region||item.payload?.data?.region;

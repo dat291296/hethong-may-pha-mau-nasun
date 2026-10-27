@@ -90,6 +90,10 @@ async function main() {
     const {verifyMachineEvidence}=await import('./verify-machine-evidence.mjs');
     await verifyMachineEvidence(client,env);
   }
+  if(env.VERIFY_FIELD_COMMANDS==='true'){
+    const {verifyFieldCommands}=await import('./verify-field-commands.mjs');
+    await verifyFieldCommands(client,env);
+  }
   if(env.VERIFY_EQUIPMENT_REPLACEMENT==='true'){
     const {verifyEquipmentReplacement}=await import('./verify-equipment-replacement.mjs');
     await verifyEquipmentReplacement(client,env);

@@ -363,6 +363,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
       return;
     }
     if(hasMalformedRepairLists(ticket)){setSaveError('Phiếu có dữ liệu ảnh hoặc vật tư cũ sai định dạng. Chưa mở sửa để tránh ghi mất dữ liệu; báo quản trị viên đối chiếu.');return;}
+    if(ticket.syncPending){setSaveNotice('Phiếu còn trong hàng chờ. Đồng bộ và đối chiếu trước khi sửa tiếp.');return;}
     setEditingTicket(ticket);
     setNppSearchTerm('');
     setFormData({
@@ -488,10 +489,11 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
     setSaving(true);
     try {
     if (editingTicket) {
+      await draft.flush();
       await onEditTicket({
         ...sanitized,
         id: editingTicket.id,
-        recordVersion: editingTicket.recordVersion,
+        recordVersion: formData.recordVersion,
         nppName: finalNppName
       });
     } else {
@@ -504,6 +506,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
       const newTicketCode = sanitized.ticketCode || `${codePrefix}${String(sequence).padStart(3, '0')}-${crypto.randomUUID().slice(0, 8)}`;
       const ticketId = sanitized.id || crypto.randomUUID();
       setFormData(previous => ({ ...previous, id: ticketId, ticketCode: newTicketCode }));
+      await draft.flush({...formData,id:ticketId,ticketCode:newTicketCode});
       await onAddTicket({
         ...sanitized,
         id: ticketId,
@@ -514,7 +517,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
 
     await draft.clear().catch(() => console.warn('[Repair] Draft cleanup failed'));
     const missing = repairMissingFields(sanitized);
-    setSaveNotice(missing.length ? `Đã lưu phiếu. Cần bổ sung: ${missing.join(' · ')}` : 'Đã lưu phiếu thành công.');
+    setSaveNotice(`${navigator.onLine ? 'Đã tiếp nhận phiếu; kiểm tra hàng chờ nếu chưa có xác nhận server.' : 'Đã lưu trên thiết bị, đang chờ đồng bộ.'}${missing.length ? ` Cần bổ sung: ${missing.join(' · ')}` : ''}`);
     setShowModal(false);
     onReturnToProfile?.();
     } catch (error) { console.error('[Repair] Save failed', error.code || error.name); setSaveError(userErrorMessage(error) || 'Chưa lưu được phiếu. Bản nháp vẫn được giữ.'); }

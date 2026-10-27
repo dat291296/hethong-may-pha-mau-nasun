@@ -7,6 +7,7 @@ import { assertAdditionalSetConfirmed } from './lib/assemblyGuard.js';
 import React, { useState, useEffect, lazy, Suspense } from 'react';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
+import FieldSyncStatus from './components/FieldSyncStatus.jsx';
 import WorkflowModal from './components/WorkflowModal';
 import HandoverPrintModal from './components/HandoverPrintModal';
 import MobileBottomNav from './components/MobileBottomNav';
@@ -17,6 +18,7 @@ import { requireRegionEdit } from './lib/workspaceFilters.js';
 import { supabase, isSupabaseConfigured } from './lib/supabase';
 import { cacheOfflineData } from './lib/offlineSync.js';
 import { executeWorkflowTransaction } from './lib/workflowTransactions.js';
+import {submitFieldCommand} from './lib/fieldCommandClient.js';
 import { acknowledgeChangeFeedCursor, retryChangeFeedCursor, startChangeFeed } from './lib/changeFeed.js';
 import { refreshBeforeCheckpoint } from './lib/syncCheckpoint.js';
 import { startPrivateRealtimeSync } from './lib/realtimeSync.js';
@@ -294,7 +296,7 @@ export default function App() {
         updateLocalDeviceStatus(added.productCategory, added.serialNumber, newStatus);
       }
 
-      await addAuditLog({
+      if(!isSupabaseConfigured)await addAuditLog({
         type: 'TẠO PHIẾU SỬA CHỮA',
         setCode: added.serialNumber,
         nppId: added.nppId,
@@ -681,15 +683,10 @@ export default function App() {
     if (!targetSet) throw new Error('Không tìm thấy bộ máy.');
     requireRegionEdit(user, targetSet.region);
     if (isSupabaseConfigured) {
-      if (!navigator.onLine) throw new Error('Kết nối mạng để lưu đồng thời checklist, ảnh và lịch bảo trì.');
-      const { error } = await supabase.rpc('complete_machine_maintenance', {
-        p_operation_id: maintData.operationId, p_set_code: maintData.setCode,
-        p_date: maintData.lastMaintenanceDate, p_next_date: maintData.nextMaintenanceDue,
-        p_notes: maintData.notes, p_photos: maintData.photos || [], p_has_issues: !!maintData.hasIssues
-      });
-      if (error) { console.error('[Maintenance] Persistence rejected', error.code); throw new Error(error.code === 'PGRST202' ? 'Admin cần áp dụng maintenance_checklist_migration.sql trước khi lưu bảo trì.' : 'Không lưu được bảo trì. Kiểm tra quyền, khu vực và kết nối mạng.'); }
-      await Promise.all([refetchAssets(), refetchAuditLogs()]);
-      return;
+      const {operationId,expectedRevision,...payload}=maintData;
+      const result=await submitFieldCommand({kind:'MAINTENANCE',entityId:maintData.setCode,expected:expectedRevision,payload,operationId});
+      if(!result.queued)await Promise.all([refetchAssets(), refetchAuditLogs()]);
+      return result;
     }
     try {
       await updateSystemSet(maintData.setCode, {
@@ -808,6 +805,7 @@ export default function App() {
         />
 
         {/* Dynamic View Content */}
+        <FieldSyncStatus/>
         <main key={activeTab} className="page-transition nasun-workspace" data-page={activeTab} style={{ flex: 1, padding: '28px', overflowY: 'auto' }}>
           {!['users', 'techHandbook'].includes(activeTab) && <RegionalWorkspaceBar key={regionalIdentity} user={user} region={workspaceRegion} onChange={setWorkspaceRegion} counts={regionCounts} compact={activeTab === 'npp'} extra={activeTab === 'npp' ? <label className="coverage-inline">Ghép bộ<select aria-label="Lọc NPP theo tình trạng ghép bộ" className="form-select" value={nppCoverageFilter} onChange={event => setNppCoverageFilter(event.target.value)}><option value="ALL">Tất cả NPP</option><option value="ASSIGNED">Đã ghép bộ</option><option value="UNASSIGNED">Chưa ghép bộ</option></select></label> : null} />}
           <WorkspaceRegionContext.Provider value={workspaceRegion}><Suspense key={`${regionalIdentity}:${workspaceRegion}`} fallback={<div className="glass-panel" style={{ padding: '28px', color: 'var(--text-muted)' }}>Đang tải màn hình...</div>}>

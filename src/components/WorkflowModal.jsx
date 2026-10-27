@@ -55,6 +55,9 @@ export default function WorkflowModal({
   const submitting = useRef(false);
   const [busy,setBusy] = useState(false);
   const [saveError,setSaveError] = useState('');
+  const [confirmedContext,setConfirmedContext]=useState('');
+  const selectedRevision=filteredSets.find(item=>item.setCode===selectedSetCode)?.dbRevision||filteredSets.find(item=>item.setCode===selectedSetCode)?.updatedAt||null;
+  const confirmationContext=JSON.stringify([mode,selectedSetCode,selectedRevision,targetNppId,handoverDate]);
   const draftValue = useMemo(() => ({operationId:operationId.current,selectedSetCode,targetNppId,technician,handoverDate,reason,notes,stabilizerBrand,hasStabilizer,photos,deviceCondition,returnToStock}),
     [selectedSetCode,targetNppId,technician,handoverDate,reason,notes,stabilizerBrand,hasStabilizer,photos,deviceCondition,returnToStock]);
   const draft = useFormDraft(`${user?.id}:workflow:${mode}`,draftValue,true,saved=>{
@@ -95,6 +98,8 @@ export default function WorkflowModal({
     if (submitting.current || draft.existing) return;
     submitting.current=true;setBusy(true);setSaveError('');
     try {
+    if(!navigator.onLine||confirmedContext!==confirmationContext)throw new Error('Kết nối mạng, đối chiếu bộ máy/NPP rồi tích xác nhận trước khi thực hiện.');
+    await draft.flush();
 
     if (isDateLocked(handoverDate)) {
       alert(`Thao tác bị khóa: Tháng ${handoverDate.substring(0, 7)} đã chốt sổ kế toán!`);
@@ -111,6 +116,7 @@ export default function WorkflowModal({
       const nextDue = dateObj.toISOString().split('T')[0];
 
       await onSubmitInstall({
+        expectedRevision:selectedRevision,confirmedOnline:true,
         operationId:operationId.current,
         setCode: selectedSetCode,
         nppId: targetNppId,
@@ -127,6 +133,7 @@ export default function WorkflowModal({
         return;
       }
       await onSubmitWithdraw({
+        expectedRevision:selectedRevision,confirmedOnline:true,
         operationId:operationId.current,
         setCode: selectedSetCode,
         reason,
@@ -143,6 +150,7 @@ export default function WorkflowModal({
         return;
       }
       await onSubmitTransfer({
+        expectedRevision:selectedRevision,confirmedOnline:true,
         operationId:operationId.current,
         setCode: selectedSetCode,
         newNppId: targetNppId,
@@ -415,6 +423,7 @@ export default function WorkflowModal({
           </div>
 
           <div className="modal-footer">
+            <label style={{flexBasis:'100%',display:'flex',gap:10,alignItems:'center'}}><input type="checkbox" checked={confirmedContext===confirmationContext} disabled={busy||!selectedSetCode||!navigator.onLine} onChange={event=>setConfirmedContext(event.target.checked?confirmationContext:'')} />Tôi đã đối chiếu đúng bộ máy, NPP và ngày thực hiện khi có mạng. Thay đổi lựa chọn phải xác nhận lại.</label>
             {selectedSet && (
               <button 
                 type="button" 
