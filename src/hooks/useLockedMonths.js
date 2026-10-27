@@ -1,3 +1,4 @@
+import { getOfflineOwner } from '../lib/offlineDb.js';
 import { fetchAllRows } from '../lib/paginatedQuery.js';
 import { useState, useEffect, useCallback } from 'react';
 import { supabase, isSupabaseConfigured, safeQuery } from '../lib/supabase.js';
@@ -28,6 +29,7 @@ export function useLockedMonths() {
 
   // Fetch locked months from Supabase
   const fetchLockedMonths = useCallback(async () => {
+    const requestOwner = getOfflineOwner();
     if (!isSupabaseConfigured) return;
     setLoading(true);
     setError(null);
@@ -35,15 +37,18 @@ export function useLockedMonths() {
       sb => sb.from('locked_months').select('*', { count: 'exact' }).order('month_key', { ascending: false }),
       safeQuery, 'fetchLockedMonths', { key: 'month_key' }
     );
+    if (requestOwner !== getOfflineOwner()) return false;
+    let cacheSaved = false;
     if (err) {
       setError(err.message);
       const cached = await getCachedOfflineData('locked_months', null);
       if (cached) setLockedMonths(cached);
     } else if (data) {
       setLockedMonths(data);
-      cacheOfflineData('locked_months', data);
+      cacheSaved = await cacheOfflineData('locked_months', data);
     }
     setLoading(false);
+    return cacheSaved;
   }, []);
 
   useEffect(() => {

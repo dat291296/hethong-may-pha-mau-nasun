@@ -17,7 +17,8 @@ import { requireRegionEdit } from './lib/workspaceFilters.js';
 import { supabase, isSupabaseConfigured } from './lib/supabase';
 import { cacheOfflineData } from './lib/offlineSync.js';
 import { executeWorkflowTransaction } from './lib/workflowTransactions.js';
-import { acknowledgeChangeFeedCursor, startChangeFeed } from './lib/changeFeed.js';
+import { acknowledgeChangeFeedCursor, retryChangeFeedCursor, startChangeFeed } from './lib/changeFeed.js';
+import { refreshBeforeCheckpoint } from './lib/syncCheckpoint.js';
 import { startPrivateRealtimeSync } from './lib/realtimeSync.js';
 
 import { useNpps } from './hooks/useNpps.js';
@@ -148,7 +149,7 @@ export default function App() {
 
   const { repairTickets, addTicket, editTicket, deleteTicket, importTickets, loading: repairsLoading, loadError: repairsLoadError, refetch: refetchRepairs } = useRepairs();
   const { auditLogs, addAuditLog, importAuditLogs, refetch: refetchAuditLogs } = useAuditLogs();
-  const { lockedMonths, lockMonth, unlockMonth, isDateLocked, loading: lockLoading, error: lockError } = useLockedMonths();
+  const { lockedMonths, lockMonth, unlockMonth, isDateLocked, loading: lockLoading, error: lockError, refetch: refetchLockedMonths } = useLockedMonths();
   const { tintingLogs, importLogs, refetch: refetchTintingLogs } = useTintingLogs();
 
   useEffect(() => {
@@ -177,13 +178,15 @@ export default function App() {
       if (changedTables.has('repair_tickets')) refreshTasks.push(refetchRepairs());
       if (changedTables.has('audit_logs')) refreshTasks.push(refetchAuditLogs());
       if (changedTables.has('tinting_logs')) refreshTasks.push(refetchTintingLogs());
-      if (changedTables.has('locked_months')) window.dispatchEvent(new Event('nasun-locked-months-changed'));
-      await Promise.allSettled(refreshTasks);
-      await acknowledgeChangeFeedCursor(detail.nextCursor, detail.hasMore);
+      if (changedTables.has('locked_months')) refreshTasks.push(refetchLockedMonths());
+      try {
+        const committed = await refreshBeforeCheckpoint(refreshTasks, () => acknowledgeChangeFeedCursor(detail.nextCursor, detail.hasMore, detail.checkpoint));
+        if (!committed) retryChangeFeedCursor(detail.nextCursor, detail.checkpoint);
+      } catch { retryChangeFeedCursor(detail.nextCursor, detail.checkpoint); }
     };
     window.addEventListener('nasun-cloud-changes', handleCloudChanges);
     return () => window.removeEventListener('nasun-cloud-changes', handleCloudChanges);
-  }, [refetchNpps, refetchAssets, refetchRepairs, refetchAuditLogs, refetchTintingLogs]);
+  }, [refetchNpps, refetchAssets, refetchRepairs, refetchAuditLogs, refetchTintingLogs, refetchLockedMonths]);
 
   useEffect(() => {
     let refreshTimer = null;

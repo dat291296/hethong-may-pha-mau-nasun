@@ -3,11 +3,12 @@ import {saveSystemSetEdit} from './systemSetEdit.js';
 import { normalizeOptionalSerial } from './deviceSerial.js';
 import { assertAuditAppendOnly } from './auditPolicy.js';
 import { supabase, isSupabaseConfigured } from './supabase';
-import { addToQueue, getQueue, removeFromQueue, clearQueue, setCache, getCache, getOfflineOwner } from './offlineDb';
+import { addToQueue, getQueue, removeFromQueue, clearQueue, setCache, getCache, getOfflineOwner, withOfflineLease } from './offlineDb';
 import { createOperationId, migrateQueueItem, classifySyncError, resolveFailureState } from './syncQueue';
 import { buildSyncEnvelope, resolveSyncEntity } from './syncContract.js';
 import { getTrustedDeviceId, validateTrustedDeviceSession } from '../security/trustedDevice.js';
 import { requireReplaySession } from '../security/replaySession.js';
+import { requireOfflineReplayPermission } from '../security/offlineReplayPolicy.js';
 import { persistQueueReplacement } from './durableMutation.js';
 
 let activeSyncPromise = null;
@@ -518,6 +519,7 @@ export async function enqueueOfflineAction(action, payload, category = null) {
   const newItem = migrateQueueItem({
     id: `action-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
     operationId: createOperationId(),
+    ownerId: getOfflineOwner(),
     action,
     payload,
     category,
@@ -584,13 +586,14 @@ export async function clearOfflineQueue() {
  * Process the offline queue and upload all actions to Supabase.
  * Returns true if all synchronized successfully.
  */
-async function processOfflineQueue(onStatusChange) {
+async function processOfflineQueue(onStatusChange, assertLease = () => {}) {
   if (!isSupabaseConfigured || !navigator.onLine) {
     return false;
   }
 
   const ownerId = getOfflineOwner();
   const assertOwner = () => {
+    assertLease();
     if (!ownerId || getOfflineOwner() !== ownerId) throw Object.assign(new Error('OFFLINE_OWNER_CHANGED'), { code: 'OFFLINE_OWNER_CHANGED' });
   };
   try {
@@ -632,7 +635,7 @@ async function processOfflineQueue(onStatusChange) {
     try {
       assertAuditAppendOnly(item.action);
       assertOwner();
-      await requireReplaySession(supabase, ownerId, getOfflineOwner, validateTrustedDeviceSession);
+      await requireReplaySession(supabase, ownerId, getOfflineOwner, validateTrustedDeviceSession,20000,scope=>requireOfflineReplayPermission(scope,item));
       assertOwner();
       await saveQueueState(item, 'syncing');
       assertOwner();
@@ -979,7 +982,10 @@ export function syncOfflineQueue(onStatusChange) {
       }
       return runSync();
     })
-    : runSync();
+    : withOfflineLease('queue-sync', assertLease => processOfflineQueue(onStatusChange, assertLease)).then(result => {
+      if (!result.acquired) onStatusChange?.('error', 0, 'Một cửa sổ khác đang đồng bộ. Hàng chờ được giữ nguyên.');
+      return result.acquired ? result.value : false;
+    });
   activeSyncPromise = syncTask
     .finally(() => {
       activeSyncPromise = null;
@@ -991,7 +997,7 @@ export function syncOfflineQueue(onStatusChange) {
  * Cache list data for offline reading
  */
 export function cacheOfflineData(key, data) {
-  setCache(key, data);
+  return setCache(key, data);
 }
 
 /**

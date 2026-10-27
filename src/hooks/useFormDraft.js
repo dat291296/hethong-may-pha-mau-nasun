@@ -1,6 +1,6 @@
 import { recordOperationalError } from '../lib/operationalDiagnostics.js';
 import { useEffect, useRef, useState } from 'react';
-import { getCache, setCache } from '../lib/offlineDb';
+import { getCacheStrict, setCache } from '../lib/offlineDb';
 import { isDraftExpired } from '../lib/teamWorkspace';
 
 export function useFormDraft(key, value, enabled, onRestore) {
@@ -25,9 +25,9 @@ export function useFormDraft(key, value, enabled, onRestore) {
     ready.current = false;
     setExisting(null);
     setStatus('Đang kiểm tra bản nháp...');
-    getCache(`form-draft:${key}`, null).then(draft => {
+    getCacheStrict(`form-draft:${key}`, null).then(draft => {
       if (!active) return;
-      if (draft && !isDraftExpired(draft)) { setExisting(draft); setStatus('Có bản nháp chưa gửi'); }
+      if (draft) { setExisting(draft); setStatus(isDraftExpired(draft) ? 'Bản nháp cũ trên 30 ngày · Khôi phục và đối chiếu trước khi gửi' : 'Có bản nháp chưa gửi'); }
       else { ready.current = true; setStatus('Chưa gửi lên hệ thống'); }
     }).catch(error => {
       if (active) setStatus('Không đọc được bản nháp trên thiết bị');

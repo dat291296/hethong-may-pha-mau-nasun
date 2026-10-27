@@ -28,7 +28,7 @@ export async function getSyncHealthSnapshot() {
   if (isSupabaseConfigured && supabase && navigator.onLine) {
     const { data, error } = await supabase.rpc('get_sync_server_health');
     if (!error) server = data;
-    else serverError = error.message || 'SYNC_SERVER_HEALTH_UNAVAILABLE';
+    else serverError = 'Chưa xác minh được trạng thái đồng bộ trên server. Kiểm tra phiên đăng nhập hoặc kết nối.';
   }
   const criticalCount = Number(counts.needs_review || 0) + Number(counts.dead_letter || 0);
   const waitingCount = Number(counts.pending || 0) + Number(counts.retry_wait || 0);

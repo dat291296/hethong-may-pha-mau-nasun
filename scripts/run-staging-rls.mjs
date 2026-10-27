@@ -86,6 +86,10 @@ async function main() {
   await verifySessionRevocation(client, env);
   const { verifyEquipmentWorkflows } = await import('./verify-equipment-workflows.mjs');
   await verifyEquipmentWorkflows(client, env);
+  if(env.VERIFY_MACHINE_EVIDENCE==='true'){
+    const {verifyMachineEvidence}=await import('./verify-machine-evidence.mjs');
+    await verifyMachineEvidence(client,env);
+  }
   if(env.VERIFY_EQUIPMENT_REPLACEMENT==='true'){
     const {verifyEquipmentReplacement}=await import('./verify-equipment-replacement.mjs');
     await verifyEquipmentReplacement(client,env);

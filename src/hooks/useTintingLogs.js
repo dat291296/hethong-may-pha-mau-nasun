@@ -1,3 +1,4 @@
+import { getOfflineOwner } from '../lib/offlineDb.js';
 import { fetchAllRows } from '../lib/paginatedQuery.js';
 import { useState, useEffect, useCallback } from 'react';
 import { supabase, isSupabaseConfigured, safeQuery } from '../lib/supabase.js';
@@ -21,21 +22,25 @@ export function useTintingLogs() {
   }, []);
 
   const fetchLogs = useCallback(async () => {
+    const requestOwner = getOfflineOwner();
     if (!isSupabaseConfigured) return;
     setLoading(true);
     const { data, error } = await fetchAllRows(
       sb => sb.from('tinting_logs').select('*', { count: 'exact' }).order('timestamp', { ascending: false }).order('id'),
       safeQuery, 'fetchLogs', { key: 'id' }
     );
+    if (requestOwner !== getOfflineOwner()) return false;
+    let cacheSaved = false;
     if (error) {
       const cached = await getCachedOfflineData('tinting_logs', null);
       if (cached) setTintingLogs(cached);
     } else if (Array.isArray(data)) {
       const mapped = data.map(mapDbToLog);
       setTintingLogs(mapped);
-      cacheOfflineData('tinting_logs', mapped);
+      cacheSaved = await cacheOfflineData('tinting_logs', mapped);
     }
     setLoading(false);
+    return cacheSaved;
   }, []);
 
   useEffect(() => {

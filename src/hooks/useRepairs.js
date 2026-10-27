@@ -1,3 +1,4 @@
+import { getOfflineOwner } from '../lib/offlineDb.js';
 import {recordOperationalError} from '../lib/operationalDiagnostics.js';
 import {normalizeCalendarDate,normalizeOptionalTimestamp} from '../utils/dateUtils.js';
 import { persistMutation, persistBatchMutation } from '../lib/durableMutation.js';
@@ -34,7 +35,7 @@ export function useRepairs() {
 
   const persistRepairTickets = useCallback((nextTickets) => {
     setRepairTickets(nextTickets);
-    cacheOfflineData('repair_tickets', nextTickets);
+    return cacheOfflineData('repair_tickets', nextTickets);
   }, []);
 
   // Hydrate cache from IndexedDB on mount
@@ -50,6 +51,7 @@ export function useRepairs() {
   }, []);
 
   const fetchRepairs = useCallback(async () => {
+    const requestOwner = getOfflineOwner();
     if (!isSupabaseConfigured) return;
     const version=++fetchVersion.current;
     setLoading(true);setLoadError('');
@@ -60,19 +62,20 @@ export function useRepairs() {
         return;
       }
       const {data,error}=await fetchAllRows(sb=>sb.from('repair_tickets').select('*',{count:'exact'}).order('date',{ascending:false}).order('id'),safeQuery,'fetchRepairs',{key:'id'});
-      if(version!==fetchVersion.current)return;
+      if(version!==fetchVersion.current || requestOwner !== getOfflineOwner())return false;
       if(error)throw error;
       if(!Array.isArray(data))throw Error('INCOMPLETE_REPAIR_RESPONSE');
-      persistRepairTickets(data.map(mapDbToRepair));
+      return await persistRepairTickets(data.map(mapDbToRepair));
     } catch(error) {
       recordOperationalError('runtime',error);
-      if(version===fetchVersion.current){
+      if(version===fetchVersion.current && requestOwner === getOfflineOwner()){
         setLoadError('Chưa tải được phiếu từ server. Dữ liệu đã có được giữ nguyên; kiểm tra kết nối và thử lại.');
         try {
           const cached=await getCachedOfflineData('repair_tickets',null);
           if(version===fetchVersion.current&&Array.isArray(cached))setRepairTickets(cached);
         } catch(cacheError) {recordOperationalError('runtime',cacheError);}
       }
+      return false;
     } finally {if(version===fetchVersion.current)setLoading(false);}
   },[persistRepairTickets]);
 

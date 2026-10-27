@@ -1,4 +1,7 @@
 const MESSAGES = Object.freeze({
+  'INVALID_OFFLINE_DATA': 'Dữ liệu chờ gửi cần kiểm tra. Bản gốc được giữ nguyên, không tự động gửi.',
+  'OFFLINE_SCOPE_INVALID': 'Chưa xác minh được quyền hoặc miền phụ trách. Đăng nhập lại và kiểm tra phân quyền.',
+  'OFFLINE_APP_UPDATE_REQUIRED': 'Thao tác cần phiên bản ứng dụng mới hơn. Cập nhật app; không xóa dữ liệu trình duyệt.',
   '42501': 'Phiên đăng nhập hết hạn hoặc bạn không có quyền thực hiện. Hãy đăng nhập lại và kiểm tra quyền.',
   '23514': 'Dữ liệu chưa hợp lệ. Kiểm tra ảnh, ngày và các trường bắt buộc.',
   '23505': 'Mã dữ liệu đã tồn tại. Kiểm tra lại trước khi lưu.',

@@ -59,3 +59,21 @@ test('permission, authentication and conflict failures stop automatic replay', (
 test('an unconfirmed delete requires review instead of automatic retry', () => {
   assert.equal(classifySyncError({code:'PERSISTENCE_DENIED'}), 'needs_review');
 });
+
+test('older clients quarantine future payloads without downgrading versions or changing IDs', () => {
+  for(const versions of [{schemaVersion:99},{engineVersion:99},{contractVersion:99}]) {
+    const original={id:'future-id',operationId:'future-operation',action:'FUTURE_ACTION',payload:{nested:{preserve:true}},attempts:4,...versions};
+    const migrated=migrateQueueItem(original);
+    assert.equal(migrated.status,'needs_review');assert.equal(migrated.operationId,original.operationId);
+    assert.deepEqual(migrated.payload,original.payload);assert.equal(migrated.attempts,4);
+    for(const [key,value] of Object.entries(versions))assert.equal(migrated[key],value);
+    assert.equal(migrated.lastErrorCode,'OFFLINE_APP_UPDATE_REQUIRED');
+  }
+});
+test('malformed queued payloads and revisions are quarantined without weakening version checks',()=>{
+ for(const values of [{payload:null},{payload:['invalid']},{schemaVersion:'invalid'},{baseVersion:'2'},{baseVersion:-1}]){
+  const source={id:'stable-id',operationId:'stable-op',action:'EDIT_NPP',payload:{id:'N1'},...values};
+  const item=migrateQueueItem(source);assert.equal(item.status,'needs_review');assert.equal(item.lastErrorCode,'INVALID_OFFLINE_DATA');
+  assert.equal(item.operationId,source.operationId);assert.deepEqual(item.payload,source.payload);assert.equal(item.baseVersion,source.baseVersion);
+ }
+});

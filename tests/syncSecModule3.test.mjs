@@ -34,11 +34,11 @@ test('change feed RPC bounds batches and advances an opaque cursor', async () =>
 
 test('client persists cursor in encrypted cache only after refresh acknowledgement', async () => {
   const [feed, app] = await Promise.all([readFile(feedUrl, 'utf8'), readFile(appUrl, 'utf8')]);
-  assert.match(feed, /getCache\(CURSOR_CACHE_KEY/);
+  assert.match(feed, /getCacheStrict\(CURSOR_CACHE_KEY/);
   assert.match(feed, /setCache\(CURSOR_CACHE_KEY/);
-  assert.match(feed, /pendingCursor = nextCursor/);
+  assert.match(feed, /pendingCursor = \{ cursor: nextCursor, owner, generation \}/);
   assert.match(feed, /runGeneration/);
-  assert.match(app, /Promise\.allSettled\(refreshTasks\)/);
+  assert.match(app, /refreshBeforeCheckpoint\(refreshTasks/);
   assert.match(app, /acknowledgeChangeFeedCursor/);
   assert.match(app, /nasun-cloud-changes/);
 });

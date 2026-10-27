@@ -1,3 +1,4 @@
+import { getOfflineOwner } from '../lib/offlineDb.js';
 import { fetchAllRows } from '../lib/paginatedQuery.js';
 import { useState, useEffect, useCallback } from 'react';
 import { supabase, isSupabaseConfigured, safeQuery } from '../lib/supabase.js';
@@ -67,12 +68,15 @@ export function useAuditLogs() {
   }, []);
 
   const fetchAuditLogs = useCallback(async () => {
+    const requestOwner = getOfflineOwner();
     if (!isSupabaseConfigured) return;
     setLoading(true);
     const { data, error } = await fetchAllRows(
       sb => sb.from('audit_logs').select('*', { count: 'exact' }).order('timestamp', { ascending: false }).order('id'),
       safeQuery, 'fetchAuditLogs', { key: 'id' }
     );
+    if (requestOwner !== getOfflineOwner()) return false;
+    let cacheSaved = false;
     if (error) {
       const cached = await getCachedOfflineData('audit_logs', null);
       if (cached && cached.length > 0) {
@@ -83,9 +87,10 @@ export function useAuditLogs() {
       const mapped = data.map(mapDbToAudit);
       const cleaned = sanitizeAndRenumberAuditLogs(mapped);
       setAuditLogs(cleaned);
-      persistAuditLogs(cleaned);
+      cacheSaved = await cacheOfflineData('audit_logs', cleaned);
     }
     setLoading(false);
+    return cacheSaved;
   }, []);
 
   useEffect(() => {
