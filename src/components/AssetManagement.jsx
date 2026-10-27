@@ -1989,7 +1989,8 @@ export default function AssetManagement({ onReplaceEquipment,replacementEvents=[
                       {addDeviceCategory === 'mixer' && 'Model Máy Lắc'}
                       {addDeviceCategory === 'printer' && 'Model Máy In (thường là QL700)'}
                     </label>
-                    <select className="form-select" aria-label="Model thiết bị mới" required value={addFormData.model} onChange={e => setAddFormData({ ...addFormData, model: e.target.value })}><option value="">Chọn model</option>{modelOptions(addDeviceCategory).map(model => <option key={model} value={model}>{model}</option>)}</select>
+                    <input className="form-input" aria-label="Model thiết bị mới" list={`stock-models-${addDeviceCategory}`} placeholder="Chọn hoặc nhập model mới" maxLength={120} required value={addFormData.model} onChange={e => setAddFormData({ ...addFormData, model: e.target.value })} />
+                    <datalist id={`stock-models-${addDeviceCategory}`}>{modelOptions(addDeviceCategory).map(model => <option key={model} value={model} />)}</datalist>
                   </div>
                 )}
 
@@ -2151,7 +2152,8 @@ export default function AssetManagement({ onReplaceEquipment,replacementEvents=[
                     {editingDevice.category !== 'computer' && (
                       <div className="form-group">
                         <label className="form-label">⚙️ Model / Hệ Máy *</label>
-                        <select className="form-select" aria-label="Model thiết bị" required value={editFormData.model || ''} onChange={e => setEditFormData({ ...editFormData, model: e.target.value })}><option value="">Chọn model</option>{[...new Set([...modelOptions(editingDevice.category), editFormData.model].filter(Boolean))].map(model => <option key={model} value={model}>{model}</option>)}</select>
+                        <input className="form-input" aria-label="Model thiết bị" list={`edit-models-${editingDevice.category}`} placeholder="Chọn hoặc nhập model mới" maxLength={120} required value={editFormData.model || ''} onChange={e => setEditFormData({ ...editFormData, model: e.target.value })} />
+                        <datalist id={`edit-models-${editingDevice.category}`}>{[...new Set([...modelOptions(editingDevice.category), editFormData.model].filter(Boolean))].map(model => <option key={model} value={model} />)}</datalist>
                       </div>
                     )}
                   </div>
