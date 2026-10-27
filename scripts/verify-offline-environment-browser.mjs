@@ -51,7 +51,7 @@ try {
     await page.getByLabel('Tình huống mạng',{exact:true}).selectOption('online');
     checkpoint='FIELD_ACK';
     await page.getByRole('button',{name:'Gửi / thử lại cùng mã',exact:true}).click();
-    if(!/Hàng chờ\\s*0/.test(await page.locator('.stats').last().textContent()))throw Error('FIELD_OUTBOX_NOT_ACKNOWLEDGED');
+    await page.locator('.stats').last().filter({hasText:/Hàng chờ\\s*0/}).waitFor();
     await page.getByLabel('Giả lập hết dung lượng khi lưu hàng chờ',{exact:true}).check();
     checkpoint='FIELD_QUOTA';
     await page.getByLabel('Nội dung nghiệp vụ mới',{exact:true}).fill('Synthetic changed field notes');
