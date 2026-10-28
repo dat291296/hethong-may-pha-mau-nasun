@@ -17,7 +17,6 @@ jobs:
       cancel-in-progress: false
     env:
       STAGING_DB_URL: ${{ secrets.STAGING_DB_URL }}
-      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
       STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
       RLS_TEST_URL: ${{ vars.STAGING_SUPABASE_URL || secrets.STAGING_SUPABASE_URL }}
       RLS_TEST_ANON_KEY: ${{ vars.STAGING_SUPABASE_ANON_KEY || secrets.STAGING_SUPABASE_ANON_KEY }}
@@ -35,7 +34,8 @@ jobs:
       - name: Verify real JWT access and workflow replay on isolated staging
         run: node scripts/run-staging-rls.mjs
   apply:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && github.ref_protected
+    environment: backup
     needs: verify-staging
     runs-on: ubuntu-24.04
     timeout-minutes: 20

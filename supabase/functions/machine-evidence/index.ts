@@ -14,6 +14,7 @@ Deno.serve(createEvidenceGateway({
   let claims;try{const part=token.slice(7).split('.')[1].replace(/-/g,'+').replace(/_/g,'/');claims=JSON.parse(atob(part.padEnd(Math.ceil(part.length/4)*4,'=')));}catch{throw evidenceError('AUTH_REQUIRED',401);}
   return {userId:identity.data.user.id,sessionId:claims.session_id,client};
  },
+ throttle:async(auth:any)=>checked(await auth.client.rpc('consume_machine_evidence_quota')),
  reserve:async(auth:any,item:any)=>checked(await auth.client.rpc('reserve_machine_evidence',{p_id:item.id,p_operation_id:item.operationId,p_set_code:item.setCode,p_sha256:item.sha256,p_byte_size:item.bytes,p_mime_type:item.mime})),
  writeObject:async(item:any,bytes:Uint8Array,mime:string)=>{
   const result=await service.storage.from(item.bucket_id).upload(item.object_path,bytes,{contentType:mime,upsert:false});
