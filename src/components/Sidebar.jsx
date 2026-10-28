@@ -390,7 +390,7 @@ export default function Sidebar({ activeTab, setActiveTab, maintenanceCount, pen
           <span className="badge badge-success" style={{ padding: '2px 6px', fontSize: '0.65rem' }}>🟢 Online PWA</span>
         </div>
         <div style={{ fontSize: '0.7rem', opacity: 0.7 }}>
-          Mobile & Cloud Ready • Vercel Ready
+          Mobile & Cloudflare Workers
         </div>
       </div>
     </aside>

@@ -1,3 +1,4 @@
+import { SERVICE_CHECKLIST, FAILURE_COMPONENTS, failureComponents, summarizeFailureComponents, requiresRepairReturn, isRepairAwaitingReturn, repairReturnLabel } from '../lib/repairClassification.js';
 import { userErrorMessage } from '../security/userError.js';
 import {repairListPage,repairStringList,hasMalformedRepairLists,uniqueAssignedMachine} from '../lib/repairList.js';
 import {validateDocumentFile} from '../lib/technicalResources.js';
@@ -64,13 +65,7 @@ export const PRODUCT_CATEGORIES = [
   'Khác / Linh kiện'
 ];
 
-const EMPTY_SERVICE_CHECKLIST = Object.freeze({
-  inspection: false,
-  cleaning: false,
-  functionalTest: false,
-  safetyCheck: false,
-  dataBackup: false
-});
+const EMPTY_SERVICE_CHECKLIST = Object.freeze(Object.fromEntries(SERVICE_CHECKLIST.map(([key]) => [key, false])));
 
 function createFieldWorkflowDefaults() {
   return {
@@ -115,6 +110,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
   const { user } = useAuth();
   const [saving, setSaving] = useState(false);
   const [photoBusy,setPhotoBusy]=useState(false);
+  const errorPhotoInput = React.useRef(null);
   async function addErrorPhotos(event){
     const files=Array.from(event.target.files||[]);event.target.value='';setSaveError('');setPhotoBusy(true);
     try {
@@ -185,6 +181,8 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
     return { categoryData, pieData };
   }, [repairTickets]);
 
+  const componentStats = useMemo(() => summarizeFailureComponents(repairTickets), [repairTickets]);
+
   // Form State
   const defaultTechnician = (user && ['admin', 'manager', 'technician', 'qc'].includes(user.role))
     ? (user.name || user.full_name)
@@ -252,7 +250,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
     productCategory: 'Máy chiết',
     machineModel: 'Satint A2',
     serialNumber: '',
-    errorCategory: 'Lỗi phần cứng / Cụm chiết',
+    errorCategory: '',
     errorDescription: '',
     photos: [],
     actionDirection: 'Sửa chữa',
@@ -298,7 +296,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
         machineModel: prefilledTicket.machineModel || 'Satint A2',
         serialNumber: prefilledTicket.serialNumber || '',
         assetCode: prefilledTicket.assetCode || '',
-        errorCategory: prefilledTicket.errorCategory || 'Lỗi phần cứng',
+        errorCategory: prefilledTicket.errorCategory || '',
         errorDescription: prefilledTicket.errorDescription || '',
         photos: [],
         actionDirection: prefilledTicket.actionDirection || 'Sửa chữa',
@@ -328,7 +326,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
       productCategory: 'Máy chiết',
       machineModel: 'Satint A2',
       serialNumber: '',
-      errorCategory: 'Lỗi phần cứng',
+      errorCategory: '',
       errorDescription: '',
       photos: [],
       actionDirection: 'Sửa chữa',
@@ -346,7 +344,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
       { key: 'ticketCode', label: 'Mã Phiếu' }, { key: 'date', label: 'Ngày (YYYY-MM-DD)' },
       { key: 'nppName', label: 'Nhà Phân Phối' }, { key: 'productCategory', label: 'Loại Thiết Bị' },
       { key: 'machineModel', label: 'Model' }, { key: 'serialNumber', label: 'Số Seri' },
-      { key: 'errorDescription', label: 'Diễn Giải Lỗi' }, { key: 'technician', label: 'Kỹ Thuật Viên' },
+      { key: 'errorCategory', label: 'Bộ Phận / Linh Kiện Lỗi' }, { key: 'errorDescription', label: 'Diễn Giải Lỗi' }, { key: 'technician', label: 'Kỹ Thuật Viên' },
       { key: 'processingStatus', label: 'Trạng Thái Xử Lý' }, { key: 'assetCode', label: 'Mã QR / Mã QL' },
       { key: 'fieldVisitStatus', label: 'Trạng Thái Công Tác' }, { key: 'slaDueAt', label: 'Hạn SLA' },
       { key: 'notes', label: 'Ghi Chú' }
@@ -472,6 +470,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
       sanitized.fieldVisitStatus = 'customer_confirmed';
     }
 
+    if (!requiresRepairReturn(sanitized)) sanitized.customerReturnStatus = 'Chưa gửi trả';
     try {validateRepairReturn(sanitized);} catch(error){setSaveError(userErrorMessage(error));return;}
     const isCompleted = ['completed', 'customer_confirmed'].includes(sanitized.fieldVisitStatus);
     if (sanitized.fieldVisitStatus === 'customer_confirmed' && !sanitized.nppConfirmation?.confirmed) {
@@ -552,7 +551,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
 
     let matchesTab = true;
     if (activeTab === 'PENDING') matchesTab = t.processingStatus === 'Chưa xử lý';
-    if (activeTab === 'NOT_RETURNED') matchesTab = t.customerReturnStatus === 'Chưa gửi trả';
+    if (activeTab === 'NOT_RETURNED') matchesTab = isRepairAwaitingReturn(t);
     if (activeTab === 'REPLACED') matchesTab = t.actionDirection === 'Xuất đổi';
 
     return found && matchesCategory && matchesModel && matchesTab;
@@ -562,7 +561,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
 
   // Calculate statistics
   const pendingCount = repairTickets.filter(t => t.processingStatus === 'Chưa xử lý').length;
-  const notReturnedCount = repairTickets.filter(t => t.customerReturnStatus === 'Chưa gửi trả').length;
+  const notReturnedCount = repairTickets.filter(t => isRepairAwaitingReturn(t)).length;
   const replacedCount = repairTickets.filter(t => t.actionDirection === 'Xuất đổi').length;
 
   return (
@@ -580,6 +579,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
       }}>Mở bản nháp</button></div>)}</section>}
       <WorkspaceFilterBar search={searchTerm} onSearch={setSearchTerm} placeholder="Tìm mã phiếu, NPP, seri…" count={filteredTickets.length} fields={[{key:'province',label:'Tỉnh / thành',value:provinceFilter,onChange:setProvinceFilter,options:uniqueOptions(npps.map(item=>item.province))},{key:'owner',label:'Người phụ trách',value:ownerFilter,onChange:setOwnerFilter,options:[...qcUsers.map(item=>({value:item.id,label:item.name || item.full_name || item.id})),...uniqueOptions(repairTickets.filter(item=>!item.assignedUserId).map(item=>item.technician))]},{key:'category',label:'Loại thiết bị',value:categoryFilter,onChange:setCategoryFilter,options:uniqueOptions(PRODUCT_CATEGORIES)},{key:'model',label:'Model',value:modelFilter,onChange:setModelFilter,options:uniqueOptions(MACHINE_MODELS)},{key:'from',label:'Ngày tiếp nhận · từ',type:'date',defaultValue:'',value:dateFrom,onChange:setDateFrom},{key:'to',label:'Ngày tiếp nhận · đến',type:'date',defaultValue:'',value:dateTo,onChange:setDateTo}]} quick={[{value:'ALL',label:'Tất cả',count:repairTickets.length},{value:'PENDING',label:'Chờ sửa',count:pendingCount},{value:'NOT_RETURNED',label:'Chờ trả',count:notReturnedCount},{value:'REPLACED',label:'Xuất đổi',count:replacedCount}]} quickValue={activeTab} onQuick={setActiveTab} onReset={() => { setSearchTerm(''); setActiveTab('ALL'); setCategoryFilter('ALL'); setModelFilter('ALL'); setProvinceFilter('ALL'); setOwnerFilter('ALL'); setDateFrom(''); setDateTo(''); }} actions={<><details className="filter-more-actions"><summary>Thao tác khác</summary><div><button className="btn btn-secondary" onClick={()=>onOpenImportModal?.()}>Nhập Excel</button><button className="btn btn-secondary" onClick={exportRepairs}>Xuất Excel</button></div></details><button className="btn btn-primary" onClick={handleOpenAdd}>Tạo phiếu</button></>}/>
 
+      <details className="glass-panel repair-component-summary"><summary>Thống kê bộ phận / linh kiện hay hỏng · {componentStats.length} nhóm</summary><p>Số phiếu có ghi nhận từng linh kiện, chia theo loại thiết bị; một phiếu có thể có nhiều linh kiện. Phạm vi theo miền đang xem. Chưa phân loại: {repairTickets.filter(ticket=>!failureComponents(ticket).length).length} phiếu.</p>{componentStats.length ? <div className="data-table-container"><table className="data-table"><thead><tr><th>Thiết bị</th><th>Bộ phận / linh kiện</th><th>Số phiếu</th></tr></thead><tbody>{componentStats.map(row=><tr key={row.key}><td>{row.category}</td><td>{row.component}</td><td>{row.count}</td></tr>)}</tbody></table></div> : <p>Chưa có phân loại linh kiện. Bổ sung khi chỉnh sửa phiếu.</p>}</details>
       {/* 1-YEAR FAILURE ANALYSIS DASHBOARD CHARTS */}
       <div className="glass-panel" style={{ padding: '20px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
@@ -733,7 +733,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
                     </td>
                     <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent-blue)' }}>{ticket.serialNumber}</td>
                     <td style={{ maxWidth: '220px', fontSize: '0.825rem' }}>
-                      <div style={{ color: 'var(--text-main)', fontWeight: '500' }}>{ticket.errorDescription}</div><div className="repair-inline-photos">{repairStringList(ticket.photos).slice(0,3).map((url,index)=><button type="button" key={index} onClick={()=>setSelectedTicket(ticket)} aria-label={`Xem ảnh lỗi ${index+1}`}><img loading="lazy" src={url} alt={ticket.errorCategory||'Ảnh lỗi thiết bị'}/></button>)}</div>{repairMissingFields(ticket).length > 0 && <p className="repair-missing-fields">⚠ Cần bổ sung: {repairMissingFields(ticket).join(' · ')}</p>}
+                      <div style={{ color: 'var(--text-main)', fontWeight: '500' }}>{ticket.errorCategory && <strong>Linh kiện lỗi: {ticket.errorCategory} · </strong>}{ticket.errorDescription}</div><div className="repair-inline-photos">{repairStringList(ticket.photos).slice(0,3).map((url,index)=><button type="button" key={index} onClick={()=>setSelectedTicket(ticket)} aria-label={`Xem ảnh lỗi ${index+1}`}><img loading="lazy" src={url} alt={ticket.errorCategory||'Ảnh lỗi thiết bị'}/></button>)}</div>{repairMissingFields(ticket).length > 0 && <p className="repair-missing-fields">⚠ Cần bổ sung: {repairMissingFields(ticket).join(' · ')}</p>}
                       {ticket.errorCategory && (
                         <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>[{ticket.errorCategory}]</span>
                       )}
@@ -756,7 +756,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
                       )}
                     </td>
                     <td>
-                      {ticket.customerReturnStatus === 'Đã gửi trả' ? (
+                      {!requiresRepairReturn(ticket) ? <span className="badge badge-neutral">Không cần gửi trả</span> : ticket.customerReturnStatus === 'Đã gửi trả' ? (
                         <span className="badge badge-success">✓ Đã gửi trả</span>
                       ) : (
                         <span className="badge badge-danger">📦 Chưa gửi trả</span>
@@ -820,7 +820,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
                     ) : (
                       <span className="badge badge-warning" style={{ fontSize: '0.65rem' }}>⏳ Chưa xử lý</span>
                     )}
-                    {ticket.customerReturnStatus === 'Đã gửi trả' ? (
+                    {!requiresRepairReturn(ticket) ? <span className="badge badge-neutral">Không cần gửi trả</span> : ticket.customerReturnStatus === 'Đã gửi trả' ? (
                       <span className="badge badge-success" style={{ fontSize: '0.65rem' }}>✓ Đã trả</span>
                     ) : (
                       <span className="badge badge-danger" style={{ fontSize: '0.65rem' }}>📦 Chưa trả</span>
@@ -838,7 +838,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
                   </div>
                   <div className="mobile-card-row">
                     <span className="mobile-card-label">Lỗi:</span>
-                    <span className="mobile-card-value">{ticket.errorDescription}<span className="repair-inline-photos">{repairStringList(ticket.photos).slice(0,3).map((url,index)=><button type="button" key={index} onClick={()=>setSelectedTicket(ticket)} aria-label={`Xem ảnh lỗi ${index+1}`}><img loading="lazy" src={url} alt={ticket.errorCategory||'Ảnh lỗi thiết bị'}/></button>)}</span></span>{repairMissingFields(ticket).length > 0 && <p className="repair-missing-fields">⚠ Cần bổ sung: {repairMissingFields(ticket).join(' · ')}</p>}
+                    <span className="mobile-card-value">{ticket.errorCategory && <strong>Linh kiện lỗi: {ticket.errorCategory} · </strong>}{ticket.errorDescription}<span className="repair-inline-photos">{repairStringList(ticket.photos).slice(0,3).map((url,index)=><button type="button" key={index} onClick={()=>setSelectedTicket(ticket)} aria-label={`Xem ảnh lỗi ${index+1}`}><img loading="lazy" src={url} alt={ticket.errorCategory||'Ảnh lỗi thiết bị'}/></button>)}</span></span>{repairMissingFields(ticket).length > 0 && <p className="repair-missing-fields">⚠ Cần bổ sung: {repairMissingFields(ticket).join(' · ')}</p>}
                   </div>
                   <div className="mobile-card-row">
                     <span className="mobile-card-label">Kỹ thuật viên:</span>
@@ -1136,17 +1136,20 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
                       <input type="text" className="form-input" placeholder="Ví dụ: Satint A2, Mixer AI88, QL-700..." value={formData.machineModel} onChange={e => setFormData({ ...formData, machineModel: e.target.value })} />
                     </div>
                     <div className="form-group">
-                      <label className="form-label">📦 Trạng Thái Trả Khách</label>
-                      <select className="form-select" value={formData.customerReturnStatus} onChange={e => setFormData({ ...formData, customerReturnStatus: e.target.value })}>
+                      <label className="form-label">📦 Gửi trả thiết bị</label>
+                      <label style={{display:'flex',gap:8,alignItems:'center'}}><input type="checkbox" checked={requiresRepairReturn(formData)} disabled={formData.actionDirection === 'Xuất đổi'} onChange={event => setFormData(previous => ({...previous, serviceChecklist:{...previous.serviceChecklist,returnRequired:event.target.checked}}))}/>Có nhận thiết bị về / cần gửi trả NPP</label>
+                      {!requiresRepairReturn(formData) && <p>Không cần gửi trả — xử lý tại NPP.</p>}
+                      {requiresRepairReturn(formData) && <select className="form-select" value={formData.customerReturnStatus} onChange={e => setFormData({ ...formData, customerReturnStatus: e.target.value })}>
                         <option value="Chưa gửi trả">📦 Chưa Gửi Trả</option>
                         <option value="Đã gửi trả">✓ Đã Gửi Trả NPP</option>
-                      </select>
+                      </select>}
                     </div>
                   </div>
 
+                  <fieldset className="repair-failure-classification"><legend>Bộ phận / linh kiện gây lỗi</legend><p>Chọn các linh kiện đã xác định. Chọn “Chưa xác định” khi đang kiểm tra; vật tư sử dụng được ghi riêng bên dưới.</p><div className="repair-component-options">{[...new Set([...FAILURE_COMPONENTS,...failureComponents(formData)])].map(component => <label key={component}><input type="checkbox" checked={failureComponents(formData).includes(component)} onChange={event => setFormData(previous => ({...previous,errorCategory:(event.target.checked?[...failureComponents(previous),component]:failureComponents(previous).filter(value => value !== component)).join('; ')}))}/>{component}</label>)}</div></fieldset>
                   <div className="form-group">
                     <label className="form-label">⚠️ 5. Diễn Giải Tình Trạng Lỗi *</label>
-                    <textarea className={`form-input ${!formData.errorDescription ? 'field-missing' : ''}`} rows={2} placeholder="Mô tả chi tiết sự cố kỹ thuật..." value={formData.errorDescription} onChange={e => setFormData({ ...formData, errorDescription: e.target.value })} /><label className="error-photo-upload">Ảnh minh họa lỗi (tối đa 6)<input aria-label="Thêm ảnh lỗi" type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={photoBusy} onChange={addErrorPhotos}/></label><div className="repair-error-photos">{repairStringList(formData.photos).map((url,index)=><figure key={index}><img src={url} alt={`Ảnh lỗi ${index+1}`}/><button type="button" className="btn btn-secondary btn-sm" aria-label={`Bỏ ảnh lỗi ${index+1}`} onClick={()=>setFormData(previous=>({...previous,photos:previous.photos.filter((_,position)=>position!==index)}))}>Bỏ ảnh</button></figure>)}</div>{photoBusy && <p role="status">Đang xử lý ảnh...</p>}
+                    <textarea className={`form-input ${!formData.errorDescription ? 'field-missing' : ''}`} rows={2} placeholder="Mô tả chi tiết sự cố kỹ thuật..." value={formData.errorDescription} onChange={e => setFormData({ ...formData, errorDescription: e.target.value })} /><div className="error-photo-upload"><p>Ảnh minh họa lỗi (tối đa 6)</p><button type="button" className="btn btn-secondary btn-sm" disabled={photoBusy} onClick={() => errorPhotoInput.current?.click()}>Chọn ảnh lỗi</button><input ref={errorPhotoInput} style={{display:'none'}} aria-label="Thêm ảnh lỗi" type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={photoBusy} onChange={addErrorPhotos}/></div><div className="repair-error-photos">{repairStringList(formData.photos).map((url,index)=><figure key={index}><img src={url} alt={`Ảnh lỗi ${index+1}`}/><button type="button" className="btn btn-secondary btn-sm" aria-label={`Bỏ ảnh lỗi ${index+1}`} onClick={()=>setFormData(previous=>({...previous,photos:previous.photos.filter((_,position)=>position!==index)}))}>Bỏ ảnh</button></figure>)}</div>{photoBusy && <p role="status">Đang xử lý ảnh...</p>}
                   </div>
 
                   {['Máy chiết', 'Máy lắc'].includes(formData.productCategory) && (
@@ -1166,6 +1169,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
                           const val = e.target.value;
                           setFormData(prev => ({
                             ...prev,
+                            serviceChecklist: {...prev.serviceChecklist, returnRequired: val === 'Xuất đổi'},
                             actionDirection: val,
                             exchangeType: val === 'Xuất đổi'
                               ? (prev.exchangeType === 'Không xuất đổi' ? 'Xuất đổi máy mới 100%' : prev.exchangeType)
@@ -1238,13 +1242,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
                     <div className="form-group">
                       <label className="form-label">Checklist bắt buộc</label>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '8px' }}>
-                        {[
-                          ['inspection', 'Kiểm tra tổng thể'],
-                          ['cleaning', 'Vệ sinh thiết bị'],
-                          ['functionalTest', 'Chạy thử chức năng'],
-                          ['safetyCheck', 'Kiểm tra an toàn'],
-                          ['dataBackup', 'Sao lưu dữ liệu PC']
-                        ].map(([key, label]) => (
+                        {SERVICE_CHECKLIST.map(([key, label]) => (
                           <label key={key} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                             <input
                               type="checkbox"
@@ -1329,11 +1327,11 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
                   <div><strong>Diễn Giải Lỗi:</strong> {selectedTicket.errorDescription}</div>
                   <div><strong>Hướng Xử Lý:</strong> {selectedTicket.actionDirection}</div>
                   <div><strong>Tình Trạng Sửa:</strong> {selectedTicket.processingStatus}</div>
-                  <div><strong>Gửi Trả Khách:</strong> {selectedTicket.customerReturnStatus}</div>
+                  <div><strong>Bộ phận / linh kiện lỗi:</strong> {selectedTicket.errorCategory || 'Chưa phân loại'}</div><div><strong>Gửi Trả Khách:</strong> {repairReturnLabel(selectedTicket)}</div>
                   <div><strong>Mã QR / Mã QL:</strong> {selectedTicket.assetCode || 'Chưa cập nhật'}</div>
                   <div><strong>Trạng thái công tác:</strong> {selectedTicket.fieldVisitStatus || 'scheduled'}</div>
 
-                  <div><strong>Checklist:</strong> {Object.values(selectedTicket.serviceChecklist || {}).filter(Boolean).length}/{Object.keys(EMPTY_SERVICE_CHECKLIST).length} mục</div>
+                  <div><strong>Checklist:</strong> {SERVICE_CHECKLIST.filter(([key]) => selectedTicket.serviceChecklist?.[key]).length}/{Object.keys(EMPTY_SERVICE_CHECKLIST).length} mục</div>
                   <div><strong>Vật tư:</strong> {repairStringList(selectedTicket.materialsUsed).join(', ') || 'Không sử dụng'}</div>
                   <div><strong>NPP xác nhận:</strong> {selectedTicket.nppConfirmation?.confirmed ? `Đã xác nhận${selectedTicket.nppConfirmation.confirmedBy ? ` - ${selectedTicket.nppConfirmation.confirmedBy}` : ''}` : 'Chưa xác nhận'}</div>
                 </div>

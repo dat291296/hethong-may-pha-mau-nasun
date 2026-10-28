@@ -1,3 +1,4 @@
+import { requiresRepairReturn, isRepairAwaitingReturn, repairReturnLabel } from '../lib/repairClassification.js';
 import SystemHealthPanel from './SystemHealthPanel.jsx';
 import {matchesSearch} from '../lib/workspaceFilters.js';
 import { WorkspaceRegionContext } from '../hooks/useWorkspaceState.js';
@@ -129,7 +130,7 @@ export default function Dashboard({
   const [repairPage, setRepairPage] = useState(1);
   const [repairPageSize, setRepairPageSize] = useState(10);
   const pendingTasks = repairTickets.filter(item => item.processingStatus === 'Chưa xử lý');
-  const returnTasks = repairTickets.filter(item => item.processingStatus === 'Đã xử lý' && item.customerReturnStatus === 'Chưa gửi trả');
+  const returnTasks = repairTickets.filter(item => item.processingStatus === 'Đã xử lý' && isRepairAwaitingReturn(item));
 
 
   // Sắp xếp bộ máy mới lắp đặt gần nhất lên đầu
@@ -1103,7 +1104,7 @@ export default function Dashboard({
                           ) : (
                             <span className="badge badge-warning" style={{ fontSize: '0.7rem' }}>⏳ Chưa xử lý</span>
                           )}
-                          {ticket.customerReturnStatus === 'Đã gửi trả' ? (
+                          {!requiresRepairReturn(ticket) ? <span className="badge badge-neutral">Không cần gửi trả</span> : ticket.customerReturnStatus === 'Đã gửi trả' ? (
                             <span className="badge badge-info" style={{ fontSize: '0.68rem' }}>📦 Đã gửi trả NPP</span>
                           ) : (
                             <span className="badge badge-neutral" style={{ fontSize: '0.68rem' }}>Chưa gửi trả</span>
@@ -1347,7 +1348,7 @@ export default function Dashboard({
 
                         <div style={{ display: 'flex', gap: '8px', fontSize: '0.75rem', marginTop: '4px' }}>
                           <span className="badge badge-neutral">Trạng thái: {ticket.processingStatus}</span>
-                          <span className="badge badge-neutral">Bàn giao: {ticket.customerReturnStatus}</span>
+                          <span className="badge badge-neutral">Bàn giao: {repairReturnLabel(ticket)}</span>
                         </div>
                       </div>
                     );

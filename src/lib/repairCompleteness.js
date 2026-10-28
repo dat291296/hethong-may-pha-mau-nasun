@@ -1,3 +1,4 @@
+import { SERVICE_CHECKLIST } from './repairClassification.js';
 import { isUnknownSerial } from './deviceSerial.js';
 export function repairMissingFields(ticket) {
   const missing = [];
@@ -5,6 +6,6 @@ export function repairMissingFields(ticket) {
     if (!String(ticket[key] || '').trim()) missing.push(label);
   }
   if (!['Màn hình','Khác / Linh kiện','Phụ kiện','Linh kiện'].includes(ticket.productCategory) && isUnknownSerial(ticket.serialNumber)) missing.push('Số seri thiết bị');
-  if (['completed','customer_confirmed'].includes(ticket.fieldVisitStatus) && ['inspection','cleaning','functionalTest','safetyCheck','dataBackup'].some(key => !ticket.serviceChecklist?.[key])) missing.push('Checklist công tác');
+  if (['completed','customer_confirmed'].includes(ticket.fieldVisitStatus) && SERVICE_CHECKLIST.some(([key]) => !ticket.serviceChecklist?.[key])) missing.push('Checklist công tác');
   return missing;
 }

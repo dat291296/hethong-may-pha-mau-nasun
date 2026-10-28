@@ -1952,3 +1952,10 @@ main.page-transition .nppmanagement-screen .npp-card-withdrawn { border-top-colo
 .equipment-slot button,.system-health-panel button,.equipment-replacement-modal button { min-height:44px; }
 .health-rate-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:16px 0}.health-rate-card{display:flex;flex-direction:column;gap:9px;text-align:left;border:1px solid var(--border-color);border-radius:12px;background:var(--bg-tertiary);color:var(--text-main);padding:16px;cursor:pointer;min-width:0}.health-rate-card strong{font-size:1.6rem;color:var(--accent-cyan)}.health-rate-card small{color:var(--text-muted)}.health-chart-group>.system-health-panel{margin-top:14px}@media(max-width:700px){.health-rate-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.health-rate-card{padding:12px}}
 .repair-pagination{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:14px;border:1px solid var(--border-color);border-radius:12px}.repair-pagination label{display:flex;align-items:center;gap:10px}.repair-pagination select{width:80px;color-scheme:dark}.repair-pagination button{min-height:44px}.health-rate-card span,.health-rate-card small{overflow-wrap:anywhere}
+
+.repair-failure-classification { border:1px solid var(--border-color); border-radius:10px; padding:12px; margin:12px 0; min-width:0; }
+.repair-failure-classification p,.repair-component-summary p { color:var(--text-muted); font-size:.82rem; margin:8px 0; }
+.repair-component-options { display:grid; grid-template-columns:repeat(auto-fit,minmax(145px,1fr)); gap:8px; }
+.repair-component-options label { display:flex; align-items:center; gap:8px; min-height:44px; }
+.repair-component-summary { padding:14px; }
+.error-photo-upload input[type="file"] { display:inline-block; width:auto; max-width:100%; position:static; }

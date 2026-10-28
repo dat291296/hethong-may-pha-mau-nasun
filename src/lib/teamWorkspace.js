@@ -1,3 +1,4 @@
+import { isRepairAwaitingReturn } from './repairClassification.js';
 import { isUnknownSerial } from './deviceSerial.js';
 export function isAssignedTo(item, user) {
   if (!user) return false;
@@ -7,7 +8,7 @@ export function isAssignedTo(item, user) {
 }
 
 export function repairNeedsAction(ticket) {
-  return ticket.processingStatus !== 'Đã xử lý' || ticket.customerReturnStatus === 'Chưa gửi trả';
+  return ticket.processingStatus !== 'Đã xử lý' || isRepairAwaitingReturn(ticket);
 }
 
 export function missingMachineFields(machine) {

@@ -1,3 +1,4 @@
+import { isRepairAwaitingReturn } from '../lib/repairClassification.js';
 import { userErrorMessage } from '../security/userError.js';
 import {EQUIPMENT_SLOTS,resolveEquipmentSlot} from '../lib/equipmentReplacement.js';
 import EquipmentReplacementDialog from './EquipmentReplacementDialog.jsx';
@@ -678,7 +679,7 @@ export default function AssetManagement({ onReplaceEquipment,replacementEvents=[
       const matchesStatus = statusFilter === 'ALL' || s.status === statusFilter;
       const matchesSearch = !searchTerm || searchText([s.setCode, s.nppName, s.dispenserSerial, s.mixerSerial, s.computerSerial, s.printerSerial, s.province, s.region, distributor?.phone].join(' ')).includes(searchText(searchTerm));
       const tickets = repairTickets.filter(ticket => ticket.nppId === s.nppId && [s.dispenserSerial, s.mixerSerial, s.computerSerial, s.printerSerial].filter(Boolean).includes(ticket.serialNumber));
-      const matchesQuick = quickFilter === 'ALL' || (quickFilter === 'STOCK' && s.status === 'TRONG_KHO') || (quickFilter === 'PENDING' && tickets.some(ticket => ticket.processingStatus === 'Chưa xử lý')) || (quickFilter === 'RETURN' && tickets.some(ticket => ticket.processingStatus === 'Đã xử lý' && ticket.customerReturnStatus === 'Chưa gửi trả')) || (quickFilter === 'OVERDUE' && s.nextMaintenanceDue && s.nextMaintenanceDue < new Date().toLocaleDateString('en-CA'));
+      const matchesQuick = quickFilter === 'ALL' || (quickFilter === 'STOCK' && s.status === 'TRONG_KHO') || (quickFilter === 'PENDING' && tickets.some(ticket => ticket.processingStatus === 'Chưa xử lý')) || (quickFilter === 'RETURN' && tickets.some(ticket => ticket.processingStatus === 'Đã xử lý' && isRepairAwaitingReturn(ticket))) || (quickFilter === 'OVERDUE' && s.nextMaintenanceDue && s.nextMaintenanceDue < new Date().toLocaleDateString('en-CA'));
       return matchesModel && matchesStatus && matchesSearch && matchesQuick && (provinceFilter === 'ALL' || (s.province || distributor?.province) === provinceFilter) && (ownerFilter === 'ALL' || s.technician === ownerFilter) && matchesDateRange(s.installDate || s.installedDate,dateFrom,dateTo);
     })
     .sort((a, b) => naturalSortCode(a, b, 'setCode'));
