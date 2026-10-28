@@ -60,7 +60,7 @@ jobs:
           umask 077
           node scripts/apply-production-safety.mjs --validate-only
           if [ "${#BACKUP_ENCRYPTION_PASSPHRASE}" -lt 24 ]; then exit 1; fi
-          pg_dump --schema=public --schema=auth --schema=storage --format=custom --no-owner --file=release-before.dump --dbname="$SUPABASE_DB_URL" 2>/dev/null
+          pg_dump --schema=public --schema=auth --schema=storage --schema=nasun_internal --format=custom --no-owner --file=release-before.dump --dbname="$SUPABASE_DB_URL" 2>/dev/null
           pg_restore --list release-before.dump > release-before-toc.txt
           grep -q 'TABLE DATA auth users' release-before-toc.txt
           grep -q 'TABLE DATA storage objects' release-before-toc.txt

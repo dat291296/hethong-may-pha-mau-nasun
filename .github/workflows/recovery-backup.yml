@@ -56,11 +56,12 @@ jobs:
         run: |
           set -euo pipefail
           umask 077
-          pg_dump --schema=public --schema=auth --schema=storage --format=custom --no-owner --file=backup/recovery/database.dump --dbname="$SUPABASE_DB_URL"
+          pg_dump --schema=public --schema=auth --schema=storage --schema=nasun_internal --format=custom --no-owner --file=backup/recovery/database.dump --dbname="$SUPABASE_DB_URL"
           pg_dumpall --roles-only --no-role-passwords --file=backup/recovery/roles.sql --database="$SUPABASE_DB_URL"
           pg_restore --list backup/recovery/database.dump > backup/recovery/database-toc.txt
           grep -Eq 'TABLE DATA auth users' backup/recovery/database-toc.txt
           grep -Eq 'TABLE DATA storage buckets' backup/recovery/database-toc.txt
+          grep -Eq 'TABLE DATA nasun_internal field_commands' backup/recovery/database-toc.txt
       - name: Export Storage file contents and verify inventory
         env:
           BACKUP_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL || secrets.VITE_SUPABASE_URL }}
@@ -70,7 +71,7 @@ jobs:
         run: node scripts/verify-storage-archive.mjs backup/recovery/storage
       - name: Bind database, roles and Storage files to one recovery manifest
         run: |
-          printf '%s\n' 'Includes public/auth/storage, grants, role definitions without passwords, and Storage contents.' 'Full Supabase restore drill has not been performed by this export job.' > backup/recovery/coverage.txt
+          printf '%s\n' 'Includes public/auth/storage/nasun_internal, grants, role definitions without passwords, and Storage contents.' 'Full Supabase restore drill has not been performed by this export job.' > backup/recovery/coverage.txt
           node scripts/recovery-integrity.mjs create backup/recovery
           node scripts/recovery-integrity.mjs verify backup/recovery
       - name: Encrypt recovery archive
