@@ -14,6 +14,8 @@ concurrency:
 
 jobs:
   backup-and-restore-test:
+    if: github.ref == 'refs/heads/main' && github.ref_protected
+    environment: backup
     name: Backup and restore verification
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -34,6 +36,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
       - name: Install PostgreSQL client
         run: |
@@ -78,7 +82,7 @@ jobs:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
           set -euo pipefail
-          pg_dump --schema=public --format=custom --compress=9 --no-owner --no-privileges --file=nasun-public.dump --dbname="$SUPABASE_DB_URL"
+          pg_dump --schema=public --format=custom --schema=nasun_internal --compress=9 --no-owner --no-privileges --file=nasun-public.dump --dbname="$SUPABASE_DB_URL"
 
       - name: Verify backup can be restored
         shell: bash
@@ -96,6 +100,7 @@ jobs:
           CREATE EXTENSION IF NOT EXISTS pg_trgm;
           CREATE SCHEMA IF NOT EXISTS auth;
           CREATE TABLE IF NOT EXISTS auth.users (id UUID PRIMARY KEY);
+          CREATE TABLE IF NOT EXISTS auth.sessions (id UUID PRIMARY KEY, user_id UUID, not_after TIMESTAMPTZ);
           CREATE OR REPLACE FUNCTION auth.uid() RETURNS UUID LANGUAGE SQL STABLE AS 'SELECT NULL::UUID';
           CREATE OR REPLACE FUNCTION auth.role() RETURNS TEXT LANGUAGE SQL STABLE AS 'SELECT ''authenticated''::TEXT';
           CREATE OR REPLACE FUNCTION auth.jwt() RETURNS JSONB LANGUAGE SQL STABLE AS 'SELECT ''{}''::JSONB';
@@ -113,7 +118,7 @@ jobs:
             FOR column_record IN
               SELECT table_schema, table_name, column_name
               FROM information_schema.columns
-              WHERE table_schema = 'public' AND data_type = 'uuid'
+              WHERE table_schema IN ('public', 'nasun_internal') AND data_type = 'uuid'
             LOOP
               EXECUTE format(
                 'INSERT INTO auth.users(id) SELECT DISTINCT %I FROM %I.%I WHERE %I IS NOT NULL ON CONFLICT DO NOTHING',

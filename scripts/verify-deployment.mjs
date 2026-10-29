@@ -58,6 +58,8 @@ async function verify() {
   const manifestResponse = await request('/build-manifest.json');
   if (!manifestResponse.ok) throw new Error('BUILD_MANIFEST_UNAVAILABLE');
   const manifest = await manifestResponse.json();
+  const expectedRevision = process.env.EXPECTED_DEPLOYMENT_REVISION || process.env.GITHUB_SHA;
+  if (expectedRevision && manifest.revision !== expectedRevision) throw new Error('DEPLOYED_REVISION_MISMATCH');
   const modules = Object.keys(manifest.assets || {}).filter(path => path.endsWith('.js'));
   if (!modules.length) throw new Error('JAVASCRIPT_MANIFEST_EMPTY');
   for (const [path, expectedHash] of Object.entries(manifest.assets)) {

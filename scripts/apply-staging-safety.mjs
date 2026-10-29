@@ -18,19 +18,33 @@ export function validateStagingDestination(environment) {
       return new URL(text.slice(0, credentialsStart) + credentials.slice(0, colon + 1) + password + text.slice(separator));
     } catch { throw new Error(`Invalid ${name}`); }
   };
-  const target = parse('STAGING_DB_URL'), production = parse('SUPABASE_DB_URL');
+  const target = parse('STAGING_DB_URL');
   const projectRef = connection => {
     const direct = connection.hostname.match(/^db\.([a-z0-9]+)\.supabase\.co$/);
     if (direct) return direct[1];
     if (connection.hostname.endsWith('.pooler.supabase.com')) return decodeURIComponent(connection.username).match(/^postgres\.([a-z0-9]+)$/)?.[1];
     return null;
   };
-  if (projectRef(target) !== APPROVED_STAGING_REF || !projectRef(production) || projectRef(production) === APPROVED_STAGING_REF || !target.password || !production.password) throw new Error('Staging destination is not isolated or approved');
+  let productionRef;
+  if (environment.SUPABASE_DB_URL) {
+    const production = parse('SUPABASE_DB_URL');
+    if (!production.password) throw new Error('Staging destination is not isolated or approved');
+    productionRef = projectRef(production);
+  } else {
+    try {
+      const production = new URL(environment.RLS_PRODUCTION_URL);
+      if (production.protocol === 'https:' && !production.username && !production.password && !production.search && !production.hash && !production.port && production.pathname === '/') {
+        productionRef = production.hostname.match(/^([a-z0-9]+)\.supabase\.co$/)?.[1];
+      }
+    } catch { /* Invalid public metadata fails closed below. */ }
+  }
+  if (projectRef(target) !== APPROVED_STAGING_REF || !productionRef || productionRef === APPROVED_STAGING_REF || !target.password) throw new Error('Staging destination is not isolated or approved');
   return target;
 }
 async function main() {
   const destination = validateStagingDestination(process.env);
-  for (const migration of ['supabase/sensitive_action_reauthentication.sql', 'supabase/technical_document_uploads_migration.sql', 'supabase/technical_storage_recent_auth.sql', 'supabase/device_edit_atomic.sql', 'supabase/optional_device_serial.sql', 'supabase/account_npp_integrity.sql', 'supabase/technician_region_write_migration.sql', 'supabase/trusted_session_revocation.sql', 'supabase/revoked_session_write_guard.sql', 'supabase/technician_national_read_admin_session.sql']) {
+  // Versioned security migrations must run last so legacy standalone SQL cannot weaken them.
+  for (const migration of ['supabase/sensitive_action_reauthentication.sql', 'supabase/technical_document_uploads_migration.sql', 'supabase/technical_storage_recent_auth.sql', 'supabase/device_edit_atomic.sql', 'supabase/optional_device_serial.sql', 'supabase/account_npp_integrity.sql', 'supabase/technician_region_write_migration.sql', 'supabase/trusted_session_revocation.sql', 'supabase/revoked_session_write_guard.sql', 'supabase/technician_national_read_admin_session.sql', 'supabase/migrations/20261020082117_session_upload_privilege_hardening.sql', 'supabase/migrations/20261028015716_security_upgrade_canonical_guards.sql', 'supabase/migrations/20261028063410_security_upgrade_internal_rate_limit_grants.sql', 'supabase/migrations/20261028063846_security_upgrade_private_realtime_guard.sql']) {
   const child = spawn('psql', ['--dbname=' + destination.href, '-v', 'ON_ERROR_STOP=1', '-f', migration], {
     env: { ...process.env, PGSSLMODE: 'require' }, stdio: ['ignore', 'ignore', 'ignore']
   });

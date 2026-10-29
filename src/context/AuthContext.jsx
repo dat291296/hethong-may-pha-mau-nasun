@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { createAuthEventScheduler } from '../security/authEventScheduler.js';
+import { redactSecurityDetails } from '../security/securityEvents.js';
 import { ROLES, ROLE_LABELS, hasPermission } from '../security/rbac.js';
 import { supabase, isSupabaseConfigured, isDevelopmentFallback } from '../lib/supabase.js';
 import { clearOfflineStorage, getCacheStrict, getQueue, initializeOfflineStorage, setCache, removeCache } from '../lib/offlineDb.js';
@@ -301,23 +302,24 @@ export function AuthProvider({ children }) {
 
   // ── Security event logging ────────────────────────────────────────────────
   const reportSecurityEvent = useCallback((type, details) => {
+    const safeDetails = redactSecurityDetails(details || {});
     const event = {
       id: `SEC-${Date.now()}`,
       type,
-      details,
+      details: safeDetails,
       timestamp: new Date().toISOString(),
       userId: user?.id || 'unknown',
       userEmail: user?.email || 'unknown',
       severity: type.includes('VIOLATION') ? 'CRITICAL' : 'WARNING',
     };
-    console.error(`[SECURITY][${event.severity}] ${type}:`, details);
+    console.error(`[SECURITY][${event.severity}] ${type}:`, safeDetails);
     setSecurityEvents(prev => [event, ...prev].slice(0, 50)); // Keep last 50 events
 
     // Security events are stored separately from editable operational audit logs.
     if (isSupabaseConfigured && supabase) {
       supabase.rpc('record_security_event', {
         p_event_type: type,
-        p_details: details || {},
+        p_details: safeDetails,
       }).then(({ error }) => {
         if (error) console.error('[Auth] Failed to log security event:', error.message);
       });
