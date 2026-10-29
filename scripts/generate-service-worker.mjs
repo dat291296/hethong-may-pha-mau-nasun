@@ -24,9 +24,11 @@ let files = await collectFiles(distDir);
 const assetHashes = Object.fromEntries(await Promise.all(files.map(async file => [file, await sha256File(file)])));
 assetHashes['/'] = assetHashes['/index.html'];
 const fingerprintSource = Object.entries(assetHashes).sort(([a], [b]) => a.localeCompare(b));
-const buildFingerprint = createHash('sha256').update(JSON.stringify(fingerprintSource)).digest('hex').slice(0, 16);
+const revision = process.env.GITHUB_SHA || null;
+if (revision !== null && !/^[a-f0-9]{40}$/i.test(revision)) throw new Error('INVALID_BUILD_REVISION');
+const buildFingerprint = createHash('sha256').update(JSON.stringify({ assets: fingerprintSource, revision })).digest('hex').slice(0, 16);
 
-const manifest = { schemaVersion: 1, buildFingerprint, algorithm: 'SHA-256', assets: assetHashes };
+const manifest = { schemaVersion: 1, revision, buildFingerprint, algorithm: 'SHA-256', assets: assetHashes };
 await writeFile(path.join(distDir, 'build-manifest.json'), JSON.stringify(manifest, null, 2), 'utf8');
 assetHashes['/build-manifest.json'] = await sha256File('/build-manifest.json');
 files = Array.from(new Set(['/index.html', '/', ...files, '/build-manifest.json']));
