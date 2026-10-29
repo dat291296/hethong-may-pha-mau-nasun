@@ -832,10 +832,10 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
                     <span className="mobile-card-label">Sản phẩm:</span>
                     <span className="mobile-card-value">{ticket.machineModel} ({ticket.productCategory})</span>
                   </div>
-                  <div className="mobile-card-row">
+                  {ticket.serialNumber && <div className="mobile-card-row">
                     <span className="mobile-card-label">Số Seri:</span>
                     <span className="mobile-card-value" style={{ fontFamily: 'var(--font-mono)' }}>{ticket.serialNumber}</span>
-                  </div>
+                  </div>}
                   <div className="mobile-card-row">
                     <span className="mobile-card-label">Lỗi:</span>
                     <span className="mobile-card-value">{ticket.errorCategory && <strong>Linh kiện lỗi: {ticket.errorCategory} · </strong>}{ticket.errorDescription}<span className="repair-inline-photos">{repairStringList(ticket.photos).slice(0,3).map((url,index)=><button type="button" key={index} onClick={()=>setSelectedTicket(ticket)} aria-label={`Xem ảnh lỗi ${index+1}`}><img loading="lazy" src={url} alt={ticket.errorCategory||'Ảnh lỗi thiết bị'}/></button>)}</span></span>{repairMissingFields(ticket).length > 0 && <p className="repair-missing-fields">⚠ Cần bổ sung: {repairMissingFields(ticket).join(' · ')}</p>}
@@ -1117,13 +1117,13 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
                     </div>
                     <div className="form-group">
                       <label className="form-label">
-                        🏷️ 4. Số Seri Thiết Bị (có thể bổ sung sau)
+                        🏷️ 4. Số Seri Thiết Bị (không bắt buộc)
                       </label>
                       <input
                         type="text"
-                        className={`form-input ${!formData.serialNumber ? 'field-missing' : ''}`}
+                        className="form-input"
                         required={false}
-                        placeholder={['Màn hình', 'Khác / Linh kiện'].includes(formData.productCategory) ? "Có thể để trống hoặc ghi chú..." : "Nhập số seri duy nhất..."}
+                        placeholder="Có thể để trống; nhập khi có để đối chiếu"
                         value={formData.serialNumber}
                         onChange={e => setFormData({ ...formData, serialNumber: e.target.value })}
                       />

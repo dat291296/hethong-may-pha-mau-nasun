@@ -13,9 +13,10 @@ test('NPP code suggestions respect region sequences and allow manual numbered co
   assert.equal(validateNppCode('NPP-MB-000', 'Miền Bắc'), false);
 });
 
-test('incomplete repairs identify missing fields without requiring SLA or photos', () => {
+test('repair tickets do not require a device serial, SLA, or photos', () => {
   const fields = repairMissingFields({ productCategory: 'Máy lắc', serialNumber: 'AUTO-1', fieldVisitStatus: 'completed' });
-  assert.ok(fields.includes('Số seri thiết bị'));
+  assert.ok(!fields.includes('Số seri thiết bị'));
+  assert.ok(!repairMissingFields({ productCategory: 'Máy tính', serialNumber: '', fieldVisitStatus: 'scheduled' }).includes('Số seri thiết bị'));
   assert.ok(fields.includes('Diễn giải lỗi'));
   assert.ok(fields.includes('Checklist công tác'));
   assert.ok(!fields.some(field => /SLA|Ảnh/.test(field)));

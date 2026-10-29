@@ -134,10 +134,10 @@ export default function App() {
   }, [user]);
 
   // Main State via Supabase hooks
-  const { npps, setNpps, addNpp, editNpp, deleteNpp, importNpps, refetch: refetchNpps } = useNpps();
+  const { npps, setNpps, addNpp, editNpp, deleteNpp, importNpps, loading: nppsLoading, error: nppsLoadError, refetch: refetchNpps } = useNpps();
   const {
     dispensers, setDispensers, mixers, setMixers, computers, setComputers, printers, setPrinters, systemSets, setSystemSets,
-    addStockDevice, editDevice, editDeviceDetails, deleteDevice, deleteSystemSet, assembleSet, replaceEquipment, updateSystemSet, importDevices, importSystemSets, refetch: refetchAssets
+    addStockDevice, editDevice, editDeviceDetails, deleteDevice, deleteSystemSet, assembleSet, replaceEquipment, updateSystemSet, importDevices, importSystemSets, loading: assetsLoading, loadError: assetsLoadError, refetch: refetchAssets
   } = useAssets();
   const replacementHistory=useReplacementEvents();
   const handleReplaceEquipment=async payload=>{
@@ -806,6 +806,10 @@ export default function App() {
 
         {/* Dynamic View Content */}
         <FieldSyncStatus/>
+        {(nppsLoadError || assetsLoadError) && <div className="alert alert-warning" role="alert" style={{ margin: '12px 28px 0' }}>
+          <div>{[nppsLoadError, assetsLoadError].filter(Boolean).join(' ')}</div>
+          <button type="button" className="btn btn-secondary btn-sm" disabled={nppsLoading || assetsLoading} onClick={() => Promise.allSettled([refetchNpps(), refetchAssets()])}>Tải lại dữ liệu NPP và bộ máy</button>
+        </div>}
         <main key={activeTab} className="page-transition nasun-workspace" data-page={activeTab} style={{ flex: 1, padding: '28px', overflowY: 'auto' }}>
           {!['users', 'techHandbook'].includes(activeTab) && <RegionalWorkspaceBar key={regionalIdentity} user={user} region={workspaceRegion} onChange={setWorkspaceRegion} counts={regionCounts} compact={activeTab === 'npp'} extra={activeTab === 'npp' ? <label className="coverage-inline">Ghép bộ<select aria-label="Lọc NPP theo tình trạng ghép bộ" className="form-select" value={nppCoverageFilter} onChange={event => setNppCoverageFilter(event.target.value)}><option value="ALL">Tất cả NPP</option><option value="ASSIGNED">Đã ghép bộ</option><option value="UNASSIGNED">Chưa ghép bộ</option></select></label> : null} />}
           <WorkspaceRegionContext.Provider value={workspaceRegion}><Suspense key={`${regionalIdentity}:${workspaceRegion}`} fallback={<div className="glass-panel" style={{ padding: '28px', color: 'var(--text-muted)' }}>Đang tải màn hình...</div>}>

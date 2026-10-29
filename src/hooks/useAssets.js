@@ -4,6 +4,7 @@ import {saveEquipmentReplacement,resolveEquipmentSlot,replacementCandidates,equi
 import {normalizeDeviceType} from '../lib/deviceType.js';
 import {saveSystemSetEdit} from '../lib/systemSetEdit.js';
 import { recordOperationalError } from '../lib/operationalDiagnostics.js';
+import { userErrorMessage } from '../security/userError.js';
 import { saveDeviceEdit } from '../lib/deviceEdit.js';
 import { requireCompleteWrite } from '../lib/guardedWrite.js';
 import { fetchAllRows } from '../lib/paginatedQuery.js';
@@ -69,6 +70,7 @@ export function useAssets() {
   const [printers,    setPrinters]    = useState(() => getInitialAssets('printers', INITIAL_PRINTERS));
   const [systemSets,  setSystemSets]  = useState(() => getInitialAssets('system_sets', INITIAL_SYSTEM_SETS));
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState('');
   const [cacheHydrated, setCacheHydrated] = useState(false);
   const fetchInFlightRef = useRef(null);
   const fetchPendingRef = useRef(false);
@@ -86,11 +88,14 @@ export function useAssets() {
           getCachedOfflineData('printers', null),
           getCachedOfflineData('system_sets', null),
         ]);
-        if (Array.isArray(d)) { setDispensers(d); persistAssetsLocal('dispensers', d); }
-        if (Array.isArray(m)) { setMixers(m); persistAssetsLocal('mixers', m); }
-        if (Array.isArray(c)) { setComputers(c); persistAssetsLocal('computers', c); }
-        if (Array.isArray(p)) { setPrinters(p); persistAssetsLocal('printers', p); }
-        if (Array.isArray(s)) { setSystemSets(s); persistAssetsLocal('system_sets', s); }
+        if (Array.isArray(d)) setDispensers(d);
+        if (Array.isArray(m)) setMixers(m);
+        if (Array.isArray(c)) setComputers(c);
+        if (Array.isArray(p)) setPrinters(p);
+        if (Array.isArray(s)) setSystemSets(s);
+      } catch (error) {
+        recordOperationalError('runtime', error);
+        setLoadError('Chưa đọc được dữ liệu máy đã lưu trên thiết bị. Không có dữ liệu nào bị xóa.');
       } finally {
         setCacheHydrated(true);
       }
@@ -102,70 +107,60 @@ export function useAssets() {
   const performFetchAssets = useCallback(async () => {
     const requestOwner = getOfflineOwner();
     if (!isSupabaseConfigured) return;
-    const pendingQueue = await getOfflineQueue();
-    if (pendingQueue.some(isPendingAssetAction)) {
-      console.info('[useAssets] Keeping local asset cache while changes are waiting to sync.');
-      return;
-    }
     setLoading(true);
-    const [dRes, mRes, cRes, pRes, sRes] = await Promise.all([
-      fetchAllRows(sb => sb.from('dispensers').select('*', { count: 'exact' }).order('id'), safeQuery, 'fetchDispensers', { key: 'id' }),
-      fetchAllRows(sb => sb.from('mixers').select('*', { count: 'exact' }).order('id'), safeQuery, 'fetchMixers', { key: 'id' }),
-      fetchAllRows(sb => sb.from('computers').select('*', { count: 'exact' }).order('id'), safeQuery, 'fetchComputers', { key: 'id' }),
-      fetchAllRows(sb => sb.from('printers').select('*', { count: 'exact' }).order('id'), safeQuery, 'fetchPrinters', { key: 'id' }),
-      fetchAllRows(sb => sb.from('system_sets').select('*', { count: 'exact' }).order('set_code'), safeQuery, 'fetchSystemSets', { key: 'set_code' }),
-    ]);
+    setLoadError('');
+    try {
+      const pendingQueue = await getOfflineQueue();
+      if (requestOwner !== getOfflineOwner()) return false;
+      if (pendingQueue.some(isPendingAssetAction)) {
+        console.info('[useAssets] Keeping local asset cache while changes are waiting to sync.');
+        return true;
+      }
+      const [dRes, mRes, cRes, pRes, sRes] = await Promise.all([
+        fetchAllRows(sb => sb.from('dispensers').select('*', { count: 'exact' }).order('id'), safeQuery, 'fetchDispensers', { key: 'id' }),
+        fetchAllRows(sb => sb.from('mixers').select('*', { count: 'exact' }).order('id'), safeQuery, 'fetchMixers', { key: 'id' }),
+        fetchAllRows(sb => sb.from('computers').select('*', { count: 'exact' }).order('id'), safeQuery, 'fetchComputers', { key: 'id' }),
+        fetchAllRows(sb => sb.from('printers').select('*', { count: 'exact' }).order('id'), safeQuery, 'fetchPrinters', { key: 'id' }),
+        fetchAllRows(sb => sb.from('system_sets').select('*', { count: 'exact' }).order('set_code'), safeQuery, 'fetchSystemSets', { key: 'set_code' }),
+      ]);
 
-    if (requestOwner !== getOfflineOwner()) return false;
-    const cacheWrites = [];
-    if (Array.isArray(dRes.data)) {
-      const mapped = dRes.data.map(mapDbToDispenser);
-      setDispensers(mapped);
-      cacheWrites.push(persistAssetsLocal('dispensers', mapped));
-    } else if (dRes.error) {
-      const cached = await getCachedOfflineData('dispensers', null);
-      if (Array.isArray(cached)) setDispensers(cached);
+      if (requestOwner !== getOfflineOwner()) return false;
+      const cacheWrites = [];
+      const sources = [
+        [dRes, 'dispensers', mapDbToDispenser, setDispensers],
+        [mRes, 'mixers', mapDbToMixer, setMixers],
+        [cRes, 'computers', mapDbToComputer, setComputers],
+        [pRes, 'printers', mapDbToPrinter, setPrinters],
+        [sRes, 'system_sets', mapDbToSystemSet, setSystemSets],
+      ];
+      for (const [result, key, mapper, setter] of sources) {
+        if (Array.isArray(result.data)) {
+          const mapped = result.data.map(mapper);
+          setter(mapped);
+          cacheWrites.push(persistAssetsLocal(key, mapped));
+        } else {
+          const cached = await getCachedOfflineData(key, null);
+          if (requestOwner !== getOfflineOwner()) return false;
+          if (Array.isArray(cached)) setter(cached);
+        }
+      }
+
+      const failed = sources.filter(([result]) => result.error || !Array.isArray(result.data));
+      if (failed.length) {
+        const firstError = failed.find(([result]) => result.error)?.[0].error;
+        setLoadError(userErrorMessage(firstError, 'Chưa tải đủ dữ liệu bộ máy. Bản lưu trên thiết bị được giữ; kiểm tra phiên đăng nhập, quyền truy cập và kết nối.'));
+        return false;
+      }
+      const saved = (await Promise.all(cacheWrites)).every(Boolean);
+      if (!saved) setLoadError('Đã tải dữ liệu bộ máy nhưng chưa lưu được bản ngoại tuyến trên thiết bị.');
+      return saved;
+    } catch (error) {
+      recordOperationalError('runtime', error);
+      if (requestOwner === getOfflineOwner()) setLoadError(userErrorMessage(error, 'Chưa tải được dữ liệu bộ máy. Dữ liệu đã lưu trên thiết bị được giữ nguyên.'));
+      return false;
+    } finally {
+      setLoading(false);
     }
-
-    if (Array.isArray(mRes.data)) {
-      const mapped = mRes.data.map(mapDbToMixer);
-      setMixers(mapped);
-      cacheWrites.push(persistAssetsLocal('mixers', mapped));
-    } else if (mRes.error) {
-      const cached = await getCachedOfflineData('mixers', null);
-      if (Array.isArray(cached)) setMixers(cached);
-    }
-
-    if (Array.isArray(cRes.data)) {
-      const mapped = cRes.data.map(mapDbToComputer);
-      setComputers(mapped);
-      cacheWrites.push(persistAssetsLocal('computers', mapped));
-    } else if (cRes.error) {
-      const cached = await getCachedOfflineData('computers', null);
-      if (Array.isArray(cached)) setComputers(cached);
-    }
-
-    if (Array.isArray(pRes.data)) {
-      const mapped = pRes.data.map(mapDbToPrinter);
-      setPrinters(mapped);
-      cacheWrites.push(persistAssetsLocal('printers', mapped));
-    } else if (pRes.error) {
-      const cached = await getCachedOfflineData('printers', null);
-      if (Array.isArray(cached)) setPrinters(cached);
-    }
-
-    if (Array.isArray(sRes.data)) {
-      const mapped = sRes.data.map(mapDbToSystemSet);
-      setSystemSets(mapped);
-      cacheWrites.push(persistAssetsLocal('system_sets', mapped));
-    } else if (sRes.error) {
-      const cached = await getCachedOfflineData('system_sets', null);
-      if (Array.isArray(cached)) setSystemSets(cached);
-    }
-
-    setLoading(false);
-    if ([dRes, mRes, cRes, pRes, sRes].some(result => result.error || !Array.isArray(result.data))) return false;
-    return (await Promise.all(cacheWrites)).every(Boolean);
   }, []);
 
   const fetchAssets = useCallback(() => {
@@ -500,6 +495,7 @@ export function useAssets() {
     printers,   setPrinters,
     systemSets, setSystemSets,
     loading,
+    loadError,
     addStockDevice,
     editDevice,
     editDeviceDetails,

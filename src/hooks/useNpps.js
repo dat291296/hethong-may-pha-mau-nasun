@@ -1,11 +1,13 @@
 import { getOfflineOwner } from '../lib/offlineDb.js';
 import { updateWithRevision } from '../lib/guardedWrite.js';
 import { fetchAllRows } from '../lib/paginatedQuery.js';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase, isSupabaseConfigured, safeQuery } from '../lib/supabase.js';
 import { persistMutation, persistBatchMutation } from '../lib/durableMutation.js';
 import { INITIAL_NPPS } from '../data/mockData.js';
 import { cacheOfflineData, getCachedOfflineData, enqueueOfflineAction, getOfflineQueue } from '../lib/offlineSync.js';
+import { recordOperationalError } from '../lib/operationalDiagnostics.js';
+import { userErrorMessage } from '../security/userError.js';
 
 /**
  * useNpps – NPP (Nhà Phân Phối) data hook.
@@ -15,6 +17,7 @@ export function useNpps() {
   const [npps, setNpps] = useState(isSupabaseConfigured ? [] : INITIAL_NPPS);
   const [loading, setLoading] = useState(false);
   const [error, setError]   = useState(null);
+  const fetchVersion = useRef(0);
 
   // Hydrate cache from IndexedDB on mount
   useEffect(() => {
@@ -31,36 +34,58 @@ export function useNpps() {
   // ── Fetch all NPPs ─────────────────────────────────────────────────────────
   const fetchNpps = useCallback(async () => {
     const requestOwner = getOfflineOwner();
+    const version = ++fetchVersion.current;
     if (!isSupabaseConfigured) {
-      const cached = await getCachedOfflineData('npps', null);
-      if (cached && cached.length > 0) persistNpps(cached, setNpps);
-      return;
-    }
-    const pendingQueue = await getOfflineQueue();
-    if (pendingQueue.some(item => ['ADD_NPP', 'EDIT_NPP', 'DELETE_NPP'].includes(item.action))) {
-      console.info('[useNpps] Keeping local NPP cache while changes are waiting to sync.');
+      try {
+        const cached = await getCachedOfflineData('npps', null);
+        if (Array.isArray(cached) && version === fetchVersion.current && requestOwner === getOfflineOwner()) setNpps(cached);
+      } catch (cacheError) {
+        recordOperationalError('runtime', cacheError);
+      }
       return;
     }
     setLoading(true);
-    const { data, error: err } = await fetchAllRows(
-      sb => sb.from('distributors').select('*', { count: 'exact' }).order('created_at', { ascending: false }).order('id'),
-      safeQuery, 'fetchNpps', { key: 'id' }
-    );
-    if (requestOwner !== getOfflineOwner()) return false;
-    let cacheSaved = false;
-    if (err) { 
-      setError(err.message); 
-      // Loading cached data on network error
-      const cached = await getCachedOfflineData('npps', null);
-      if (cached && cached.length > 0) setNpps(cached);
-    }
-    else if (data) { 
+    setError(null);
+    try {
+      const pendingQueue = await getOfflineQueue();
+      if (version !== fetchVersion.current || requestOwner !== getOfflineOwner()) return false;
+      if (pendingQueue.some(item => ['ADD_NPP', 'EDIT_NPP', 'DELETE_NPP'].includes(item.action))) {
+        const cached = await getCachedOfflineData('npps', null);
+        if (version !== fetchVersion.current || requestOwner !== getOfflineOwner()) return false;
+        if (Array.isArray(cached)) setNpps(cached);
+        setError(Array.isArray(cached)
+          ? 'NPP đang có thay đổi chờ đồng bộ. Đang hiển thị bản lưu trên thiết bị; hãy xử lý hàng chờ trước khi tải lại từ máy chủ.'
+          : 'NPP đang có thay đổi chờ đồng bộ nhưng chưa có bản lưu trên thiết bị. Không tải đè dữ liệu; kiểm tra hàng chờ đồng bộ.');
+        return false;
+      }
+      const columns = 'id,npp_code,updated_at,name,phone,contact_person,salesperson,brand,region,province,address,location_coordinates,google_maps_url,status,created_at,photos';
+      const { data, error: fetchError } = await fetchAllRows(
+        sb => sb.from('distributors').select(columns, { count: 'exact' }).order('created_at', { ascending: false }).order('id'),
+        safeQuery, 'fetchNpps', { key: 'id' }
+      );
+      if (version !== fetchVersion.current || requestOwner !== getOfflineOwner()) return false;
+      if (fetchError) throw fetchError;
+      if (!Array.isArray(data)) throw Object.assign(new Error('INCOMPLETE_NPP_RESPONSE'), { code: 'INCOMPLETE_QUERY' });
       const mapped = data.map(mapDbToNpp);
-      // Supabase is authoritative while online, including an empty table.
-      cacheSaved = await persistNpps(mapped, setNpps);
+      const cacheSaved = await persistNpps(mapped, setNpps);
+      if (version === fetchVersion.current && requestOwner === getOfflineOwner()) {
+        setError(cacheSaved ? null : 'Đã tải NPP nhưng chưa lưu được bản ngoại tuyến trên thiết bị.');
+      }
+      return cacheSaved;
+    } catch (fetchError) {
+      recordOperationalError('runtime', fetchError);
+      if (version !== fetchVersion.current || requestOwner !== getOfflineOwner()) return false;
+      setError(userErrorMessage(fetchError, 'Chưa tải được NPP. Dữ liệu trên thiết bị được giữ nguyên; kiểm tra phiên đăng nhập, quyền truy cập và kết nối.'));
+      try {
+        const cached = await getCachedOfflineData('npps', null);
+        if (version === fetchVersion.current && requestOwner === getOfflineOwner() && Array.isArray(cached)) setNpps(cached);
+      } catch (cacheError) {
+        recordOperationalError('runtime', cacheError);
+      }
+      return false;
+    } finally {
+      if (version === fetchVersion.current) setLoading(false);
     }
-    setLoading(false);
-    return cacheSaved;
   }, []);
 
   useEffect(() => { fetchNpps(); }, [fetchNpps]);

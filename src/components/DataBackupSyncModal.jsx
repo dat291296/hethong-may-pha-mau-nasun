@@ -421,7 +421,7 @@ export default function DataBackupSyncModal({
                           <span className={`badge ${['needs_review', 'dead_letter'].includes(item.status) ? 'badge-danger' : 'badge-info'}`}>{item.status}</span>
                         </div>
                         <div style={{ color: 'var(--text-muted)', marginTop: '3px' }}>
-                          Thử {item.attempts} lần · chờ {Math.floor(item.ageSeconds / 60)} phút{item.nextRetryInSeconds ? ` · retry sau ${item.nextRetryInSeconds}s` : ''}
+                          {item.attempts > 0 && `Thử ${item.attempts} lần · `}{['needs_review', 'dead_letter'].includes(item.status) ? `Đã lưu trong hàng chờ ${Math.floor(item.ageSeconds / 60)} phút` : `Đã chờ ${Math.floor(item.ageSeconds / 60)} phút`}{item.nextRetryInSeconds ? ` · thử lại sau ${item.nextRetryInSeconds}s` : ''}
                         </div>
                         {item.lastError && <div style={{ color: 'var(--accent-rose)', marginTop: '3px', overflowWrap: 'anywhere' }}>{userErrorMessage({code:item.lastErrorCode || "SYNC_OPERATION_FAILED"})}</div>}
                       </div>

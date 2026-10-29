@@ -27,9 +27,17 @@ export default function TechnicalResources({ machineModel = '', modelOptions = [
     setDocuments([]);setError('');setLoading(false);
     if (!supabase || !user?.id) return;
     setLoading(true);
-    fetchAllRows(sb=>sb.from('technical_documents').select(fields,{count:'exact'}).order('id'),safeQuery,'technicalDocuments').then(data => {
+    fetchAllRows(sb=>sb.from('technical_documents').select(fields,{count:'exact'}).order('id'),safeQuery,'technicalDocuments').then(({ data, error: fetchError }) => {
       if (cancelled) return;
-      setDocuments(data || []);
+      if (fetchError) {
+        setError(resourceError(fetchError));
+        return;
+      }
+      if (!Array.isArray(data)) {
+        setError('Chưa nhận đủ danh sách tài liệu. Vui lòng tải lại.');
+        return;
+      }
+      setDocuments(data);
     }).catch(err => { if (!cancelled) setError(resourceError(err)); }).finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [user?.id]);
