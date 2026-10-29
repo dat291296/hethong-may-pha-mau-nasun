@@ -26,6 +26,10 @@ function run(command, args, options = {}) {
   const result = spawnSync(command, args, { cwd: root, encoding: 'utf8', timeout: 900000,
     maxBuffer: 16 * 1024 * 1024, ...options });
   if (result.error || result.status !== 0) {
+    if (command === 'docker' && args.includes('pg_restore')) {
+      const diagnostics = (result.stderr || '').split('\n').filter(line => /^pg_restore: error:/.test(line));
+      console.error(diagnostics.slice(0, 3).join('\n'));
+    }
     // Commands can contain only local disposable identities; suppress provider output anyway.
     throw new Error(`SYNTHETIC_DRILL_COMMAND_FAILED:${command}:${args[0]}`);
   }
