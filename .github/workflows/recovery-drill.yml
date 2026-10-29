@@ -2,9 +2,6 @@ name: Synthetic DB Auth Storage recovery drill
 on:
   pull_request:
     paths: ['scripts/*recovery*', 'scripts/*storage*', '.github/workflows/recovery-drill.yml', 'supabase/schema.sql']
-  push:
-    branches: ['codex/security-verification-20261029']
-    paths: ['scripts/*recovery*', 'scripts/*storage*', '.github/workflows/recovery-drill.yml', 'supabase/schema.sql']
   workflow_dispatch:
 permissions:
   contents: read

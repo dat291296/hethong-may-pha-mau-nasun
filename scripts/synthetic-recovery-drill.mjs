@@ -121,6 +121,7 @@ try {
   const destination = await start('destination');
   assert.equal(sql('SELECT count(*) FROM auth.users;').trim(), '0');
   assert.equal(sql("SELECT count(*) FROM pg_tables WHERE schemaname IN ('public','nasun_internal');").trim(), '0');
+  sql('CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA public;');
   await decryptRecoveryBackup(join(root, 'recovery.enc'), join(root, 'restored.tar.gz'), passphrase);
   await mkdir(join(root, 'decrypted'));
   run('tar', ['-xzf', join(root, 'restored.tar.gz'), '-C', join(root, 'decrypted')]);
@@ -140,7 +141,10 @@ try {
   }).join('\n');
   await writeFile(join(root, 'restore.list'), selected);
   run('docker', ['cp', join(root, 'restore.list'), `supabase_db_${active}:/tmp/restore.list`]);
-  run('docker', ['exec', `supabase_db_${active}`, 'pg_restore', '-U', 'postgres', '-d', 'postgres', '--no-owner', '--exit-on-error', '--single-transaction', '--use-list=/tmp/restore.list', '/tmp/database.dump']);
+  // The fresh Auth schema already has foreign keys. Apply the documented logical-restore
+  // replication mode on this one disposable connection, then validate relationships below.
+  run('docker', ['exec', '-e', 'PGOPTIONS=-c session_replication_role=replica', `supabase_db_${active}`, 'pg_restore', '-U', 'postgres', '-d', 'postgres', '--no-owner', '--exit-on-error', '--single-transaction', '--use-list=/tmp/restore.list', '/tmp/database.dump']);
+  assert.equal(sql('SELECT count(*) FROM auth.identities i LEFT JOIN auth.users u ON u.id=i.user_id WHERE u.id IS NULL;').trim(), '0');
   const manifest = JSON.parse(await readFile(join(recovered, 'storage', 'manifest.json'), 'utf8'));
   for (const bucket of manifest.buckets) assert.ifError((await destination.admin.storage.createBucket(bucket.id, { public: bucket.public })).error);
   const restoredLogin = destination.user();

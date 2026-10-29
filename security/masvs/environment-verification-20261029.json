@@ -1,0 +1,90 @@
+{
+  "date": "2026-10-29",
+  "readOnlyUI": true,
+  "backupEnvironment": {
+    "allowedBranches": [
+      "main"
+    ],
+    "allowedTags": [],
+    "requiredReviewers": [],
+    "adminBypassAllowed": false,
+    "environmentSecretNames": [
+      "BACKUP_SUPABASE_SERVICE_ROLE_KEY",
+      "SUPABASE_DB_URL"
+    ],
+    "source": "Authenticated GitHub Settings > Environments > backup"
+  },
+  "repositorySecretNamesRelevantToBackup": [
+    "BACKUP_ENCRYPTION_PASSPHRASE",
+    "BACKUP_SUPABASE_SERVICE_ROLE_KEY",
+    "SUPABASE_DB_URL"
+  ],
+  "secretValuesAccessed": false,
+  "settingsChanged": false,
+  "ownerDecision": "Only dat291296 account exists; do not claim independent two-person approval.",
+  "remainingRisk": "Repository-scope duplicates remain reachable to workflows without backup environment. Scope migration requires the owner to enter the existing encryption passphrase directly into GitHub Environment backup and validate environment keys before removing repository duplicates. Never rotate away the ability to decrypt historical archives.",
+  "costConstraint": "No hosted project, paid runner, paid restore or service activation authorized. Use standard ubuntu-24.04 in the existing public repository, no recovery archives uploaded.",
+  "baselineTableAclDrift": [
+    {
+      "schema": "public",
+      "table": "account_sessions",
+      "production": "{postgres=arwdDxtm/postgres,authenticated=rm/postgres,service_role=arwdDxtm/postgres}",
+      "staging": "{postgres=arwdDxtm/postgres,authenticated=arwdm/postgres,service_role=arwdDxtm/postgres}"
+    },
+    {
+      "schema": "public",
+      "table": "admin_role_grants",
+      "production": "{postgres=arwdDxtm/postgres,authenticated=rm/postgres,service_role=arwdDxtm/postgres}",
+      "staging": "{postgres=arwdDxtm/postgres,authenticated=arwdm/postgres,service_role=arwdDxtm/postgres}"
+    },
+    {
+      "schema": "public",
+      "table": "app_schema_migrations",
+      "production": "{postgres=arwdDxtm/postgres,authenticated=rm/postgres,service_role=arwdDxtm/postgres}",
+      "staging": "{postgres=arwdDxtm/postgres,authenticated=arwdm/postgres,service_role=arwdDxtm/postgres}"
+    },
+    {
+      "schema": "public",
+      "table": "legacy_component_retirements",
+      "production": "{postgres=arwdDxtm/postgres,authenticated=rm/postgres,service_role=arwdDxtm/postgres}",
+      "staging": "{postgres=arwdDxtm/postgres,authenticated=arwdm/postgres,service_role=arwdDxtm/postgres}"
+    },
+    {
+      "schema": "public",
+      "table": "security_events",
+      "production": "{postgres=arwdDxtm/postgres,authenticated=rm/postgres,service_role=arxm/postgres}",
+      "staging": "{postgres=arwdDxtm/postgres,authenticated=arm/postgres,service_role=arxm/postgres}"
+    },
+    {
+      "schema": "public",
+      "table": "security_rate_limits",
+      "production": "{postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "staging": "{postgres=arwdDxtm/postgres,authenticated=arwdm/postgres,service_role=arwdDxtm/postgres}"
+    },
+    {
+      "schema": "public",
+      "table": "sync_change_feed",
+      "production": "{postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "staging": "{postgres=arwdDxtm/postgres,authenticated=arwdm/postgres,service_role=arwdDxtm/postgres}"
+    },
+    {
+      "schema": "public",
+      "table": "sync_entity_versions",
+      "production": "{postgres=arwdDxtm/postgres,authenticated=rm/postgres,service_role=arwdDxtm/postgres}",
+      "staging": "{postgres=arwdDxtm/postgres,authenticated=arwdm/postgres,service_role=arwdDxtm/postgres}"
+    },
+    {
+      "schema": "public",
+      "table": "sync_operations",
+      "production": "{postgres=arwdDxtm/postgres,authenticated=arm/postgres,service_role=arwdDxtm/postgres}",
+      "staging": "{postgres=arwdDxtm/postgres,authenticated=arwdm/postgres,service_role=arwdDxtm/postgres}"
+    },
+    {
+      "schema": "public",
+      "table": "trusted_devices",
+      "production": "{postgres=arwdDxtm/postgres,authenticated=rm/postgres,service_role=arwdDxtm/postgres}",
+      "staging": "{postgres=arwdDxtm/postgres,authenticated=arwdm/postgres,service_role=arwdDxtm/postgres}"
+    }
+  ],
+  "indexCount": 64
+}
