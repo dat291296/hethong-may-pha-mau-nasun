@@ -1,3 +1,4 @@
+import { schemaSelection, orderAuthDataEntries } from './recovery-restore-plan.mjs';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { mkdtemp, readFile, writeFile, mkdir } from 'node:fs/promises';
@@ -47,19 +48,6 @@ function tableSnapshot() {
     assert.match(table.name, /^[a-z_][a-z0-9_]*$/);
     return { ...table, digest: sql(`SELECT count(*)::text||':'||md5(coalesce(string_agg(h,',' ORDER BY h),'')) FROM (SELECT md5(to_jsonb(t)::text) h FROM "${table.schema}"."${table.name}" t) rows;`).trim() };
   });
-}
-function schemaSelection(toc) {
-  return toc.split('\n').filter(line => {
-    if (line.startsWith(';')) return true;
-    if (/ SCHEMA - public /.test(line)) return false;
-    // Platform-owned default ACLs already exist in the pinned destination. Keep custom
-    // postgres defaults and explicit app grants without altering Supabase administrator roles.
-    if (/ DEFAULT ACL /.test(line) && !/ postgres\s*$/.test(line)) return false;
-    if (/ (?:public|nasun_internal) /.test(line)) return true;
-    if (/ TABLE DATA auth /.test(line) && !/schema_migrations/.test(line)) return true;
-    if (/ POLICY storage objects /.test(line)) return true;
-    return / TRIGGER auth users on_auth_user_created /.test(line);
-  }).join('\n');
 }
 async function start(label) {
   active = `nasun-drill-${label}`;
@@ -171,16 +159,7 @@ try {
   // The destination already owns Auth foreign keys. Respect their dependency order without
   // disabling triggers or requesting superuser-only replication settings.
   const dependencies = JSON.parse(sql(`SELECT coalesce(jsonb_agg(jsonb_build_object('child',c.conrelid::regclass::text,'parent',c.confrelid::regclass::text)),'[]'::jsonb) FROM pg_constraint c JOIN pg_namespace n ON n.oid=c.connamespace WHERE c.contype='f' AND n.nspname='auth';`).trim());
-  const pending = selected.split('\n').filter(line => / TABLE DATA auth /.test(line));
-  const tableName = line => `auth.${line.match(/ TABLE DATA auth (\w+) /)[1]}`;
-  const ordered = [];
-  while (pending.length) {
-    const index = pending.findIndex(line => !dependencies.some(edge => edge.child === tableName(line)
-      && edge.parent !== edge.child && pending.some(other => tableName(other) === edge.parent)));
-    assert.notEqual(index, -1, 'Auth restore dependency cycle requires explicit review');
-    ordered.push(pending.splice(index, 1)[0]);
-  }
-  const dataList = ordered.concat(selected.split('\n').filter(line => !/ TABLE DATA auth /.test(line))).join('\n');
+  const dataList = orderAuthDataEntries(selected, dependencies);
   await writeFile(join(root, 'data.list'), dataList);
   run('docker', ['cp', join(root, 'data.list'), `supabase_db_${active}:/tmp/data.list`]);
   for (const section of ['pre-data', 'data', 'post-data']) {
