@@ -31,6 +31,10 @@ BEGIN
   denied:=false;
   BEGIN PERFORM public.require_account_admin_session(); EXCEPTION WHEN insufficient_privilege THEN denied:=true; END;
   IF NOT denied THEN RAISE EXCEPTION 'UNREGISTERED_ADMIN_ACCEPTED'; END IF;
+  denied:=false;
+  BEGIN PERFORM public.provision_admin_role(NULL,'Synthetic unregistered session denial');
+  EXCEPTION WHEN insufficient_privilege THEN denied:=true; END;
+  IF NOT denied THEN RAISE EXCEPTION 'UNREGISTERED_ADMIN_PROVISION_ACCEPTED'; END IF;
   PERFORM public.register_trusted_device_session(prefix||actor,'Synthetic upgrade fixture','UTC');
   IF role_name='admin' THEN admin_actor:=actor; admin_sid:=sid; admin_claims:=claims; END IF;
   IF role_name='viewer' THEN target:=actor; viewer_sid:=sid; END IF;
@@ -98,6 +102,10 @@ BEGIN
   denied:=false;
   BEGIN PERFORM public.get_sync_server_health(); EXCEPTION WHEN insufficient_privilege THEN denied:=true; END;
   IF NOT denied THEN RAISE EXCEPTION 'REVOKED_HEALTH_ALLOWED'; END IF;
+  denied:=false;
+  BEGIN PERFORM public.provision_admin_role(NULL,'Synthetic revoked session denial');
+  EXCEPTION WHEN insufficient_privilege THEN denied:=true; END;
+  IF NOT denied THEN RAISE EXCEPTION 'REVOKED_ADMIN_PROVISION_ACCEPTED'; END IF;
   RESET ROLE;
   PERFORM set_config('request.jwt.claims','{}',true);
  END LOOP;

@@ -1,0 +1,312 @@
+{
+  "date": "2026-10-29",
+  "baseRevision": "58db500",
+  "mode": "focused remediation and read-only metadata reconciliation; not a complete security audit",
+  "productionChanged": false,
+  "stagingChanged": false,
+  "localTests": "not run: required OS sandbox controls not established",
+  "currentChangesCI": "not run: no push authorized",
+  "historicalCI": {
+    "url": "https://github.com/dat291296/hethong-may-pha-mau-nasun/actions/runs/40805512225",
+    "revision": "fad2d253d1cf6080f4db4d97b982712d6bdfb631",
+    "codeql": "success",
+    "dependencyAudit": "success",
+    "appliesToCurrentChanges": false
+  },
+  "environments": {
+    "production": {
+      "projectRef": "tqoxyharlsubyqjxjnfg",
+      "definerCount": 54,
+      "authenticatedDefinerCount": 33,
+      "anonymousDefinerCount": 0,
+      "metadata": [
+        {
+          "jsonb_build_object": {
+            "schema_create_acl": [
+              {
+                "schema": "extensions",
+                "anon_create": false,
+                "authenticated_create": false
+              },
+              {
+                "schema": "public",
+                "anon_create": false,
+                "authenticated_create": false
+              },
+              {
+                "schema": "nasun_internal",
+                "anon_create": false,
+                "authenticated_create": false
+              }
+            ],
+            "trigram_dependents": 47,
+            "public_tables_without_rls": []
+          }
+        }
+      ],
+      "storageRealtimePolicies": [
+        {
+          "schemaname": "realtime",
+          "tablename": "messages",
+          "policyname": "nasun_active_sync_session",
+          "permissive": "RESTRICTIVE",
+          "roles": "{authenticated}",
+          "cmd": "SELECT",
+          "qual": "has_active_app_session()",
+          "with_check": null
+        },
+        {
+          "schemaname": "realtime",
+          "tablename": "messages",
+          "policyname": "nasun_sync_broadcast_receive",
+          "permissive": "PERMISSIVE",
+          "roles": "{authenticated}",
+          "cmd": "SELECT",
+          "qual": "((extension = 'broadcast'::text) AND can_receive_sync_topic(realtime.topic()))",
+          "with_check": null
+        },
+        {
+          "schemaname": "storage",
+          "tablename": "objects",
+          "policyname": "active_app_session_required",
+          "permissive": "RESTRICTIVE",
+          "roles": "{authenticated}",
+          "cmd": "ALL",
+          "qual": "( SELECT has_active_app_session() AS has_active_app_session)",
+          "with_check": "( SELECT has_active_app_session() AS has_active_app_session)"
+        },
+        {
+          "schemaname": "storage",
+          "tablename": "objects",
+          "policyname": "machine_evidence_boundary",
+          "permissive": "RESTRICTIVE",
+          "roles": "{public}",
+          "cmd": "ALL",
+          "qual": "((bucket_id <> 'machine-evidence'::text) OR\nCASE\n    WHEN (auth.uid() IS NULL) THEN false\n    ELSE (has_active_app_session() AND (EXISTS ( SELECT 1\n       FROM machine_evidence e\n      WHERE ((e.object_path = objects.name) AND (e.verified_at IS NOT NULL)))))\nEND)",
+          "with_check": "(bucket_id <> 'machine-evidence'::text)"
+        },
+        {
+          "schemaname": "storage",
+          "tablename": "objects",
+          "policyname": "machine_evidence_no_delete",
+          "permissive": "RESTRICTIVE",
+          "roles": "{public}",
+          "cmd": "DELETE",
+          "qual": "(bucket_id <> 'machine-evidence'::text)",
+          "with_check": null
+        },
+        {
+          "schemaname": "storage",
+          "tablename": "objects",
+          "policyname": "machine_evidence_read",
+          "permissive": "PERMISSIVE",
+          "roles": "{authenticated}",
+          "cmd": "SELECT",
+          "qual": "((bucket_id = 'machine-evidence'::text) AND has_active_app_session() AND (EXISTS ( SELECT 1\n   FROM machine_evidence e\n  WHERE ((e.object_path = objects.name) AND (e.verified_at IS NOT NULL)))))",
+          "with_check": null
+        },
+        {
+          "schemaname": "storage",
+          "tablename": "objects",
+          "policyname": "technical_files_delete",
+          "permissive": "PERMISSIVE",
+          "roles": "{authenticated}",
+          "cmd": "DELETE",
+          "qual": "((bucket_id = 'technical-documents'::text) AND (EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND profiles.is_active AND (profiles.role = 'admin'::text)))) AND require_recent_authentication())",
+          "with_check": null
+        },
+        {
+          "schemaname": "storage",
+          "tablename": "objects",
+          "policyname": "technical_files_insert",
+          "permissive": "PERMISSIVE",
+          "roles": "{authenticated}",
+          "cmd": "INSERT",
+          "qual": null,
+          "with_check": "((bucket_id = 'technical-documents'::text) AND (name ~ '^[0-9a-f-]{36}/[0-9a-f-]{36}\\.(pdf|png|jpg|jpeg|webp|gif|bmp|tif|tiff)$'::text) AND (split_part(name, '/'::text, 1) = (auth.uid())::text) AND (EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND profiles.is_active AND (profiles.role = 'admin'::text)))) AND require_recent_authentication())"
+        },
+        {
+          "schemaname": "storage",
+          "tablename": "objects",
+          "policyname": "technical_files_read",
+          "permissive": "PERMISSIVE",
+          "roles": "{authenticated}",
+          "cmd": "SELECT",
+          "qual": "((bucket_id = 'technical-documents'::text) AND (EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND profiles.is_active))) AND ((EXISTS ( SELECT 1\n   FROM technical_documents d\n  WHERE (d.storage_path = objects.name))) OR (EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND profiles.is_active AND (profiles.role = 'admin'::text))))))",
+          "with_check": null
+        }
+      ],
+      "advisors": [
+        {
+          "name": "rls_enabled_no_policy",
+          "level": "INFO",
+          "count": 1,
+          "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy"
+        },
+        {
+          "name": "extension_in_public",
+          "level": "WARN",
+          "count": 1,
+          "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0014_extension_in_public"
+        },
+        {
+          "name": "authenticated_security_definer_function_executable",
+          "level": "WARN",
+          "count": 33,
+          "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable"
+        },
+        {
+          "name": "auth_leaked_password_protection",
+          "level": "WARN",
+          "count": 1,
+          "remediation": "https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection"
+        }
+      ],
+      "migration20261029074910": "not recorded; function paths/admin guard differ"
+    },
+    "staging": {
+      "projectRef": "kenznmtdfuexmfrtzypb",
+      "definerCount": 56,
+      "authenticatedDefinerCount": 35,
+      "anonymousDefinerCount": 0,
+      "metadata": [
+        {
+          "jsonb_build_object": {
+            "schema_create_acl": [
+              {
+                "schema": "public",
+                "anon_create": false,
+                "authenticated_create": false
+              },
+              {
+                "schema": "extensions",
+                "anon_create": false,
+                "authenticated_create": false
+              },
+              {
+                "schema": "nasun_internal",
+                "anon_create": false,
+                "authenticated_create": false
+              }
+            ],
+            "trigram_dependents": 0,
+            "public_tables_without_rls": []
+          }
+        }
+      ],
+      "storageRealtimePolicies": [
+        {
+          "schemaname": "realtime",
+          "tablename": "messages",
+          "policyname": "nasun_active_sync_session",
+          "permissive": "RESTRICTIVE",
+          "roles": "{authenticated}",
+          "cmd": "SELECT",
+          "qual": "has_active_app_session()",
+          "with_check": null
+        },
+        {
+          "schemaname": "realtime",
+          "tablename": "messages",
+          "policyname": "nasun_sync_broadcast_receive",
+          "permissive": "PERMISSIVE",
+          "roles": "{authenticated}",
+          "cmd": "SELECT",
+          "qual": "((extension = 'broadcast'::text) AND can_receive_sync_topic(realtime.topic()))",
+          "with_check": null
+        },
+        {
+          "schemaname": "storage",
+          "tablename": "objects",
+          "policyname": "active_app_session_required",
+          "permissive": "RESTRICTIVE",
+          "roles": "{authenticated}",
+          "cmd": "ALL",
+          "qual": "( SELECT has_active_app_session() AS has_active_app_session)",
+          "with_check": "( SELECT has_active_app_session() AS has_active_app_session)"
+        },
+        {
+          "schemaname": "storage",
+          "tablename": "objects",
+          "policyname": "machine_evidence_boundary",
+          "permissive": "RESTRICTIVE",
+          "roles": "{public}",
+          "cmd": "ALL",
+          "qual": "((bucket_id <> 'machine-evidence'::text) OR\nCASE\n    WHEN (auth.uid() IS NULL) THEN false\n    ELSE (has_active_app_session() AND (EXISTS ( SELECT 1\n       FROM machine_evidence e\n      WHERE ((e.object_path = objects.name) AND (e.verified_at IS NOT NULL)))))\nEND)",
+          "with_check": "(bucket_id <> 'machine-evidence'::text)"
+        },
+        {
+          "schemaname": "storage",
+          "tablename": "objects",
+          "policyname": "machine_evidence_no_delete",
+          "permissive": "RESTRICTIVE",
+          "roles": "{public}",
+          "cmd": "DELETE",
+          "qual": "(bucket_id <> 'machine-evidence'::text)",
+          "with_check": null
+        },
+        {
+          "schemaname": "storage",
+          "tablename": "objects",
+          "policyname": "machine_evidence_read",
+          "permissive": "PERMISSIVE",
+          "roles": "{authenticated}",
+          "cmd": "SELECT",
+          "qual": "((bucket_id = 'machine-evidence'::text) AND has_active_app_session() AND (EXISTS ( SELECT 1\n   FROM machine_evidence e\n  WHERE ((e.object_path = objects.name) AND (e.verified_at IS NOT NULL)))))",
+          "with_check": null
+        },
+        {
+          "schemaname": "storage",
+          "tablename": "objects",
+          "policyname": "technical_files_delete",
+          "permissive": "PERMISSIVE",
+          "roles": "{authenticated}",
+          "cmd": "DELETE",
+          "qual": "((bucket_id = 'technical-documents'::text) AND (EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND profiles.is_active AND (profiles.role = 'admin'::text)))) AND require_recent_authentication())",
+          "with_check": null
+        },
+        {
+          "schemaname": "storage",
+          "tablename": "objects",
+          "policyname": "technical_files_insert",
+          "permissive": "PERMISSIVE",
+          "roles": "{authenticated}",
+          "cmd": "INSERT",
+          "qual": null,
+          "with_check": "((bucket_id = 'technical-documents'::text) AND (name ~ '^[0-9a-f-]{36}/[0-9a-f-]{36}\\.(pdf|png|jpg|jpeg|webp|gif|bmp|tif|tiff)$'::text) AND (split_part(name, '/'::text, 1) = (auth.uid())::text) AND (EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND profiles.is_active AND (profiles.role = 'admin'::text)))) AND require_recent_authentication())"
+        },
+        {
+          "schemaname": "storage",
+          "tablename": "objects",
+          "policyname": "technical_files_read",
+          "permissive": "PERMISSIVE",
+          "roles": "{authenticated}",
+          "cmd": "SELECT",
+          "qual": "((bucket_id = 'technical-documents'::text) AND (EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND profiles.is_active))) AND ((EXISTS ( SELECT 1\n   FROM technical_documents d\n  WHERE (d.storage_path = objects.name))) OR (EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND profiles.is_active AND (profiles.role = 'admin'::text))))))",
+          "with_check": null
+        }
+      ],
+      "advisors": [
+        {
+          "name": "rls_enabled_no_policy",
+          "level": "INFO",
+          "count": 1,
+          "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy"
+        },
+        {
+          "name": "authenticated_security_definer_function_executable",
+          "level": "WARN",
+          "count": 35,
+          "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable"
+        },
+        {
+          "name": "auth_leaked_password_protection",
+          "level": "WARN",
+          "count": 1,
+          "remediation": "https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection"
+        }
+      ],
+      "migration20261029074910": "recorded and function paths/admin guard verified"
+    }
+  }
+}
