@@ -141,9 +141,24 @@ try {
   }).join('\n');
   await writeFile(join(root, 'restore.list'), selected);
   run('docker', ['cp', join(root, 'restore.list'), `supabase_db_${active}:/tmp/restore.list`]);
-  // The fresh Auth schema already has foreign keys. Apply the documented logical-restore
-  // replication mode on this one disposable connection, then validate relationships below.
-  run('docker', ['exec', '-e', 'PGOPTIONS=-c session_replication_role=replica', `supabase_db_${active}`, 'pg_restore', '-U', 'postgres', '-d', 'postgres', '--no-owner', '--exit-on-error', '--single-transaction', '--use-list=/tmp/restore.list', '/tmp/database.dump']);
+  // The destination already owns Auth foreign keys. Respect their dependency order without
+  // disabling triggers or requesting superuser-only replication settings.
+  const dependencies = JSON.parse(sql(`SELECT coalesce(jsonb_agg(jsonb_build_object('child',c.conrelid::regclass::text,'parent',c.confrelid::regclass::text)),'[]'::jsonb) FROM pg_constraint c JOIN pg_namespace n ON n.oid=c.connamespace WHERE c.contype='f' AND n.nspname='auth';`).trim());
+  const pending = selected.split('\n').filter(line => / TABLE DATA auth /.test(line));
+  const tableName = line => `auth.${line.match(/ TABLE DATA auth (\w+) /)[1]}`;
+  const ordered = [];
+  while (pending.length) {
+    const index = pending.findIndex(line => !dependencies.some(edge => edge.child === tableName(line)
+      && edge.parent !== edge.child && pending.some(other => tableName(other) === edge.parent)));
+    assert.notEqual(index, -1, 'Auth restore dependency cycle requires explicit review');
+    ordered.push(pending.splice(index, 1)[0]);
+  }
+  const dataList = ordered.concat(selected.split('\n').filter(line => !/ TABLE DATA auth /.test(line))).join('\n');
+  await writeFile(join(root, 'data.list'), dataList);
+  run('docker', ['cp', join(root, 'data.list'), `supabase_db_${active}:/tmp/data.list`]);
+  for (const section of ['pre-data', 'data', 'post-data']) {
+    run('docker', ['exec', `supabase_db_${active}`, 'pg_restore', '-U', 'postgres', '-d', 'postgres', '--no-owner', '--exit-on-error', '--single-transaction', `--section=${section}`, `--use-list=/tmp/${section === 'data' ? 'data' : 'restore'}.list`, '/tmp/database.dump']);
+  }
   assert.equal(sql('SELECT count(*) FROM auth.identities i LEFT JOIN auth.users u ON u.id=i.user_id WHERE u.id IS NULL;').trim(), '0');
   const manifest = JSON.parse(await readFile(join(recovered, 'storage', 'manifest.json'), 'utf8'));
   for (const bucket of manifest.buckets) assert.ifError((await destination.admin.storage.createBucket(bucket.id, { public: bucket.public })).error);
