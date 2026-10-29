@@ -191,7 +191,20 @@ try {
   const manifest = JSON.parse(await readFile(join(recovered, 'storage', 'manifest.json'), 'utf8'));
   for (const bucket of manifest.buckets) assert.ifError((await destination.admin.storage.createBucket(bucket.id, { public: bucket.public })).error);
   const restoredLogin = destination.user();
-  assert.ifError((await restoredLogin.auth.signInWithPassword({ email, password })).error);
+  const restoredAuth = await restoredLogin.auth.signInWithPassword({ email, password });
+  if (restoredAuth.error) {
+    const logs = spawnSync('docker', ['logs', '--tail', '60', `supabase_auth_${active}`], { encoding: 'utf8' });
+    for (const line of `${logs.stdout || ''}\n${logs.stderr || ''}`.split('\n')) {
+      try {
+        const item = JSON.parse(line);
+        if (typeof item.error === 'string') {
+          console.error('Synthetic Auth diagnostic: ' + item.error.replaceAll(password, '[REDACTED]').replaceAll(passphrase, '[REDACTED]')
+            .replace(/(?:postgres(?:ql)?:\/\/|Bearer\s+)\S+/gi, '[REDACTED]').slice(0, 800));
+        }
+      } catch { /* Non-JSON logs are deliberately excluded. */ }
+    }
+    throw new Error('RESTORED_SYNTHETIC_AUTH_LOGIN_FAILED');
+  }
   assert.equal((await restoredLogin.auth.getUser()).data.user.id, actor);
   if (schemaArchive) assert.ifError((await restoredLogin.rpc('register_trusted_device_session', { p_device_id: 'synthetic-recovery-destination-device', p_device_label: 'Synthetic destination', p_timezone: 'UTC' })).error);
   for (const file of manifest.files) {

@@ -2,7 +2,7 @@ name: Security patch staging acceptance
 on:
   push:
     branches: [codex/security-verification-20261029]
-    paths: ['scripts/**', 'supabase/**', '.github/workflows/security-staging-verification.yml']
+    paths: ['scripts/apply-*safety.mjs', 'scripts/run-security-hardening-rollback.mjs', 'scripts/verify-security-*', 'scripts/verify-definer-hardening-state.sql', 'scripts/run-staging-rls.mjs', 'supabase/**', '.github/workflows/security-staging-verification.yml']
   workflow_dispatch:
 permissions:
   contents: read
