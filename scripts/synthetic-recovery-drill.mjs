@@ -40,6 +40,27 @@ function sql(query, input) {
   if (query) args.push('-c', query);
   return run('docker', args, input ? { input } : {});
 }
+function tableSnapshot() {
+  const tables = JSON.parse(sql("SELECT coalesce(jsonb_agg(jsonb_build_object('schema',schemaname,'name',tablename) ORDER BY schemaname,tablename),'[]'::jsonb) FROM pg_tables WHERE schemaname IN ('public','nasun_internal');").trim());
+  return tables.map(table => {
+    assert.match(table.schema, /^[a-z_][a-z0-9_]*$/);
+    assert.match(table.name, /^[a-z_][a-z0-9_]*$/);
+    return { ...table, digest: sql(`SELECT count(*)::text||':'||md5(coalesce(string_agg(h,',' ORDER BY h),'')) FROM (SELECT md5(to_jsonb(t)::text) h FROM "${table.schema}"."${table.name}" t) rows;`).trim() };
+  });
+}
+function schemaSelection(toc) {
+  return toc.split('\n').filter(line => {
+    if (line.startsWith(';')) return true;
+    if (/ SCHEMA - public /.test(line)) return false;
+    // Platform-owned default ACLs already exist in the pinned destination. Keep custom
+    // postgres defaults and explicit app grants without altering Supabase administrator roles.
+    if (/ DEFAULT ACL /.test(line) && !/ postgres\s*$/.test(line)) return false;
+    if (/ (?:public|nasun_internal) /.test(line)) return true;
+    if (/ TABLE DATA auth /.test(line) && !/schema_migrations/.test(line)) return true;
+    if (/ POLICY storage objects /.test(line)) return true;
+    return / TRIGGER auth users on_auth_user_created /.test(line);
+  }).join('\n');
+}
 async function start(label) {
   active = `nasun-drill-${label}`;
   const config = join(root, 'supabase', 'config.toml');
@@ -72,10 +93,20 @@ try {
   const created = await source.admin.auth.admin.createUser({ email, password, email_confirm: true });
   assert.ifError(created.error);
   const actor = created.data.user.id;
-  // Include the repository's complete base business schema, populated only by synthetic rows.
-  sql(null, await readFile(resolve('supabase/schema.sql'), 'utf8'));
+  // Clone live staging structure only; all rows in this local source are synthetic.
+  const schemaArchive = process.env.SYNTHETIC_SCHEMA_ARCHIVE;
+  if (schemaArchive) {
+    assert.equal(resolve(schemaArchive), join(process.env.RUNNER_TEMP, 'nasun-staging-schema.dump'));
+    run('docker', ['cp', schemaArchive, `supabase_db_${active}:/tmp/schema.dump`]);
+    const list = schemaSelection(run('docker', ['exec', `supabase_db_${active}`, 'pg_restore', '--list', '/tmp/schema.dump']));
+    await writeFile(join(root, 'schema.list'), list);
+    run('docker', ['cp', join(root, 'schema.list'), `supabase_db_${active}:/tmp/schema.list`]);
+    run('docker', ['exec', `supabase_db_${active}`, 'pg_restore', '-U', 'postgres', '-d', 'postgres', '--no-owner', '--exit-on-error', '--single-transaction', '--use-list=/tmp/schema.list', '/tmp/schema.dump']);
+  } else {
+    sql(null, await readFile(resolve('supabase/schema.sql'), 'utf8'));
+  }
   sql(null, `
-    CREATE SCHEMA nasun_internal;
+    CREATE SCHEMA IF NOT EXISTS nasun_internal;
     CREATE TABLE nasun_internal.drill_ledger(id text PRIMARY KEY, receipt jsonb NOT NULL);
     INSERT INTO nasun_internal.drill_ledger VALUES ('operation-1','{"ok":true}');
     REVOKE ALL ON SCHEMA nasun_internal FROM PUBLIC,anon,authenticated;
@@ -97,10 +128,12 @@ try {
   `);
   const login = source.user();
   assert.ifError((await login.auth.signInWithPassword({ email, password })).error);
+  if (schemaArchive) assert.ifError((await login.rpc('register_trusted_device_session', { p_device_id: 'synthetic-recovery-source-device', p_device_label: 'Synthetic source', p_timezone: 'UTC' })).error);
   assert.ifError((await source.admin.storage.createBucket('drill-private', { public: false })).error);
   const object = `${actor}/evidence.txt`;
   assert.ifError((await login.storage.from('drill-private').upload(object, bytes, { contentType: 'text/plain' })).error);
   const before = sql(`SELECT jsonb_build_object('users',(SELECT count(*) FROM auth.users),'ledger',(SELECT jsonb_agg(t ORDER BY id) FROM nasun_internal.drill_ledger t),'distributors',(SELECT jsonb_agg(t ORDER BY id) FROM public.distributors t),'policies',(SELECT jsonb_agg(t ORDER BY policyname) FROM (SELECT schemaname,tablename,policyname,roles,cmd,qual,with_check FROM pg_policies WHERE policyname LIKE 'drill_%') t));`).trim();
+  const sourceTables = tableSnapshot();
   // Preserve the same schemas, ACLs and role definitions as the recovery backup job.
   const container = `supabase_db_${active}`;
   run('docker', ['exec', container, 'pg_dump', '-U', 'postgres', '-d', 'postgres', '--schema=public', '--schema=auth', '--schema=storage', '--schema=nasun_internal', '--format=custom', '--no-owner', '-f', '/tmp/database.dump']);
@@ -132,13 +165,7 @@ try {
   const toc = run('docker', ['exec', `supabase_db_${active}`, 'pg_restore', '--list', '/tmp/database.dump']);
   // Keep platform-owned auth/storage DDL from the fresh pinned stack. Restore all app DDL/ACLs,
   // Auth data, and custom Storage policies. Object metadata is rebuilt through Storage API.
-  const selected = toc.split('\n').filter(line => {
-    if (line.startsWith(';')) return true;
-    if (/ SCHEMA - public /.test(line)) return false;
-    if (/ (?:public|nasun_internal) /.test(line)) return true;
-    if (/ TABLE DATA auth /.test(line) && !/schema_migrations/.test(line)) return true;
-    return / POLICY storage objects drill_/.test(line);
-  }).join('\n');
+  const selected = schemaSelection(toc);
   await writeFile(join(root, 'restore.list'), selected);
   run('docker', ['cp', join(root, 'restore.list'), `supabase_db_${active}:/tmp/restore.list`]);
   // The destination already owns Auth foreign keys. Respect their dependency order without
@@ -160,11 +187,13 @@ try {
     run('docker', ['exec', `supabase_db_${active}`, 'pg_restore', '-U', 'postgres', '-d', 'postgres', '--no-owner', '--exit-on-error', '--single-transaction', `--section=${section}`, `--use-list=/tmp/${section === 'data' ? 'data' : 'restore'}.list`, '/tmp/database.dump']);
   }
   assert.equal(sql('SELECT count(*) FROM auth.identities i LEFT JOIN auth.users u ON u.id=i.user_id WHERE u.id IS NULL;').trim(), '0');
+  assert.deepEqual(tableSnapshot(), sourceTables, 'Every restored business/internal table must match its synthetic source');
   const manifest = JSON.parse(await readFile(join(recovered, 'storage', 'manifest.json'), 'utf8'));
   for (const bucket of manifest.buckets) assert.ifError((await destination.admin.storage.createBucket(bucket.id, { public: bucket.public })).error);
   const restoredLogin = destination.user();
   assert.ifError((await restoredLogin.auth.signInWithPassword({ email, password })).error);
   assert.equal((await restoredLogin.auth.getUser()).data.user.id, actor);
+  if (schemaArchive) assert.ifError((await restoredLogin.rpc('register_trusted_device_session', { p_device_id: 'synthetic-recovery-destination-device', p_device_label: 'Synthetic destination', p_timezone: 'UTC' })).error);
   for (const file of manifest.files) {
     const content = await readFile(join(recovered, 'storage', file.file));
     assert.equal(sha(content), file.sha256);
@@ -192,6 +221,7 @@ try {
   assert.equal(sql("SELECT has_schema_privilege('authenticated','nasun_internal','USAGE');").trim(), 'f');
   console.log(JSON.stringify({ passed: true, environment: 'disposable-local-Supabase-on-public-standard-runner',
     productionDataUsed: false, hostedRestoreVerified: false, fullNasunMigrationChainVerified: false,
+    fullNasunStagingSchemaSnapshotVerified: Boolean(schemaArchive), restoredTableCount: sourceTables.length,
     database: true, authIdentityAndPasswordLogin: true, privateStorageBytesAndDenials: true,
     regionalRls: true, grantsAndPolicies: true, encryptionRoundtrip: true,
     elapsedSeconds: Math.ceil((Date.now() - started) / 1000), revision: process.env.GITHUB_SHA }));
