@@ -31,6 +31,14 @@ export function createEvidenceGateway(deps){
    const identity=await deps.authenticate(request);
    if(!identity?.userId||!identity.sessionId)throw evidenceError('AUTH_REQUIRED',401);
    const auth={...identity,userId:evidenceIdentity(identity.userId),sessionId:evidenceIdentity(identity.sessionId)};
+   if(deps.throttle){
+    const quota=await deps.throttle(auth);
+    if(quota?.allowed!==true){
+     if(quota?.allowed!==false)throw evidenceError('EVIDENCE_UNAVAILABLE',503);
+     headers['Retry-After']=String(Math.max(1,Math.min(600,Number(quota.retry_after_seconds)||60)));
+     return response(429,{error:'RATE_LIMITED'});
+    }
+   }
    const reader=request.body?.getReader();if(!reader)throw evidenceError('INVALID_BODY');
    const chunks=[];let size=0;
    while(true){const {done,value}=await reader.read();if(done)break;size+=value.byteLength;if(size>3*1024*1024){await reader.cancel();throw evidenceError('BODY_TOO_LARGE',413);}chunks.push(value);}

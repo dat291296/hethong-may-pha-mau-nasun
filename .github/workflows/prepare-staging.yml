@@ -13,7 +13,8 @@ concurrency:
   cancel-in-progress: false
 jobs:
   prepare:
-    environment: staging
+    if: github.ref == 'refs/heads/main' && github.ref_protected
+    environment: backup
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:

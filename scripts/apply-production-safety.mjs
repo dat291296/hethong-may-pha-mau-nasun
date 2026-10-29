@@ -21,8 +21,15 @@ const security = process.argv.includes('--security');
 if ([auditOnly,operational,replacement,security].filter(Boolean).length > 1) throw new Error('Choose exactly one migration mode');
 const migrations = security ? ['migrations/20261020082117_session_upload_privilege_hardening.sql'] : replacement ? ['migrations/20261019074616_equipment_replacement_history.sql'] : operational ? ['migrations/20261017075603_roadmap_operational_integrity.sql'] : auditOnly ? ['audit_logs_append_only.sql'] : ['sensitive_action_reauthentication.sql', 'technical_document_uploads_migration.sql',
   'technical_storage_recent_auth.sql', 'device_edit_atomic.sql', 'optional_device_serial.sql', 'account_npp_integrity.sql', 'technician_region_write_migration.sql', 'technician_national_read_admin_session.sql', 'trusted_session_revocation.sql', 'revoked_session_write_guard.sql'];
+// Every legacy entry point finishes with the same versioned authorization contract.
+if (!migrations.includes('migrations/20261020082117_session_upload_privilege_hardening.sql')) migrations.push('migrations/20261020082117_session_upload_privilege_hardening.sql');
+migrations.push('migrations/20261028015716_security_upgrade_canonical_guards.sql');
+migrations.push('migrations/20261028063410_security_upgrade_internal_rate_limit_grants.sql');
+migrations.push('migrations/20261028063846_security_upgrade_private_realtime_guard.sql');
 const statements = await Promise.all(migrations.map(async name => (await readFile(`supabase/${name}`, 'utf8'))
   .replace(/^\s*(BEGIN|COMMIT);\s*$/gm, '')));
+const securityContract = (await readFile('scripts/verify-security-upgrade-state.sql', 'utf8'))
+  .replace(/^BEGIN READ ONLY;\s*$/gm, '').replace(/^COMMIT;\s*$/gm, '');
 const snapshot = `
 BEGIN;
 SET LOCAL lock_timeout = '10s';
@@ -78,7 +85,7 @@ const child = spawn('psql', ['--dbname=' + destination.href, '-X', '-q', '-v', '
   env: { ...process.env, PGSSLMODE: 'require' }, stdio: ['pipe', 'ignore', 'ignore'],
 });
 child.stdin.on('error', () => {});
-child.stdin.end(snapshot + statements.join('\n') + auditVerification + verify);
+child.stdin.end(snapshot + statements.join('\n') + auditVerification + securityContract + verify);
 await new Promise((accept, reject) => {
   child.on('error', () => reject(new Error('PostgreSQL client unavailable')));
   child.on('exit', code => code === 0 ? accept() : reject(new Error('Production migration failed; transaction rolled back. Review schema prerequisites.')));
