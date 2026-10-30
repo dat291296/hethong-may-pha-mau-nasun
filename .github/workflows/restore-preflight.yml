@@ -5,6 +5,7 @@ permissions:
   contents: read
 jobs:
   inspect:
+    if: github.ref == 'refs/heads/main' && github.ref_protected
     environment: restore
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -15,6 +16,8 @@ jobs:
       RLS_PRODUCTION_URL: ${{ vars.VITE_SUPABASE_URL }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 22

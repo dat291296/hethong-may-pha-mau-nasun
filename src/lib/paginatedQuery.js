@@ -1,5 +1,5 @@
 // Keep incomplete responses out of the authoritative offline cache.
-export async function fetchAllRows(buildQuery, runQuery, context, { key = 'id', pageSize = 500 } = {}) {
+export async function fetchAllRows(buildQuery, runQuery, context, { key = 'id', pageSize = 1000 } = {}) {
   const rows = [];
   const seen = new Set();
   let expectedCount;

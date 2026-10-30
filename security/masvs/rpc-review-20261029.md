@@ -1,0 +1,64 @@
+# RPC metadata review — 2026-10-29
+
+Base revision: 58db500. Read-only pg_proc inspection; no business rows accessed. Metadata signals below are not role/region behavioral acceptance. All listed functions deny anon EXECUTE and allow service_role EXECUTE at inspection time. Trigger/internal functions must be evaluated through their callers and table policies.
+
+| Signature | Auth production/staging | Search path production/staging | Direct helper references (staging) | Review |
+|---|---|---|---|---|
+| admin_list_registered_accounts() | true/true | search_path="" / search_path="" | public.get_my_role | same inspected definition/grants; behavioral validation pending |
+| audit_technical_document() | false/false | search_path="" / search_path="" | none; inspect body/caller | same inspected definition/grants; behavioral validation pending |
+| bootstrap_admin_role() | false/true | search_path=public, pg_temp / search_path=public, pg_temp | none; inspect body/caller | drift; reconcile explicitly; behavioral validation pending |
+| broadcast_sync_change() | false/false | search_path="" / search_path="" | none; inspect body/caller | same inspected definition/grants; behavioral validation pending |
+| bump_sync_entity_version() | false/false | search_path=public, pg_temp / search_path=public, pg_temp | none; inspect body/caller | same inspected definition/grants; behavioral validation pending |
+| can_access_region(text) | true/true | search_path="" / search_path="" | public.has_active_app_session, public.get_my_role, public.get_my_region | same inspected definition/grants; behavioral validation pending |
+| can_manage_master_data() | true/true | search_path=public, pg_temp / search_path=public, pg_temp | public.get_my_role | same inspected definition/grants; behavioral validation pending |
+| can_receive_sync_topic(text) | true/true | search_path="" / search_path="" | public.has_active_app_session, public.get_my_role, public.get_my_region | same inspected definition/grants; behavioral validation pending |
+| capture_profile_security_change() | false/false | search_path=public / search_path=public | none; inspect body/caller | same inspected definition/grants; behavioral validation pending |
+| capture_sync_change() | false/false | search_path=public, pg_temp / search_path=public, pg_temp | none; inspect body/caller | same inspected definition/grants; behavioral validation pending |
+| check_role_update() | false/false | search_path=public, pg_temp / search_path=public, pg_temp | none; inspect body/caller | same inspected definition/grants; behavioral validation pending |
+| complete_machine_maintenance(uuid,text,date,date,text,jsonb,boolean) | true/true | search_path=public, pg_temp / search_path=public, pg_temp | public.get_my_role, public.can_access_region, public.is_month_locked, public.audit_logs | same inspected definition/grants; behavioral validation pending |
+| complete_sync_operation(text,jsonb) | true/true | search_path=public, pg_temp / search_path=public, pg_temp | public.has_active_app_session | same inspected definition/grants; behavioral validation pending |
+| consume_machine_evidence_quota() | true/true | search_path="" / search_path="" | public.has_active_app_session, public.get_my_role, public.security_rate_limits | same inspected definition/grants; behavioral validation pending |
+| consume_security_rate_limit(text,integer,integer) | false/false | search_path=public / search_path=public | none; inspect body/caller | same inspected definition/grants; behavioral validation pending |
+| create_audit_log(jsonb) | true/true | search_path=public / search_path=public | public.get_my_role, public.can_access_region, public.technician_can_write_region | same inspected definition/grants; behavioral validation pending |
+| execute_field_command(jsonb) | true/true | search_path="" / search_path="" | public.has_active_app_session, public.get_my_role, public.can_access_region, public.repair_tickets, public.apply_sync_row_mutation, public.audit_logs, public.complete_machine_maintenance, public.execute_equipment_workflow, nasun_internal.field_commands | drift; reconcile explicitly; behavioral validation pending |
+| finalize_machine_evidence(uuid,uuid,uuid,text,integer) | false/false | search_path="" / search_path="" | nasun_internal.evidence_actor_allowed | same inspected definition/grants; behavioral validation pending |
+| get_enterprise_preflight_snapshot() | true/true | search_path=public, pg_temp / search_path=public, pg_temp | public.has_active_app_session | same inspected definition/grants; behavioral validation pending |
+| get_my_contact_phone() | false/false | search_path="" / search_path="" | none; inspect body/caller | same inspected definition/grants; behavioral validation pending |
+| get_my_managed_region() | true/true | search_path=public / search_path=public | none; inspect body/caller | same inspected definition/grants; behavioral validation pending |
+| get_my_region() | true/true | search_path=public / search_path=public | none; inspect body/caller | same inspected definition/grants; behavioral validation pending |
+| get_my_role() | true/true | search_path="" / search_path="" | public.has_active_app_session | same inspected definition/grants; behavioral validation pending |
+| get_npp_region(text) | true/true | search_path=public / search_path=public | public.has_active_app_session | same inspected definition/grants; behavioral validation pending |
+| get_session_security_state() | true/true | search_path=public / search_path=public | public.has_active_app_session | same inspected definition/grants; behavioral validation pending |
+| get_sync_change_feed(bigint,integer) | true/true | search_path=public, pg_temp / search_path=pg_catalog, public, pg_temp | public.has_active_app_session, public.get_my_role, public.can_access_region | drift; reconcile explicitly; behavioral validation pending |
+| get_sync_server_health() | true/true | search_path=public, pg_temp / search_path=pg_catalog, public, pg_temp | public.has_active_app_session | drift; reconcile explicitly; behavioral validation pending |
+| get_technical_support_contacts() | false/false | search_path="" / search_path="" | none; inspect body/caller | same inspected definition/grants; behavioral validation pending |
+| guard_repair_team_update() | false/false | search_path="" / search_path="" | public.has_active_app_session, public.get_my_role, public.can_access_region | same inspected definition/grants; behavioral validation pending |
+| guard_revoked_session_write() | false/false | search_path="" / search_path="" | public.has_active_app_session | same inspected definition/grants; behavioral validation pending |
+| guard_sensitive_profile_change() | false/false | search_path="" / search_path="" | public.require_account_admin_session | same inspected definition/grants; behavioral validation pending |
+| guard_technician_region_write() | false/false | search_path=public, pg_temp / search_path=public, pg_temp | public.get_my_role, public.technician_can_write_region | same inspected definition/grants; behavioral validation pending |
+| handle_new_user() | false/false | search_path=public, pg_temp / search_path=public, pg_temp | none; inspect body/caller | same inspected definition/grants; behavioral validation pending |
+| has_active_app_session() | true/true | search_path="" / search_path="" | public.has_valid_auth_session | same inspected definition/grants; behavioral validation pending |
+| has_privileged_aal() | true/true | search_path=public / search_path=public | none; inspect body/caller | same inspected definition/grants; behavioral validation pending |
+| has_valid_auth_session() | true/true | search_path="" / search_path="" | public.is_allowed_request_origin | same inspected definition/grants; behavioral validation pending |
+| initialize_staging_test_profile() | absent/false |  / search_path=public, pg_temp | none; inspect body/caller | staging only; behavioral validation pending |
+| invalidate_changed_account_sessions() | false/false | search_path="" / search_path="" | none; inspect body/caller | same inspected definition/grants; behavioral validation pending |
+| is_month_locked(date) | true/true | search_path=public / search_path=public | none; inspect body/caller | same inspected definition/grants; behavioral validation pending |
+| is_operational_staff() | true/true | search_path=public, pg_temp / search_path=public, pg_temp | public.get_my_role | same inspected definition/grants; behavioral validation pending |
+| nasun_internal.evidence_actor_allowed(uuid,text,uuid) | false/false | search_path="" / search_path="" | none; inspect body/caller | same inspected definition/grants; behavioral validation pending |
+| nasun_internal.record_evidence_event() | false/false | search_path="" / search_path="" | public.machine_evidence_events | same inspected definition/grants; behavioral validation pending |
+| provision_admin_role(uuid,text) | true/true | search_path=public, pg_temp / search_path=pg_catalog, public, pg_temp | public.require_account_admin_session | drift; reconcile explicitly; behavioral validation pending |
+| record_security_event(text,jsonb) | true/true | search_path="" / search_path="" | public.has_active_app_session, public.security_events, public.redact_security_details | same inspected definition/grants; behavioral validation pending |
+| register_sync_operation(jsonb) | true/true | search_path=public, pg_temp / search_path=public, pg_temp | public.has_active_app_session, public.request_security_context | same inspected definition/grants; behavioral validation pending |
+| register_trusted_device_session(text,text,text) | true/true | search_path=public, extensions, pg_temp / search_path=public, extensions, pg_temp | public.has_valid_auth_session, public.request_security_context | same inspected definition/grants; behavioral validation pending |
+| replace_machine_equipment(uuid,text,text,text,text,timestamp with time zone,text,text,text) | true/true | search_path=pg_catalog, public, pg_temp;lock_timeout=5s;statement_timeout=15s / search_path=pg_catalog, public, pg_temp;lock_timeout=5s;statement_timeout=15s | public.get_my_role, public.technician_can_write_region, public.equipment_replacement_events, public.create_audit_log | same inspected definition/grants; behavioral validation pending |
+| request_security_context() | false/true | search_path=public, extensions, pg_temp / search_path=public, extensions, pg_temp | none; inspect body/caller | drift; reconcile explicitly; behavioral validation pending |
+| require_account_admin_session() | true/true | search_path="" / search_path="" | public.has_active_app_session, public.get_my_role | same inspected definition/grants; behavioral validation pending |
+| reserve_machine_evidence(uuid,uuid,text,text,integer,text) | true/true | search_path="" / search_path="" | public.has_active_app_session, nasun_internal.evidence_actor_allowed, public.machine_evidence | same inspected definition/grants; behavioral validation pending |
+| rls_auto_enable() | absent/false |  / search_path=pg_catalog | none; inspect body/caller | staging only; behavioral validation pending |
+| set_user_account_active(uuid,boolean) | true/true | search_path=public / search_path=public | public.get_my_role, public.require_account_admin_session, public.consume_security_rate_limit | same inspected definition/grants; behavioral validation pending |
+| technician_can_write_region(text) | true/true | search_path=public, pg_temp / search_path=public, pg_temp | public.get_my_role, public.get_my_region | same inspected definition/grants; behavioral validation pending |
+| update_my_contact_phone(text) | false/false | search_path="" / search_path="" | none; inspect body/caller | same inspected definition/grants; behavioral validation pending |
+| update_user_access(uuid,text,text) | true/true | search_path=public, pg_temp / search_path=public, pg_temp | public.get_my_role, public.require_account_admin_session, public.consume_security_rate_limit | same inspected definition/grants; behavioral validation pending |
+| validate_trusted_device_session(text,text) | true/true | search_path=public, extensions, pg_temp / search_path=public, extensions, pg_temp | none; inspect body/caller | same inspected definition/grants; behavioral validation pending |
+
+Public RPC necessity: retain business/session/RLS helpers until caller analysis and synthetic acceptance justify removal. Disabled bootstrap always raises; staging still grants authenticated EXECUTE. request_security_context is callable only on staging; no privilege revocation performed. Empty search_path is tightly scoped; paths containing public/extensions require schema CREATE ACL verification and qualified-reference review. A path string alone is not proof of exploitability.

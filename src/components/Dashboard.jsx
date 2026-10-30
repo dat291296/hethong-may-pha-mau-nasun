@@ -68,10 +68,14 @@ export default function Dashboard({
   const inventory = useMemo(() => summarizeInventory({ systemSets, dispensers, mixers, computers, printers }), [systemSets, dispensers, mixers, computers, printers]);
   const coverage = useMemo(() => nppCoverage(npps, systemSets), [npps, systemSets]);
   const totalSetsCount = inventory.totalSets;
-  const installedSetsCount = systemSets.filter(s => s.status === 'DA_LAP_DAT').length;
+  const { installedSetsCount, revokedSetsCount, maintenanceSetsCount, warehouseCount } = useMemo(() => systemSets.reduce((counts, set) => {
+    if (set.status === 'DA_LAP_DAT') counts.installedSetsCount++;
+    if (set.status === 'DA_THU_HOI') counts.revokedSetsCount++;
+    if (set.status === 'BAO_THUONG_BAO_TRI') counts.maintenanceSetsCount++;
+    if (set.region === 'Kho Tổng') counts.warehouseCount++;
+    return counts;
+  }, { installedSetsCount: 0, revokedSetsCount: 0, maintenanceSetsCount: 0, warehouseCount: 0 }), [systemSets]);
   const stockSetsCount = inventory.totalReadySets;
-  const revokedSetsCount = systemSets.filter(s => s.status === 'DA_THU_HOI').length;
-  const maintenanceSetsCount = systemSets.filter(s => s.status === 'BAO_THUONG_BAO_TRI').length;
 
   // Repair & replacement statistics
   const totalRepairsCount = useMemo(() => 
@@ -100,19 +104,17 @@ export default function Dashboard({
   // Region data for chart
   const workspaceRegion = useContext(WorkspaceRegionContext);
   const regionalCounts = useMemo(() => regionalMachineCounts(systemSets, npps).filter(item => workspaceRegion === 'ALL' || item.name === workspaceRegion), [systemSets, npps, workspaceRegion]);
-  const regionChartData = [...regionalCounts, { name: 'Trong Kho', count: systemSets.filter(s => s.region === 'Kho Tổng').length }];
+  const regionChartData = useMemo(() => [...regionalCounts, { name: 'Trong Kho', count: warehouseCount }], [regionalCounts, warehouseCount]);
 
   // Dispenser Model distribution chart data
-  const modelCounts = systemSets.reduce((acc, curr) => {
-    const model = curr.dispenserModel || 'Khác';
-    acc[model] = (acc[model] || 0) + 1;
-    return acc;
-  }, {});
-
-  const modelChartData = Object.keys(modelCounts).map(key => ({
-    name: key,
-    value: modelCounts[key]
-  }));
+  const modelChartData = useMemo(() => {
+    const counts = new Map();
+    for (const set of systemSets) {
+      const model = set.dispenserModel || 'Khác';
+      counts.set(model, (counts.get(model) || 0) + 1);
+    }
+    return Array.from(counts, ([name, value]) => ({ name, value }));
+  }, [systemSets]);
 
   const COLORS = ['#38bdf8', '#06b6d4', '#10b981', '#f59e0b', '#a855f7'];
 
@@ -129,24 +131,26 @@ export default function Dashboard({
   const [repairActionFilter, setRepairActionFilter] = useState('ALL');
   const [repairPage, setRepairPage] = useState(1);
   const [repairPageSize, setRepairPageSize] = useState(10);
-  const pendingTasks = repairTickets.filter(item => item.processingStatus === 'Chưa xử lý');
-  const returnTasks = repairTickets.filter(item => item.processingStatus === 'Đã xử lý' && isRepairAwaitingReturn(item));
+  const pendingTasks = useMemo(() => repairTickets.filter(item => item.processingStatus === 'Chưa xử lý'), [repairTickets]);
+  const returnTasks = useMemo(() => repairTickets.filter(item => item.processingStatus === 'Đã xử lý' && isRepairAwaitingReturn(item)), [repairTickets]);
 
 
   // Sắp xếp bộ máy mới lắp đặt gần nhất lên đầu
   const [allocatedSearch,setAllocatedSearch]=useState('');
   useEffect(()=>setDashboardPage(1),[allocatedSearch]);
-  const sortedAllocatedSets = useMemo(() => {
-    return systemSets.filter(machine=>matchesSearch(allocatedSearch,[machine.nppName,machine.nppId,machine.setCode,npps.find(npp=>npp.id===machine.nppId)?.name])).sort((a, b) => {
-      const dateA = a.installedDate || a.installed_date || a.createdAt || a.created_at || '';
-      const dateB = b.installedDate || b.installed_date || b.createdAt || b.created_at || '';
+  const nppNames = useMemo(() => new Map(npps.map(npp => [npp.id, npp.name])), [npps]);
+  const sortedSystemSets = useMemo(() => {
+    return [...systemSets].sort((a, b) => {
+      const dateA = a.installDate || a.installedDate || a.installed_date || a.createdAt || a.created_at || '';
+      const dateB = b.installDate || b.installedDate || b.installed_date || b.createdAt || b.created_at || '';
       if (dateA && dateB) {
         const comp = dateB.localeCompare(dateA);
         if (comp !== 0) return comp;
       }
       return String(b.setCode || b.id || '').localeCompare(String(a.setCode || a.id || ''), undefined, { numeric: true, sensitivity: 'base' });
     });
-  }, [systemSets,npps,allocatedSearch]);
+  }, [systemSets]);
+  const sortedAllocatedSets = useMemo(() => sortedSystemSets.filter(machine => matchesSearch(allocatedSearch, [machine.nppName, machine.nppId, machine.setCode, nppNames.get(machine.nppId)])), [sortedSystemSets, nppNames, allocatedSearch]);
 
   const totalAllocatedPages = Math.ceil(sortedAllocatedSets.length / dashboardPageSize) || 1;
   const paginatedAllocatedSets = sortedAllocatedSets.slice(

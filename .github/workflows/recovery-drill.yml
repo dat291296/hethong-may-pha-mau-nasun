@@ -1,0 +1,45 @@
+name: Synthetic DB Auth Storage recovery drill
+on:
+  pull_request:
+    paths: ['scripts/*recovery*', 'scripts/*storage*', '.github/workflows/recovery-drill.yml', 'supabase/schema.sql']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: synthetic-recovery-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  restore:
+    environment: staging
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Export approved staging structure without reading business rows
+        env:
+          STAGING_DB_URL: ${{ secrets.STAGING_DB_URL }}
+          RLS_PRODUCTION_URL: ${{ vars.VITE_SUPABASE_URL || secrets.VITE_SUPABASE_URL }}
+        run: node scripts/export-staging-recovery-schema.mjs
+      - name: Install checksum-pinned official Supabase CLI
+        run: |
+          set -euo pipefail
+          curl --fail --location --silent --show-error https://github.com/supabase/cli/releases/download/v2.122.0/supabase_2.122.0_linux_amd64.tar.gz -o "$RUNNER_TEMP/supabase-cli.tar.gz"
+          echo '59ed066847b98d7461c60e9109d40cab6b9756177ce06ebb05b51338519f5136  '"$RUNNER_TEMP/supabase-cli.tar.gz" | sha256sum --check
+          mkdir "$RUNNER_TEMP/supabase-bin"
+          tar -xzf "$RUNNER_TEMP/supabase-cli.tar.gz" -C "$RUNNER_TEMP/supabase-bin" supabase
+          echo "$RUNNER_TEMP/supabase-bin" >> "$GITHUB_PATH"
+      - name: Rehearse encrypted recovery on disposable local Supabase only
+        env:
+          DO_NOT_TRACK: '1'
+          SYNTHETIC_SCHEMA_ARCHIVE: ${{ runner.temp }}/nasun-staging-schema.dump
+        run: node scripts/synthetic-recovery-drill.mjs
+      - name: Remove temporary schema-only archive
+        if: always()
+        run: rm -f -- "$RUNNER_TEMP/nasun-staging-schema.dump"

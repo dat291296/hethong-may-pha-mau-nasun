@@ -42,3 +42,16 @@ test('supports system set keys without renaming or filtering historical records'
   const result = await fetchAllRows(query, async () => ({ data: records, count: 2 }), 'sets', { key: 'set_code' });
   assert.deepEqual(result.data, records);
 });
+
+
+test('default page retrieves 1000 rows in one roundtrip', async () => {
+  const records = Array.from({ length: 1000 }, (_, id) => ({ id }));
+  let calls = 0;
+  const result = await fetchAllRows(query, async build => {
+    calls++;
+    assert.deepEqual(build(), { from: 0, to: 999 });
+    return { data: records, count: records.length };
+  }, 'default-page');
+  assert.equal(calls, 1);
+  assert.deepEqual(result.data, records);
+});

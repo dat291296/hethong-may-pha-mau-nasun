@@ -10,7 +10,8 @@ test('ENT-7 creates encrypted scheduled backups without exposing database creden
   assert.match(workflow, /secrets\.SUPABASE_DB_URL/);
   assert.match(workflow, /BACKUP_ENCRYPTION_PASSPHRASE/);
   assert.match(workflow, /pg_dump --schema=public --format=custom/);
-  assert.match(workflow, /openssl enc -aes-256-cbc/);
+  assert.match(workflow, /node scripts\/encrypt-recovery-backup\.mjs nasun-public\.dump nasun-public\.dump\.enc/);
+  assert.doesNotMatch(workflow, /openssl enc -aes-256-cbc/);
   assert.match(workflow, /shred -u nasun-public\.dump/);
   assert.match(workflow, /retention-days: 7/);
   assert.doesNotMatch(workflow, /postgres(?:ql)?:\/\/[^$\s]+:[^$\s]+@/i);

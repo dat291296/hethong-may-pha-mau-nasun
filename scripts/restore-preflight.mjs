@@ -30,13 +30,13 @@ export function validateRestoreConfiguration(environment) {
   return connection;
 }
 export function requireEmptyRestoreDestination(counts) {
-  for (const name of ['public_tables', 'auth_users', 'storage_objects', 'storage_buckets']) {
+  for (const name of ['public_tables', 'internal_tables', 'auth_users', 'storage_objects', 'storage_buckets']) {
     if (!Number.isSafeInteger(counts?.[name]) || counts[name] !== 0) throw new Error('Restore target is not empty; no restore was performed');
   }
 }
 async function main() {
   const connection = validateRestoreConfiguration(process.env);
-  const query = `SELECT json_build_object('public_tables',(SELECT count(*) FROM pg_tables WHERE schemaname='public'),'auth_users',(SELECT count(*) FROM auth.users),'storage_objects',(SELECT count(*) FROM storage.objects),'storage_buckets',(SELECT count(*) FROM storage.buckets));`;
+  const query = `SELECT json_build_object('public_tables',(SELECT count(*) FROM pg_tables WHERE schemaname='public'),'internal_tables',(SELECT count(*) FROM pg_tables WHERE schemaname='nasun_internal'),'auth_users',(SELECT count(*) FROM auth.users),'storage_objects',(SELECT count(*) FROM storage.objects),'storage_buckets',(SELECT count(*) FROM storage.buckets));`;
   const child = spawn('psql', ['--dbname=' + connection.href, '-X', '-At', '-v', 'ON_ERROR_STOP=1', '-c', query], { env: { ...process.env, PGSSLMODE: 'require', PGCONNECT_TIMEOUT: '15', PGOPTIONS: '-c default_transaction_read_only=on -c statement_timeout=30000' }, stdio: ['ignore', 'pipe', 'ignore'] });
   let output = '';
   child.stdout.on('data', chunk => { output += chunk; });

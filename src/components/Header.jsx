@@ -27,10 +27,24 @@ export default function Header({
   repairTickets = [],
   auditLogs = [],
   tintingLogs = [],
-  onImportData
+  onImportData,
+  assetDetailsReady = true,
+  onEnsureAssetDetails
 }) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showBackupSyncModal, setShowBackupSyncModal] = useState(false);
+  const [preparingBackup, setPreparingBackup] = useState(false);
+  const [backupLoadError, setBackupLoadError] = useState('');
+  const openBackup = async () => {
+    setPreparingBackup(true);
+    setBackupLoadError('');
+    try {
+      if (onEnsureAssetDetails && !await onEnsureAssetDetails()) throw new Error('INCOMPLETE_ASSET_DETAILS');
+      setShowBackupSyncModal(true);
+    } catch {
+      setBackupLoadError('Chưa tải đủ dữ liệu để sao lưu. Kiểm tra kết nối và thử lại.');
+    } finally { setPreparingBackup(false); }
+  };
   const [showSearchResults, setShowSearchResults] = useState(false);
   const utilityRef = useRef(null);
   const { role, user, isDevMode } = useAuth();
@@ -141,7 +155,7 @@ export default function Header({
   const maintenanceAlerts = allMaintenanceAlerts.filter(item => inManagedRegion(item, user, npps, systemSets));
   const unstabilizedAlerts = allUnstabilizedAlerts.filter(item => inManagedRegion(item, user, npps, systemSets));
   const pendingRegionalRepairs = repairTickets.filter(item => repairNeedsAction(item) && inManagedRegion(item, user, npps, systemSets));
-  const missingDataAlerts=dataCompletenessAlerts({npps,systemSets,devices:{dispenser:dispensers,mixer:mixers,computer:computers,printer:printers},user});
+  const missingDataAlerts=dataCompletenessAlerts({npps,systemSets,devices:assetDetailsReady?{dispenser:dispensers,mixer:mixers,computer:computers,printer:printers}:{},user});
   const totalAlertsCount = maintenanceAlerts.length + unstabilizedAlerts.length + pendingRegionalRepairs.length + missingDataAlerts.length;
   const compactTitle = {
     dashboard: 'Tổng quan', npp: 'Nhà phân phối', assets: 'Bộ máy & kho thiết bị',
@@ -252,18 +266,21 @@ export default function Header({
         {/* Data Backup & Sync Button */}
         <button 
           className="btn btn-secondary btn-sm header-action-btn" 
-          onClick={() => setShowBackupSyncModal(true)}
+          onClick={openBackup}
+          disabled={preparingBackup}
           title="Sao Lưu & Đồng Bộ Dữ Liệu Điện Thoại / Web Admin"
           style={{ gap: '6px' }}
         >
           <Database size={15} style={{ color: 'var(--accent-purple)' }} />
-          <span>Sao Lưu & Đồng Bộ</span>
+          <span>{preparingBackup ? 'Đang tải dữ liệu…' : 'Sao Lưu & Đồng Bộ'}</span>
           {queueCount > 0 && (
             <span className="badge badge-purple" style={{ padding: '1px 6px', fontSize: '0.675rem' }}>
               {queueCount}
             </span>
           )}
         </button>
+
+        {backupLoadError && <span role="alert" style={{ color: 'var(--accent-amber)' }}>{backupLoadError}</span>}
 
         {/* Role Selector (dev mode only) */}
         <RoleSelector />

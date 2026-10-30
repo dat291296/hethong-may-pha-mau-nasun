@@ -1,0 +1,83 @@
+{
+  "observedDate": "2026-10-30",
+  "executionDate": "2026-10-29",
+  "pullRequest": "https://github.com/dat291296/hethong-may-pha-mau-nasun/pull/28",
+  "testedHead": "870d2ef34f75f82bb01e26c51408f031da169a3b",
+  "testedPullRequestMerge": "d10bdb5a85a25ac1aaaa7a459dabee6d0b6aed64",
+  "base": "fad2d253d1cf6080f4db4d97b982712d6bdfb631",
+  "productionModified": false,
+  "mergedOrDeployed": false,
+  "quality": {
+    "run": "https://github.com/dat291296/hethong-may-pha-mau-nasun/actions/runs/40844401205",
+    "conclusion": "success",
+    "lint": true,
+    "testsPassed": 365,
+    "testsFailed": 0,
+    "productionBuild": true,
+    "productionDependencyAudit": "passes configured critical threshold; 2 moderate advisories remain"
+  },
+  "securityAnalysis": {
+    "run": "https://github.com/dat291296/hethong-may-pha-mau-nasun/actions/runs/40844401258",
+    "conclusion": "success",
+    "codeqlAndDependencyAudit": true
+  },
+  "secretScanning": {
+    "run": "https://github.com/dat291296/hethong-may-pha-mau-nasun/actions/runs/40844401221",
+    "conclusion": "success"
+  },
+  "offlineAcceptance": {
+    "run": "https://github.com/dat291296/hethong-may-pha-mau-nasun/actions/runs/40844401211",
+    "conclusion": "success",
+    "physicalIphoneVerified": false
+  },
+  "stagingAcceptance": {
+    "projectRef": "kenznmtdfuexmfrtzypb",
+    "run": "https://github.com/dat291296/hethong-may-pha-mau-nasun/actions/runs/40843831245",
+    "conclusion": "success",
+    "runHead": "e899bda5a21c85faa9eb8225c8f1cd9e288f8078",
+    "securitySourceUnchangedThroughTestedHead": true,
+    "verification": "git diff --exit-code e899bda HEAD -- scripts/apply-production-safety.mjs scripts/apply-staging-safety.mjs scripts/run-staging-rls.mjs scripts/run-security-hardening-rollback.mjs scripts/verify-security-upgrade-state.sql scripts/verify-security-upgrade.rollback.sql scripts/verify-definer-hardening-state.sql supabase",
+    "existingRowsPreservedInApplyTransaction": true,
+    "coverage": ["anonymous plus five roles", "own and foreign regions", "unregistered expired idle and revoked JWTs", "session registration replay", "admin escalation and IDOR", "private Storage read upload delete", "equipment workflow replay and audit", "immutable evidence and role/region denial", "concurrent field command revision conflict", "transactional admin provisioning denials"],
+    "historyRepaired": false,
+    "advisorsAfterApply": {"authenticatedDefinerWarnings": 35, "rlsEnabledNoPolicyInfo": 1, "leakedPasswordProtectionDisabled": true}
+  },
+  "recoveryDrill": {
+    "run": "https://github.com/dat291296/hethong-may-pha-mau-nasun/actions/runs/40844401245",
+    "conclusion": "success",
+    "sourceSchema": "read-only schema-only export from approved staging",
+    "sourceAndDestinationData": "disposable synthetic identities and business rows only",
+    "environment": "two distinct disposable local Supabase projects on standard public GitHub runner",
+    "restoredBusinessAndInternalTables": 28,
+    "allSyntheticTableDigestsMatch": true,
+    "authIdentityAndPasswordLogin": true,
+    "authForeignKeyOrderAndSequenceState": true,
+    "storageByteChecksumsAndAnonymousDenials": true,
+    "regionalRls": true,
+    "applicationGrantsAndPolicies": true,
+    "authenticatedEncryptionRoundtrip": true,
+    "elapsedSeconds": 145,
+    "hostedRestoreVerified": false,
+    "productionArchiveRestored": false,
+    "historicalMigrationChainReplayedFromEmpty": false,
+    "managedPlatformDdlAndAdministratorDefaultAcls": "preserved from pinned fresh stack; not blindly overwritten",
+    "rolesFile": "exported without passwords; platform roles reused rather than blindly replaying roles.sql",
+    "productionRowsReadOrExported": false,
+    "recoveryArchiveUploaded": false
+  },
+  "costBoundary": {
+    "newHostedProjectCreated": false,
+    "paidRunnerUsed": false,
+    "paidRestoreOrAddOnActivated": false,
+    "runner": "standard ubuntu-24.04 in existing public repository",
+    "reference": "https://docs.github.com/en/actions/how-tos/write-workflows/choose-where-workflows-run/choose-the-runner-for-a-job"
+  },
+  "remainingGates": [
+    "Backup Environment has main-only branch restriction and admin bypass disabled, but no required reviewer; owner has only dat291296 account.",
+    "Repository-scope SUPABASE_DB_URL and BACKUP_SUPABASE_SERVICE_ROLE_KEY duplicates remain; BACKUP_ENCRYPTION_PASSPHRASE is repository-scoped. Owner must migrate secret scope directly in GitHub while preserving decryption of retained archives. No secret values were requested or accessed.",
+    "Production migration history remains incomplete; exact matches and current-state differences are recorded, without speculative history repair or production SQL application.",
+    "Production admin MFA, lost-factor recovery and leaked-password protection rollout remain unaccepted.",
+    "Hosted production-archive restore and post-deployment authenticated verification have not been performed."
+  ],
+  "securityScore": "8/10 not awarded; P1 acceptance remains incomplete"
+}

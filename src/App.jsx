@@ -4,7 +4,7 @@ import { WorkspaceRegionContext } from './hooks/useWorkspaceState.js';
 import RegionalWorkspaceBar from './components/RegionalWorkspaceBar.jsx';
 import { defaultWorkspaceRegion, resolveWorkspaceRegion, scopeWorkspace } from './lib/regionalWorkspace.js';
 import { assertAdditionalSetConfirmed } from './lib/assemblyGuard.js';
-import React, { useState, useEffect, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useMemo, lazy, Suspense } from 'react';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import FieldSyncStatus from './components/FieldSyncStatus.jsx';
@@ -41,6 +41,20 @@ const UserManagement = lazy(() => import('./components/UserManagement'));
 const TechHandbook = lazy(() => import('./components/TechHandbook'));
 const FieldRouteMap = lazy(() => import('./components/FieldRouteMap'));
 
+function AssetLoadingSkeleton() {
+  return (
+    <section role="status" aria-live="polite" aria-busy="true" aria-label="Đang tải dữ liệu máy" className="asset-loading-skeleton">
+      <p>Đang tải dữ liệu máy…</p>
+      <div className="asset-skeleton-cards" aria-hidden="true">
+        {[0, 1, 2, 3].map(item => <div className="card asset-skeleton-block" key={item} />)}
+      </div>
+      <div className="card asset-skeleton-table" aria-hidden="true">
+        {[0, 1, 2, 3, 4].map(item => <div className="asset-skeleton-line" key={item} />)}
+      </div>
+    </section>
+  );
+}
+
 function normalizeWarehouseRegion(region) {
   const value = String(region || '').toLowerCase();
   if (value.includes('bắc') || value === 'mb') return 'Miền Bắc';
@@ -54,6 +68,11 @@ function persistWorkflowCache(key, data) {
 }
 
 export default function App() {
+  const { user } = useAuth();
+  return user ? <AppWorkspace key={user.id} /> : <LoginModal />;
+}
+
+function AppWorkspace() {
   const { user, isDevMode, can } = useAuth();
   const { requireAuthentication, dialog: authenticationDialog } = useSensitiveActionGate();
   const handleSensitiveSetDeletion = async setCode => {
@@ -137,7 +156,7 @@ export default function App() {
   const { npps, setNpps, addNpp, editNpp, deleteNpp, importNpps, loading: nppsLoading, error: nppsLoadError, refetch: refetchNpps } = useNpps();
   const {
     dispensers, setDispensers, mixers, setMixers, computers, setComputers, printers, setPrinters, systemSets, setSystemSets,
-    addStockDevice, editDevice, editDeviceDetails, deleteDevice, deleteSystemSet, assembleSet, replaceEquipment, updateSystemSet, importDevices, importSystemSets, loading: assetsLoading, loadError: assetsLoadError, refetch: refetchAssets
+    addStockDevice, editDevice, editDeviceDetails, deleteDevice, deleteSystemSet, assembleSet, replaceEquipment, updateSystemSet, importDevices, importSystemSets, detailsReady: assetDetailsReady, summaryReady: assetSummaryReady, ensureDetails: ensureAssetDetails, loading: assetsLoading, loadError: assetsLoadError, refetch: refetchAssets
   } = useAssets();
   const replacementHistory=useReplacementEvents();
   const handleReplaceEquipment=async payload=>{
@@ -175,7 +194,7 @@ export default function App() {
       const refreshTasks = [];
       if (changedTables.has('distributors')) refreshTasks.push(refetchNpps());
       if (['system_sets', 'dispensers', 'mixers', 'computers', 'printers'].some(table => changedTables.has(table))) {
-        refreshTasks.push(refetchAssets());
+        refreshTasks.push(refetchAssets(['system_sets', 'dispensers', 'mixers', 'computers', 'printers'].filter(table => changedTables.has(table))));
       }
       if (changedTables.has('repair_tickets')) refreshTasks.push(refetchRepairs());
       if (changedTables.has('audit_logs')) refreshTasks.push(refetchAuditLogs());
@@ -230,6 +249,9 @@ export default function App() {
 
   // Workflow Modal state
   const [workflowMode, setWorkflowMode] = useState(null); // 'INSTALL' | 'WITHDRAW' | 'TRANSFER' | null
+  useEffect(() => {
+    if (user && (['assets', 'npp', 'repairs', 'maintenance'].includes(activeTab) || workflowMode || showImportModal)) void ensureAssetDetails();
+  }, [user, activeTab, workflowMode, showImportModal, ensureAssetDetails]);
   const [workflowResult, setWorkflowResult] = useState(null);
   const [printProtocolData, setPrintProtocolData] = useState(null);
 
@@ -685,7 +707,7 @@ export default function App() {
     if (isSupabaseConfigured) {
       const {operationId,expectedRevision,...payload}=maintData;
       const result=await submitFieldCommand({kind:'MAINTENANCE',entityId:maintData.setCode,expected:expectedRevision,payload,operationId});
-      if(!result.queued)await Promise.all([refetchAssets(), refetchAuditLogs()]);
+      if(!result.queued)await Promise.all([refetchAssets(['system_sets']), refetchAuditLogs()]);
       return result;
     }
     try {
@@ -745,7 +767,7 @@ export default function App() {
     }
   };
 
-  const regionalData = scopeWorkspace({ npps, systemSets, dispensers, mixers, computers, printers, repairTickets, auditLogs, tintingLogs }, workspaceRegion);
+  const regionalData = useMemo(() => scopeWorkspace({ npps, systemSets, dispensers, mixers, computers, printers, repairTickets, auditLogs, tintingLogs }, workspaceRegion), [npps, systemSets, dispensers, mixers, computers, printers, repairTickets, auditLogs, tintingLogs, workspaceRegion]);
   const scopedMaintenanceAlerts = maintenanceAlerts.filter(item => workspaceRegion === 'ALL' || resolveWorkspaceRegion(item, npps, systemSets) === workspaceRegion);
   const scopedUnstabilizedAlerts = unstabilizedAlerts.filter(item => workspaceRegion === 'ALL' || resolveWorkspaceRegion(item, npps, systemSets) === workspaceRegion);
   const scopedPendingRepairCount = regionalData.repairTickets.filter(ticket => ticket.processingStatus === 'Chưa xử lý').length;
@@ -785,6 +807,8 @@ export default function App() {
         {/* Top Header */}
         <Header
           activeTab={activeTab}
+          assetDetailsReady={assetDetailsReady}
+          onEnsureAssetDetails={ensureAssetDetails}
           onNavigate={setActiveTab}
           globalSearch={globalSearch}
           setGlobalSearch={setGlobalSearch}
@@ -819,7 +843,7 @@ export default function App() {
             </div>
           )}
 
-          {activeTab === 'dashboard' && (
+          {activeTab === 'dashboard' && ((!assetSummaryReady || nppsLoading && !npps.length || repairsLoading && !repairTickets.length) ? <AssetLoadingSkeleton /> : (
             <Dashboard
               replacementEvents={replacementHistory.events}
               replacementHistoryError={replacementHistory.error}
@@ -838,9 +862,9 @@ export default function App() {
               onNavigateWorkspace={navigateWorkspace}
               onOpenNewInstallation={() => setWorkflowMode('INSTALL')}
             />
-          )}
+          ))}
 
-          {activeTab === 'npp' && (
+          {activeTab === 'npp' && (!assetDetailsReady ? <AssetLoadingSkeleton /> : (
             <NppManagement
               coverageFilter={nppCoverageFilter}
               onCoverageFilterChange={setNppCoverageFilter}
@@ -852,9 +876,9 @@ export default function App() {
               onDeleteNpp={handleDeleteNpp}
               onOpenImportModal={() => openImportModal('npp')}
             />
-          )}
+          ))}
 
-          {activeTab === 'assets' && (
+          {activeTab === 'assets' && (!assetDetailsReady ? <AssetLoadingSkeleton /> : (
             <AssetManagement
               catalog={{ systemSets, npps, dispensers, mixers, computers, printers }}
               globalSearch={globalSearch}
@@ -882,9 +906,9 @@ export default function App() {
               onEditSet={handleUpdateRegionalSet}
               onDeleteSet={handleSensitiveSetDeletion}
             />
-          )}
+          ))}
 
-          {activeTab === 'repairs' && (
+          {activeTab === 'repairs' && (!assetDetailsReady ? <AssetLoadingSkeleton /> : (
             <RepairWorkspaceBoundary><DeviceRepairProcessing
               loading={repairsLoading}
               loadError={repairsLoadError}
@@ -905,7 +929,7 @@ export default function App() {
               onOpenImportModal={() => openImportModal('repair')}
               isDateLocked={isDateLocked}
             /></RepairWorkspaceBoundary>
-          )}
+          ))}
 
           {activeTab === 'techHandbook' && (
             <TechHandbook
@@ -976,7 +1000,7 @@ export default function App() {
             </div>
           )}
 
-          {activeTab === 'maintenance' && (
+          {activeTab === 'maintenance' && (!assetDetailsReady ? <AssetLoadingSkeleton /> : (
             <MaintenanceSchedule
               globalSearch={globalSearch}
               initialFilter={workspaceFilter}
@@ -986,7 +1010,7 @@ export default function App() {
               onUpdateSystemSet={handleUpdateRegionalSet}
               onDeleteSystemSet={handleSensitiveSetDeletion}
             />
-          )}
+          ))}
 
           {activeTab === 'auditLogs' && (
             <AuditLogs
@@ -1020,7 +1044,7 @@ export default function App() {
       />
 
       {/* Workflow Execution Modal */}
-      {workflowMode && (
+      {workflowMode && (!assetDetailsReady ? <div className="modal-overlay"><div className="modal-content"><AssetLoadingSkeleton /><p role="alert">{assetsLoadError}</p><button className="btn btn-secondary" onClick={() => setWorkflowMode(null)}>Đóng</button><button className="btn btn-primary" disabled={assetsLoading} onClick={() => void ensureAssetDetails()}>Tải lại</button></div></div> : (
         <WorkflowModal
           mode={workflowMode}
           systemSets={systemSets}
@@ -1032,7 +1056,7 @@ export default function App() {
           onPrintProtocol={(pData) => setPrintProtocolData(pData)}
           isDateLocked={isDateLocked}
         />
-      )}
+      ))}
 
       {/* Handover Printable Protocol Modal */}
       {printProtocolData && (
@@ -1043,7 +1067,7 @@ export default function App() {
       )}
 
       {/* Excel Import Modal */}
-      {showImportModal && (
+      {showImportModal && (!assetDetailsReady ? <div className="modal-overlay"><div className="modal-content"><AssetLoadingSkeleton /><p role="alert">{assetsLoadError}</p><button className="btn btn-secondary" onClick={() => setShowImportModal(false)}>Đóng</button><button className="btn btn-primary" disabled={assetsLoading} onClick={() => void ensureAssetDetails()}>Tải lại</button></div></div> : (
         <Suspense fallback={null}>
         <ExcelImportModal
           importType={importModalType}
@@ -1149,7 +1173,7 @@ export default function App() {
           onClose={() => setShowImportModal(false)}
         />
         </Suspense>
-      )}
+      ))}
 
     </div>
     </>
