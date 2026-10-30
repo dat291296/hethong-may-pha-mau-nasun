@@ -1,0 +1,47 @@
+# Security upgrade follow-up — 2026-10-29
+
+Historical baseline. Subsequent authorized CI/staging/local restore acceptance is recorded in security-acceptance-20261030.json. Its results supersede the pending CI and restore statuses below; production deployment, MFA/password rollout and backup secret-scope limitations remain unresolved.
+
+Base: 58db500, initially clean worktree. The older security worktree at 4d57 was clean at 7c6b90a, already included through PR #26. Current remote main is newer; reconcile this patch with main before release. This is focused remediation, not a full Cloudflare audit or an 8/10 acceptance.
+
+## Verified metadata
+
+1. Production tqoxyharlsubyqjxjnfg records only 20261027074551, 20261027074604 and 20261027074619. Staging kenznmtdfuexmfrtzypb records 19 migrations. Equivalent migration names have different versions across repo and environments. A missing version is not proof that its effects are absent.
+2. Recovered 20261029074910 from staging schema_migrations.statements into source, preserving its existing version and SQL; no new timestamp was invented. Its three function search paths and admin session guard match staging metadata. Production has the older paths and lacks the direct require_account_admin_session call in provision_admin_role. No production SQL was changed.
+3. Inspected 54 production and 56 staging SECURITY DEFINER functions, including triggers/internal helpers. Authenticated can execute 33/35; anon can execute none in inspected schemas. See rpc-review-20261029.md. Direct helper references are inventory signals, not transitive authorization proofs. Behavioral acceptance remains pending.
+4. No public ordinary/partitioned tables without RLS were returned. Neither anon nor authenticated can CREATE in public/extensions/nasun_internal. Storage and Realtime policy metadata is saved in the JSON receipt. Actual JWT role/region/Storage tests were not run this turn.
+5. Both advisors still report leaked-password protection disabled. Production pg_trgm has 47 extension-member dependency entries; that count is not an application dependency analysis. Do not move it until dependent operators, indexes and SQL are checked in an isolated clone.
+
+## Repository changes and validation
+
+1. Database backup now uses the existing authenticated AES-256-GCM envelope and roundtrip verification; always removes plaintext and uses private file permissions. Existing CBC archives require the historical CBC restore procedure; newly created archives must use encrypt-recovery-backup.mjs --decrypt. The extension remains .enc; identify the NASUNBK1 header before choosing a decoder. Verify both archive generations with synthetic fixtures before rollout; never overwrite historical archives.
+2. Restore preflight requires protected main, disables persisted checkout credentials, and rejects leftover nasun_internal tables. Updated the existing regression to cover nonzero/missing internal table counts.
+3. All apply-production-safety entry points append the recovered migration after canonical guards. Metadata verification and the staging rollback suite now check the admin provision guard, including unregistered and revoked synthetic sessions. No migration history repair was performed. PostgreSQL transactions roll back failed application; after a committed security migration, prefer a reviewed forward correction rather than removing the session guard. Any restoration of the previous definition requires fresh approval and the exact pre-change metadata snapshot.
+4. git diff --check passed. No repo build/test executed locally: an empty environment, no-network namespace, read-only source/toolchain, scratch-only writes and resource limits were not established. No push was authorized, so current patch CI is pending. GitHub Security Analysis run 40805512225 passed CodeQL and Dependency Audit on fad2d253d1cf6080f4db4d97b982712d6bdfb631, not on this patch. No category change is justified by that successful run.
+5. Backup source requires protected main, backup Environment, read-only contents permission, SHA-pinned actions, 7-day database/30-day recovery retention. GitHub connector rejected the environments/backup endpoint as unsupported. Required reviewers, prevent-self-review, branch restrictions, bypass rules and actual Environment secret placement remain unverified. No security score increase is justified.
+
+## Migration reconciliation gate
+
+1. Export metadata only: exact function signatures/definitions/ACLs, RLS policies, triggers, constraints, extension dependencies and migration statements from each environment. Match every repository migration by intended schema effects and exact SQL, not timestamp/name alone. Current RPC comparison is partial; full schema equivalence is not established.
+2. Classify each migration as recorded-and-matching, recorded-but-drifted, unrecorded-effects-present, absent, or unresolved. Version differences for same-named migrations require statement and postcondition comparison. Never mark all missing versions applied.
+3. Rehearse the proposed minimal forward migrations on an isolated clone, exercise five roles across three regions, unregistered/revoked/expired sessions, aal1/aal2 and Storage operations. Retain clean before/after receipts and negative-test results.
+4. Production history repair or SQL application requires explicit approval after the mapping, recovery backup and staging acceptance are reviewed. Do not run a broad migration push against the three-entry production history.
+
+## Full restore drill preparation — not executed
+
+1. Use a separately approved, empty Supabase project distinct from production and staging. Obtain cost approval before creating it. Do not use either live project as the destination. Restrict access to the recovery operator and set deletion/retention dates.
+2. Prefer a complete synthetic source backup for the first rehearsal: public/auth/storage/nasun_internal schemas, policies, ACLs, password-free role definitions, Auth configuration inventory and object bytes. Keep real backup material encrypted and out of logs/artifacts; restoring real Auth/business records needs a separately approved data-handling plan.
+3. Run read-only restore preflight, authenticate/decrypt the archive, verify recovery-integrity manifest and every Storage file hash. Reject tampered/truncated archives and wrong passphrases before exposing plaintext. Require a reviewed restore driver before any write; the existing preflight does not restore.
+4. Compare target PostgreSQL, extensions and managed Supabase schemas first. Review role mappings; do not blindly execute roles.sql or overwrite platform-owned auth/storage objects. Restore schema/data/dependencies in the rehearsed order and preserve application grants and restrictive policies. Import object bytes through the supported Storage API without overwriting the restored metadata blindly.
+5. Compare fixture row counts/key hashes, Auth user identities and MFA behavior, bucket/object counts and content hashes, policies/grants, internal ledgers and RLS with five roles/three regions. Test login, session registration/revocation, signed object access, unauthorized direct object writes and application replay. Record revision, source/target refs, elapsed restore time, recovery point, commands and sanitized results.
+6. Full restore remains unproven until DB/Auth/Storage and negative authorization acceptance all pass. Securely remove temporary plaintext and fixtures after recording approved evidence. A TOC check or public-only local restore is insufficient.
+
+## Password and admin MFA rollout — approval required
+
+1. Confirm provider plan/support and current Auth configuration. In staging, enable leaked-password protection, test signup/password change/reset rejection and normal passwords with disposable identities. Do not submit a real user password. Verify error handling without logging password values.
+2. Prepare two independently controlled admin accounts and recovery ownership. Enroll and verify TOTP on each, confirm a fresh aal2 login and a separately secured recovery route before requiring MFA. Store enrollment secrets only in approved secure storage, never in repo/evidence/chat.
+3. Rehearse lost-device recovery with a synthetic admin and a second authorized administrator/provider recovery operator. Verify identity outside the app, audit factor reset, revoke old sessions, re-enroll, then require aal2 again. Do not assume password reset removes MFA or that recovery codes exist for project users.
+4. Require MFA for one pilot admin only after enrollment/recovery acceptance. Verify aal1 denial for sensitive RPC/table/Storage operations, aal2 success, stale token/session revocation and account lifecycle flows. Ensure ordinary field staff still work as intended. Expand admin by admin after a fresh login check; do not bulk flip mfa_required.
+5. Enable production password protection and admin enforcement only after explicit approval. If the pilot locks out, use the rehearsed second-admin/provider route; make any temporary exception account-specific, approved, audited and time limited. Never rerun security_module_18_disable_mfa.sql as a global rollback.
+
+References: https://supabase.com/docs/guides/auth/auth-mfa and https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection. All P1 gates, current patch CI, restore acceptance and post-deploy verification must pass before considering 8/10.

@@ -1,0 +1,2860 @@
+{
+  "date": "2026-10-29",
+  "revision": "8286f423bf1730478673ce5b1a39002630e58b38",
+  "readOnly": true,
+  "businessRowsRead": false,
+  "historyRepairPerformed": false,
+  "method": "All 58 tracked Supabase SQL files inventoried. Exact recorded-statement comparison normalizes CRLF and outer whitespace only. Function body comparison is a text signal, not SQL semantic equivalence, and does not compare headers, grants, DO blocks or all postconditions. Same-name histories are never marked applied automatically.",
+  "histories": {
+    "production": [
+      {
+        "version": "20261027074551",
+        "name": "machine_evidence_private_storage",
+        "statement_md5": "8c94e1742ff0f8a955aee87aa2509849"
+      },
+      {
+        "version": "20261027074604",
+        "name": "field_command_outbox",
+        "statement_md5": "2da384ffaf71bcbd5faa08c9a9353728"
+      },
+      {
+        "version": "20261027074619",
+        "name": "field_command_actor_scope",
+        "statement_md5": "a8c200e8d2a645aca0917aac4c5695e4"
+      }
+    ],
+    "staging": [
+      {
+        "version": "20261014014016",
+        "name": "assigned_region_write_boundary",
+        "statement_md5": "f6867e6eabb934584dfcc4b32635e31a"
+      },
+      {
+        "version": "20261014015326",
+        "name": "computer_software_atomic_edit",
+        "statement_md5": "f902af1b652afa872e1c31d5ea183723"
+      },
+      {
+        "version": "20261016012220",
+        "name": "account_npp_integrity",
+        "statement_md5": "1197f27e22a76b2817bab03085056867"
+      },
+      {
+        "version": "20261016085729",
+        "name": "technician_national_read_admin_session",
+        "statement_md5": "7ac6eeb55f880b887fc10b29015656f8"
+      },
+      {
+        "version": "20261017075936",
+        "name": "roadmap_operational_integrity",
+        "statement_md5": "c9af2a4b14639134a8d3576b6ba30a15"
+      },
+      {
+        "version": "20261017080725",
+        "name": "roadmap_operational_integrity_hardened",
+        "statement_md5": "1a1684ed38e1d3a3957a56628ca5d42d"
+      },
+      {
+        "version": "20261019013740",
+        "name": "repair_operational_integrity_preserve_existing_rows",
+        "statement_md5": "84dcc02d5f14b5e5fe865d8740eec54e"
+      },
+      {
+        "version": "20261019013933",
+        "name": "fix_workflow_ledger_payload_hash",
+        "statement_md5": "7420da53e7d2155990585111e97a39cc"
+      },
+      {
+        "version": "20261019013956",
+        "name": "fix_legacy_sync_hash_search_path",
+        "statement_md5": "a18397445777c5bdb5e59abdd84e99b0"
+      },
+      {
+        "version": "20261019014022",
+        "name": "standardize_workflow_authorization_error",
+        "statement_md5": "563e8f586c75627012869b49c0c0a9b8"
+      },
+      {
+        "version": "20261019075726",
+        "name": "equipment_replacement_history",
+        "statement_md5": "c9a08bd7925c29e10328242e2833855b"
+      },
+      {
+        "version": "20261019080657",
+        "name": "equipment_replacement_validation",
+        "statement_md5": "8b287d86aa1d5ca9c47d504ac4877a20"
+      },
+      {
+        "version": "20261027010759",
+        "name": "machine_evidence_private_storage",
+        "statement_md5": "b9c56dad558808120152d7d510868788"
+      },
+      {
+        "version": "20261027013140",
+        "name": "field_command_outbox",
+        "statement_md5": "ad2b5e9306df063786f718855cef5bfc"
+      },
+      {
+        "version": "20261027062951",
+        "name": "field_command_actor_scope",
+        "statement_md5": "4657afb9de7561fb164e12713fca601b"
+      },
+      {
+        "version": "20261028020041",
+        "name": "security_upgrade_canonical_guards",
+        "statement_md5": "c3967032eb452b36acc622ece29f08fd"
+      },
+      {
+        "version": "20261028063507",
+        "name": "security_upgrade_internal_rate_limit_grants",
+        "statement_md5": "54836feb3218c90a9fb44e2e39b4db61"
+      },
+      {
+        "version": "20261028073807",
+        "name": "security_upgrade_private_realtime_guard",
+        "statement_md5": "d6a07aaa76530e6020b5207e5b0bcffc"
+      },
+      {
+        "version": "20261029074910",
+        "name": "security_upgrade_definer_hardening_20261029",
+        "statement_md5": "282aa1f43d9654680fcc8ef4db2e32d7"
+      }
+    ]
+  },
+  "currentSchemaComparison": {
+    "tables": [],
+    "columns": [],
+    "policies": [],
+    "constraints": [],
+    "triggers": [
+      {
+        "key": "profiles.zzzz_staging_test_profile",
+        "state": "staging-only",
+        "value": {
+          "name": "zzzz_staging_test_profile",
+          "table": "profiles",
+          "definition": "CREATE TRIGGER zzzz_staging_test_profile BEFORE INSERT ON public.profiles FOR EACH ROW EXECUTE FUNCTION initialize_staging_test_profile()"
+        }
+      }
+    ],
+    "functionDrift": [
+      {
+        "signature": "assert_sync_base_version(jsonb)",
+        "definitionChanged": false,
+        "aclChanged": true,
+        "productionAcl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+        "stagingAcl": "{postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}"
+      },
+      {
+        "signature": "execute_sync_operation_v2(jsonb)",
+        "definitionChanged": false,
+        "aclChanged": true,
+        "productionAcl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+        "stagingAcl": "{postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}"
+      },
+      {
+        "signature": "apply_sync_row_mutation(regclass,text,text,jsonb,text)",
+        "definitionChanged": false,
+        "aclChanged": true,
+        "productionAcl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+        "stagingAcl": "{postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}"
+      },
+      {
+        "signature": "execute_sync_operation(jsonb)",
+        "definitionChanged": false,
+        "aclChanged": true,
+        "productionAcl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+        "stagingAcl": "{postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}"
+      },
+      {
+        "signature": "provision_admin_role(uuid,text)",
+        "definitionChanged": true,
+        "aclChanged": false,
+        "productionAcl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+        "stagingAcl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}"
+      },
+      {
+        "signature": "request_security_context()",
+        "definitionChanged": false,
+        "aclChanged": true,
+        "productionAcl": "{postgres=X/postgres,service_role=X/postgres}",
+        "stagingAcl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}"
+      },
+      {
+        "signature": "delete_system_set_atomic(text,text)",
+        "definitionChanged": false,
+        "aclChanged": true,
+        "productionAcl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+        "stagingAcl": "{postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}"
+      },
+      {
+        "signature": "bootstrap_admin_role()",
+        "definitionChanged": false,
+        "aclChanged": true,
+        "productionAcl": "{postgres=X/postgres,service_role=X/postgres}",
+        "stagingAcl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}"
+      },
+      {
+        "signature": "get_sync_change_feed(bigint,integer)",
+        "definitionChanged": true,
+        "aclChanged": false,
+        "productionAcl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+        "stagingAcl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}"
+      },
+      {
+        "signature": "get_sync_server_health()",
+        "definitionChanged": true,
+        "aclChanged": false,
+        "productionAcl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+        "stagingAcl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}"
+      }
+    ],
+    "indexesEqual": true,
+    "tableAclsEqual": false,
+    "extensions": {
+      "production": [
+        {
+          "name": "pg_stat_statements",
+          "schema": "extensions",
+          "version": "1.11"
+        },
+        {
+          "name": "pg_trgm",
+          "schema": "public",
+          "version": "1.6"
+        },
+        {
+          "name": "pgcrypto",
+          "schema": "extensions",
+          "version": "1.3"
+        },
+        {
+          "name": "plpgsql",
+          "schema": "pg_catalog",
+          "version": "1.0"
+        },
+        {
+          "name": "supabase_vault",
+          "schema": "vault",
+          "version": "0.3.1"
+        },
+        {
+          "name": "uuid-ossp",
+          "schema": "extensions",
+          "version": "1.1"
+        }
+      ],
+      "staging": [
+        {
+          "name": "pg_stat_statements",
+          "schema": "extensions",
+          "version": "1.11"
+        },
+        {
+          "name": "pgcrypto",
+          "schema": "extensions",
+          "version": "1.3"
+        },
+        {
+          "name": "plpgsql",
+          "schema": "pg_catalog",
+          "version": "1.0"
+        },
+        {
+          "name": "supabase_vault",
+          "schema": "vault",
+          "version": "0.3.1"
+        },
+        {
+          "name": "uuid-ossp",
+          "schema": "extensions",
+          "version": "1.1"
+        }
+      ]
+    }
+  },
+  "files": [
+    {
+      "path": "supabase/account_npp_integrity.sql",
+      "version": null,
+      "name": "account_npp_integrity",
+      "sourceFunctionCount": 3,
+      "environments": {
+        "production": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.assign_distributor_code",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.sync_distributor_region",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.admin_list_registered_accounts",
+              "state": "matching-body"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        },
+        "staging": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [
+            "20261016012220"
+          ],
+          "functionBodies": [
+            {
+              "name": "public.assign_distributor_code",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.sync_distributor_region",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.admin_list_registered_accounts",
+              "state": "matching-body"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "same-name-recorded-content-differs-review-required"
+        }
+      }
+    },
+    {
+      "path": "supabase/asset_persistence_migration.sql",
+      "version": null,
+      "name": "asset_persistence_migration",
+      "sourceFunctionCount": 0,
+      "environments": {
+        "production": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        },
+        "staging": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        }
+      }
+    },
+    {
+      "path": "supabase/atomic_set_deletion_migration.sql",
+      "version": null,
+      "name": "atomic_set_deletion_migration",
+      "sourceFunctionCount": 2,
+      "environments": {
+        "production": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.release_deleted_set_devices",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.delete_system_set_atomic",
+              "state": "matching-body"
+            }
+          ],
+          "createdTables": [
+            {
+              "name": "public.set_deletion_operations",
+              "present": true
+            }
+          ],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        },
+        "staging": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.release_deleted_set_devices",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.delete_system_set_atomic",
+              "state": "matching-body"
+            }
+          ],
+          "createdTables": [
+            {
+              "name": "public.set_deletion_operations",
+              "present": true
+            }
+          ],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        }
+      }
+    },
+    {
+      "path": "supabase/audit_log_edit_delete_migration.sql",
+      "version": null,
+      "name": "audit_log_edit_delete_migration",
+      "sourceFunctionCount": 0,
+      "environments": {
+        "production": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        },
+        "staging": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        }
+      }
+    },
+    {
+      "path": "supabase/audit_logs_append_only.sql",
+      "version": null,
+      "name": "audit_logs_append_only",
+      "sourceFunctionCount": 1,
+      "environments": {
+        "production": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.reject_audit_log_mutation",
+              "state": "matching-body"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        },
+        "staging": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.reject_audit_log_mutation",
+              "state": "matching-body"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        }
+      }
+    },
+    {
+      "path": "supabase/device_edit_atomic.sql",
+      "version": null,
+      "name": "device_edit_atomic",
+      "sourceFunctionCount": 1,
+      "environments": {
+        "production": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.edit_device_atomic",
+              "state": "matching-body"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        },
+        "staging": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.edit_device_atomic",
+              "state": "matching-body"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        }
+      }
+    },
+    {
+      "path": "supabase/enterprise_module_0_migration_registry.sql",
+      "version": null,
+      "name": "enterprise_module_0_migration_registry",
+      "sourceFunctionCount": 1,
+      "environments": {
+        "production": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.get_enterprise_preflight_snapshot",
+              "state": "different-or-superseded"
+            }
+          ],
+          "createdTables": [
+            {
+              "name": "public.app_schema_migrations",
+              "present": true
+            }
+          ],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        },
+        "staging": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.get_enterprise_preflight_snapshot",
+              "state": "different-or-superseded"
+            }
+          ],
+          "createdTables": [
+            {
+              "name": "public.app_schema_migrations",
+              "present": true
+            }
+          ],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        }
+      }
+    },
+    {
+      "path": "supabase/enterprise_module_1_server_admin_provisioning.sql",
+      "version": null,
+      "name": "enterprise_module_1_server_admin_provisioning",
+      "sourceFunctionCount": 4,
+      "environments": {
+        "production": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.handle_new_user",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.check_role_update",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.provision_admin_role",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.bootstrap_admin_role",
+              "state": "matching-body"
+            }
+          ],
+          "createdTables": [
+            {
+              "name": "public.admin_role_grants",
+              "present": true
+            }
+          ],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        },
+        "staging": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.handle_new_user",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.check_role_update",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.provision_admin_role",
+              "state": "different-or-superseded"
+            },
+            {
+              "name": "public.bootstrap_admin_role",
+              "state": "matching-body"
+            }
+          ],
+          "createdTables": [
+            {
+              "name": "public.admin_role_grants",
+              "present": true
+            }
+          ],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        }
+      }
+    },
+    {
+      "path": "supabase/enterprise_module_2_five_role_rbac.sql",
+      "version": null,
+      "name": "enterprise_module_2_five_role_rbac",
+      "sourceFunctionCount": 3,
+      "environments": {
+        "production": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.is_operational_staff",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.can_manage_master_data",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.update_user_access",
+              "state": "different-or-superseded"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        },
+        "staging": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.is_operational_staff",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.can_manage_master_data",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.update_user_access",
+              "state": "different-or-superseded"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        }
+      }
+    },
+    {
+      "path": "supabase/enterprise_module_3_legacy_component_retirement.sql",
+      "version": null,
+      "name": "enterprise_module_3_legacy_component_retirement",
+      "sourceFunctionCount": 0,
+      "environments": {
+        "production": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [],
+          "createdTables": [
+            {
+              "name": "public.legacy_component_retirements",
+              "present": true
+            }
+          ],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        },
+        "staging": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [],
+          "createdTables": [
+            {
+              "name": "public.legacy_component_retirements",
+              "present": true
+            }
+          ],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        }
+      }
+    },
+    {
+      "path": "supabase/enterprise_module_9_field_service_workflow.sql",
+      "version": null,
+      "name": "enterprise_module_9_field_service_workflow",
+      "sourceFunctionCount": 0,
+      "environments": {
+        "production": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        },
+        "staging": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        }
+      }
+    },
+    {
+      "path": "supabase/fix_constraints_migration.sql",
+      "version": null,
+      "name": "fix_constraints_migration",
+      "sourceFunctionCount": 0,
+      "environments": {
+        "production": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        },
+        "staging": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        }
+      }
+    },
+    {
+      "path": "supabase/indexes.sql",
+      "version": null,
+      "name": "indexes",
+      "sourceFunctionCount": 0,
+      "environments": {
+        "production": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        },
+        "staging": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        }
+      }
+    },
+    {
+      "path": "supabase/maintenance_checklist_migration.sql",
+      "version": null,
+      "name": "maintenance_checklist_migration",
+      "sourceFunctionCount": 1,
+      "environments": {
+        "production": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.complete_machine_maintenance",
+              "state": "matching-body"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        },
+        "staging": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.complete_machine_maintenance",
+              "state": "matching-body"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        }
+      }
+    },
+    {
+      "path": "supabase/migrations/20261017075603_roadmap_operational_integrity.sql",
+      "version": "20261017075603",
+      "name": "roadmap_operational_integrity",
+      "sourceFunctionCount": 5,
+      "environments": {
+        "production": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.create_audit_log",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.normalize_legacy_sync_operation",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.execute_equipment_workflow",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.assemble_system_set_atomic",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.guard_operational_lifecycle",
+              "state": "matching-body"
+            }
+          ],
+          "createdTables": [
+            {
+              "name": "public.sync_operations",
+              "present": true
+            }
+          ],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        },
+        "staging": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [
+            "20261017075936"
+          ],
+          "functionBodies": [
+            {
+              "name": "public.create_audit_log",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.normalize_legacy_sync_operation",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.execute_equipment_workflow",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.assemble_system_set_atomic",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.guard_operational_lifecycle",
+              "state": "matching-body"
+            }
+          ],
+          "createdTables": [
+            {
+              "name": "public.sync_operations",
+              "present": true
+            }
+          ],
+          "historyConclusion": "same-name-recorded-content-differs-review-required"
+        }
+      }
+    },
+    {
+      "path": "supabase/migrations/20261019074616_equipment_replacement_history.sql",
+      "version": "20261019074616",
+      "name": "equipment_replacement_history",
+      "sourceFunctionCount": 2,
+      "environments": {
+        "production": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.replace_machine_equipment",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.guard_technician_region_write",
+              "state": "matching-body"
+            }
+          ],
+          "createdTables": [
+            {
+              "name": "public.equipment_replacement_events",
+              "present": true
+            }
+          ],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        },
+        "staging": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [
+            "20261019075726"
+          ],
+          "functionBodies": [
+            {
+              "name": "public.replace_machine_equipment",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.guard_technician_region_write",
+              "state": "matching-body"
+            }
+          ],
+          "createdTables": [
+            {
+              "name": "public.equipment_replacement_events",
+              "present": true
+            }
+          ],
+          "historyConclusion": "same-name-recorded-content-differs-review-required"
+        }
+      }
+    },
+    {
+      "path": "supabase/migrations/20261020082117_session_upload_privilege_hardening.sql",
+      "version": "20261020082117",
+      "name": "session_upload_privilege_hardening",
+      "sourceFunctionCount": 9,
+      "environments": {
+        "production": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.is_allowed_request_origin",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.has_valid_auth_session",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.has_active_app_session",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.get_my_role",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.guard_revoked_session_write",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.validate_inline_image_list",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.guard_inline_image_fields",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.register_trusted_device_session",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.require_account_admin_session",
+              "state": "different-or-superseded"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        },
+        "staging": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.is_allowed_request_origin",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.has_valid_auth_session",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.has_active_app_session",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.get_my_role",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.guard_revoked_session_write",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.validate_inline_image_list",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.guard_inline_image_fields",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.register_trusted_device_session",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.require_account_admin_session",
+              "state": "different-or-superseded"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        }
+      }
+    },
+    {
+      "path": "supabase/migrations/20261026095423_machine_evidence_private_storage.sql",
+      "version": "20261026095423",
+      "name": "machine_evidence_private_storage",
+      "sourceFunctionCount": 5,
+      "environments": {
+        "production": {
+          "exactRecordedStatementVersions": [
+            "20261027074551"
+          ],
+          "sameNameHistoryVersions": [
+            "20261027074551"
+          ],
+          "functionBodies": [
+            {
+              "name": "nasun_internal.evidence_actor_allowed",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.reserve_machine_evidence",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.finalize_machine_evidence",
+              "state": "matching-body"
+            },
+            {
+              "name": "nasun_internal.record_evidence_event",
+              "state": "matching-body"
+            },
+            {
+              "name": "nasun_internal.reject_evidence_history_change",
+              "state": "matching-body"
+            }
+          ],
+          "createdTables": [
+            {
+              "name": "public.machine_evidence",
+              "present": true
+            },
+            {
+              "name": "public.machine_evidence_events",
+              "present": true
+            }
+          ],
+          "historyConclusion": "exact-statement-recorded"
+        },
+        "staging": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [
+            "20261027010759"
+          ],
+          "functionBodies": [
+            {
+              "name": "nasun_internal.evidence_actor_allowed",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.reserve_machine_evidence",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.finalize_machine_evidence",
+              "state": "matching-body"
+            },
+            {
+              "name": "nasun_internal.record_evidence_event",
+              "state": "matching-body"
+            },
+            {
+              "name": "nasun_internal.reject_evidence_history_change",
+              "state": "matching-body"
+            }
+          ],
+          "createdTables": [
+            {
+              "name": "public.machine_evidence",
+              "present": true
+            },
+            {
+              "name": "public.machine_evidence_events",
+              "present": true
+            }
+          ],
+          "historyConclusion": "same-name-recorded-content-differs-review-required"
+        }
+      }
+    },
+    {
+      "path": "supabase/migrations/20261027012501_field_command_outbox.sql",
+      "version": "20261027012501",
+      "name": "field_command_outbox",
+      "sourceFunctionCount": 1,
+      "environments": {
+        "production": {
+          "exactRecordedStatementVersions": [
+            "20261027074604"
+          ],
+          "sameNameHistoryVersions": [
+            "20261027074604"
+          ],
+          "functionBodies": [
+            {
+              "name": "public.execute_field_command",
+              "state": "different-or-superseded"
+            }
+          ],
+          "createdTables": [
+            {
+              "name": "nasun_internal.field_commands",
+              "present": true
+            }
+          ],
+          "historyConclusion": "exact-statement-recorded"
+        },
+        "staging": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [
+            "20261027013140"
+          ],
+          "functionBodies": [
+            {
+              "name": "public.execute_field_command",
+              "state": "different-or-superseded"
+            }
+          ],
+          "createdTables": [
+            {
+              "name": "nasun_internal.field_commands",
+              "present": true
+            }
+          ],
+          "historyConclusion": "same-name-recorded-content-differs-review-required"
+        }
+      }
+    },
+    {
+      "path": "supabase/migrations/20261027062933_field_command_actor_scope.sql",
+      "version": "20261027062933",
+      "name": "field_command_actor_scope",
+      "sourceFunctionCount": 1,
+      "environments": {
+        "production": {
+          "exactRecordedStatementVersions": [
+            "20261027074619"
+          ],
+          "sameNameHistoryVersions": [
+            "20261027074619"
+          ],
+          "functionBodies": [
+            {
+              "name": "public.execute_field_command",
+              "state": "matching-body"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "exact-statement-recorded"
+        },
+        "staging": {
+          "exactRecordedStatementVersions": [
+            "20261027062951"
+          ],
+          "sameNameHistoryVersions": [
+            "20261027062951"
+          ],
+          "functionBodies": [
+            {
+              "name": "public.execute_field_command",
+              "state": "matching-body"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "exact-statement-recorded"
+        }
+      }
+    },
+    {
+      "path": "supabase/migrations/20261028015716_security_upgrade_canonical_guards.sql",
+      "version": "20261028015716",
+      "name": "security_upgrade_canonical_guards",
+      "sourceFunctionCount": 9,
+      "environments": {
+        "production": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.can_access_region",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.require_account_admin_session",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.guard_sensitive_profile_change",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.invalidate_changed_account_sessions",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.redact_security_details",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.record_security_event",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.reject_security_event_mutation",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.consume_machine_evidence_quota",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.guard_repair_team_update",
+              "state": "matching-body"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        },
+        "staging": {
+          "exactRecordedStatementVersions": [
+            "20261028020041"
+          ],
+          "sameNameHistoryVersions": [
+            "20261028020041"
+          ],
+          "functionBodies": [
+            {
+              "name": "public.can_access_region",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.require_account_admin_session",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.guard_sensitive_profile_change",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.invalidate_changed_account_sessions",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.redact_security_details",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.record_security_event",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.reject_security_event_mutation",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.consume_machine_evidence_quota",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.guard_repair_team_update",
+              "state": "matching-body"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "exact-statement-recorded"
+        }
+      }
+    },
+    {
+      "path": "supabase/migrations/20261028063410_security_upgrade_internal_rate_limit_grants.sql",
+      "version": "20261028063410",
+      "name": "security_upgrade_internal_rate_limit_grants",
+      "sourceFunctionCount": 0,
+      "environments": {
+        "production": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        },
+        "staging": {
+          "exactRecordedStatementVersions": [
+            "20261028063507"
+          ],
+          "sameNameHistoryVersions": [
+            "20261028063507"
+          ],
+          "functionBodies": [],
+          "createdTables": [],
+          "historyConclusion": "exact-statement-recorded"
+        }
+      }
+    },
+    {
+      "path": "supabase/migrations/20261028063846_security_upgrade_private_realtime_guard.sql",
+      "version": "20261028063846",
+      "name": "security_upgrade_private_realtime_guard",
+      "sourceFunctionCount": 2,
+      "environments": {
+        "production": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.can_receive_sync_topic",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.broadcast_sync_change",
+              "state": "matching-body"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        },
+        "staging": {
+          "exactRecordedStatementVersions": [
+            "20261028073807"
+          ],
+          "sameNameHistoryVersions": [
+            "20261028073807"
+          ],
+          "functionBodies": [
+            {
+              "name": "public.can_receive_sync_topic",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.broadcast_sync_change",
+              "state": "matching-body"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "exact-statement-recorded"
+        }
+      }
+    },
+    {
+      "path": "supabase/migrations/20261029074910_security_upgrade_definer_hardening_20261029.sql",
+      "version": "20261029074910",
+      "name": "security_upgrade_definer_hardening_20261029",
+      "sourceFunctionCount": 1,
+      "environments": {
+        "production": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.provision_admin_role",
+              "state": "different-or-superseded"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        },
+        "staging": {
+          "exactRecordedStatementVersions": [
+            "20261029074910"
+          ],
+          "sameNameHistoryVersions": [
+            "20261029074910"
+          ],
+          "functionBodies": [
+            {
+              "name": "public.provision_admin_role",
+              "state": "matching-body"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "exact-statement-recorded"
+        }
+      }
+    },
+    {
+      "path": "supabase/optional_device_serial.sql",
+      "version": null,
+      "name": "optional_device_serial",
+      "sourceFunctionCount": 0,
+      "environments": {
+        "production": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        },
+        "staging": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        }
+      }
+    },
+    {
+      "path": "supabase/revoked_session_write_guard.sql",
+      "version": null,
+      "name": "revoked_session_write_guard",
+      "sourceFunctionCount": 1,
+      "environments": {
+        "production": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.guard_revoked_session_write",
+              "state": "different-or-superseded"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        },
+        "staging": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.guard_revoked_session_write",
+              "state": "different-or-superseded"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        }
+      }
+    },
+    {
+      "path": "supabase/rls_policies.sql",
+      "version": null,
+      "name": "rls_policies",
+      "sourceFunctionCount": 4,
+      "environments": {
+        "production": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.get_my_role",
+              "state": "different-or-superseded"
+            },
+            {
+              "name": "public.get_my_region",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.can_access_region",
+              "state": "different-or-superseded"
+            },
+            {
+              "name": "public.is_month_locked",
+              "state": "different-or-superseded"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        },
+        "staging": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.get_my_role",
+              "state": "different-or-superseded"
+            },
+            {
+              "name": "public.get_my_region",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.can_access_region",
+              "state": "different-or-superseded"
+            },
+            {
+              "name": "public.is_month_locked",
+              "state": "different-or-superseded"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        }
+      }
+    },
+    {
+      "path": "supabase/schema.sql",
+      "version": null,
+      "name": "schema",
+      "sourceFunctionCount": 7,
+      "environments": {
+        "production": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.handle_new_user",
+              "state": "different-or-superseded"
+            },
+            {
+              "name": "public.bootstrap_admin_role",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.has_privileged_aal",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.check_role_update",
+              "state": "different-or-superseded"
+            },
+            {
+              "name": "public.update_user_access",
+              "state": "different-or-superseded"
+            },
+            {
+              "name": "public.update_updated_at",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.sync_device_status_on_repair",
+              "state": "absent"
+            }
+          ],
+          "createdTables": [
+            {
+              "name": "public.profiles",
+              "present": true
+            },
+            {
+              "name": "public.distributors",
+              "present": true
+            },
+            {
+              "name": "public.system_sets",
+              "present": true
+            },
+            {
+              "name": "public.dispensers",
+              "present": true
+            },
+            {
+              "name": "public.mixers",
+              "present": true
+            },
+            {
+              "name": "public.computers",
+              "present": true
+            },
+            {
+              "name": "public.printers",
+              "present": true
+            },
+            {
+              "name": "public.repair_tickets",
+              "present": true
+            },
+            {
+              "name": "public.audit_logs",
+              "present": true
+            },
+            {
+              "name": "public.locked_months",
+              "present": true
+            },
+            {
+              "name": "public.tinting_logs",
+              "present": false
+            }
+          ],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        },
+        "staging": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.handle_new_user",
+              "state": "different-or-superseded"
+            },
+            {
+              "name": "public.bootstrap_admin_role",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.has_privileged_aal",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.check_role_update",
+              "state": "different-or-superseded"
+            },
+            {
+              "name": "public.update_user_access",
+              "state": "different-or-superseded"
+            },
+            {
+              "name": "public.update_updated_at",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.sync_device_status_on_repair",
+              "state": "absent"
+            }
+          ],
+          "createdTables": [
+            {
+              "name": "public.profiles",
+              "present": true
+            },
+            {
+              "name": "public.distributors",
+              "present": true
+            },
+            {
+              "name": "public.system_sets",
+              "present": true
+            },
+            {
+              "name": "public.dispensers",
+              "present": true
+            },
+            {
+              "name": "public.mixers",
+              "present": true
+            },
+            {
+              "name": "public.computers",
+              "present": true
+            },
+            {
+              "name": "public.printers",
+              "present": true
+            },
+            {
+              "name": "public.repair_tickets",
+              "present": true
+            },
+            {
+              "name": "public.audit_logs",
+              "present": true
+            },
+            {
+              "name": "public.locked_months",
+              "present": true
+            },
+            {
+              "name": "public.tinting_logs",
+              "present": false
+            }
+          ],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        }
+      }
+    },
+    {
+      "path": "supabase/security_hardening_migration.sql",
+      "version": null,
+      "name": "security_hardening_migration",
+      "sourceFunctionCount": 0,
+      "environments": {
+        "production": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        },
+        "staging": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        }
+      }
+    },
+    {
+      "path": "supabase/security_module_11_mfa_enforcement.sql",
+      "version": null,
+      "name": "security_module_11_mfa_enforcement",
+      "sourceFunctionCount": 2,
+      "environments": {
+        "production": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.has_privileged_aal",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.get_my_role",
+              "state": "different-or-superseded"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        },
+        "staging": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.has_privileged_aal",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.get_my_role",
+              "state": "different-or-superseded"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        }
+      }
+    },
+    {
+      "path": "supabase/security_module_13_rls_probe.sql",
+      "version": null,
+      "name": "security_module_13_rls_probe",
+      "sourceFunctionCount": 1,
+      "environments": {
+        "production": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.run_rls_security_probe",
+              "state": "matching-body"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        },
+        "staging": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.run_rls_security_probe",
+              "state": "matching-body"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        }
+      }
+    },
+    {
+      "path": "supabase/security_module_14_session_validation.sql",
+      "version": null,
+      "name": "security_module_14_session_validation",
+      "sourceFunctionCount": 1,
+      "environments": {
+        "production": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.get_session_security_state",
+              "state": "different-or-superseded"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        },
+        "staging": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.get_session_security_state",
+              "state": "different-or-superseded"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        }
+      }
+    },
+    {
+      "path": "supabase/security_module_15_sensitive_action_rate_limits.sql",
+      "version": null,
+      "name": "security_module_15_sensitive_action_rate_limits",
+      "sourceFunctionCount": 3,
+      "environments": {
+        "production": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.consume_security_rate_limit",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.update_user_access",
+              "state": "different-or-superseded"
+            },
+            {
+              "name": "public.set_user_account_active",
+              "state": "different-or-superseded"
+            }
+          ],
+          "createdTables": [
+            {
+              "name": "public.security_rate_limits",
+              "present": true
+            }
+          ],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        },
+        "staging": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.consume_security_rate_limit",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.update_user_access",
+              "state": "different-or-superseded"
+            },
+            {
+              "name": "public.set_user_account_active",
+              "state": "different-or-superseded"
+            }
+          ],
+          "createdTables": [
+            {
+              "name": "public.security_rate_limits",
+              "present": true
+            }
+          ],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        }
+      }
+    },
+    {
+      "path": "supabase/security_module_17_immutable_security_events.sql",
+      "version": null,
+      "name": "security_module_17_immutable_security_events",
+      "sourceFunctionCount": 2,
+      "environments": {
+        "production": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.record_security_event",
+              "state": "different-or-superseded"
+            },
+            {
+              "name": "public.capture_profile_security_change",
+              "state": "matching-body"
+            }
+          ],
+          "createdTables": [
+            {
+              "name": "public.security_events",
+              "present": true
+            }
+          ],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        },
+        "staging": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.record_security_event",
+              "state": "different-or-superseded"
+            },
+            {
+              "name": "public.capture_profile_security_change",
+              "state": "matching-body"
+            }
+          ],
+          "createdTables": [
+            {
+              "name": "public.security_events",
+              "present": true
+            }
+          ],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        }
+      }
+    },
+    {
+      "path": "supabase/security_module_18_disable_mfa.sql",
+      "version": null,
+      "name": "security_module_18_disable_mfa",
+      "sourceFunctionCount": 2,
+      "environments": {
+        "production": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.get_my_role",
+              "state": "different-or-superseded"
+            },
+            {
+              "name": "public.keep_mfa_disabled",
+              "state": "matching-body"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        },
+        "staging": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.get_my_role",
+              "state": "different-or-superseded"
+            },
+            {
+              "name": "public.keep_mfa_disabled",
+              "state": "matching-body"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        }
+      }
+    },
+    {
+      "path": "supabase/security_module_1_admin_bootstrap.sql",
+      "version": null,
+      "name": "security_module_1_admin_bootstrap",
+      "sourceFunctionCount": 1,
+      "environments": {
+        "production": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.bootstrap_admin_role",
+              "state": "matching-body"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        },
+        "staging": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.bootstrap_admin_role",
+              "state": "matching-body"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        }
+      }
+    },
+    {
+      "path": "supabase/security_module_2_rls_lockdown.sql",
+      "version": null,
+      "name": "security_module_2_rls_lockdown",
+      "sourceFunctionCount": 0,
+      "environments": {
+        "production": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        },
+        "staging": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        }
+      }
+    },
+    {
+      "path": "supabase/security_module_3_regional_rbac.sql",
+      "version": null,
+      "name": "security_module_3_regional_rbac",
+      "sourceFunctionCount": 2,
+      "environments": {
+        "production": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.get_my_region",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.can_access_region",
+              "state": "different-or-superseded"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        },
+        "staging": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.get_my_region",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.can_access_region",
+              "state": "different-or-superseded"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        }
+      }
+    },
+    {
+      "path": "supabase/security_module_4_audit_integrity.sql",
+      "version": null,
+      "name": "security_module_4_audit_integrity",
+      "sourceFunctionCount": 1,
+      "environments": {
+        "production": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.create_audit_log",
+              "state": "different-or-superseded"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        },
+        "staging": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.create_audit_log",
+              "state": "different-or-superseded"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        }
+      }
+    },
+    {
+      "path": "supabase/security_module_5_account_lifecycle.sql",
+      "version": null,
+      "name": "security_module_5_account_lifecycle",
+      "sourceFunctionCount": 2,
+      "environments": {
+        "production": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.get_my_role",
+              "state": "different-or-superseded"
+            },
+            {
+              "name": "public.set_user_account_active",
+              "state": "different-or-superseded"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        },
+        "staging": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.get_my_role",
+              "state": "different-or-superseded"
+            },
+            {
+              "name": "public.set_user_account_active",
+              "state": "different-or-superseded"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        }
+      }
+    },
+    {
+      "path": "supabase/security_module_8_profile_property_access.sql",
+      "version": null,
+      "name": "security_module_8_profile_property_access",
+      "sourceFunctionCount": 1,
+      "environments": {
+        "production": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.update_user_access",
+              "state": "different-or-superseded"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        },
+        "staging": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.update_user_access",
+              "state": "different-or-superseded"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        }
+      }
+    },
+    {
+      "path": "supabase/seed.sql",
+      "version": null,
+      "name": "seed",
+      "sourceFunctionCount": 0,
+      "environments": {
+        "production": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        },
+        "staging": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        }
+      }
+    },
+    {
+      "path": "supabase/sensitive_action_reauthentication.sql",
+      "version": null,
+      "name": "sensitive_action_reauthentication",
+      "sourceFunctionCount": 3,
+      "environments": {
+        "production": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.require_recent_authentication",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.guard_sensitive_profile_change",
+              "state": "different-or-superseded"
+            },
+            {
+              "name": "public.guard_sensitive_set_deletion",
+              "state": "matching-body"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        },
+        "staging": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.require_recent_authentication",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.guard_sensitive_profile_change",
+              "state": "different-or-superseded"
+            },
+            {
+              "name": "public.guard_sensitive_set_deletion",
+              "state": "matching-body"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        }
+      }
+    },
+    {
+      "path": "supabase/staging_test_fixtures.sql",
+      "version": null,
+      "name": "staging_test_fixtures",
+      "sourceFunctionCount": 1,
+      "environments": {
+        "production": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.initialize_staging_test_profile",
+              "state": "absent"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        },
+        "staging": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.initialize_staging_test_profile",
+              "state": "matching-body"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        }
+      }
+    },
+    {
+      "path": "supabase/sync_sec_module_1_foundation.sql",
+      "version": null,
+      "name": "sync_sec_module_1_foundation",
+      "sourceFunctionCount": 4,
+      "environments": {
+        "production": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.normalize_legacy_sync_operation",
+              "state": "different-or-superseded"
+            },
+            {
+              "name": "public.request_security_context",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.register_sync_operation",
+              "state": "different-or-superseded"
+            },
+            {
+              "name": "public.validate_trusted_device_session",
+              "state": "matching-body"
+            }
+          ],
+          "createdTables": [
+            {
+              "name": "public.sync_operations",
+              "present": true
+            },
+            {
+              "name": "public.trusted_devices",
+              "present": true
+            },
+            {
+              "name": "public.account_sessions",
+              "present": true
+            }
+          ],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        },
+        "staging": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.normalize_legacy_sync_operation",
+              "state": "different-or-superseded"
+            },
+            {
+              "name": "public.request_security_context",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.register_sync_operation",
+              "state": "different-or-superseded"
+            },
+            {
+              "name": "public.validate_trusted_device_session",
+              "state": "matching-body"
+            }
+          ],
+          "createdTables": [
+            {
+              "name": "public.sync_operations",
+              "present": true
+            },
+            {
+              "name": "public.trusted_devices",
+              "present": true
+            },
+            {
+              "name": "public.account_sessions",
+              "present": true
+            }
+          ],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        }
+      }
+    },
+    {
+      "path": "supabase/sync_sec_module_2_atomic_mutations.sql",
+      "version": null,
+      "name": "sync_sec_module_2_atomic_mutations",
+      "sourceFunctionCount": 3,
+      "environments": {
+        "production": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.apply_sync_row_mutation",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.complete_sync_operation",
+              "state": "different-or-superseded"
+            },
+            {
+              "name": "public.execute_sync_operation",
+              "state": "matching-body"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        },
+        "staging": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.apply_sync_row_mutation",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.complete_sync_operation",
+              "state": "different-or-superseded"
+            },
+            {
+              "name": "public.execute_sync_operation",
+              "state": "matching-body"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        }
+      }
+    },
+    {
+      "path": "supabase/sync_sec_module_3_change_feed.sql",
+      "version": null,
+      "name": "sync_sec_module_3_change_feed",
+      "sourceFunctionCount": 2,
+      "environments": {
+        "production": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.capture_sync_change",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.get_sync_change_feed",
+              "state": "different-or-superseded"
+            }
+          ],
+          "createdTables": [
+            {
+              "name": "public.sync_change_feed",
+              "present": true
+            }
+          ],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        },
+        "staging": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.capture_sync_change",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.get_sync_change_feed",
+              "state": "different-or-superseded"
+            }
+          ],
+          "createdTables": [
+            {
+              "name": "public.sync_change_feed",
+              "present": true
+            }
+          ],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        }
+      }
+    },
+    {
+      "path": "supabase/sync_sec_module_4_conflict_engine.sql",
+      "version": null,
+      "name": "sync_sec_module_4_conflict_engine",
+      "sourceFunctionCount": 4,
+      "environments": {
+        "production": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.bump_sync_entity_version",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.assert_sync_base_version",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.read_sync_entity_version",
+              "state": "different-or-superseded"
+            },
+            {
+              "name": "public.execute_sync_operation_v2",
+              "state": "matching-body"
+            }
+          ],
+          "createdTables": [
+            {
+              "name": "public.sync_entity_versions",
+              "present": true
+            }
+          ],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        },
+        "staging": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.bump_sync_entity_version",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.assert_sync_base_version",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.read_sync_entity_version",
+              "state": "different-or-superseded"
+            },
+            {
+              "name": "public.execute_sync_operation_v2",
+              "state": "matching-body"
+            }
+          ],
+          "createdTables": [
+            {
+              "name": "public.sync_entity_versions",
+              "present": true
+            }
+          ],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        }
+      }
+    },
+    {
+      "path": "supabase/sync_sec_module_5_private_realtime.sql",
+      "version": null,
+      "name": "sync_sec_module_5_private_realtime",
+      "sourceFunctionCount": 1,
+      "environments": {
+        "production": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.broadcast_sync_change",
+              "state": "different-or-superseded"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        },
+        "staging": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.broadcast_sync_change",
+              "state": "different-or-superseded"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        }
+      }
+    },
+    {
+      "path": "supabase/sync_sec_module_6_observability.sql",
+      "version": null,
+      "name": "sync_sec_module_6_observability",
+      "sourceFunctionCount": 1,
+      "environments": {
+        "production": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.get_sync_server_health",
+              "state": "different-or-superseded"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        },
+        "staging": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.get_sync_server_health",
+              "state": "different-or-superseded"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        }
+      }
+    },
+    {
+      "path": "supabase/team_workspace_migration.sql",
+      "version": null,
+      "name": "team_workspace_migration",
+      "sourceFunctionCount": 1,
+      "environments": {
+        "production": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.guard_repair_team_update",
+              "state": "different-or-superseded"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        },
+        "staging": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.guard_repair_team_update",
+              "state": "different-or-superseded"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        }
+      }
+    },
+    {
+      "path": "supabase/technical_document_uploads_migration.sql",
+      "version": null,
+      "name": "technical_document_uploads_migration",
+      "sourceFunctionCount": 0,
+      "environments": {
+        "production": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        },
+        "staging": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        }
+      }
+    },
+    {
+      "path": "supabase/technical_resources_migration.sql",
+      "version": null,
+      "name": "technical_resources_migration",
+      "sourceFunctionCount": 4,
+      "environments": {
+        "production": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.get_technical_support_contacts",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.get_my_contact_phone",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.update_my_contact_phone",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.audit_technical_document",
+              "state": "matching-body"
+            }
+          ],
+          "createdTables": [
+            {
+              "name": "public.technical_documents",
+              "present": true
+            }
+          ],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        },
+        "staging": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.get_technical_support_contacts",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.get_my_contact_phone",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.update_my_contact_phone",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.audit_technical_document",
+              "state": "matching-body"
+            }
+          ],
+          "createdTables": [
+            {
+              "name": "public.technical_documents",
+              "present": true
+            }
+          ],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        }
+      }
+    },
+    {
+      "path": "supabase/technical_storage_recent_auth.sql",
+      "version": null,
+      "name": "technical_storage_recent_auth",
+      "sourceFunctionCount": 0,
+      "environments": {
+        "production": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        },
+        "staging": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        }
+      }
+    },
+    {
+      "path": "supabase/technician_national_read_admin_session.sql",
+      "version": null,
+      "name": "technician_national_read_admin_session",
+      "sourceFunctionCount": 2,
+      "environments": {
+        "production": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.require_account_admin_session",
+              "state": "different-or-superseded"
+            },
+            {
+              "name": "public.guard_sensitive_profile_change",
+              "state": "different-or-superseded"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        },
+        "staging": {
+          "exactRecordedStatementVersions": [
+            "20261016085729"
+          ],
+          "sameNameHistoryVersions": [
+            "20261016085729"
+          ],
+          "functionBodies": [
+            {
+              "name": "public.require_account_admin_session",
+              "state": "different-or-superseded"
+            },
+            {
+              "name": "public.guard_sensitive_profile_change",
+              "state": "different-or-superseded"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "exact-statement-recorded"
+        }
+      }
+    },
+    {
+      "path": "supabase/technician_region_write_migration.sql",
+      "version": null,
+      "name": "technician_region_write_migration",
+      "sourceFunctionCount": 3,
+      "environments": {
+        "production": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.technician_can_write_region",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.guard_technician_region_write",
+              "state": "different-or-superseded"
+            },
+            {
+              "name": "public.guard_assigned_profile_region",
+              "state": "matching-body"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        },
+        "staging": {
+          "exactRecordedStatementVersions": [
+            "20261014014016"
+          ],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.technician_can_write_region",
+              "state": "matching-body"
+            },
+            {
+              "name": "public.guard_technician_region_write",
+              "state": "different-or-superseded"
+            },
+            {
+              "name": "public.guard_assigned_profile_region",
+              "state": "matching-body"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "exact-statement-recorded"
+        }
+      }
+    },
+    {
+      "path": "supabase/trusted_session_revocation.sql",
+      "version": null,
+      "name": "trusted_session_revocation",
+      "sourceFunctionCount": 2,
+      "environments": {
+        "production": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.register_trusted_device_session",
+              "state": "different-or-superseded"
+            },
+            {
+              "name": "public.validate_trusted_device_session",
+              "state": "matching-body"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        },
+        "staging": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.register_trusted_device_session",
+              "state": "different-or-superseded"
+            },
+            {
+              "name": "public.validate_trusted_device_session",
+              "state": "matching-body"
+            }
+          ],
+          "createdTables": [],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        }
+      }
+    },
+    {
+      "path": "supabase/workflow_transactions_migration.sql",
+      "version": null,
+      "name": "workflow_transactions_migration",
+      "sourceFunctionCount": 1,
+      "environments": {
+        "production": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.execute_equipment_workflow",
+              "state": "different-or-superseded"
+            }
+          ],
+          "createdTables": [
+            {
+              "name": "public.sync_operations",
+              "present": true
+            }
+          ],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        },
+        "staging": {
+          "exactRecordedStatementVersions": [],
+          "sameNameHistoryVersions": [],
+          "functionBodies": [
+            {
+              "name": "public.execute_equipment_workflow",
+              "state": "different-or-superseded"
+            }
+          ],
+          "createdTables": [
+            {
+              "name": "public.sync_operations",
+              "present": true
+            }
+          ],
+          "historyConclusion": "unrecorded-not-proof-of-absence"
+        }
+      }
+    }
+  ]
+}

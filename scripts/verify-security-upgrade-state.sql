@@ -3,6 +3,10 @@ BEGIN READ ONLY;
 DO $$
 DECLARE definition text; item text; table_name text;
 BEGIN
+ SELECT pg_get_functiondef('public.provision_admin_role(uuid,text)'::regprocedure) INTO definition;
+ IF definition !~* 'PERFORM public.require_account_admin_session\(\)' THEN
+  RAISE EXCEPTION 'SECURITY_ADMIN_GRANT_SESSION_DRIFT';
+ END IF;
  FOREACH item IN ARRAY ARRAY['has_active_app_session','require_account_admin_session','get_my_role','get_sync_server_health'] LOOP
   SELECT pg_get_functiondef(p.oid) INTO definition FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
    WHERE n.nspname='public' AND p.proname=item LIMIT 1;
