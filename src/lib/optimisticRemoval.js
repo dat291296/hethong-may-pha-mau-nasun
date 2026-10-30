@@ -2,7 +2,7 @@
 export async function optimisticRemoval({ id, key, read, update, persist }) {
   const previous = read();
   const index = previous.findIndex(row => row[key] === id);
-  if (index < 0) throw new Error('Không tìm thấy bản ghi. Tải lại dữ liệu trước khi xóa.');
+  if (index < 0) throw new Error('Bản ghi không còn tồn tại.');
   const removed = previous[index];
   update(rows => rows.filter(row => row[key] !== id));
   try {

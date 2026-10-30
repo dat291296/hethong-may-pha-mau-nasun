@@ -7,12 +7,7 @@ import {userErrorMessage} from '../security/userError.js';
 import './FieldSyncStatus.css';
 import {flushBeforeAppUpdate} from '../lib/appUpdateSafety.js';
 function DataLoadIndicator({ loading, error, online, pending, sending }) {
- const [duration, setDuration] = useState(() => getPerformanceSnapshot().DATA_LOAD?.value);
- useEffect(() => {
-  const received = event => { if (event.detail?.name === 'DATA_LOAD') setDuration(event.detail.value); };
-  window.addEventListener('nasun-performance-metric', received);
-  return () => window.removeEventListener('nasun-performance-metric', received);
- }, []);
+ const duration = getPerformanceSnapshot().DATA_LOAD?.value;
  const label = error ? 'Chưa tải đủ dữ liệu' : sending ? 'Đang gửi thay đổi…' : !online ? 'Đang dùng bản lưu offline' : loading ? 'Đang tải dữ liệu…' : pending ? `${pending} thay đổi chờ xác nhận` : 'Dữ liệu đã tải';
  const state = error ? 'error' : loading || sending ? 'loading' : !online || pending ? 'pending' : 'ready';
  return <div className={`data-load-indicator ${state}`} role="status" aria-live="polite" title={error || (duration === undefined ? label : `Lượt tải gần nhất: ${(duration / 1000).toFixed(1)} giây`)}><span aria-hidden="true" className="data-load-dot" />{label}</div>;

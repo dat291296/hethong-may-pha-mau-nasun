@@ -11,7 +11,7 @@ import { saveDeviceEdit } from '../lib/deviceEdit.js';
 import { requireCompleteWrite } from '../lib/guardedWrite.js';
 import { ASSET_TABLES, DEVICE_TABLES, assetColumns, assetCacheKey, cachedAssetSnapshot, createAssetRefreshQueue, createAssetReadBarrier } from '../lib/assetQuery.js';
 import { fetchAllRows } from '../lib/paginatedQuery.js';
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { persistMutation, persistBatchMutation } from '../lib/durableMutation.js';
 import { createOperationId } from '../lib/syncQueue.js';
 import { supabase, isSupabaseConfigured, safeQuery } from '../lib/supabase.js';
@@ -90,6 +90,18 @@ export function useAssets() {
   }
   const realtimeTimerRef = useRef(null);
 
+  const deviceConfigs = useMemo(() => {
+    const definitions = [
+      ['dispenser', 'dispensers', setDispensers, mapDbToDispenser],
+      ['mixer', 'mixers', setMixers, mapDbToMixer],
+      ['computer', 'computers', setComputers, mapDbToComputer],
+      ['printer', 'printers', setPrinters, mapDbToPrinter],
+    ];
+    return Object.fromEntries(definitions.flatMap(([singular, table, setter, mapper]) => {
+      const config = { singular, table, setter, mapper, cacheKey: table };
+      return [[singular, config], [table, config]];
+    }));
+  }, []);
   const assetStateRef = useRef(null);
   assetStateRef.current = { dispensers, mixers, computers, printers, system_sets: systemSets };
   const removalPendingRef = useRef(false);
@@ -281,13 +293,7 @@ export function useAssets() {
 
   // ── Generic add stock device ────────────────────────────────────────────────
   const addStockDevice = useCallback(async (category, deviceData) => {
-    const tableMap = {
-      dispenser: { table: 'dispensers', setter: setDispensers, mapper: mapDbToDispenser, cacheKey: 'dispensers' },
-      mixer:     { table: 'mixers',     setter: setMixers,     mapper: mapDbToMixer,     cacheKey: 'mixers' },
-      computer:  { table: 'computers',  setter: setComputers,  mapper: mapDbToComputer,  cacheKey: 'computers' },
-      printer:   { table: 'printers',   setter: setPrinters,   mapper: mapDbToPrinter,   cacheKey: 'printers' },
-    };
-    const cfg = tableMap[category];
+    const cfg = deviceConfigs[category];
     if (!cfg) throw new Error(`Unknown category: ${category}`);
 
     const tempId = deviceData.id || `${category.toUpperCase()}-${Date.now()}`;
@@ -305,22 +311,11 @@ export function useAssets() {
     await persistAssetsLocal(cfg.cacheKey, rows);
     return result;
     });
-  }, [withAssetWrite, updateRows]);
+  }, [withAssetWrite, updateRows, deviceConfigs]);
 
   // ── Generic edit device ────────────────────────────────────────────────────
   const editDeviceDetails = useCallback(async (category, id, updates, revision) => {
-    const tableMap = {
-      dispensers: { setter: setDispensers, cacheKey: 'dispensers', table: 'dispensers', singular: 'dispenser' },
-      mixers:     { setter: setMixers,     cacheKey: 'mixers',     table: 'mixers',     singular: 'mixer' },
-      computers:  { setter: setComputers,  cacheKey: 'computers',  table: 'computers',  singular: 'computer' },
-      printers:   { setter: setPrinters,   cacheKey: 'printers',   table: 'printers',   singular: 'printer' },
-      dispenser:  { setter: setDispensers, cacheKey: 'dispensers', table: 'dispensers', singular: 'dispenser' },
-      mixer:      { setter: setMixers,     cacheKey: 'mixers',     table: 'mixers',     singular: 'mixer' },
-      computer:   { setter: setComputers,  cacheKey: 'computers',  table: 'computers',  singular: 'computer' },
-      printer:    { setter: setPrinters,   cacheKey: 'printers',   table: 'printers',   singular: 'printer' },
-    };
-
-    const cfg = tableMap[category];
+    const cfg = deviceConfigs[category];
     const targetTable = cfg ? cfg.table : category;
     const singularCat = cfg ? cfg.singular : category;
 
@@ -360,21 +355,10 @@ export function useAssets() {
         return set;
       }));
     }
-  }, [fetchAssets, withAssetWrite, updateRows]);
+  }, [fetchAssets, withAssetWrite, updateRows, deviceConfigs]);
 
   const editDevice = useCallback(async (category, id, updates) => {
-    const tableMap = {
-      dispensers: { setter: setDispensers, cacheKey: 'dispensers', table: 'dispensers', singular: 'dispenser' },
-      mixers:     { setter: setMixers,     cacheKey: 'mixers',     table: 'mixers',     singular: 'mixer' },
-      computers:  { setter: setComputers,  cacheKey: 'computers',  table: 'computers',  singular: 'computer' },
-      printers:   { setter: setPrinters,   cacheKey: 'printers',   table: 'printers',   singular: 'printer' },
-      dispenser:  { setter: setDispensers, cacheKey: 'dispensers', table: 'dispensers', singular: 'dispenser' },
-      mixer:      { setter: setMixers,     cacheKey: 'mixers',     table: 'mixers',     singular: 'mixer' },
-      computer:   { setter: setComputers,  cacheKey: 'computers',  table: 'computers',  singular: 'computer' },
-      printer:    { setter: setPrinters,   cacheKey: 'printers',   table: 'printers',   singular: 'printer' },
-    };
-
-    const cfg = tableMap[category];
+    const cfg = deviceConfigs[category];
     const targetTable = cfg ? cfg.table : category;
     const singularCat = cfg ? cfg.singular : category;
 
@@ -413,25 +397,14 @@ export function useAssets() {
       console.log(`[Offline] Network down. Enqueueing editDevice for ${targetTable}.`);
       await enqueueOfflineAction('EDIT_DEVICE', { id, ...dbUpdates }, targetTable);
     }
-  }, [fetchAssets, withAssetWrite]);
+  }, [fetchAssets, withAssetWrite, deviceConfigs]);
 
   // ── Generic delete device ──────────────────────────────────────────────────
   const deleteDevice = useCallback(async (category, id) => {
-    const tableMap = {
-      dispensers: { setter: setDispensers, cacheKey: 'dispensers', table: 'dispensers' },
-      mixers:     { setter: setMixers,     cacheKey: 'mixers',     table: 'mixers' },
-      computers:  { setter: setComputers,  cacheKey: 'computers',  table: 'computers' },
-      printers:   { setter: setPrinters,   cacheKey: 'printers',   table: 'printers' },
-      dispenser:  { setter: setDispensers, cacheKey: 'dispensers', table: 'dispensers' },
-      mixer:      { setter: setMixers,     cacheKey: 'mixers',     table: 'mixers' },
-      computer:   { setter: setComputers,  cacheKey: 'computers',  table: 'computers' },
-      printer:    { setter: setPrinters,   cacheKey: 'printers',   table: 'printers' },
-    };
-
-    const cfg = tableMap[category];
+    const cfg = deviceConfigs[category];
     const targetTable = cfg ? cfg.table : category;
     if(!cfg) throw createPersistenceError('Loại thiết bị không hợp lệ.');
-    if (removalPendingRef.current) throw createPersistenceError('Đang xử lý một yêu cầu xóa. Vui lòng chờ xác nhận.');
+    if (removalPendingRef.current) throw createPersistenceError('Đang xóa dữ liệu. Vui lòng chờ.');
     const owner = getOfflineOwner();
     removalPendingRef.current = true;
     const finishWrite = readBarrierRef.current.begin();
@@ -450,21 +423,11 @@ export function useAssets() {
       removalPendingRef.current = false;
       finishWrite();
     }
-  }, [updateRows]);
+  }, [updateRows, deviceConfigs]);
 
   // ── Batch Import Devices from Excel ────────────────────────────────────────
   const importDevices = useCallback(async (type, items) => {
-    const tableMap = {
-      dispensers: { table: 'dispensers', setter: setDispensers, mapper: mapDbToDispenser, cacheKey: 'dispensers' },
-      mixers:     { table: 'mixers',     setter: setMixers,     mapper: mapDbToMixer,     cacheKey: 'mixers' },
-      computers:  { table: 'computers',  setter: setComputers,  mapper: mapDbToComputer,  cacheKey: 'computers' },
-      printers:   { table: 'printers',   setter: setPrinters,   mapper: mapDbToPrinter,   cacheKey: 'printers' },
-      dispenser:  { table: 'dispensers', setter: setDispensers, mapper: mapDbToDispenser, cacheKey: 'dispensers' },
-      mixer:      { table: 'mixers',     setter: setMixers,     mapper: mapDbToMixer,     cacheKey: 'mixers' },
-      computer:   { table: 'computers',  setter: setComputers,  mapper: mapDbToComputer,  cacheKey: 'computers' },
-      printer:    { table: 'printers',   setter: setPrinters,   mapper: mapDbToPrinter,   cacheKey: 'printers' },
-    };
-    const cfg = tableMap[type];
+    const cfg = deviceConfigs[type];
     if (!cfg) throw new Error(`Unknown import type: ${type}`);
 
     const nowIso = new Date().toISOString();
@@ -482,7 +445,7 @@ export function useAssets() {
     });
     if (isSupabaseConfigured && !result.queued) await fetchAssets([cfg.table]);
     return result;
-  }, [fetchAssets, withAssetWrite]);
+  }, [fetchAssets, withAssetWrite, deviceConfigs]);
 
   const importSystemSets = useCallback(async (items) => {
     const dbItems = items.map(mapSystemSetToDb).filter(item => item.set_code);
@@ -565,7 +528,7 @@ export function useAssets() {
 
   // ── Delete system set ──────────────────────────────────────────────────────
   const deleteSystemSet = useCallback(async (setCode) => {
-    if (removalPendingRef.current) throw createPersistenceError('Đang xử lý một yêu cầu xóa. Vui lòng chờ xác nhận.');
+    if (removalPendingRef.current) throw createPersistenceError('Đang xóa dữ liệu. Vui lòng chờ.');
     const owner = getOfflineOwner();
     const operationId = createOperationId();
     removalPendingRef.current = true;
