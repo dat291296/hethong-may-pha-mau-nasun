@@ -1,3 +1,5 @@
+import { optimisticRemoval } from '../lib/optimisticRemoval.js';
+import { recordDataLoadMetric } from '../lib/performanceMetrics.js';
 import { getOfflineOwner } from '../lib/offlineDb.js';
 import {normalizeDateFields} from '../utils/dateUtils.js';
 import {saveEquipmentReplacement,resolveEquipmentSlot,replacementCandidates,equipmentFields,EQUIPMENT_SLOTS} from '../lib/equipmentReplacement.js';
@@ -7,7 +9,7 @@ import { recordOperationalError } from '../lib/operationalDiagnostics.js';
 import { userErrorMessage } from '../security/userError.js';
 import { saveDeviceEdit } from '../lib/deviceEdit.js';
 import { requireCompleteWrite } from '../lib/guardedWrite.js';
-import { ASSET_TABLES, DEVICE_TABLES, assetColumns, assetCacheKey, cachedAssetSnapshot, createAssetRefreshQueue } from '../lib/assetQuery.js';
+import { ASSET_TABLES, DEVICE_TABLES, assetColumns, assetCacheKey, cachedAssetSnapshot, createAssetRefreshQueue, createAssetReadBarrier } from '../lib/assetQuery.js';
 import { fetchAllRows } from '../lib/paginatedQuery.js';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { persistMutation, persistBatchMutation } from '../lib/durableMutation.js';
@@ -88,6 +90,23 @@ export function useAssets() {
   }
   const realtimeTimerRef = useRef(null);
 
+  const assetStateRef = useRef(null);
+  assetStateRef.current = { dispensers, mixers, computers, printers, system_sets: systemSets };
+  const removalPendingRef = useRef(false);
+  const readBarrierRef = useRef(null);
+  if (!readBarrierRef.current) readBarrierRef.current = createAssetReadBarrier();
+  const withAssetWrite = useCallback(async action => {
+    const finish = readBarrierRef.current.begin();
+    try { return await action(); } finally { finish(); }
+  }, []);
+  const updateRows = useCallback((table, updater) => {
+    const next = updater(assetStateRef.current[table]);
+    assetStateRef.current = { ...assetStateRef.current, [table]: next };
+    const setters = { dispensers: setDispensers, mixers: setMixers, computers: setComputers, printers: setPrinters, system_sets: setSystemSets };
+    setters[table](next);
+    return next;
+  }, []);
+
   // Hydrate from IndexedDB cache on mount if available
   useEffect(() => {
     async function loadCached() {
@@ -123,6 +142,9 @@ export function useAssets() {
   // ── Fetch all asset tables ────────────────────────────────────────────────
   const performFetchAssets = useCallback(async (tables) => {
     const requestOwner = getOfflineOwner();
+    const readEpoch = readBarrierRef.current.capture();
+    if (!readBarrierRef.current.canCommit(readEpoch)) return false;
+    const startedAt = performance.now();
     const details = detailsRequestedRef.current;
     if (!isSupabaseConfigured) return;
     setLoading(true);
@@ -146,7 +168,7 @@ export function useAssets() {
         await fetchAllRows(sb => sb.from(table).select(assetColumns(table, details), { count: 'exact' }).order(key), safeQuery, `fetchAssets:${table}`, { key }),
         table, mapper, setter,
       ]));
-      if (requestOwner !== getOfflineOwner()) return false;
+      if (requestOwner !== getOfflineOwner() || !readBarrierRef.current.canCommit(readEpoch)) return false;
       const cacheWrites = [];
       for (const [result, key, mapper, setter] of sources) {
         if (Array.isArray(result.data)) {
@@ -166,7 +188,7 @@ export function useAssets() {
           const summary = await getCachedOfflineData(assetCacheKey(key, false), null);
           const snapshot = cachedAssetSnapshot(full, summary);
           const cached = snapshot.rows;
-          if (requestOwner !== getOfflineOwner()) return false;
+          if (requestOwner !== getOfflineOwner() || !readBarrierRef.current.canCommit(readEpoch)) return false;
           if (Array.isArray(cached)) {
             setter(cached);
             readyTablesRef.current.add(key);
@@ -190,6 +212,7 @@ export function useAssets() {
       if (requestOwner === getOfflineOwner()) setLoadError(userErrorMessage(error, 'Chưa tải được dữ liệu bộ máy. Dữ liệu đã lưu trên thiết bị được giữ nguyên.'));
       return false;
     } finally {
+      if (requestOwner === getOfflineOwner()) recordDataLoadMetric(performance.now() - startedAt);
       setLoading(false);
     }
   }, []);
@@ -271,15 +294,18 @@ export function useAssets() {
     const dbPayload = sanitizeDeviceForDb(category, deviceData, tempId);
     const localDevice = cfg.mapper(dbPayload);
 
+    return withAssetWrite(async () => {
     const result = !isSupabaseConfigured ? {queued:false} : await persistMutation({
       online:navigator.onLine,
       write:()=>safeQuery(sb=>sb.from(cfg.table).insert(dbPayload).select(assetColumns(cfg.table, true)),'addStockDevice'),
       queue:()=>enqueueOfflineAction('ADD_DEVICE',dbPayload,cfg.table),
     });
     const confirmedDevice = !result.queued && result.data?.[0] ? cfg.mapper(result.data[0]) : localDevice;
-    cfg.setter(prev=>{const updated=[confirmedDevice,...prev.filter(item=>item.id!==confirmedDevice.id)];persistAssetsLocal(cfg.cacheKey,updated);return updated;});
+    const rows = updateRows(cfg.table, prev => [confirmedDevice, ...prev.filter(item => item.id !== confirmedDevice.id)]);
+    await persistAssetsLocal(cfg.cacheKey, rows);
     return result;
-  }, []);
+    });
+  }, [withAssetWrite, updateRows]);
 
   // ── Generic edit device ────────────────────────────────────────────────────
   const editDeviceDetails = useCallback(async (category, id, updates, revision) => {
@@ -308,8 +334,15 @@ export function useAssets() {
     if (!cfg) throw createPersistenceError('Loại thiết bị không hợp lệ.');
     if (isSupabaseConfigured) {
       if (!navigator.onLine) throw createPersistenceError('Cần kết nối mạng để lưu thiết bị và bộ máy đồng thời. Nội dung đang nhập được giữ nguyên.');
-      await saveDeviceEdit(query => safeQuery(query, `editDevice:${targetTable}`), targetTable, id, dbUpdates, revision);
-      await fetchAssets([targetTable, 'system_sets']);
+      await withAssetWrite(async () => {
+        const acknowledgement = await saveDeviceEdit(query => safeQuery(query, `editDevice:${targetTable}`), targetTable, id, dbUpdates, revision);
+        const updatedAt = acknowledgement?.data?.[0]?.updated_at;
+        const rows = updateRows(targetTable, previous => previous.map(device => device.id === id
+          ? { ...device, ...appUpdates, updatedAt: updatedAt || device.updatedAt } : device));
+        await persistAssetsLocal(targetTable, rows);
+      });
+      const linked = updates.setCode || updates.set_code || assetStateRef.current.system_sets.some(set => set[`${singularCat}Id`] === id);
+      await fetchAssets([linked ? 'system_sets' : targetTable]);
     } else {
       cfg.setter(prev => {
         const updated = prev.map(d => d.id === id ? { ...d, ...appUpdates } : d);
@@ -327,7 +360,7 @@ export function useAssets() {
         return set;
       }));
     }
-  }, [fetchAssets]);
+  }, [fetchAssets, withAssetWrite, updateRows]);
 
   const editDevice = useCallback(async (category, id, updates) => {
     const tableMap = {
@@ -361,17 +394,17 @@ export function useAssets() {
 
     if (isSupabaseConfigured && navigator.onLine) {
       try {
-        const result = await safeQuery(
+        const result = await withAssetWrite(() => safeQuery(
           sb => sb.from(targetTable).update(dbUpdates).eq('id', id).select('id'),
           `editDevice:${targetTable}`
-        );
+        ));
         requireCompleteWrite(result);
-        await fetchAssets([targetTable, 'system_sets']);
+        await fetchAssets([targetTable]);
       } catch (err) {
         recordOperationalError('device', err);
         console.warn(`[Offline] Failed online editDevice for ${targetTable}. Queueing action.`);
         if (!canRetryOffline(err)) {
-          await fetchAssets([targetTable, 'system_sets']);
+          await fetchAssets([targetTable]);
           throw err;
         }
         await enqueueOfflineAction('EDIT_DEVICE', { id, ...dbUpdates }, targetTable);
@@ -380,7 +413,7 @@ export function useAssets() {
       console.log(`[Offline] Network down. Enqueueing editDevice for ${targetTable}.`);
       await enqueueOfflineAction('EDIT_DEVICE', { id, ...dbUpdates }, targetTable);
     }
-  }, [fetchAssets]);
+  }, [fetchAssets, withAssetWrite]);
 
   // ── Generic delete device ──────────────────────────────────────────────────
   const deleteDevice = useCallback(async (category, id) => {
@@ -398,13 +431,26 @@ export function useAssets() {
     const cfg = tableMap[category];
     const targetTable = cfg ? cfg.table : category;
     if(!cfg) throw createPersistenceError('Loại thiết bị không hợp lệ.');
-    const result = !isSupabaseConfigured ? {queued:false} : await persistMutation({online:navigator.onLine,
-      write:()=>safeQuery(sb=>sb.from(targetTable).delete().eq('id',id).select('id'),'deleteDevice'),
-      queue:()=>enqueueOfflineAction('DELETE_DEVICE',{id},targetTable),
-    });
-    cfg.setter(prev=>{const updated=prev.filter(item=>item.id!==id);persistAssetsLocal(cfg.cacheKey,updated);return updated;});
-    return result;
-  }, [fetchAssets]);
+    if (removalPendingRef.current) throw createPersistenceError('Đang xử lý một yêu cầu xóa. Vui lòng chờ xác nhận.');
+    const owner = getOfflineOwner();
+    removalPendingRef.current = true;
+    const finishWrite = readBarrierRef.current.begin();
+    try {
+      const result = await optimisticRemoval({
+        id, key: 'id', read: () => assetStateRef.current[targetTable],
+        update: updater => { if (owner === getOfflineOwner()) updateRows(targetTable, updater); },
+        persist: () => !isSupabaseConfigured ? Promise.resolve({ queued: false }) : persistMutation({ online: navigator.onLine,
+          write: () => safeQuery(sb => sb.from(targetTable).delete().eq('id', id).select('id'), 'deleteDevice'),
+          queue: () => enqueueOfflineAction('DELETE_DEVICE', { id }, targetTable),
+        }),
+      });
+      if (owner === getOfflineOwner()) await persistAssetsLocal(cfg.cacheKey, assetStateRef.current[targetTable]);
+      return result;
+    } finally {
+      removalPendingRef.current = false;
+      finishWrite();
+    }
+  }, [updateRows]);
 
   // ── Batch Import Devices from Excel ────────────────────────────────────────
   const importDevices = useCallback(async (type, items) => {
@@ -425,10 +471,10 @@ export function useAssets() {
     const markedItems = items.map(item => ({ ...item, createdAt: nowIso, isNew: true }));
 
     const dbItems = items.map(item => mapDeviceToDb(item,cfg.table));
-    const result = !isSupabaseConfigured ? {queued:false} : await persistBatchMutation({items:dbItems, online:isSupabaseConfigured && navigator.onLine,
+    const result = !isSupabaseConfigured ? {queued:false} : await withAssetWrite(() => persistBatchMutation({items:dbItems, online:isSupabaseConfigured && navigator.onLine,
       write:rows => safeQuery(sb => sb.from(cfg.table).upsert(rows,{onConflict:'id'}).select('id'), 'importDevices'),
       queue:item => enqueueOfflineAction('ADD_DEVICE',item,cfg.table),
-    });
+    }));
     cfg.setter(prev => {
       const ids = new Set(markedItems.map(item => item.id));
       const updated = [...markedItems,...prev.filter(item => !ids.has(item.id))];
@@ -436,16 +482,16 @@ export function useAssets() {
     });
     if (isSupabaseConfigured && !result.queued) await fetchAssets([cfg.table]);
     return result;
-  }, [fetchAssets]);
+  }, [fetchAssets, withAssetWrite]);
 
   const importSystemSets = useCallback(async (items) => {
     const dbItems = items.map(mapSystemSetToDb).filter(item => item.set_code);
     if (dbItems.length !== items.length) throw new Error('Every imported system set must include a set code');
 
-    const result = !isSupabaseConfigured ? {queued:false} : await persistBatchMutation({items:dbItems, key:'set_code', online:isSupabaseConfigured && navigator.onLine,
+    const result = !isSupabaseConfigured ? {queued:false} : await withAssetWrite(() => persistBatchMutation({items:dbItems, key:'set_code', online:isSupabaseConfigured && navigator.onLine,
       write:rows => safeQuery(sb => sb.from('system_sets').upsert(rows,{onConflict:'set_code'}).select('set_code'), 'importSystemSets'),
       queue:item => enqueueOfflineAction('ASSEMBLE_SET',item),
-    });
+    }));
     setSystemSets(prev => {
       const merged = new Map(prev.map(item => [item.setCode || item.set_code,item]));
       dbItems.map(mapDbToSystemSet).forEach(item => merged.set(item.setCode,item));
@@ -453,7 +499,7 @@ export function useAssets() {
     });
     if (isSupabaseConfigured && !result.queued) await fetchAssets(['system_sets']);
     return result;
-  }, [fetchAssets]);
+  }, [fetchAssets, withAssetWrite]);
 
   // ── Assemble new system set ────────────────────────────────────────────────
   const assembleSet = useCallback(async (newSet) => {
@@ -463,7 +509,7 @@ export function useAssets() {
 
     if (isSupabaseConfigured) {
       if (!navigator.onLine) throw createPersistenceError('Cần kết nối mạng để ráp bộ máy đồng thời. Nội dung được giữ ở bản nháp.');
-      const result=await safeQuery(sb=>sb.rpc('assemble_system_set_atomic',{p_operation_id:newSet.operationId,p_payload:dbPayload}),'assembleSystemSet');
+      const result=await withAssetWrite(() => safeQuery(sb=>sb.rpc('assemble_system_set_atomic',{p_operation_id:newSet.operationId,p_payload:dbPayload}),'assembleSystemSet'));
       if(result.error)throw result.error;
       if(!result.data?.ok || result.data.setCode !== setCode)throw createPersistenceError('Server chưa xác nhận ráp bộ máy.');
       await fetchAssets();
@@ -471,12 +517,12 @@ export function useAssets() {
       setSystemSets(prev=>{const updated=[appSetData,...prev.filter(item=>item.setCode!==setCode)];persistAssetsLocal('system_sets',updated);return updated;});
     }
     return {queued:false};
-  }, [fetchAssets]);
+  }, [fetchAssets, withAssetWrite]);
 
   const replaceEquipment=useCallback(async payload=>{
     if(isSupabaseConfigured){
       if(!navigator.onLine)throw createPersistenceError('Cần có mạng để thay thiết bị đồng thời. Bản nháp được giữ nguyên.');
-      const result=await saveEquipmentReplacement(query=>safeQuery(query,'replaceEquipment'),payload);
+      const result=await withAssetWrite(() => saveEquipmentReplacement(query=>safeQuery(query,'replaceEquipment'),payload));
       await fetchAssets([EQUIPMENT_SLOTS.find(item => item.category === payload.p_category).table, 'system_sets']);return result;
     }
     const machine=systemSets.find(item=>item.setCode===payload.p_set_code);
@@ -493,7 +539,7 @@ export function useAssets() {
     setters[payload.p_category](previous=>{const next=previous.map(device=>device.id===incoming.id?{...device,isAssigned:true,setCode:machine.setCode,updatedAt:changedAt}:device.id===slot.device?.id?{...device,isAssigned:false,setCode:null,status:payload.p_old_condition,updatedAt:changedAt}:device);persistAssetsLocal(table,next);return next;});
     setSystemSets(previous=>{const next=previous.map(item=>item.setCode===machine.setCode?{...item,...equipmentFields(payload.p_category,incoming),updatedAt:changedAt}:item);persistAssetsLocal('system_sets',next);return next;});
     return {ok:true,setCode:machine.setCode,newDeviceId:incoming.id,event:{operation_id:payload.p_operation_id,set_code:machine.setCode,npp_id:machine.nppId,region:machine.region,category:payload.p_category,action:payload.p_action,old_device_id:slot.device?.id||null,new_device_id:incoming.id,old_snapshot:slot.device,new_snapshot:incoming,old_condition:payload.p_old_condition,reason:payload.p_reason,changed_at:changedAt}};
-  },[systemSets,computers,dispensers,mixers,printers,fetchAssets]);
+  },[systemSets,computers,dispensers,mixers,printers,fetchAssets,withAssetWrite]);
 
   // ── Update system set ──────────────────────────────────────────────────────
   const updateSystemSet = useCallback(async (oldSetCode, updates) => {
@@ -503,44 +549,52 @@ export function useAssets() {
 
     const dbPayload = mapSystemSetToDb({ ...updates, set_code: newSetCode, setCode: newSetCode });
     if(isSupabaseConfigured && (!updates.expectedRevision || !Number.isFinite(Date.parse(updates.expectedRevision)))) throw Object.assign(new Error('Giữ bản nháp và tải lại hồ sơ máy trước khi lưu.'),{code:'REVISION_REQUIRED'});
-    const result = !isSupabaseConfigured ? {queued:false} : await persistMutation({
+    const result = await withAssetWrite(async () => {
+    const persisted = !isSupabaseConfigured ? {queued:false} : await persistMutation({
       online:navigator.onLine,
       write:async()=>{try {return await saveSystemSetEdit(query=>safeQuery(query,'updateSystemSet'),oldSetCode,dbPayload,updates.expectedRevision);}catch(error){return {data:null,error};}},
       queue:()=>enqueueOfflineAction('UPDATE_SYSTEM_SET',{targetSetCode:oldSetCode,data:dbPayload,expectedRevision:updates.expectedRevision})
     });
-    setSystemSets(prev=>{const next=prev.map(item=>item.setCode===oldSetCode?{...item,...updates,isUpdated:true}:item);persistAssetsLocal('system_sets',next);return next;});
-    if(isSupabaseConfigured && !result.queued)await fetchAssets();
+    const rows = updateRows('system_sets', prev => prev.map(item => item.setCode === oldSetCode ? { ...item, ...updates, isUpdated: true, updatedAt: persisted.data?.[0]?.updated_at || item.updatedAt } : item));
+    await persistAssetsLocal('system_sets', rows);
+    return persisted;
+    });
+    if(isSupabaseConfigured && !result.queued)await fetchAssets(['system_sets']);
     return result;
-  }, [fetchAssets]);
+  }, [fetchAssets, withAssetWrite, updateRows]);
 
   // ── Delete system set ──────────────────────────────────────────────────────
   const deleteSystemSet = useCallback(async (setCode) => {
+    if (removalPendingRef.current) throw createPersistenceError('Đang xử lý một yêu cầu xóa. Vui lòng chờ xác nhận.');
+    const owner = getOfflineOwner();
     const operationId = createOperationId();
-    const result = await persistMutation({
-      online: isSupabaseConfigured && navigator.onLine,
-      write: () => safeQuery(sb => sb.rpc('delete_system_set_atomic', {
-        p_operation_id: operationId, p_set_code: setCode
-      }), 'deleteSystemSet'),
-      queue: () => enqueueOfflineAction('DELETE_SYSTEM_SET', { set_code: setCode, operationId })
-    });
-    setSystemSets(prev => {
-      const updated = prev.filter(set => (set.setCode || set.set_code) !== setCode);
-      persistAssetsLocal('system_sets', updated);
-      return updated;
-    });
-    for (const [updateState, key] of [
-      [setDispensers, 'dispensers'], [setMixers, 'mixers'],
-      [setComputers, 'computers'], [setPrinters, 'printers']
-    ]) {
-      updateState(prev => {
-        const updated = prev.map(device => (device.setCode || device.set_code) === setCode
-          ? { ...device, setCode: null, set_code: null, isAssigned: false, is_assigned: false } : device);
-        persistAssetsLocal(key, updated);
-        return updated;
+    removalPendingRef.current = true;
+    const finishWrite = readBarrierRef.current.begin();
+    try {
+      const result = await optimisticRemoval({
+        id: setCode, key: 'setCode', read: () => assetStateRef.current.system_sets,
+        update: updater => { if (owner === getOfflineOwner()) updateRows('system_sets', updater); },
+        persist: () => !isSupabaseConfigured ? Promise.resolve({ queued: false }) : persistMutation({
+          online: navigator.onLine,
+          write: () => safeQuery(sb => sb.rpc('delete_system_set_atomic', { p_operation_id: operationId, p_set_code: setCode }), 'deleteSystemSet'),
+          queue: () => enqueueOfflineAction('DELETE_SYSTEM_SET', { set_code: setCode, operationId }),
+        }),
       });
+      if (owner !== getOfflineOwner()) return result;
+      const writes = [persistAssetsLocal('system_sets', assetStateRef.current.system_sets)];
+      // Release linked devices only after durable server/queue acknowledgement.
+      for (const table of DEVICE_TABLES) {
+        const next = updateRows(table, rows => rows.map(device => (device.setCode || device.set_code) === setCode
+          ? { ...device, setCode: null, set_code: null, isAssigned: false, is_assigned: false } : device));
+        writes.push(persistAssetsLocal(table, next));
+      }
+      await Promise.all(writes);
+      return result;
+    } finally {
+      removalPendingRef.current = false;
+      finishWrite();
     }
-    return result;
-  }, []);
+  }, [updateRows]);
   return {
     dispensers, setDispensers,
     mixers,     setMixers,

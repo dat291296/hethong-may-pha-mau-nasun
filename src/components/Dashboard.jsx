@@ -3,7 +3,7 @@ import SystemHealthPanel from './SystemHealthPanel.jsx';
 import {matchesSearch} from '../lib/workspaceFilters.js';
 import { WorkspaceRegionContext } from '../hooks/useWorkspaceState.js';
 import { nppCoverage } from '../lib/nppCoverage.js';
-import { regionalMachineCounts } from '../lib/teamWorkspace.js';
+import { summarizeDashboard } from '../lib/dashboardSummary.js';
 import { summarizeInventory } from '../lib/inventorySummary.js';
 import { findAssignedDevice } from '../lib/deviceEdit.js';
 import React, { useState, useMemo, useContext, useEffect } from 'react';
@@ -68,13 +68,9 @@ export default function Dashboard({
   const inventory = useMemo(() => summarizeInventory({ systemSets, dispensers, mixers, computers, printers }), [systemSets, dispensers, mixers, computers, printers]);
   const coverage = useMemo(() => nppCoverage(npps, systemSets), [npps, systemSets]);
   const totalSetsCount = inventory.totalSets;
-  const { installedSetsCount, revokedSetsCount, maintenanceSetsCount, warehouseCount } = useMemo(() => systemSets.reduce((counts, set) => {
-    if (set.status === 'DA_LAP_DAT') counts.installedSetsCount++;
-    if (set.status === 'DA_THU_HOI') counts.revokedSetsCount++;
-    if (set.status === 'BAO_THUONG_BAO_TRI') counts.maintenanceSetsCount++;
-    if (set.region === 'Kho Tổng') counts.warehouseCount++;
-    return counts;
-  }, { installedSetsCount: 0, revokedSetsCount: 0, maintenanceSetsCount: 0, warehouseCount: 0 }), [systemSets]);
+  const today = new Date().toLocaleDateString('en-CA');
+  const stats = useMemo(() => summarizeDashboard(systemSets, npps, today), [systemSets, npps, today]);
+  const installedSetsCount = stats.installed;
   const stockSetsCount = inventory.totalReadySets;
 
   // Repair & replacement statistics
@@ -103,18 +99,9 @@ export default function Dashboard({
 
   // Region data for chart
   const workspaceRegion = useContext(WorkspaceRegionContext);
-  const regionalCounts = useMemo(() => regionalMachineCounts(systemSets, npps).filter(item => workspaceRegion === 'ALL' || item.name === workspaceRegion), [systemSets, npps, workspaceRegion]);
-  const regionChartData = useMemo(() => [...regionalCounts, { name: 'Trong Kho', count: warehouseCount }], [regionalCounts, warehouseCount]);
-
-  // Dispenser Model distribution chart data
-  const modelChartData = useMemo(() => {
-    const counts = new Map();
-    for (const set of systemSets) {
-      const model = set.dispenserModel || 'Khác';
-      counts.set(model, (counts.get(model) || 0) + 1);
-    }
-    return Array.from(counts, ([name, value]) => ({ name, value }));
-  }, [systemSets]);
+  const regionalCounts = useMemo(() => stats.regionalCounts.filter(item => workspaceRegion === 'ALL' || item.name === workspaceRegion), [stats, workspaceRegion]);
+  const regionChartData = useMemo(() => [...regionalCounts, { name: 'Trong Kho', count: stats.warehouse }], [regionalCounts, stats.warehouse]);
+  const modelChartData = stats.modelChartData;
 
   const COLORS = ['#38bdf8', '#06b6d4', '#10b981', '#f59e0b', '#a855f7'];
 
@@ -411,7 +398,7 @@ export default function Dashboard({
 
       </div>
 
-      <div className="workspace-tabs" aria-label="Thống kê nhanh">{[['assets','STOCK','Trong kho',stockSetsCount],['repairs','PENDING','Chờ sửa',pendingTasks.length],['repairs','RETURN','Chờ gửi trả',returnTasks.length],['maintenance','OVERDUE','Quá hạn bảo trì',systemSets.filter(set => set.nextMaintenanceDue && set.nextMaintenanceDue < new Date().toLocaleDateString('en-CA')).length]].map(([tab,filter,label,count]) => <button key={filter} onClick={() => onNavigateWorkspace?.(tab, '', filter)}>{label} ({count})</button>)}</div>
+      <div className="workspace-tabs" aria-label="Thống kê nhanh">{[['assets','STOCK','Trong kho',stockSetsCount],['repairs','PENDING','Chờ sửa',pendingTasks.length],['repairs','RETURN','Chờ gửi trả',returnTasks.length],['maintenance','OVERDUE','Quá hạn bảo trì',stats.overdue]].map(([tab,filter,label,count]) => <button key={filter} onClick={() => onNavigateWorkspace?.(tab, '', filter)}>{label} ({count})</button>)}</div>
 
 
       <details className="dashboard-chart-group health-chart-group" open={healthOpen} onToggle={event=>setHealthOpen(event.currentTarget.open)}>

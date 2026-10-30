@@ -1,6 +1,21 @@
 export const ASSET_TABLES = ['dispensers', 'mixers', 'computers', 'printers', 'system_sets'];
 export const DEVICE_TABLES = ASSET_TABLES.filter(table => table !== 'system_sets');
 
+export function createAssetReadBarrier() {
+  let epoch = 0;
+  let active = 0;
+  return {
+    capture: () => epoch,
+    canCommit: token => active === 0 && token === epoch,
+    begin() {
+      active++;
+      epoch++;
+      let finished = false;
+      return () => { if (!finished) { finished = true; active--; epoch++; } };
+    },
+  };
+}
+
 const deviceBase = 'id,serial,status,is_assigned,set_code,created_at,updated_at';
 const setSummary = 'set_code,npp_id,npp_name,region,province,status,dispenser_id,dispenser_model,dispenser_serial,mixer_id,mixer_model,mixer_serial,computer_id,computer_type,computer_serial,printer_id,printer_serial,tinting_software,software_version,agent_status,install_date,last_maintenance_date,next_maintenance_due,technician,salesperson,stabilizer,created_at,updated_at';
 const summaryColumns = {

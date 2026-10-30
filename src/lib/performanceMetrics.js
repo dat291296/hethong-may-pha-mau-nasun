@@ -79,3 +79,8 @@ export function stopPerformanceMonitoring() {
 export function getPerformanceSnapshot() {
   return Object.fromEntries(metrics);
 }
+
+export function recordDataLoadMetric(duration) {
+  if (!Number.isFinite(duration) || duration < 0 || typeof window === 'undefined') return;
+  publish('DATA_LOAD', duration);
+}
