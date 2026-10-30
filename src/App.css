@@ -182,3 +182,12 @@
     border-right-color: var(--border);
   }
 }
+
+.asset-loading-skeleton { color: var(--text-muted); }
+.asset-skeleton-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; margin-bottom: 20px; }
+.asset-skeleton-block { height: 112px; }
+.asset-skeleton-table { padding: 24px; }
+.asset-skeleton-line { height: 24px; margin: 16px 0; border-radius: 6px; }
+.asset-skeleton-block, .asset-skeleton-line { background: linear-gradient(100deg, var(--bg-secondary, #172334) 30%, var(--border-color, #2b4055) 50%, var(--bg-secondary, #172334) 70%); background-size: 200% 100%; animation: asset-loading-shimmer 1.6s ease-in-out infinite; }
+@keyframes asset-loading-shimmer { to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .asset-skeleton-block, .asset-skeleton-line { animation: none; } }

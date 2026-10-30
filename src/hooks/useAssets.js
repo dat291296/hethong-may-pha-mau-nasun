@@ -7,6 +7,7 @@ import { recordOperationalError } from '../lib/operationalDiagnostics.js';
 import { userErrorMessage } from '../security/userError.js';
 import { saveDeviceEdit } from '../lib/deviceEdit.js';
 import { requireCompleteWrite } from '../lib/guardedWrite.js';
+import { ASSET_TABLES, DEVICE_TABLES, assetColumns, assetCacheKey, cachedAssetSnapshot, createAssetRefreshQueue } from '../lib/assetQuery.js';
 import { fetchAllRows } from '../lib/paginatedQuery.js';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { persistMutation, persistBatchMutation } from '../lib/durableMutation.js';
@@ -69,11 +70,22 @@ export function useAssets() {
   const [computers,   setComputers]   = useState(() => getInitialAssets('computers', INITIAL_COMPUTERS));
   const [printers,    setPrinters]    = useState(() => getInitialAssets('printers', INITIAL_PRINTERS));
   const [systemSets,  setSystemSets]  = useState(() => getInitialAssets('system_sets', INITIAL_SYSTEM_SETS));
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(isSupabaseConfigured);
   const [loadError, setLoadError] = useState('');
   const [cacheHydrated, setCacheHydrated] = useState(false);
-  const fetchInFlightRef = useRef(null);
-  const fetchPendingRef = useRef(false);
+  const [detailsReady, setDetailsReady] = useState(!isSupabaseConfigured);
+  const [summaryReady, setSummaryReady] = useState(!isSupabaseConfigured);
+  const detailsRequestedRef = useRef(false);
+  const fullTablesRef = useRef(new Set());
+  const loadErrorsRef = useRef(new Map());
+  const readyTablesRef = useRef(new Set());
+  const refreshQueueRef = useRef(null);
+  const hydrationRef = useRef(null);
+  if (!hydrationRef.current) {
+    let resolve;
+    const promise = new Promise(done => { resolve = done; });
+    hydrationRef.current = { promise, resolve };
+  }
   const realtimeTimerRef = useRef(null);
 
   // Hydrate from IndexedDB cache on mount if available
@@ -81,78 +93,97 @@ export function useAssets() {
     async function loadCached() {
       try {
         if (navigator.onLine && !(await getOfflineQueue()).some(isPendingAssetAction)) return;
-        const [d, m, c, p, s] = await Promise.all([
-          getCachedOfflineData('dispensers', null),
-          getCachedOfflineData('mixers', null),
-          getCachedOfflineData('computers', null),
-          getCachedOfflineData('printers', null),
-          getCachedOfflineData('system_sets', null),
-        ]);
-        if (Array.isArray(d)) setDispensers(d);
-        if (Array.isArray(m)) setMixers(m);
-        if (Array.isArray(c)) setComputers(c);
-        if (Array.isArray(p)) setPrinters(p);
-        if (Array.isArray(s)) setSystemSets(s);
+        const setters = { dispensers: setDispensers, mixers: setMixers, computers: setComputers, printers: setPrinters, system_sets: setSystemSets };
+        for (const table of ASSET_TABLES) {
+          const full = await getCachedOfflineData(table, null);
+          const summary = await getCachedOfflineData(assetCacheKey(table, false), null);
+          const { rows, details } = cachedAssetSnapshot(full, summary);
+          if (Array.isArray(rows)) {
+            setters[table](rows);
+            readyTablesRef.current.add(table);
+            if (details) fullTablesRef.current.add(table);
+          }
+        }
+        setSummaryReady(ASSET_TABLES.every(table => readyTablesRef.current.has(table)));
+        const complete = ASSET_TABLES.every(table => fullTablesRef.current.has(table));
+        setDetailsReady(complete);
+        if (complete) detailsRequestedRef.current = true;
       } catch (error) {
         recordOperationalError('runtime', error);
         setLoadError('Chưa đọc được dữ liệu máy đã lưu trên thiết bị. Không có dữ liệu nào bị xóa.');
       } finally {
         setCacheHydrated(true);
+        setLoading(false);
+        hydrationRef.current.resolve();
       }
     }
     loadCached();
   }, []);
 
   // ── Fetch all asset tables ────────────────────────────────────────────────
-  const performFetchAssets = useCallback(async () => {
+  const performFetchAssets = useCallback(async (tables) => {
     const requestOwner = getOfflineOwner();
+    const details = detailsRequestedRef.current;
     if (!isSupabaseConfigured) return;
     setLoading(true);
-    setLoadError('');
     try {
       const pendingQueue = await getOfflineQueue();
       if (requestOwner !== getOfflineOwner()) return false;
       if (pendingQueue.some(isPendingAssetAction)) {
         console.info('[useAssets] Keeping local asset cache while changes are waiting to sync.');
-        return true;
+        const complete = ASSET_TABLES.every(table => fullTablesRef.current.has(table));
+        if (details && !complete) setLoadError('Có thay đổi đang chờ đồng bộ. Đồng bộ xong rồi tải lại chi tiết; bản lưu đầy đủ được giữ nguyên.');
+        return !details || complete;
       }
-      const [dRes, mRes, cRes, pRes, sRes] = await Promise.all([
-        fetchAllRows(sb => sb.from('dispensers').select('*', { count: 'exact' }).order('id'), safeQuery, 'fetchDispensers', { key: 'id' }),
-        fetchAllRows(sb => sb.from('mixers').select('*', { count: 'exact' }).order('id'), safeQuery, 'fetchMixers', { key: 'id' }),
-        fetchAllRows(sb => sb.from('computers').select('*', { count: 'exact' }).order('id'), safeQuery, 'fetchComputers', { key: 'id' }),
-        fetchAllRows(sb => sb.from('printers').select('*', { count: 'exact' }).order('id'), safeQuery, 'fetchPrinters', { key: 'id' }),
-        fetchAllRows(sb => sb.from('system_sets').select('*', { count: 'exact' }).order('set_code'), safeQuery, 'fetchSystemSets', { key: 'set_code' }),
-      ]);
-
+      const definitions = [
+        ['dispensers', mapDbToDispenser, setDispensers, 'id'],
+        ['mixers', mapDbToMixer, setMixers, 'id'],
+        ['computers', mapDbToComputer, setComputers, 'id'],
+        ['printers', mapDbToPrinter, setPrinters, 'id'],
+        ['system_sets', mapDbToSystemSet, setSystemSets, 'set_code'],
+      ].filter(([table]) => tables.includes(table));
+      const sources = await Promise.all(definitions.map(async ([table, mapper, setter, key]) => [
+        await fetchAllRows(sb => sb.from(table).select(assetColumns(table, details), { count: 'exact' }).order(key), safeQuery, `fetchAssets:${table}`, { key }),
+        table, mapper, setter,
+      ]));
       if (requestOwner !== getOfflineOwner()) return false;
       const cacheWrites = [];
-      const sources = [
-        [dRes, 'dispensers', mapDbToDispenser, setDispensers],
-        [mRes, 'mixers', mapDbToMixer, setMixers],
-        [cRes, 'computers', mapDbToComputer, setComputers],
-        [pRes, 'printers', mapDbToPrinter, setPrinters],
-        [sRes, 'system_sets', mapDbToSystemSet, setSystemSets],
-      ];
       for (const [result, key, mapper, setter] of sources) {
         if (Array.isArray(result.data)) {
+          loadErrorsRef.current.delete(key);
           const mapped = result.data.map(mapper);
           setter(mapped);
-          cacheWrites.push(persistAssetsLocal(key, mapped));
+          readyTablesRef.current.add(key);
+          if (details) fullTablesRef.current.add(key);
+          else fullTablesRef.current.delete(key);
+          cacheWrites.push((async () => {
+            if (details && !await persistAssetsLocal(key, mapped)) return false;
+            return persistAssetsLocal(assetCacheKey(key, false), details ? { fullSnapshot: true } : { fullSnapshot: false, rows: mapped });
+          })());
         } else {
-          const cached = await getCachedOfflineData(key, null);
+          loadErrorsRef.current.set(key, userErrorMessage(result.error, 'Chưa tải đủ dữ liệu bộ máy. Bản lưu trên thiết bị được giữ; kiểm tra kết nối và thử lại.'));
+          const full = await getCachedOfflineData(key, null);
+          const summary = await getCachedOfflineData(assetCacheKey(key, false), null);
+          const snapshot = cachedAssetSnapshot(full, summary);
+          const cached = snapshot.rows;
           if (requestOwner !== getOfflineOwner()) return false;
-          if (Array.isArray(cached)) setter(cached);
+          if (Array.isArray(cached)) {
+            setter(cached);
+            readyTablesRef.current.add(key);
+            if (snapshot.details) fullTablesRef.current.add(key);
+            else fullTablesRef.current.delete(key);
+          }
         }
       }
 
-      const failed = sources.filter(([result]) => result.error || !Array.isArray(result.data));
-      if (failed.length) {
-        const firstError = failed.find(([result]) => result.error)?.[0].error;
-        setLoadError(userErrorMessage(firstError, 'Chưa tải đủ dữ liệu bộ máy. Bản lưu trên thiết bị được giữ; kiểm tra phiên đăng nhập, quyền truy cập và kết nối.'));
-        return false;
-      }
+      setSummaryReady(ASSET_TABLES.every(table => readyTablesRef.current.has(table)));
+      setDetailsReady(ASSET_TABLES.every(table => fullTablesRef.current.has(table)));
       const saved = (await Promise.all(cacheWrites)).every(Boolean);
-      if (!saved) setLoadError('Đã tải dữ liệu bộ máy nhưng chưa lưu được bản ngoại tuyến trên thiết bị.');
+      const failed = sources.filter(([result]) => result.error || !Array.isArray(result.data));
+      if (saved) loadErrorsRef.current.delete('cache');
+      else loadErrorsRef.current.set('cache', 'Đã tải dữ liệu bộ máy nhưng chưa lưu được bản ngoại tuyến trên thiết bị.');
+      setLoadError([...new Set(loadErrorsRef.current.values())].join(' '));
+      if (failed.length) return false;
       return saved;
     } catch (error) {
       recordOperationalError('runtime', error);
@@ -163,43 +194,65 @@ export function useAssets() {
     }
   }, []);
 
-  const fetchAssets = useCallback(() => {
-    if (fetchInFlightRef.current) {
-      fetchPendingRef.current = true;
-      return fetchInFlightRef.current;
-    }
+  if (!refreshQueueRef.current) refreshQueueRef.current = createAssetRefreshQueue(performFetchAssets);
+  const fetchAssets = useCallback(tables => refreshQueueRef.current(tables), []);
 
-    const request = performFetchAssets().finally(() => {
-      fetchInFlightRef.current = null;
-      if (fetchPendingRef.current) {
-        fetchPendingRef.current = false;
-        window.setTimeout(() => fetchAssets(), 0);
-      }
-    });
-    fetchInFlightRef.current = request;
-    return request;
-  }, [performFetchAssets]);
+  const ensureDetails = useCallback(async () => {
+    detailsRequestedRef.current = true;
+    await hydrationRef.current.promise;
+    if (!isSupabaseConfigured) return true;
+    if (!navigator.onLine && !ASSET_TABLES.every(table => fullTablesRef.current.has(table))) {
+      setLoadError('Thiết bị chưa lưu đủ chi tiết ngoại tuyến. Kết nối mạng và tải lại trước khi chỉnh sửa hoặc sao lưu.');
+      return false;
+    }
+    if (ASSET_TABLES.every(table => fullTablesRef.current.has(table))) return true;
+    await fetchAssets();
+    return ASSET_TABLES.every(table => fullTablesRef.current.has(table));
+  }, [fetchAssets]);
 
   useEffect(() => {
-    if (cacheHydrated) fetchAssets();
+    if (!cacheHydrated || detailsRequestedRef.current) return;
+    if (!navigator.onLine) {
+      if (!ASSET_TABLES.every(table => readyTablesRef.current.has(table))) setLoadError('Thiết bị chưa lưu đủ dữ liệu tổng quan ngoại tuyến. Kết nối mạng để tải dữ liệu.');
+      return;
+    }
+    let cancelled = false;
+    let idleHandle;
+    let timer;
+    // Render machine summaries before requesting the lightweight inventory index.
+    void fetchAssets(['system_sets']).then(() => {
+      if (cancelled || detailsRequestedRef.current) return;
+      const loadInventory = () => { if (!cancelled) void fetchAssets(DEVICE_TABLES); };
+      if (window.requestIdleCallback) idleHandle = window.requestIdleCallback(loadInventory, { timeout: 1000 });
+      else timer = window.setTimeout(loadInventory, 0);
+    });
+    return () => {
+      cancelled = true;
+      if (idleHandle !== undefined) window.cancelIdleCallback(idleHandle);
+      window.clearTimeout(timer);
+    };
   }, [cacheHydrated, fetchAssets]);
 
   // ── Realtime subscriptions for all asset tables ───────────────────────────
   useEffect(() => {
     if (!cacheHydrated || !isSupabaseConfigured || !supabase) return;
-    const scheduleRefresh = () => {
+    const changedTables = new Set();
+    const scheduleRefresh = table => {
+      changedTables.add(table);
       window.clearTimeout(realtimeTimerRef.current);
-      realtimeTimerRef.current = window.setTimeout(() => fetchAssets(), 250);
+      realtimeTimerRef.current = window.setTimeout(() => {
+        const tables = [...changedTables];
+        changedTables.clear();
+        void fetchAssets(tables);
+      }, 500);
     };
     const tables = ['dispensers', 'mixers', 'computers', 'printers', 'system_sets'];
-    const channels = tables.map(table =>
-      supabase.channel(`${table}-changes`)
-        .on('postgres_changes', { event: '*', schema: 'public', table }, scheduleRefresh)
-        .subscribe()
-    );
+    const channel = supabase.channel('asset-changes');
+    tables.forEach(table => channel.on('postgres_changes', { event: '*', schema: 'public', table }, () => scheduleRefresh(table)));
+    channel.subscribe();
     return () => {
       window.clearTimeout(realtimeTimerRef.current);
-      channels.forEach(ch => supabase.removeChannel(ch));
+      supabase.removeChannel(channel);
     };
   }, [cacheHydrated, fetchAssets]);
 
@@ -220,13 +273,13 @@ export function useAssets() {
 
     const result = !isSupabaseConfigured ? {queued:false} : await persistMutation({
       online:navigator.onLine,
-      write:()=>safeQuery(sb=>sb.from(cfg.table).insert(dbPayload).select('id'),'addStockDevice'),
+      write:()=>safeQuery(sb=>sb.from(cfg.table).insert(dbPayload).select(assetColumns(cfg.table, true)),'addStockDevice'),
       queue:()=>enqueueOfflineAction('ADD_DEVICE',dbPayload,cfg.table),
     });
-    cfg.setter(prev=>{const updated=[localDevice,...prev.filter(item=>item.id!==localDevice.id)];persistAssetsLocal(cfg.cacheKey,updated);return updated;});
-    if(isSupabaseConfigured && !result.queued) await fetchAssets();
+    const confirmedDevice = !result.queued && result.data?.[0] ? cfg.mapper(result.data[0]) : localDevice;
+    cfg.setter(prev=>{const updated=[confirmedDevice,...prev.filter(item=>item.id!==confirmedDevice.id)];persistAssetsLocal(cfg.cacheKey,updated);return updated;});
     return result;
-  }, [fetchAssets]);
+  }, []);
 
   // ── Generic edit device ────────────────────────────────────────────────────
   const editDeviceDetails = useCallback(async (category, id, updates, revision) => {
@@ -256,7 +309,7 @@ export function useAssets() {
     if (isSupabaseConfigured) {
       if (!navigator.onLine) throw createPersistenceError('Cần kết nối mạng để lưu thiết bị và bộ máy đồng thời. Nội dung đang nhập được giữ nguyên.');
       await saveDeviceEdit(query => safeQuery(query, `editDevice:${targetTable}`), targetTable, id, dbUpdates, revision);
-      await fetchAssets();
+      await fetchAssets([targetTable, 'system_sets']);
     } else {
       cfg.setter(prev => {
         const updated = prev.map(d => d.id === id ? { ...d, ...appUpdates } : d);
@@ -313,12 +366,12 @@ export function useAssets() {
           `editDevice:${targetTable}`
         );
         requireCompleteWrite(result);
-        await fetchAssets();
+        await fetchAssets([targetTable, 'system_sets']);
       } catch (err) {
         recordOperationalError('device', err);
         console.warn(`[Offline] Failed online editDevice for ${targetTable}. Queueing action.`);
         if (!canRetryOffline(err)) {
-          await fetchAssets();
+          await fetchAssets([targetTable, 'system_sets']);
           throw err;
         }
         await enqueueOfflineAction('EDIT_DEVICE', { id, ...dbUpdates }, targetTable);
@@ -381,7 +434,7 @@ export function useAssets() {
       const updated = [...markedItems,...prev.filter(item => !ids.has(item.id))];
       persistAssetsLocal(cfg.cacheKey,updated); return updated;
     });
-    if (isSupabaseConfigured && !result.queued) await fetchAssets();
+    if (isSupabaseConfigured && !result.queued) await fetchAssets([cfg.table]);
     return result;
   }, [fetchAssets]);
 
@@ -398,7 +451,7 @@ export function useAssets() {
       dbItems.map(mapDbToSystemSet).forEach(item => merged.set(item.setCode,item));
       const updated = Array.from(merged.values()); persistAssetsLocal('system_sets',updated); return updated;
     });
-    if (isSupabaseConfigured && !result.queued) await fetchAssets();
+    if (isSupabaseConfigured && !result.queued) await fetchAssets(['system_sets']);
     return result;
   }, [fetchAssets]);
 
@@ -424,7 +477,7 @@ export function useAssets() {
     if(isSupabaseConfigured){
       if(!navigator.onLine)throw createPersistenceError('Cần có mạng để thay thiết bị đồng thời. Bản nháp được giữ nguyên.');
       const result=await saveEquipmentReplacement(query=>safeQuery(query,'replaceEquipment'),payload);
-      await fetchAssets();return result;
+      await fetchAssets([EQUIPMENT_SLOTS.find(item => item.category === payload.p_category).table, 'system_sets']);return result;
     }
     const machine=systemSets.find(item=>item.setCode===payload.p_set_code);
     if(!machine||machine.updatedAt!==payload.p_expected_updated_at)throw Object.assign(new Error('Hồ sơ máy đã thay đổi. Tải lại để đối chiếu.'),{code:'PT409'});
@@ -506,6 +559,7 @@ export function useAssets() {
     assembleSet,
     replaceEquipment,
     updateSystemSet,
+    detailsReady, summaryReady, ensureDetails,
     refetch: fetchAssets,
   };
 }
@@ -588,8 +642,9 @@ function mapDbToSystemSet(row) {
     computerId: row.computer_id || row.computerId, computerType: row.computer_type || row.computerType, pcType: row.computer_type || row.pcType,
     printerId: row.printer_id || row.printerId, printerSerial: row.printer_serial || row.printerSerial, printerModel: 'QL700',
     installDate: row.install_date || row.installDate || row.installedDate, lastMaintenanceDate: row.last_maintenance_date || row.lastMaintenanceDate, nextMaintenanceDue: row.next_maintenance_due || row.nextMaintenanceDue,
-    technician: row.technician, salesperson: row.salesperson || row.sales_person || '', stabilizer: row.stabilizer || '', notes: row.notes || '',
-    installationPhotos: row.installation_photos || row.installationPhotos || [],
+    technician: row.technician, salesperson: row.salesperson || row.sales_person || '', stabilizer: row.stabilizer || '', notes: row.notes,
+    installationPhotos: row.installation_photos ?? row.installationPhotos,
+    createdAt: row.created_at || row.createdAt,
   };
 }
 
