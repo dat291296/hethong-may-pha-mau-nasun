@@ -1,5 +1,7 @@
 # Security upgrade follow-up — 2026-10-29
 
+Historical baseline. Subsequent authorized CI/staging/local restore acceptance is recorded in security-acceptance-20261030.json. Its results supersede the pending CI and restore statuses below; production deployment, MFA/password rollout and backup secret-scope limitations remain unresolved.
+
 Base: 58db500, initially clean worktree. The older security worktree at 4d57 was clean at 7c6b90a, already included through PR #26. Current remote main is newer; reconcile this patch with main before release. This is focused remediation, not a full Cloudflare audit or an 8/10 acceptance.
 
 ## Verified metadata

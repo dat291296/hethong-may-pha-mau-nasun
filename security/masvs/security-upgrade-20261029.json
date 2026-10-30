@@ -3,9 +3,10 @@
   "baseRevision": "58db500",
   "mode": "focused remediation and read-only metadata reconciliation; not a complete security audit",
   "productionChanged": false,
-  "stagingChanged": false,
+  "stagingChangedAtInitialInspection": false,
+  "laterAcceptanceReceipt": "security-acceptance-20261030.json",
   "localTests": "not run: required OS sandbox controls not established",
-  "currentChangesCI": "not run: no push authorized",
+  "ciAtInitialInspection": "not run before push authorization; superseded by laterAcceptanceReceipt",
   "historicalCI": {
     "url": "https://github.com/dat291296/hethong-may-pha-mau-nasun/actions/runs/40805512225",
     "revision": "fad2d253d1cf6080f4db4d97b982712d6bdfb631",
