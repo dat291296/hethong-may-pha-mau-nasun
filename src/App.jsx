@@ -829,7 +829,7 @@ function AppWorkspace() {
         />
 
         {/* Dynamic View Content */}
-        <FieldSyncStatus/>
+        <FieldSyncStatus dataLoading={assetsLoading || nppsLoading || repairsLoading} dataError={[assetsLoadError, nppsLoadError, repairsLoadError].filter(Boolean).join(' ')} />
         {(nppsLoadError || assetsLoadError) && <div className="alert alert-warning" role="alert" style={{ margin: '12px 28px 0' }}>
           <div>{[nppsLoadError, assetsLoadError].filter(Boolean).join(' ')}</div>
           <button type="button" className="btn btn-secondary btn-sm" disabled={nppsLoading || assetsLoading} onClick={() => Promise.allSettled([refetchNpps(), refetchAssets()])}>Tải lại dữ liệu NPP và bộ máy</button>
