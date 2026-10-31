@@ -1,7 +1,7 @@
-import { userErrorMessage } from '../security/userError.js';
-import FieldOfflinePanel from '../../modules/fieldwork/components/FieldOfflinePanel.jsx';
-import FieldReviewPanel from '../../modules/fieldwork/components/FieldReviewPanel.jsx';
-import {loadFieldDocuments} from '../../modules/fieldwork/lib/fieldDocumentClient.js';
+import { userErrorMessage } from '../../../shared/security/userError.js';
+import FieldOfflinePanel from './FieldOfflinePanel.jsx';
+import FieldReviewPanel from './FieldReviewPanel.jsx';
+import {loadFieldDocuments} from '../lib/fieldDocumentClient.js';
 import React, { useState } from 'react';
 import { 
   Database, 
@@ -15,16 +15,16 @@ import {
   Copy,
   Check
 } from 'lucide-react';
-import { syncOfflineQueue } from '../lib/offlineSync.js';
-import { getSyncHealthSnapshot } from '../lib/syncHealth.js';
-import { getOperationalDiagnostics } from '../lib/operationalDiagnostics.js';
-import { getPerformanceSnapshot } from '../lib/performanceMetrics.js';
-import { buildSupportReport } from '../lib/supportReport.js';
-import { createSecureBackup, parseAndValidateBackup, MAX_BACKUP_BYTES } from '../utils/secureBackup.js';
-import { useAuth } from '../context/AuthContext.jsx';
-import { ROLES } from '../security/rbac.js';
-import { PERMISSION_PURPOSES, writeSensitiveClipboard } from '../security/permissionPolicy.js';
-import { useSensitiveActionGate } from './SensitiveActionGate.jsx';
+import { syncOfflineQueue } from '../../../shared/sync/offlineSync.js';
+import { getSyncHealthSnapshot } from '../../../shared/sync/syncHealth.js';
+import { getOperationalDiagnostics } from '../../../shared/diagnostics/operationalDiagnostics.js';
+import { getPerformanceSnapshot } from '../../../shared/diagnostics/performanceMetrics.js';
+import { buildSupportReport } from '../../../shared/diagnostics/supportReport.js';
+import { createSecureBackup, parseAndValidateBackup, MAX_BACKUP_BYTES } from '../../../shared/utils/secureBackup.js';
+import { useAuth } from '../../../shared/context/AuthContext.jsx';
+import { ROLES } from '../../../shared/security/rbac.js';
+import { PERMISSION_PURPOSES, writeSensitiveClipboard } from '../../../shared/security/permissionPolicy.js';
+import { useSensitiveActionGate } from '../../../shared/components/SensitiveActionGate.jsx';
 
 /**
  * DataBackupSyncModal - Export/Import local device data & trigger cloud sync

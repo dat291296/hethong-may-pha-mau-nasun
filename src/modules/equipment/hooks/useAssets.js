@@ -1,20 +1,20 @@
-import { optimisticRemoval } from '../../../shared/lib/optimisticRemoval.js';
-import { recordDataLoadMetric } from '../../../shared/lib/performanceMetrics.js';
-import { getOfflineOwner } from '../../../shared/lib/offlineDb.js';
+import { optimisticRemoval } from '../../../shared/data-access/optimisticRemoval.js';
+import { recordDataLoadMetric } from '../../../shared/diagnostics/performanceMetrics.js';
+import { getOfflineOwner } from '../../../shared/sync/offlineDb.js';
 import {normalizeDateFields} from '../../../shared/utils/dateUtils.js';
 import {saveEquipmentReplacement,resolveEquipmentSlot,replacementCandidates,equipmentFields,EQUIPMENT_SLOTS} from '../lib/equipmentReplacement.js';
 import {normalizeDeviceType} from '../lib/deviceType.js';
 import {saveSystemSetEdit} from '../lib/systemSetEdit.js';
-import { recordOperationalError } from '../../../shared/lib/operationalDiagnostics.js';
+import { recordOperationalError } from '../../../shared/diagnostics/operationalDiagnostics.js';
 import { userErrorMessage } from '../../../shared/security/userError.js';
 import { saveDeviceEdit } from '../lib/deviceEdit.js';
-import { requireCompleteWrite } from '../../../shared/lib/guardedWrite.js';
+import { requireCompleteWrite } from '../../../shared/data-access/guardedWrite.js';
 import { ASSET_TABLES, DEVICE_TABLES, assetColumns, assetCacheKey, cachedAssetSnapshot, createAssetRefreshQueue, createAssetReadBarrier } from '../lib/assetQuery.js';
-import { fetchAllRows } from '../../../shared/lib/paginatedQuery.js';
+import { fetchAllRows } from '../../../shared/data-access/paginatedQuery.js';
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { persistMutation, persistBatchMutation } from '../../../shared/lib/durableMutation.js';
-import { createOperationId } from '../../../shared/lib/syncQueue.js';
-import { supabase, isSupabaseConfigured, safeQuery } from '../../../shared/lib/supabase.js';
+import { persistMutation, persistBatchMutation } from '../../../shared/data-access/durableMutation.js';
+import { createOperationId } from '../../../shared/sync/syncQueue.js';
+import { supabase, isSupabaseConfigured, safeQuery } from '../../../shared/data-access/supabase.js';
 import {
   INITIAL_DISPENSERS,
   INITIAL_MIXERS,
@@ -22,7 +22,7 @@ import {
   INITIAL_PRINTERS,
   INITIAL_SYSTEM_SETS,
 } from '../../../shared/data/mockData.js';
-import { cacheOfflineData, getCachedOfflineData, enqueueOfflineAction, getOfflineQueue } from '../../../shared/lib/offlineSync.js';
+import { cacheOfflineData, getCachedOfflineData, enqueueOfflineAction, getOfflineQueue } from '../../../shared/sync/offlineSync.js';
 
 /**
  * useAssets – unified hook for all physical equipment:

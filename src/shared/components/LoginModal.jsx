@@ -2,9 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { ArrowLeft, CheckCircle2, Circle, Eye, EyeOff, KeyRound, LockKeyhole, Mail, UserRound } from 'lucide-react';
 import { getAuthErrorMessage, getPasswordRuleState, shouldCountLoginFailure } from '../security/authFeedback.js';
 import { useAuth } from '../context/AuthContext.jsx';
-import { supabase } from '../lib/supabase.js';
-import { syncOfflineQueue } from '../lib/offlineSync.js';
-import { clearOfflineStorage } from '../lib/offlineDb.js';
+import { supabase } from '../data-access/supabase.js';
+import { syncOfflineQueue } from '../sync/offlineSync.js';
+import { clearOfflineStorage } from '../sync/offlineDb.js';
 import { AUTH_REDIRECT_PURPOSES, createPrivateIdentifier, getAuthRedirectUrl } from '../security/authRuntime.js';
 import { completePasswordRecovery, signInEmailAccount, registerEmailAccount, requestPasswordRecovery, resendSignupVerification } from '../security/authEmailFlows.js';
 

@@ -1,5 +1,5 @@
-import {supabase} from '../../../shared/lib/supabase.js';
-import {getOfflineOwner} from '../../../shared/lib/offlineDb.js';
+import {supabase} from '../../../shared/data-access/supabase.js';
+import {getOfflineOwner} from '../../../shared/sync/offlineDb.js';
 import {encodeFieldBlob} from './fieldAttachments.js';
 export async function loadFieldDocuments({machines,ids=null}) {
   const owner=getOfflineOwner();const assertOwner=()=>{if(!owner||getOfflineOwner()!==owner)throw Error('OFFLINE_OWNER_CHANGED');};assertOwner();

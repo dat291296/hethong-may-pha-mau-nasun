@@ -1,6 +1,6 @@
-import { isSupabaseConfigured, safeQuery } from '../../../shared/lib/supabase.js';
-import { enqueueOfflineAction } from '../../../shared/lib/offlineSync.js';
-import { isTransientMutationError } from '../../../shared/lib/durableMutation.js';
+import { isSupabaseConfigured, safeQuery } from '../../../shared/data-access/supabase.js';
+import { enqueueOfflineAction } from '../../../shared/sync/offlineSync.js';
+import { isTransientMutationError } from '../../../shared/data-access/durableMutation.js';
 import {submitFieldCommand} from '../../fieldwork/lib/fieldCommandClient.js';
 
 function createOperationId() {

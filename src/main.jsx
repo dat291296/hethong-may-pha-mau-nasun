@@ -4,8 +4,8 @@ import './index.css'
 import App from './app/App.jsx'
 import { AuthProvider } from './shared/context/AuthContext.jsx'
 import ErrorBoundary from './shared/components/ErrorBoundary.jsx'
-import { startPerformanceMonitoring } from './shared/lib/performanceMetrics.js'
-import { startErrorMonitoring } from './shared/lib/operationalDiagnostics.js'
+import { startPerformanceMonitoring } from './shared/diagnostics/performanceMetrics.js'
+import { startErrorMonitoring } from './shared/diagnostics/operationalDiagnostics.js'
 
 startPerformanceMonitoring()
 const stopErrorMonitoring = startErrorMonitoring()

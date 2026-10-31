@@ -1,13 +1,13 @@
-import {dataCompletenessAlerts} from '../../shared/lib/dataCompleteness.js';
-import { completedSyncState } from '../../shared/lib/syncPresentation.js';
+import {dataCompletenessAlerts} from '../../modules/equipment/lib/dataCompleteness.js';
+import { completedSyncState } from '../../shared/sync/syncPresentation.js';
 import { inManagedRegion, missingMachineFields, repairNeedsAction } from '../../modules/fieldwork/lib/teamWorkspace.js';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Bell, Search, PlusCircle, AlertTriangle, ShieldAlert, CheckCircle2, UserCheck, Wifi, WifiOff, RefreshCw, Menu, Database, MoreHorizontal } from 'lucide-react';
 import RoleSelector from '../../shared/components/RoleSelector.jsx';
 import { useAuth } from '../../shared/context/AuthContext.jsx';
 import { ROLE_LABELS, ROLE_COLORS } from '../../shared/security/rbac.js';
-import { getOfflineQueue, syncOfflineQueue } from '../../shared/lib/offlineSync.js';
-import DataBackupSyncModal from '../../shared/components/DataBackupSyncModal.jsx';
+import { getOfflineQueue, syncOfflineQueue } from '../../shared/sync/offlineSync.js';
+import DataBackupSyncModal from '../../modules/fieldwork/components/DataBackupSyncModal.jsx';
 
 export default function Header({ 
   activeTab, 

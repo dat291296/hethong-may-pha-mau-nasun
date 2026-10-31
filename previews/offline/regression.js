@@ -1,11 +1,11 @@
-import { migrateQueueItem } from '../../src/shared/lib/syncQueue.js';
-import {sealDataSnapshot,verifyDataSnapshot,requireUniqueDataRows} from '../../src/shared/lib/dataIntegrity.js';
+import { migrateQueueItem } from '../../src/shared/sync/syncQueue.js';
+import {sealDataSnapshot,verifyDataSnapshot,requireUniqueDataRows} from '../../src/shared/data-access/dataIntegrity.js';
 import {createOfflineAccessGrant,offlineAccessDecision} from '../../src/shared/security/offlineAccess.js';
 import {requireOfflineReplayPermission} from '../../src/shared/security/offlineReplayPolicy.js';
 import {makeFieldCommand,createFieldOutbox,requireFieldReceipt} from '../../src/modules/fieldwork/lib/fieldCommands.js';
 import {attachFieldFiles} from '../../src/modules/fieldwork/lib/fieldAttachments.js';
 import {retainReviewedCommand} from '../../src/modules/fieldwork/lib/fieldReview.js';
-import {flushBeforeAppUpdate} from '../../src/shared/lib/appUpdateSafety.js';
+import {flushBeforeAppUpdate} from '../../src/shared/updates/appUpdateSafety.js';
 const result = document.getElementById('result');
 const checks = {};
 const owner = 'stage1-synthetic-owner';
@@ -45,7 +45,7 @@ async function seedLegacy() {
 
 async function inspectCurrent() {
   verify('fullPageReloadAfterLegacySeed', sessionStorage.getItem('nasun-stage1-seeded')==='true');
-  const storage=await import('../../src/shared/lib/offlineDb.js');
+  const storage=await import('../../src/shared/sync/offlineDb.js');
   await storage.initializeOfflineStorage(owner);
   const saved=await storage.getCacheStrict(draftKey);
   verify('oldDraftAndPhotoSurviveV3ToV4',saved.value.notes==='Synthetic draft from schema v3' && saved.value.photos[0]==='synthetic-photo-marker');

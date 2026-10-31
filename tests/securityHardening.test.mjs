@@ -49,7 +49,7 @@ test('worker rejects foreign/null origins and never sends wildcard CORS',async()
  assert.equal((await worker.fetch(new Request('https://kythuat.nasun.workers.dev/'),env)).status,200);
 });
 
-import { resolveFailureState } from '../src/shared/lib/syncQueue.js';
+import { resolveFailureState } from '../src/shared/sync/syncQueue.js';
 test('sync review keeps failure classification without retaining raw SQL errors',()=>{
  const failure=resolveFailureState({attempts:0},{code:'22P02',message:'invalid input syntax for customer-private-value'},1000);
  assert.equal(failure.status,'needs_review');assert.equal(failure.lastErrorCode,'22P02');assert.doesNotMatch(failure.lastError,/customer-private-value|invalid input/);
@@ -60,7 +60,7 @@ test('machine albums validate new batches while retaining cumulative historical 
  assert.match(sql,/field='installation_photos'/);assert.match(sql,/EXCEPT ALL/);assert.match(sql,/validate_inline_image_list\(added_images\)/);
 });
 
-import { retainEncryptedDraft } from '../src/shared/lib/offlineRetention.js';
+import { retainEncryptedDraft } from '../src/shared/sync/offlineRetention.js';
 test('session cleanup retains encrypted own drafts but not master cache or foreign/unprotected rows',()=>{
  const draft={ownerId:'synthetic-A',encrypted:true,logicalKey:'form-draft:synthetic-A:repair'};
  assert.equal(retainEncryptedDraft(draft,'synthetic-A'),true);

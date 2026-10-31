@@ -1,4 +1,4 @@
-import { normalizeRegion } from '../../modules/fieldwork/lib/teamWorkspace.js';
+import { normalizeRegion } from './regions.js';
 
 export const WORKSPACE_REGIONS = ['Miền Bắc', 'Miền Trung', 'Miền Nam'];
 export function defaultWorkspaceRegion(user) {

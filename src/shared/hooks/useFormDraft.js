@@ -1,7 +1,7 @@
-import { recordOperationalError } from '../lib/operationalDiagnostics.js';
+import { recordOperationalError } from '../diagnostics/operationalDiagnostics.js';
 import { useEffect, useRef, useState } from 'react';
-import { getCacheStrict, setCache } from '../lib/offlineDb';
-import { isDraftExpired } from '../../modules/fieldwork/lib/teamWorkspace';
+import { getCacheStrict, setCache } from '../sync/offlineDb';
+import { isDraftExpired } from '../utils/draftExpiry.js';
 
 export function useFormDraft(key, value, enabled, onRestore) {
   const [existing, setExisting] = useState(null);

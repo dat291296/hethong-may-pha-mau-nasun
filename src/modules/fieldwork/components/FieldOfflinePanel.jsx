@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { buildFieldPack, FIELD_PACK_KEY, readFieldPack } from '../lib/fieldOffline.js';
-import { getCacheStrict, setCache, getOfflineOwner, getOwnedCacheEntries, getQueue } from '../../../shared/lib/offlineDb.js';
+import { getCacheStrict, setCache, getOfflineOwner, getOwnedCacheEntries, getQueue } from '../../../shared/sync/offlineDb.js';
 import './FieldOfflinePanel.css';
-import {sealDataSnapshot,verifyDataSnapshot} from '../../../shared/lib/dataIntegrity.js';
+import {sealDataSnapshot,verifyDataSnapshot} from '../../../shared/data-access/dataIntegrity.js';
 import {attachFieldFiles} from '../lib/fieldAttachments.js';
 
 function OfflineFile({file}){

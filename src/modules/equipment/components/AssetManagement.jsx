@@ -2,25 +2,25 @@ import { isRepairAwaitingReturn } from '../../repairs/lib/repairClassification.j
 import { userErrorMessage } from '../../../shared/security/userError.js';
 import {EQUIPMENT_SLOTS,resolveEquipmentSlot} from '../lib/equipmentReplacement.js';
 import EquipmentReplacementDialog from './EquipmentReplacementDialog.jsx';
-import {missingSystemSetFields} from '../../../shared/lib/dataCompleteness.js';
+import {missingSystemSetFields} from '../lib/dataCompleteness.js';
 import { assignedSetsForNpp, assertAdditionalSetConfirmed } from '../lib/assemblyGuard.js';
 import { isUnknownSerial } from '../lib/deviceSerial.js';
 import { summarizeInventory, nextWarehouseId, inventoryLinkIssues } from '../lib/inventorySummary.js';
 import { prepareDeviceEdit, findAssignedDevice, requireUniqueDeviceSerial } from '../lib/deviceEdit.js';
 import WorkspaceFilterBar from '../../../shared/components/WorkspaceFilterBar.jsx';
-import { matchesSearch, matchesDateRange, uniqueOptions, canEditRegion } from '../../../shared/lib/workspaceFilters.js';
+import { matchesSearch, matchesDateRange, uniqueOptions, canEditRegion } from '../../../shared/workspace/workspaceFilters.js';
 import TechnicalResources from '../../handbook/components/TechnicalResources';
 import { resolveMachine, resolveMachineCode } from '../lib/machineWorkspace';
 import { resolveMachineProfile, sameMachine } from '../lib/machineProfile.js';
 import { MachineProfileSummary, MachineProfileHistory } from './MachineProfileSummary.jsx';
-import { recordOperationalError } from '../../../shared/lib/operationalDiagnostics.js';
+import { recordOperationalError } from '../../../shared/diagnostics/operationalDiagnostics.js';
 import { useFormDraft } from '../../../shared/hooks/useFormDraft.js';
 import DraftNotice from '../../../shared/components/DraftNotice.jsx';
 import { searchText, missingMachineFields } from '../../fieldwork/lib/teamWorkspace';
 import React, { useState, useEffect } from 'react';
 import SafePortal from '../../../shared/components/SafePortal.jsx';
 import { useAuth } from '../../../shared/context/AuthContext.jsx';
-import { supabase, isSupabaseConfigured } from '../../../shared/lib/supabase.js';
+import { supabase, isSupabaseConfigured } from '../../../shared/data-access/supabase.js';
 import { generateNextSetCode } from '../hooks/useAssets.js';
 import { 
   Cpu, 

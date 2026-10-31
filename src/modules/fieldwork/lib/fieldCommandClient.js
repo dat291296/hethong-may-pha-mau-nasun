@@ -1,5 +1,5 @@
-import {supabase} from '../../../shared/lib/supabase.js';
-import {getOfflineOwner,getQueue,addToQueue,getCacheStrict,setCache,withOfflineLease} from '../../../shared/lib/offlineDb.js';
+import {supabase} from '../../../shared/data-access/supabase.js';
+import {getOfflineOwner,getQueue,addToQueue,getCacheStrict,setCache,withOfflineLease} from '../../../shared/sync/offlineDb.js';
 import {makeFieldCommand,createFieldOutbox,requireFieldReceipt,fieldError} from './fieldCommands.js';
 
 const receiptKey=id=>`field-receipt:${id}`;
@@ -29,7 +29,7 @@ export async function submitFieldCommand(input,options={}) {
   if(!locked.acquired)throw fieldError('SYNC_LEASE_LOST');
   const result=locked.value;
   if(!result.queued||!navigator.onLine)return result;
-  const {syncOfflineQueue}=await import('../../../shared/lib/offlineSync.js');
+  const {syncOfflineQueue}=await import('../../../shared/sync/offlineSync.js');
   await syncOfflineQueue();assertOwner();
   const receipt=await getCacheStrict(receiptKey(command.operationId));assertOwner();
   if(receipt)return {queued:false,receipt:requireFieldReceipt(command,receipt)};

@@ -26,7 +26,7 @@ import {
 } from 'lucide-react';
 import SafePortal from '../../../shared/components/SafePortal';
 import TechnicalResources from './TechnicalResources';
-import { cacheOfflineData, getCachedOfflineData } from '../../../shared/lib/offlineSync.js';
+import { cacheOfflineData, getCachedOfflineData } from '../../../shared/sync/offlineSync.js';
 
 import {
   ERROR_CODES_DATA,

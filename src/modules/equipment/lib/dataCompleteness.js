@@ -1,6 +1,6 @@
-import {getSystemSetMissingFields} from '../../modules/equipment/utils/systemSetValidation.js';
-import {isUnknownSerial} from '../../modules/equipment/lib/deviceSerial.js';
-import {inManagedRegion} from '../../modules/fieldwork/lib/teamWorkspace.js';
+import {getSystemSetMissingFields} from '../utils/systemSetValidation.js';
+import {isUnknownSerial} from './deviceSerial.js';
+import {inManagedRegion} from '../../fieldwork/lib/teamWorkspace.js';
 export function missingNppFields(npp){return [['name','Tên NPP'],['region','Miền'],['province','Tỉnh/thành'],['address','Địa chỉ'],['phone','Số điện thoại'],['contactPerson','Người liên hệ']].filter(([key])=>!String(npp[key]||'').trim()).map(([,label])=>label);}
 export function missingSystemSetFields(machine){
  const fields=getSystemSetMissingFields(machine);

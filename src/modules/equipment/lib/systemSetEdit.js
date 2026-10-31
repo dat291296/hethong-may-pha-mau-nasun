@@ -1,5 +1,5 @@
 import {normalizeDateFields} from '../../../shared/utils/dateUtils.js';
-import {requireCompleteWrite} from '../../../shared/lib/guardedWrite.js';
+import {requireCompleteWrite} from '../../../shared/data-access/guardedWrite.js';
 export async function saveSystemSetEdit(runQuery,setCode,updates,revision) {
  if(!revision || !Number.isFinite(Date.parse(revision))) throw Object.assign(new Error('Giữ bản nháp và tải lại hồ sơ máy để lấy phiên bản mới trước khi lưu.'),{code:'REVISION_REQUIRED'});
  if(updates.set_code && updates.set_code!==setCode) throw Object.assign(new Error('Không được đổi mã bộ máy.'),{code:'PERSISTENCE_DENIED'});

@@ -1,10 +1,10 @@
-import { fetchAllRows } from '../../../shared/lib/paginatedQuery.js';
+import { fetchAllRows } from '../../../shared/data-access/paginatedQuery.js';
 import { useSensitiveActionGate } from '../../../shared/components/SensitiveActionGate.jsx';
 import { matchesDocumentModel } from '../../equipment/lib/machineWorkspace';
 import React, { useEffect, useState } from 'react';
 import { FileText, ExternalLink, Upload, Trash2 } from 'lucide-react';
 import { useAuth } from '../../../shared/context/AuthContext';
-import { supabase, safeQuery } from '../../../shared/lib/supabase';
+import { supabase, safeQuery } from '../../../shared/data-access/supabase';
 import { DOCUMENT_BUCKET, resourceError, validateDocumentFile, validateDocumentUrl } from '../lib/technicalResources';
 import './technicalResources.css';
 const fields = 'id,title,category,machine_model,url,storage_path,file_name,file_size,created_at';

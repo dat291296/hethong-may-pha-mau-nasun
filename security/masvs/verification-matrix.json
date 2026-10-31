@@ -31,7 +31,7 @@
         "tests/securityMasvs2.test.mjs"
       ],
       "evidence": [
-        "src/shared/lib/offlineDb.js",
+        "src/shared/sync/offlineDb.js",
         "src/shared/platform/mobileSecurityBridge.js"
       ]
     },
@@ -151,7 +151,7 @@
     {
       "id": "MASVS-STORAGE",
       "source": [
-        "src/shared/lib/offlineDb.js"
+        "src/shared/sync/offlineDb.js"
       ],
       "evidence": [
         "security/masvs/offline-session-browser.json"
@@ -161,7 +161,7 @@
     {
       "id": "MASVS-CRYPTO",
       "source": [
-        "src/shared/lib/offlineDb.js",
+        "src/shared/sync/offlineDb.js",
         "scripts/encrypt-recovery-backup.mjs"
       ],
       "evidence": [

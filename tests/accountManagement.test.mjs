@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { authorizeAccountManagement, confirmAccountUpdate } from '../src/shared/security/accountManagement.js';
 import { hasPermission } from '../src/shared/security/rbac.js';
-import { canEditRegion } from '../src/shared/lib/workspaceFilters.js';
+import { canEditRegion } from '../src/shared/workspace/workspaceFilters.js';
 
 test('account management validates the current session without signing in again', async () => {
   const calls = [];

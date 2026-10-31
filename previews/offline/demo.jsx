@@ -5,7 +5,7 @@ import FieldOfflinePanel from '../../src/modules/fieldwork/components/FieldOffli
 import DraftNotice from '../../src/shared/components/DraftNotice.jsx';
 import {useFormDraft} from '../../src/shared/hooks/useFormDraft.js';
 import {createFieldSyncProtocol,OFFLINE_ACTIONS} from '../../src/modules/fieldwork/lib/fieldOffline.js';
-import {initializeOfflineStorage,getOfflineOwner,getCacheStrict,setCache,withOfflineLease} from '../../src/shared/lib/offlineDb.js';
+import {initializeOfflineStorage,getOfflineOwner,getCacheStrict,setCache,withOfflineLease} from '../../src/shared/sync/offlineDb.js';
 import {compressImage} from '../../src/shared/utils/imageCompressor.js';
 import {machines,npps,createDemoServer} from './server.js';
 import './style.css';

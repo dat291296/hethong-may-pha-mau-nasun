@@ -7,7 +7,7 @@
       "title": "Lưu trữ",
       "state": "source-only",
       "evidence": [
-        "src/shared/lib/offlineDb.js"
+        "src/shared/sync/offlineDb.js"
       ],
       "implemented": "Cache mã hóa theo tài khoản",
       "next": "Kiểm thử đổi tài khoản, logout và giới hạn cache; bảo toàn hàng đợi chưa gửi",
@@ -133,9 +133,9 @@
       "remaining": "Chưa nghiệm thu đầy đủ mọi màn hình có bản nháp và vòng đời PWA trên Safari/iOS; production chưa áp dụng.",
       "acceptance": "Không mất bản nháp, không ghi trùng và không âm thầm ghi đè.",
       "evidence": [
-        "src/shared/lib/offlineDb.js",
-        "src/shared/lib/offlineSync.js",
-        "src/shared/lib/syncQueue.js",
+        "src/shared/sync/offlineDb.js",
+        "src/shared/sync/offlineSync.js",
+        "src/shared/sync/syncQueue.js",
         "tests/syncQueue.test.mjs",
         "security/masvs/offline-session-browser.json"
       ],

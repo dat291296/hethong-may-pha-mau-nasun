@@ -62,7 +62,7 @@
     "MASVS-STORAGE": {
       "status": "partial",
       "evidence": [
-        "src/shared/lib/operationalDiagnostics.js",
+        "src/shared/diagnostics/operationalDiagnostics.js",
         "tests/machineProfile.test.mjs"
       ],
       "gap": "Native secure storage and backup exclusions unverified"
@@ -106,7 +106,7 @@
       "status": "partial",
       "evidence": [
         "src/shared/components/ErrorBoundary.jsx",
-        "src/shared/lib/operationalDiagnostics.js"
+        "src/shared/diagnostics/operationalDiagnostics.js"
       ],
       "gap": "Data retention, deletion and future native disclosures require acceptance; no privacy UI added"
     }

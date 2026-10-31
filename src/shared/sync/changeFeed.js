@@ -1,4 +1,4 @@
-import { supabase, isSupabaseConfigured } from './supabase.js';
+import { supabase, isSupabaseConfigured } from '../data-access/supabase.js';
 import { getCacheStrict, setCache, getOfflineOwner } from './offlineDb.js';
 import { commitSyncCheckpoint } from './syncCheckpoint.js';
 

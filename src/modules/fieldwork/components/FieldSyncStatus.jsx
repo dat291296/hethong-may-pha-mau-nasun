@@ -1,11 +1,11 @@
-import { getPerformanceSnapshot } from '../lib/performanceMetrics.js';
+import { getPerformanceSnapshot } from '../../../shared/diagnostics/performanceMetrics.js';
 import {useCallback,useEffect,useState} from 'react';
-import {getQueue,getOfflineOwner} from '../lib/offlineDb.js';
-import {fieldQueueSummary} from '../../modules/fieldwork/lib/fieldAttachments.js';
-import {syncOfflineQueue} from '../lib/offlineSync.js';
-import {userErrorMessage} from '../security/userError.js';
+import {getQueue,getOfflineOwner} from '../../../shared/sync/offlineDb.js';
+import {fieldQueueSummary} from '../lib/fieldAttachments.js';
+import {syncOfflineQueue} from '../../../shared/sync/offlineSync.js';
+import {userErrorMessage} from '../../../shared/security/userError.js';
 import './FieldSyncStatus.css';
-import {flushBeforeAppUpdate} from '../lib/appUpdateSafety.js';
+import {flushBeforeAppUpdate} from '../../../shared/updates/appUpdateSafety.js';
 function DataLoadIndicator({ loading, error, online, pending, sending }) {
  const duration = getPerformanceSnapshot().DATA_LOAD?.value;
  const label = error ? 'Chưa tải đủ dữ liệu' : sending ? 'Đang gửi thay đổi…' : !online ? 'Đang dùng bản lưu offline' : loading ? 'Đang tải dữ liệu…' : pending ? `${pending} thay đổi chờ xác nhận` : 'Dữ liệu đã tải';

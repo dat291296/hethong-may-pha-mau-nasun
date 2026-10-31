@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-const supabaseUrl = new URL('../src/shared/lib/supabase.js', import.meta.url);
+const supabaseUrl = new URL('../src/shared/data-access/supabase.js', import.meta.url);
 const authRuntimeUrl = new URL('../src/shared/security/authRuntime.js', import.meta.url);
 const loginUrl = new URL('../src/shared/components/LoginModal.jsx', import.meta.url);
 const bridgeUrl = new URL('../src/shared/platform/mobileSecurityBridge.js', import.meta.url);

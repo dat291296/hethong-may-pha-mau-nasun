@@ -1,8 +1,8 @@
 import {useCallback,useEffect,useState,useRef} from 'react';
 import {useAuth} from '../../../shared/context/AuthContext.jsx';
-import {isSupabaseConfigured,safeQuery} from '../../../shared/lib/supabase.js';
+import {isSupabaseConfigured,safeQuery} from '../../../shared/data-access/supabase.js';
 import {readReplacementEvents} from '../lib/equipmentReplacement.js';
-import {getCachedOfflineData,cacheOfflineData} from '../../../shared/lib/offlineSync.js';
+import {getCachedOfflineData,cacheOfflineData} from '../../../shared/sync/offlineSync.js';
 export function useReplacementEvents(){
  const {user}=useAuth();const owner=useRef(user?.id);owner.current=user?.id;const [events,setEvents]=useState([]);const [error,setError]=useState('');
  const refresh=useCallback(async()=>{

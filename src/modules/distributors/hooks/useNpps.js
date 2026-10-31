@@ -1,12 +1,12 @@
-import { getOfflineOwner } from '../../../shared/lib/offlineDb.js';
-import { updateWithRevision } from '../../../shared/lib/guardedWrite.js';
-import { fetchAllRows } from '../../../shared/lib/paginatedQuery.js';
+import { getOfflineOwner } from '../../../shared/sync/offlineDb.js';
+import { updateWithRevision } from '../../../shared/data-access/guardedWrite.js';
+import { fetchAllRows } from '../../../shared/data-access/paginatedQuery.js';
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { supabase, isSupabaseConfigured, safeQuery } from '../../../shared/lib/supabase.js';
-import { persistMutation, persistBatchMutation } from '../../../shared/lib/durableMutation.js';
+import { supabase, isSupabaseConfigured, safeQuery } from '../../../shared/data-access/supabase.js';
+import { persistMutation, persistBatchMutation } from '../../../shared/data-access/durableMutation.js';
 import { INITIAL_NPPS } from '../../../shared/data/mockData.js';
-import { cacheOfflineData, getCachedOfflineData, enqueueOfflineAction, getOfflineQueue } from '../../../shared/lib/offlineSync.js';
-import { recordOperationalError } from '../../../shared/lib/operationalDiagnostics.js';
+import { cacheOfflineData, getCachedOfflineData, enqueueOfflineAction, getOfflineQueue } from '../../../shared/sync/offlineSync.js';
+import { recordOperationalError } from '../../../shared/diagnostics/operationalDiagnostics.js';
 import { userErrorMessage } from '../../../shared/security/userError.js';
 
 /**

@@ -4,7 +4,7 @@ import test from 'node:test';
 
 const packageUrl = new URL('../package.json', import.meta.url);
 const utilityUrl = new URL('../src/shared/utils/secureSpreadsheet.js', import.meta.url);
-const modalUrl = new URL('../src/shared/components/ExcelImportModal.jsx', import.meta.url);
+const modalUrl = new URL('../src/modules/imports/components/ExcelImportModal.jsx', import.meta.url);
 
 test('vulnerable SheetJS package is removed in favor of ExcelJS', async () => {
   const pkg = JSON.parse(await readFile(packageUrl, 'utf8'));

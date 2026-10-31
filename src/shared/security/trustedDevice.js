@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase.js';
+import { supabase } from '../data-access/supabase.js';
 import { secureAuthStorage } from './authRuntime.js';
 
 const DEVICE_ID_KEY = 'nasun-trusted-device-id';

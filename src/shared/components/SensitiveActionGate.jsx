@@ -1,7 +1,7 @@
 import { registerTrustedDeviceSession } from '../security/trustedDevice.js';
 import { userErrorMessage } from '../security/userError.js';
 import React, { useEffect, useRef, useState } from 'react';
-import { supabase, isDevelopmentFallback } from '../lib/supabase.js';
+import { supabase, isDevelopmentFallback } from '../data-access/supabase.js';
 import { authorizeSensitiveAction, reauthenticateSensitiveAction } from '../security/sensitiveAction.js';
 
 export function useSensitiveActionGate() {

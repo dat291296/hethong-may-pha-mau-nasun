@@ -1,5 +1,5 @@
 import { searchText } from './teamWorkspace.js';
-import { requireUniqueDataRows } from '../../../shared/lib/dataIntegrity.js';
+import { requireUniqueDataRows } from '../../../shared/data-access/dataIntegrity.js';
 
 export const FIELD_PACK_TTL = 8 * 60 * 60 * 1000;
 export const FIELD_PACK_KEY = 'field-pack:v1';

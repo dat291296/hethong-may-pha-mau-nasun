@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { updateWithRevision } from '../src/shared/lib/guardedWrite.js';
+import { updateWithRevision } from '../src/shared/data-access/guardedWrite.js';
 
 // Called only after the isolated staging preflight in verify-rls.mjs.
 export async function verifyWriteIntegrity(admin) {

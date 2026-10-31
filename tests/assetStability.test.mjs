@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createAssetReadBarrier } from '../src/modules/equipment/lib/assetQuery.js';
-import { optimisticRemoval } from '../src/shared/lib/optimisticRemoval.js';
+import { optimisticRemoval } from '../src/shared/data-access/optimisticRemoval.js';
 import { summarizeDashboard } from '../src/modules/dashboard/lib/dashboardSummary.js';
 import { regionalMachineCounts } from '../src/modules/fieldwork/lib/teamWorkspace.js';
 

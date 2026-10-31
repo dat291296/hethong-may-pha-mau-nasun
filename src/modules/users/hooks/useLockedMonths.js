@@ -1,8 +1,8 @@
-import { getOfflineOwner } from '../../../shared/lib/offlineDb.js';
-import { fetchAllRows } from '../../../shared/lib/paginatedQuery.js';
+import { getOfflineOwner } from '../../../shared/sync/offlineDb.js';
+import { fetchAllRows } from '../../../shared/data-access/paginatedQuery.js';
 import { useState, useEffect, useCallback } from 'react';
-import { supabase, isSupabaseConfigured, safeQuery } from '../../../shared/lib/supabase.js';
-import { cacheOfflineData, getCachedOfflineData } from '../../../shared/lib/offlineSync.js';
+import { supabase, isSupabaseConfigured, safeQuery } from '../../../shared/data-access/supabase.js';
+import { cacheOfflineData, getCachedOfflineData } from '../../../shared/sync/offlineSync.js';
 import { useAuth } from '../../../shared/context/AuthContext.jsx';
 
 /**

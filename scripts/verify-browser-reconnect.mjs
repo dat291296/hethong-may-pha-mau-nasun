@@ -55,9 +55,9 @@ try {
 import React from 'react';
 import {createRoot} from 'react-dom/client';
 import {AuthProvider,useAuth} from '/src/shared/context/AuthContext.jsx';
-import {supabase} from '/src/shared/lib/supabase.js';
-import * as db from '/src/shared/lib/offlineDb.js';
-import {syncOfflineQueue} from '/src/shared/lib/offlineSync.js';
+import {supabase} from '/src/shared/data-access/supabase.js';
+import * as db from '/src/shared/sync/offlineDb.js';
+import {syncOfflineQueue} from '/src/shared/sync/offlineSync.js';
 import {validateTrustedDeviceSession} from '/src/shared/security/trustedDevice.js';
 async function control(action,account='A'){const r=await fetch('/__nasun_ui/'+action,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({account})});if(!r.ok)throw Error('CONTROL_FAILED');return r.json();}
 window.uiProbe={

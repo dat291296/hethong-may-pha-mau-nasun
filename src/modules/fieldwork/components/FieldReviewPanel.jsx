@@ -1,5 +1,5 @@
 import {useCallback,useEffect,useState} from 'react';
-import {getQueue,getOfflineOwner,getOwnedCacheEntries,setCache,removeFromQueue,withOfflineLease} from '../../../shared/lib/offlineDb.js';
+import {getQueue,getOfflineOwner,getOwnedCacheEntries,setCache,removeFromQueue,withOfflineLease} from '../../../shared/sync/offlineDb.js';
 import {fieldReviewDescription,retainReviewedCommand} from '../lib/fieldReview.js';
 export default function FieldReviewPanel(){
  const [pending,setPending]=useState([]),[archived,setArchived]=useState([]),[message,setMessage]=useState(''),[busy,setBusy]=useState(false);

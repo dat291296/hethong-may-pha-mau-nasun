@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createFieldSyncProtocol, buildFieldPack, readFieldPack, requireOfflineAction } from '../src/modules/fieldwork/lib/fieldOffline.js';
-import { commitSyncCheckpoint, refreshBeforeCheckpoint } from '../src/shared/lib/syncCheckpoint.js';
+import { commitSyncCheckpoint, refreshBeforeCheckpoint } from '../src/shared/sync/syncCheckpoint.js';
 
 function fixture() {
   const documents = new Map(); let account = 'a', clock = 1000, seq = 0;

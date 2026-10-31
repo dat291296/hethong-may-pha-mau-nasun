@@ -8,10 +8,10 @@ on:
       - previews/offline/**
       - scripts/*offline*
       - scripts/restore-preflight.mjs
-      - src/shared/lib/offlineDb.js
-      - src/shared/lib/syncQueue.js
+      - src/shared/sync/offlineDb.js
+      - src/shared/sync/syncQueue.js
       - src/modules/fieldwork/lib/field*.js
-      - src/shared/lib/appUpdateSafety.js
+      - src/shared/updates/appUpdateSafety.js
       - src/modules/fieldwork/components/Field*.jsx
       - src/modules/fieldwork/components/Field*.css
       - src/shared/hooks/useFormDraft.js

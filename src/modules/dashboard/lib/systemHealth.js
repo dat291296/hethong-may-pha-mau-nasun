@@ -1,5 +1,5 @@
-import {searchText} from '../../modules/fieldwork/lib/teamWorkspace.js';
-import {isUnknownSerial} from '../../modules/equipment/lib/deviceSerial.js';
+import {searchText} from '../../fieldwork/lib/teamWorkspace.js';
+import {isUnknownSerial} from '../../equipment/lib/deviceSerial.js';
 export function repairCategory(value){const text=searchText(value);if(/may chiet|dispenser/.test(text))return 'dispenser';if(/may lac|mixer|shaker/.test(text))return 'mixer';if(/may in|printer|ql700/.test(text))return 'printer';if(/may tinh|^aio$|^case$|computer/.test(text))return 'computer';return 'other';}
 const labels={computer:'Máy tính',dispenser:'Máy chiết',mixer:'Máy lắc',printer:'Máy in',other:'Khác / chưa rõ'};
 const dateKey=value=>{const key=String(value||'').slice(0,10);if(!/^\d{4}-\d{2}-\d{2}$/.test(key))return '';const parsed=new Date(key+'T00:00:00Z');return Number.isFinite(parsed.getTime())&&parsed.toISOString().slice(0,10)===key?key:'';};

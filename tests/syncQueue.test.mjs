@@ -6,7 +6,7 @@ import {
   classifySyncError,
   getRetryDelay,
   migrateQueueItem
-} from '../src/shared/lib/syncQueue.js';
+} from '../src/shared/sync/syncQueue.js';
 
 test('migrates a legacy queue item without changing its stable id', () => {
   const migrated = migrateQueueItem({ id: 'action-1', action: 'EDIT_NPP', timestamp: 100 }, 200);

@@ -13,7 +13,7 @@ const profileUrl = new URL('../security/masvs/profile.json', import.meta.url);
 const networkPolicyUrl = new URL('../security/masvs/network-policy.json', import.meta.url);
 const headersUrl = new URL('../public/_headers', import.meta.url);
 const gpsUrl = new URL('../src/shared/utils/gpsHelper.js', import.meta.url);
-const supabaseUrl = new URL('../src/shared/lib/supabase.js', import.meta.url);
+const supabaseUrl = new URL('../src/shared/data-access/supabase.js', import.meta.url);
 
 test('Supabase transport accepts only HTTPS project endpoints', () => {
   assert.equal(validateSupabaseEndpoint('https://project-ref.supabase.co'), 'https://project-ref.supabase.co');

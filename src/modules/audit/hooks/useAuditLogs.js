@@ -1,9 +1,9 @@
-import { getOfflineOwner } from '../../../shared/lib/offlineDb.js';
-import { fetchAllRows } from '../../../shared/lib/paginatedQuery.js';
+import { getOfflineOwner } from '../../../shared/sync/offlineDb.js';
+import { fetchAllRows } from '../../../shared/data-access/paginatedQuery.js';
 import { useState, useEffect, useCallback } from 'react';
-import { supabase, isSupabaseConfigured, safeQuery } from '../../../shared/lib/supabase.js';
+import { supabase, isSupabaseConfigured, safeQuery } from '../../../shared/data-access/supabase.js';
 import { INITIAL_AUDIT_LOGS } from '../../../shared/data/mockData.js';
-import { cacheOfflineData, getCachedOfflineData, enqueueOfflineAction } from '../../../shared/lib/offlineSync.js';
+import { cacheOfflineData, getCachedOfflineData, enqueueOfflineAction } from '../../../shared/sync/offlineSync.js';
 
 function canRetryOffline(error) {
   return !error?.code || error.code === 'QUERY_TIMEOUT';

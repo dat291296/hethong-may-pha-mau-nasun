@@ -1,6 +1,6 @@
 import React from 'react';
 import { AlertTriangle, RefreshCw, HardDrive } from 'lucide-react';
-import { recordOperationalError } from '../lib/operationalDiagnostics.js';
+import { recordOperationalError } from '../diagnostics/operationalDiagnostics.js';
 
 /**
  * ErrorBoundary - Catches unhandled React crashes & Service Worker stale cache errors.

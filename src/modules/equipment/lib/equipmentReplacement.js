@@ -1,4 +1,4 @@
-import {fetchAllRows} from '../../../shared/lib/paginatedQuery.js';
+import {fetchAllRows} from '../../../shared/data-access/paginatedQuery.js';
 export const EQUIPMENT_SLOTS=[{category:'computer',label:'Máy tính',table:'computers'},{category:'dispenser',label:'Máy chiết',table:'dispensers'},{category:'mixer',label:'Máy lắc',table:'mixers'},{category:'printer',label:'Máy in',table:'printers'}];
 export const READY_STATUSES=new Set(['Mới 100%','Đang chạy tốt','Đã đổi trả máy mới','Đổi trả máy cũ','Đã đổi trả máy cũ']);
 export function resolveEquipmentSlot(machine,category,devices){

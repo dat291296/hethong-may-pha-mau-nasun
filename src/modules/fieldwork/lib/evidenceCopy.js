@@ -1,4 +1,4 @@
-import {inspectEvidenceImage,evidenceIdentity} from '../../../supabase/functions/_shared/evidenceProtocol.js';
+import {inspectEvidenceImage,evidenceIdentity} from '../../../../supabase/functions/_shared/evidenceProtocol.js';
 export async function deriveLegacyEvidenceIntent({owner,setCode,index,sha256}){
  owner=evidenceIdentity(owner);
  if(typeof setCode!=='string'||!setCode||setCode.length>120||!Number.isSafeInteger(index)||index<0||!/^[0-9a-f]{64}$/.test(sha256))throw Error('INVALID_LEGACY_EVIDENCE_IDENTITY');

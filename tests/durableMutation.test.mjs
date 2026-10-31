@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { persistMutation, persistQueueReplacement } from '../src/shared/lib/durableMutation.js';
+import { persistMutation, persistQueueReplacement } from '../src/shared/data-access/durableMutation.js';
 
 test('permission and validation failures never become queued successes', async () => {
   for (const error of [{ code: '42501', message: 'permission denied' }, { code: '23505', message: 'duplicate key' }]) {

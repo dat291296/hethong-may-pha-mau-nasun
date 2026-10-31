@@ -3,7 +3,7 @@ import { calculateRoadRoute } from '../lib/routeEstimate.js';
 import React, { useState, useMemo, useEffect } from 'react';
 import { useAuth } from '../../../shared/context/AuthContext';
 import { useWorkspaceState } from '../../../shared/hooks/useWorkspaceState';
-import { matchesSearch } from '../../../shared/lib/workspaceFilters.js';
+import { matchesSearch } from '../../../shared/workspace/workspaceFilters.js';
 import {
   Navigation,
   MapPin,

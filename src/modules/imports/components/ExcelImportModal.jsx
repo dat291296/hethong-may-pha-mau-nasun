@@ -1,4 +1,4 @@
-import { userErrorMessage } from '../security/userError.js';
+import { userErrorMessage } from '../../../shared/security/userError.js';
 import React, { useState, useCallback, useRef } from 'react';
 import {
   Upload,
@@ -11,8 +11,8 @@ import {
   ChevronDown,
   Loader2
 } from 'lucide-react';
-import { sanitizeForSheet, sanitizeText, validatePhone, validateSerial, validateGps } from '../security/sanitize.js';
-import { downloadSpreadsheet, parseSpreadsheetFile } from '../utils/secureSpreadsheet.js';
+import { sanitizeForSheet, sanitizeText, validatePhone, validateSerial, validateGps } from '../../../shared/security/sanitize.js';
+import { downloadSpreadsheet, parseSpreadsheetFile } from '../../../shared/utils/secureSpreadsheet.js';
 
 
 // ─────────────────────────────────────────────

@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const migrationUrl = new URL('../supabase/sync_sec_module_3_change_feed.sql', import.meta.url);
-const feedUrl = new URL('../src/shared/lib/changeFeed.js', import.meta.url);
+const feedUrl = new URL('../src/shared/sync/changeFeed.js', import.meta.url);
 const appUrl = new URL('../src/app/App.jsx', import.meta.url);
 
 test('module 3 adds a monotonic feed without mutating business rows', async () => {

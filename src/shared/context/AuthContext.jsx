@@ -2,10 +2,10 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { createAuthEventScheduler } from '../security/authEventScheduler.js';
 import { redactSecurityDetails } from '../security/securityEvents.js';
 import { ROLES, ROLE_LABELS, hasPermission } from '../security/rbac.js';
-import { supabase, isSupabaseConfigured, isDevelopmentFallback } from '../lib/supabase.js';
-import { clearOfflineStorage, getCacheStrict, getQueue, initializeOfflineStorage, setCache, removeCache } from '../lib/offlineDb.js';
+import { supabase, isSupabaseConfigured, isDevelopmentFallback } from '../data-access/supabase.js';
+import { clearOfflineStorage, getCacheStrict, getQueue, initializeOfflineStorage, setCache, removeCache } from '../sync/offlineDb.js';
 import { OFFLINE_GRANT_KEY, createOfflineAccessGrant, offlineAccessDecision, requireCurrentReplayScope } from '../security/offlineAccess.js';
-import { syncOfflineQueue } from '../lib/offlineSync.js';
+import { syncOfflineQueue } from '../sync/offlineSync.js';
 import { registerTrustedDeviceSession, validateTrustedDeviceSession } from '../security/trustedDevice.js';
 
 // ─── Auth Context ─────────────────────────────────────────────────────────────

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-const offlineDbUrl = new URL('../src/shared/lib/offlineDb.js', import.meta.url);
+const offlineDbUrl = new URL('../src/shared/sync/offlineDb.js', import.meta.url);
 const authContextUrl = new URL('../src/shared/context/AuthContext.jsx', import.meta.url);
 const cacheFiles = [
   new URL('../src/app/App.jsx', import.meta.url),

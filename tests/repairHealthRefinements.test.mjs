@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {normalizeCalendarDate,normalizeDateFields,normalizeOptionalTimestamp} from '../src/shared/utils/dateUtils.js';
 import {saveSystemSetEdit} from '../src/modules/equipment/lib/systemSetEdit.js';
-import {buildSystemHealth} from '../src/shared/lib/systemHealth.js';
+import {buildSystemHealth} from '../src/modules/dashboard/lib/systemHealth.js';
 import {repairListPage,repairStringList,hasMalformedRepairLists,uniqueAssignedMachine} from '../src/modules/repairs/lib/repairList.js';
 test('calendar dates preserve valid dates, convert Vietnamese input and reject impossible dates',()=>{
  for(const value of ['', '  ',null,undefined])assert.equal(normalizeCalendarDate(value),null);

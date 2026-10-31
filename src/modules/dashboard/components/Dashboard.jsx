@@ -1,6 +1,6 @@
 import { requiresRepairReturn, isRepairAwaitingReturn, repairReturnLabel } from '../../repairs/lib/repairClassification.js';
-import SystemHealthPanel from '../../../shared/components/SystemHealthPanel.jsx';
-import {matchesSearch} from '../../../shared/lib/workspaceFilters.js';
+import SystemHealthPanel from './SystemHealthPanel.jsx';
+import {matchesSearch} from '../../../shared/workspace/workspaceFilters.js';
 import { WorkspaceRegionContext } from '../../../shared/hooks/useWorkspaceState.js';
 import { nppCoverage } from '../../distributors/lib/nppCoverage.js';
 import { summarizeDashboard } from '../lib/dashboardSummary.js';

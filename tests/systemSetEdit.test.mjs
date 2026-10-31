@@ -16,7 +16,7 @@ test('stale or permission-filtered writes and missing revisions never report sav
 });
 
 test('missing server capabilities require review while network loss remains retryable',async()=>{
- const {classifySyncError}=await import('../src/shared/lib/syncQueue.js');
+ const {classifySyncError}=await import('../src/shared/sync/syncQueue.js');
  for(const code of ['REVISION_REQUIRED','SCHEMA_MIGRATION_REQUIRED','WORKFLOW_MIGRATION_REQUIRED'])assert.equal(classifySyncError({code}),'needs_review');
  assert.equal(classifySyncError({message:'Failed to fetch'}),'retry_wait');
 });

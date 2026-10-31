@@ -2,14 +2,14 @@ import { userErrorMessage } from '../security/userError.js';
 import {saveSystemSetEdit} from '../../modules/equipment/lib/systemSetEdit.js';
 import { normalizeOptionalSerial } from '../../modules/equipment/lib/deviceSerial.js';
 import { assertAuditAppendOnly } from '../../modules/audit/lib/auditPolicy.js';
-import { supabase, isSupabaseConfigured } from './supabase';
+import { supabase, isSupabaseConfigured } from '../data-access/supabase';
 import { addToQueue, getQueue, removeFromQueue, clearQueue, setCache, getCache, getOfflineOwner, withOfflineLease } from './offlineDb';
 import { createOperationId, migrateQueueItem, classifySyncError, resolveFailureState } from './syncQueue';
 import { buildSyncEnvelope, resolveSyncEntity } from './syncContract.js';
 import { getTrustedDeviceId, validateTrustedDeviceSession } from '../security/trustedDevice.js';
 import { requireReplaySession } from '../security/replaySession.js';
 import { requireOfflineReplayPermission } from '../security/offlineReplayPolicy.js';
-import { persistQueueReplacement } from './durableMutation.js';
+import { persistQueueReplacement } from '../data-access/durableMutation.js';
 import {replayFieldCommand} from '../../modules/fieldwork/lib/fieldCommandClient.js';
 
 let activeSyncPromise = null;

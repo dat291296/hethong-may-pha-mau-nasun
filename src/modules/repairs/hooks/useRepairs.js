@@ -1,13 +1,13 @@
-import { getOfflineOwner } from '../../../shared/lib/offlineDb.js';
+import { getOfflineOwner } from '../../../shared/sync/offlineDb.js';
 import {submitFieldCommand} from '../../fieldwork/lib/fieldCommandClient.js';
-import {recordOperationalError} from '../../../shared/lib/operationalDiagnostics.js';
+import {recordOperationalError} from '../../../shared/diagnostics/operationalDiagnostics.js';
 import {normalizeCalendarDate,normalizeOptionalTimestamp} from '../../../shared/utils/dateUtils.js';
-import { persistMutation, persistBatchMutation } from '../../../shared/lib/durableMutation.js';
-import { fetchAllRows } from '../../../shared/lib/paginatedQuery.js';
+import { persistMutation, persistBatchMutation } from '../../../shared/data-access/durableMutation.js';
+import { fetchAllRows } from '../../../shared/data-access/paginatedQuery.js';
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { supabase, isSupabaseConfigured, safeQuery } from '../../../shared/lib/supabase.js';
+import { supabase, isSupabaseConfigured, safeQuery } from '../../../shared/data-access/supabase.js';
 import { INITIAL_REPAIR_TICKETS } from '../../../shared/data/mockData.js';
-import { cacheOfflineData, getCachedOfflineData, enqueueOfflineAction, getOfflineQueue } from '../../../shared/lib/offlineSync.js';
+import { cacheOfflineData, getCachedOfflineData, enqueueOfflineAction, getOfflineQueue } from '../../../shared/sync/offlineSync.js';
 
 function normalizeProductCategory(category, machineModel = '') {
   const raw = String(category || '').trim();

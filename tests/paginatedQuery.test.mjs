@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { fetchAllRows } from '../src/shared/lib/paginatedQuery.js';
+import { fetchAllRows } from '../src/shared/data-access/paginatedQuery.js';
 
 function query() { return { range: (from, to) => ({ from, to }) }; }
 

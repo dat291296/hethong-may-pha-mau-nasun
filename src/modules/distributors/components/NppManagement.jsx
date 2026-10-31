@@ -1,10 +1,10 @@
 import { userErrorMessage } from '../../../shared/security/userError.js';
-import {missingNppFields} from '../../../shared/lib/dataCompleteness.js';
-import { isSupabaseConfigured } from '../../../shared/lib/supabase.js';
+import {missingNppFields} from '../../equipment/lib/dataCompleteness.js';
+import { isSupabaseConfigured } from '../../../shared/data-access/supabase.js';
 import { nextNppCode, validateNppCode } from '../lib/nppCodes.js';
 import { nppCoverage, assignedNppSets } from '../lib/nppCoverage.js';
 import WorkspaceFilterBar from '../../../shared/components/WorkspaceFilterBar.jsx';
-import { matchesSearch, matchesDateRange, uniqueOptions } from '../../../shared/lib/workspaceFilters.js';
+import { matchesSearch, matchesDateRange, uniqueOptions } from '../../../shared/workspace/workspaceFilters.js';
 import { useWorkspaceState, useWorkspaceScroll } from '../../../shared/hooks/useWorkspaceState.js';
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';

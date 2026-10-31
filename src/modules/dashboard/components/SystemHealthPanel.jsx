@@ -1,8 +1,8 @@
 import React,{useMemo,useState} from 'react';
 import {BarChart,Bar,XAxis,YAxis,Tooltip,ResponsiveContainer,CartesianGrid,Legend} from 'recharts';
 import {buildSystemHealth} from '../lib/systemHealth.js';
-import SafePortal from './SafePortal.jsx';
-import {useModalScrollLock} from '../hooks/useModalScrollLock.js';
+import SafePortal from '../../../shared/components/SafePortal.jsx';
+import {useModalScrollLock} from '../../../shared/hooks/useModalScrollLock.js';
 const chartStyle={background:'#0f172a',border:'1px solid #334155',borderRadius:8,color:'#f1f5f9'};
 function Chart({rows,title,onPick,stacked=true,limit=8}){
  return <article className="health-chart"><h4>{title}</h4>{rows.length?<><ResponsiveContainer width="100%" height={220}><BarChart data={rows.slice(0,limit)} margin={{left:0,right:12,bottom:18}}><CartesianGrid stroke="#334155" strokeDasharray="3 3"/><XAxis dataKey="name" tick={{fill:'#94a3b8',fontSize:10}} tickFormatter={value=>value.length>20?value.slice(0,18)+'…':value}/><YAxis allowDecimals={false} tick={{fill:'#94a3b8',fontSize:11}}/><Tooltip contentStyle={chartStyle}/>{stacked?<><Legend/><Bar dataKey="repairs" name="Sửa chữa" stackId="reports" fill="#38bdf8" onClick={onPick}/><Bar dataKey="exchanges" name="Đổi trả" stackId="reports" fill="#f59e0b" onClick={onPick}/></>:<Bar dataKey="total" name="Số bộ máy" fill="#34d399"/>}</BarChart></ResponsiveContainer>{stacked&&<div className="health-chart-links">{rows.slice(0,limit).map(row=><button className="btn btn-secondary btn-sm" key={row.id} onClick={()=>onPick(row)}>{row.name} ({row.total})</button>)}</div>}</>:<p className="resource-muted">Chưa có phiếu phù hợp trong kỳ.</p>}</article>;

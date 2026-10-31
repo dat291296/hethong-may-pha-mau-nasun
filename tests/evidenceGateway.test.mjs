@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createEvidenceGateway,inspectEvidenceImage} from '../supabase/functions/_shared/evidenceProtocol.js';
-import {copyLegacyEvidence,deriveLegacyEvidenceIntent} from '../src/shared/lib/evidenceCopy.js';
+import {copyLegacyEvidence,deriveLegacyEvidenceIntent} from '../src/modules/fieldwork/lib/evidenceCopy.js';
 const actor='10000000-0000-4000-8000-000000000001',session='20000000-0000-4000-8000-000000000001';
 const id='30000000-0000-4000-8000-000000000001',operationId='40000000-0000-4000-8000-000000000001';
 const image='data:image/png;base64,iVBORw0KGgo=';

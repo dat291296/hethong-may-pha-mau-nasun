@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {dataChecksum,sealDataSnapshot,verifyDataSnapshot,requireUniqueDataRows,canonicalData} from '../src/shared/lib/dataIntegrity.js';
+import {dataChecksum,sealDataSnapshot,verifyDataSnapshot,requireUniqueDataRows,canonicalData} from '../src/shared/data-access/dataIntegrity.js';
 test('snapshot checksum is stable across property order and detects tampering',async()=>{
  assert.equal(await dataChecksum({b:2,a:1}),await dataChecksum({a:1,b:2}));
  const value=await sealDataSnapshot({owner:'A',rows:[{id:'S1',notes:'Giữ dữ liệu cũ'}]});assert.equal(await verifyDataSnapshot(value),true);

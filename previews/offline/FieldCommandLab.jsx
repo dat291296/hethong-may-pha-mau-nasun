@@ -1,8 +1,8 @@
 import {useEffect,useState} from 'react';
 import {makeFieldCommand,createFieldOutbox,requireFieldReceipt} from '../../src/modules/fieldwork/lib/fieldCommands.js';
-import {getOfflineOwner,getQueue,addToQueue,removeFromQueue,getCacheStrict,setCache,withOfflineLease} from '../../src/shared/lib/offlineDb.js';
+import {getOfflineOwner,getQueue,addToQueue,removeFromQueue,getCacheStrict,setCache,withOfflineLease} from '../../src/shared/sync/offlineDb.js';
 import {fieldQueueSummary} from '../../src/modules/fieldwork/lib/fieldAttachments.js';
-import {resolveFailureState} from '../../src/shared/lib/syncQueue.js';
+import {resolveFailureState} from '../../src/shared/sync/syncQueue.js';
 import FieldReviewPanel from '../../src/modules/fieldwork/components/FieldReviewPanel.jsx';
 const initialRevision='2026-10-27T01:00:00.000Z';
 export default function FieldCommandLab({mode,quota}){

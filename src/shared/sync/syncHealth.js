@@ -1,5 +1,5 @@
 import { getQueue } from './offlineDb.js';
-import { supabase, isSupabaseConfigured } from './supabase.js';
+import { supabase, isSupabaseConfigured } from '../data-access/supabase.js';
 import { SYNC_ENGINE_VERSION } from './syncQueue.js';
 
 let transportState = { status: 'POLLING', error: null, at: null };

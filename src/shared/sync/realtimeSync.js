@@ -1,4 +1,4 @@
-import { supabase, isSupabaseConfigured } from './supabase.js';
+import { supabase, isSupabaseConfigured } from '../data-access/supabase.js';
 import { pullChangeFeed } from './changeFeed.js';
 
 function normalizeTopicRegion(region) {

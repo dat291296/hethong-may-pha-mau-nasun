@@ -1,6 +1,6 @@
 import { userErrorMessage } from '../../../shared/security/userError.js';
 import WorkspaceFilterBar from '../../../shared/components/WorkspaceFilterBar.jsx';
-import { matchesSearch, matchesDateRange, uniqueOptions, REGIONS, canEditRegion } from '../../../shared/lib/workspaceFilters.js';
+import { matchesSearch, matchesDateRange, uniqueOptions, REGIONS, canEditRegion } from '../../../shared/workspace/workspaceFilters.js';
 import { useAuth } from '../../../shared/context/AuthContext.jsx';
 import { useWorkspaceState, useWorkspaceScroll } from '../../../shared/hooks/useWorkspaceState.js';
 import { resolveMachine } from '../../equipment/lib/machineWorkspace';

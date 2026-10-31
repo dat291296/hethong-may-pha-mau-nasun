@@ -1,5 +1,5 @@
 import {inspectEvidenceImage} from '../../../../supabase/functions/_shared/evidenceProtocol.js';
-import {dataChecksum} from '../../../shared/lib/dataIntegrity.js';
+import {dataChecksum} from '../../../shared/data-access/dataIntegrity.js';
 export const MAX_FIELD_ATTACHMENT_BYTES=8*1024*1024;
 export async function encodeFieldBlob(blob) {
   if(!blob?.size||blob.size>2*1024*1024)throw Error('Tệp tải offline phải nhỏ hơn 2 MB.');

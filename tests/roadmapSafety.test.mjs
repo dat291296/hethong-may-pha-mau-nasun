@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {validateRepairReturn} from '../src/modules/repairs/lib/repairLifecycle.js';
-import {buildSupportReport} from '../src/shared/lib/supportReport.js';
+import {buildSupportReport} from '../src/shared/diagnostics/supportReport.js';
 test('unfinished repairs cannot be sent back but completed and legacy unreturned repairs remain editable',()=>{
  for(const processingStatus of ['Chưa xử lý','Đang xử lý',undefined]) assert.throws(()=>validateRepairReturn({processingStatus,customerReturnStatus:'Đã gửi trả'}),{code:'INVALID_REPAIR_RETURN'});
  assert.doesNotThrow(()=>validateRepairReturn({processingStatus:'Đã xử lý',customerReturnStatus:'Đã gửi trả'}));

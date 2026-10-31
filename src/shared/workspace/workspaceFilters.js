@@ -1,4 +1,4 @@
-import { searchText } from '../../modules/fieldwork/lib/teamWorkspace.js';
+import { searchText } from '../utils/searchText.js';
 
 export const REGIONS = ['Miền Bắc', 'Miền Trung', 'Miền Nam'];
 export function matchesSearch(query, values) {

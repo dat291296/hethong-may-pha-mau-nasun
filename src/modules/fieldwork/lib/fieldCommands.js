@@ -1,4 +1,4 @@
-import { canonicalData, dataChecksum } from '../../../shared/lib/dataIntegrity.js';
+import { canonicalData, dataChecksum } from '../../../shared/data-access/dataIntegrity.js';
 
 export const FIELD_COMMAND_VERSION = 1;
 export const MAX_FIELD_OUTBOX_BYTES=32*1024*1024;

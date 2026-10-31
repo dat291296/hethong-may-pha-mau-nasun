@@ -1,3 +1,8 @@
+import { searchText } from '../../../shared/utils/searchText.js';
+import { normalizeRegion } from '../../../shared/workspace/regions.js';
+export { searchText } from '../../../shared/utils/searchText.js';
+export { isDraftExpired } from '../../../shared/utils/draftExpiry.js';
+export { normalizeRegion, inManagedRegion } from '../../../shared/workspace/regions.js';
 import { isRepairAwaitingReturn } from '../../repairs/lib/repairClassification.js';
 import { isUnknownSerial } from '../../equipment/lib/deviceSerial.js';
 export function isAssignedTo(item, user) {
@@ -20,14 +25,6 @@ export function missingMachineFields(machine) {
   ].filter(([key]) => isUnknownSerial(machine[key])).map(([, label]) => label);
 }
 
-export function isDraftExpired(draft, now = Date.now()) {
-  return !draft?.savedAt || now - draft.savedAt > 30 * 86400000;
-}
-
-export function searchText(value) {
-  return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[đĐ]/g, 'd').toLowerCase();
-}
-
 function canonical(value) {
   if (Array.isArray(value)) return value.map(canonical);
   if (value && typeof value === 'object') return Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])]));
@@ -38,24 +35,11 @@ export function matchesSavedRepair(row, payload) {
   return Boolean(row && Object.entries(payload).every(([key, value]) => value === undefined || JSON.stringify(canonical(row[key])) === JSON.stringify(canonical(value))));
 }
 
-export function normalizeRegion(value) {
-  const region = searchText(value).replace(/^(mien|khu vuc)\s+/, '').trim();
-  return { bac: 'Miền Bắc', trung: 'Miền Trung', nam: 'Miền Nam' }[region] || '';
-}
-
 export function regionalMachineCounts(systemSets, npps = []) {
   return ['Miền Bắc', 'Miền Trung', 'Miền Nam'].map(region => {
     const machines = systemSets.filter(machine => normalizeRegion(machine.region || npps.find(npp => npp.id === machine.nppId)?.region) === region);
     return { name: region, count: machines.length, installed: machines.filter(machine => machine.status === 'DA_LAP_DAT').length };
   });
-}
-
-export function inManagedRegion(item, user, npps = [], systemSets = []) {
-  if (['admin', 'viewer'].includes(user?.role)) return true;
-  const assignedRegion = normalizeRegion(user?.managedRegion);
-  const machine = systemSets.find(set => (item.setCode && set.setCode === item.setCode) || (item.nppId && set.nppId === item.nppId));
-  const region = normalizeRegion(npps.find(npp => npp.id === (item.nppId || machine?.nppId))?.region || machine?.region || item.region);
-  return Boolean(assignedRegion && region === assignedRegion);
 }
 
 export function taskPriority(task, today) {

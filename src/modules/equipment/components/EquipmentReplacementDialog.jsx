@@ -3,7 +3,7 @@ import React,{useMemo,useRef,useState} from 'react';
 import {useAuth} from '../../../shared/context/AuthContext.jsx';
 import {useFormDraft} from '../../../shared/hooks/useFormDraft.js';
 import {replacementCandidates} from '../lib/equipmentReplacement.js';
-import {matchesSearch} from '../../../shared/lib/workspaceFilters.js';
+import {matchesSearch} from '../../../shared/workspace/workspaceFilters.js';
 import DraftNotice from '../../../shared/components/DraftNotice.jsx';
 import SafePortal from '../../../shared/components/SafePortal.jsx';
 export default function EquipmentReplacementDialog({machine,slot,devices,onSave,onClose}){

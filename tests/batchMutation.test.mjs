@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { persistBatchMutation } from '../src/shared/lib/durableMutation.js';
+import { persistBatchMutation } from '../src/shared/data-access/durableMutation.js';
 const items=[{id:'one'},{id:'two'}];
 test('batch import rejects incomplete acknowledgements and never queues permission errors',async()=>{
   let queued=0;

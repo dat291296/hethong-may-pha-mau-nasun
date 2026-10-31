@@ -1,6 +1,6 @@
 import { userErrorMessage } from '../../../shared/security/userError.js';
 import React, { useState, useEffect } from 'react';
-import { supabase, isSupabaseConfigured } from '../../../shared/lib/supabase.js';
+import { supabase, isSupabaseConfigured } from '../../../shared/data-access/supabase.js';
 import { useAuth } from '../../../shared/context/AuthContext.jsx';
 import { authorizeAccountManagement, confirmAccountUpdate } from '../../../shared/security/accountManagement.js';
 import { UserCheck, ShieldAlert, Trash2, Key, RefreshCw, Award, Lock, Unlock, Calendar, ExternalLink } from 'lucide-react';

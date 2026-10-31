@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { defaultWorkspaceRegion, WORKSPACE_REGIONS } from '../../shared/lib/regionalWorkspace.js';
+import { defaultWorkspaceRegion, WORKSPACE_REGIONS } from '../../shared/workspace/regionalWorkspace.js';
 
 export default function RegionalWorkspaceBar({ user, region, onChange, counts, extra, compact = false }) {
   const [expanded, setExpanded] = useState(false);

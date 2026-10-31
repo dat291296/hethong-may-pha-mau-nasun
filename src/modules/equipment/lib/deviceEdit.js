@@ -1,5 +1,5 @@
 import { normalizeOptionalSerial } from './deviceSerial.js';
-import { requireCompleteWrite } from '../../../shared/lib/guardedWrite.js';
+import { requireCompleteWrite } from '../../../shared/data-access/guardedWrite.js';
 
 export function requireUniqueDeviceSerial(serial, originalId, devices, sets, npps = []) {
   const normalized = value => String(value || '').trim().toLocaleUpperCase('en');

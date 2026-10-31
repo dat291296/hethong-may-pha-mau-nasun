@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { completedSyncState } from '../src/shared/lib/syncPresentation.js';
+import { completedSyncState } from '../src/shared/sync/syncPresentation.js';
 import { nextWarehouseId } from '../src/modules/equipment/lib/inventorySummary.js';
 import { requireReplaySession } from '../src/shared/security/replaySession.js';
 

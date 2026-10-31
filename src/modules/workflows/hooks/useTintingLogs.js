@@ -1,9 +1,9 @@
-import { getOfflineOwner } from '../lib/offlineDb.js';
-import { fetchAllRows } from '../lib/paginatedQuery.js';
+import { getOfflineOwner } from '../../../shared/sync/offlineDb.js';
+import { fetchAllRows } from '../../../shared/data-access/paginatedQuery.js';
 import { useState, useEffect, useCallback } from 'react';
-import { supabase, isSupabaseConfigured, safeQuery } from '../lib/supabase.js';
-import { INITIAL_TINTING_LOGS } from '../data/mockData.js';
-import { cacheOfflineData, getCachedOfflineData } from '../lib/offlineSync.js';
+import { supabase, isSupabaseConfigured, safeQuery } from '../../../shared/data-access/supabase.js';
+import { INITIAL_TINTING_LOGS } from '../../../shared/data/mockData.js';
+import { cacheOfflineData, getCachedOfflineData } from '../../../shared/sync/offlineSync.js';
 
 export function useTintingLogs() {
   const [tintingLogs, setTintingLogs] = useState(INITIAL_TINTING_LOGS);

@@ -1,5 +1,5 @@
 import React from 'react';
-import {recordOperationalError} from '../../../shared/lib/operationalDiagnostics.js';
+import {recordOperationalError} from '../../../shared/diagnostics/operationalDiagnostics.js';
 export default class RepairWorkspaceBoundary extends React.Component {
   state={failed:false};
   static getDerivedStateFromError(){return {failed:true};}
