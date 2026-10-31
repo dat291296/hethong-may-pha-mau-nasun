@@ -1,3 +1,4 @@
+import { searchText as normalize } from '../../shared/utils/searchText.js';
 import {dataCompletenessAlerts} from '../../modules/equipment/lib/dataCompleteness.js';
 import { completedSyncState } from '../../shared/sync/syncPresentation.js';
 import { inManagedRegion, missingMachineFields, repairNeedsAction } from '../../modules/fieldwork/lib/teamWorkspace.js';
@@ -163,7 +164,6 @@ export default function Header({
     techHandbook: 'Sổ tay kỹ thuật', routeMap: 'Tuyến công tác', auditLogs: 'Nhật ký', users: 'Quản lý người dùng',
   }[activeTab] || getTitle();
   const searchResults = useMemo(() => {
-    const normalize = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[đĐ]/g, 'd').toLowerCase();
     const term = normalize(globalSearch.trim());
     if (!term) return [];
     return [
