@@ -1,4 +1,4 @@
-import { reauthenticateSensitiveAction } from '../src/security/sensitiveAction.js';
+import { reauthenticateSensitiveAction } from '../src/shared/security/sensitiveAction.js';
 import assert from 'node:assert/strict';
 import { createClient } from '@supabase/supabase-js';
 import { registerTestSession } from './register-test-session.mjs';

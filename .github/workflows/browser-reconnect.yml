@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
   push:
     branches: [codex/nasun-staging-integrity]
-    paths: [scripts/verify-browser-reconnect.mjs, .github/workflows/browser-reconnect.yml, src/context/AuthContext.jsx, src/lib/offlineDb.js, src/security/replaySession.js]
+    paths: [scripts/verify-browser-reconnect.mjs, .github/workflows/browser-reconnect.yml, src/shared/context/AuthContext.jsx, src/shared/sync/offlineDb.js, src/shared/security/replaySession.js]
 permissions:
   contents: read
 concurrency:

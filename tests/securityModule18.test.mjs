@@ -3,9 +3,9 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const migrationUrl = new URL('../supabase/security_module_18_disable_mfa.sql', import.meta.url);
-const authUrl = new URL('../src/context/AuthContext.jsx', import.meta.url);
-const loginUrl = new URL('../src/components/LoginModal.jsx', import.meta.url);
-const appUrl = new URL('../src/App.jsx', import.meta.url);
+const authUrl = new URL('../src/shared/context/AuthContext.jsx', import.meta.url);
+const loginUrl = new URL('../src/shared/components/LoginModal.jsx', import.meta.url);
+const appUrl = new URL('../src/app/App.jsx', import.meta.url);
 
 test('MFA requirement is disabled without modifying business tables', async () => {
   const sql = await readFile(migrationUrl, 'utf8');

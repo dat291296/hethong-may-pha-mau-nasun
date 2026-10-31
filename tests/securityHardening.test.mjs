@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
-import { userErrorMessage } from '../src/security/userError.js';
+import { userErrorMessage } from '../src/shared/security/userError.js';
 test('provider errors do not expose SQL, submitted values or hints',()=>{
  for(const error of [{code:'22P02',message:'invalid input customer-private-value'}, {code:'PGRST999',details:'private SQL',hint:'private value'},new Error('SELECT secret FROM profiles'),new Error('Lỗi SQL chứa dữ liệu riêng')]) {
   const result=userErrorMessage(error);
@@ -31,7 +31,7 @@ test('photo guard validates bytes and allows unchanged historical fields',async(
  assert.match(sql,/INVALID_IMAGE_UPLOAD/);
 });
 
-import { validateInlineImage } from '../src/security/imageEvidence.js';
+import { validateInlineImage } from '../src/shared/security/imageEvidence.js';
 import worker from '../src/worker.js';
 test('inline evidence rejects active content, spoofed MIME and oversize bytes',()=>{
  const png='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jr1cAAAAASUVORK5CYII=';
@@ -49,7 +49,7 @@ test('worker rejects foreign/null origins and never sends wildcard CORS',async()
  assert.equal((await worker.fetch(new Request('https://kythuat.nasun.workers.dev/'),env)).status,200);
 });
 
-import { resolveFailureState } from '../src/lib/syncQueue.js';
+import { resolveFailureState } from '../src/shared/sync/syncQueue.js';
 test('sync review keeps failure classification without retaining raw SQL errors',()=>{
  const failure=resolveFailureState({attempts:0},{code:'22P02',message:'invalid input syntax for customer-private-value'},1000);
  assert.equal(failure.status,'needs_review');assert.equal(failure.lastErrorCode,'22P02');assert.doesNotMatch(failure.lastError,/customer-private-value|invalid input/);
@@ -60,7 +60,7 @@ test('machine albums validate new batches while retaining cumulative historical 
  assert.match(sql,/field='installation_photos'/);assert.match(sql,/EXCEPT ALL/);assert.match(sql,/validate_inline_image_list\(added_images\)/);
 });
 
-import { retainEncryptedDraft } from '../src/lib/offlineRetention.js';
+import { retainEncryptedDraft } from '../src/shared/sync/offlineRetention.js';
 test('session cleanup retains encrypted own drafts but not master cache or foreign/unprotected rows',()=>{
  const draft={ownerId:'synthetic-A',encrypted:true,logicalKey:'form-draft:synthetic-A:repair'};
  assert.equal(retainEncryptedDraft(draft,'synthetic-A'),true);

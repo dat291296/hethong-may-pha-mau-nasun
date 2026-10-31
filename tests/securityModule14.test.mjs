@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const migrationUrl = new URL('../supabase/security_module_14_session_validation.sql', import.meta.url);
-const authUrl = new URL('../src/context/AuthContext.jsx', import.meta.url);
+const authUrl = new URL('../src/shared/context/AuthContext.jsx', import.meta.url);
 
 test('session validation migration is read-only and authenticated-only', async () => {
   const sql = await readFile(migrationUrl, 'utf8');

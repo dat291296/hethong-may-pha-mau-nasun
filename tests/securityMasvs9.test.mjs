@@ -5,7 +5,7 @@ import test from 'node:test';
 const profileUrl = new URL('../security/masvs/profile.json', import.meta.url);
 const matrixUrl = new URL('../security/masvs/verification-matrix.json', import.meta.url);
 const privacyUrl = new URL('../security/masvs/privacy-inventory.json', import.meta.url);
-const loginUrl = new URL('../src/components/LoginModal.jsx', import.meta.url);
+const loginUrl = new URL('../src/shared/components/LoginModal.jsx', import.meta.url);
 
 test('verification matrix covers every implemented MASVS module with tests and evidence', async () => {
   const [profile, matrix] = await Promise.all([

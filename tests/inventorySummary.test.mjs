@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { summarizeInventory, nextWarehouseId, inventoryLinkIssues } from '../src/lib/inventorySummary.js';
+import { summarizeInventory, nextWarehouseId, inventoryLinkIssues } from '../src/modules/equipment/lib/inventorySummary.js';
 
 test('dashboard and warehouse include equivalent loose sets without double counting assembled stock', () => {
   const devices = Object.fromEntries(['dispensers', 'mixers', 'computers', 'printers'].map(table => [table, Array.from({ length: 23 }, (_, i) => ({ id: `${table}-${i}` }))]));

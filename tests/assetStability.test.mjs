@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createAssetReadBarrier } from '../src/lib/assetQuery.js';
-import { optimisticRemoval } from '../src/lib/optimisticRemoval.js';
-import { summarizeDashboard } from '../src/lib/dashboardSummary.js';
-import { regionalMachineCounts } from '../src/lib/teamWorkspace.js';
+import { createAssetReadBarrier } from '../src/modules/equipment/lib/assetQuery.js';
+import { optimisticRemoval } from '../src/shared/data-access/optimisticRemoval.js';
+import { summarizeDashboard } from '../src/modules/dashboard/lib/dashboardSummary.js';
+import { regionalMachineCounts } from '../src/modules/fieldwork/lib/teamWorkspace.js';
 
 test('Dashboard aggregation preserves regional fallback, warehouse and model semantics', () => {
   const npps = [{ id: 'N1', region: 'Miền Bắc' }];

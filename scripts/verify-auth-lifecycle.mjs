@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
-import { completePasswordRecovery, signInEmailAccount } from '../src/security/authEmailFlows.js';
+import { completePasswordRecovery, signInEmailAccount } from '../src/shared/security/authEmailFlows.js';
 import { retireStagingUser } from './staging-user-cleanup.mjs';
 
 export async function verifyAuthLifecycle(service, env) {

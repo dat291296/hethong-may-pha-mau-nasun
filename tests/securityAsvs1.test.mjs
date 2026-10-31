@@ -2,15 +2,15 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-const offlineDbUrl = new URL('../src/lib/offlineDb.js', import.meta.url);
-const authContextUrl = new URL('../src/context/AuthContext.jsx', import.meta.url);
+const offlineDbUrl = new URL('../src/shared/sync/offlineDb.js', import.meta.url);
+const authContextUrl = new URL('../src/shared/context/AuthContext.jsx', import.meta.url);
 const cacheFiles = [
-  new URL('../src/App.jsx', import.meta.url),
-  new URL('../src/hooks/useAssets.js', import.meta.url),
-  new URL('../src/hooks/useNpps.js', import.meta.url),
-  new URL('../src/hooks/useRepairs.js', import.meta.url),
-  new URL('../src/hooks/useAuditLogs.js', import.meta.url),
-  new URL('../src/components/TechHandbook.jsx', import.meta.url),
+  new URL('../src/app/App.jsx', import.meta.url),
+  new URL('../src/modules/equipment/hooks/useAssets.js', import.meta.url),
+  new URL('../src/modules/distributors/hooks/useNpps.js', import.meta.url),
+  new URL('../src/modules/repairs/hooks/useRepairs.js', import.meta.url),
+  new URL('../src/modules/audit/hooks/useAuditLogs.js', import.meta.url),
+  new URL('../src/modules/handbook/components/TechHandbook.jsx', import.meta.url),
 ];
 
 test('offline cache and queue use non-extractable AES-GCM encryption', async () => {

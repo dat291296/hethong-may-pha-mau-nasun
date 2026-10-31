@@ -5,7 +5,7 @@ import test from 'node:test';
 const profileUrl = new URL('../security/masvs/profile.json', import.meta.url);
 const threatsUrl = new URL('../security/masvs/threat-register.json', import.meta.url);
 const threatDragonUrl = new URL('../security/masvs/threat-dragon.json', import.meta.url);
-const bridgeUrl = new URL('../src/platform/mobileSecurityBridge.js', import.meta.url);
+const bridgeUrl = new URL('../src/shared/platform/mobileSecurityBridge.js', import.meta.url);
 
 test('MASVS profile targets PWA now and native mobile later', async () => {
   const profile = JSON.parse(await readFile(profileUrl, 'utf8'));

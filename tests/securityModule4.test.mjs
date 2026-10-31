@@ -3,8 +3,8 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const migrationUrl = new URL('../supabase/security_module_4_audit_integrity.sql', import.meta.url);
-const hookUrl = new URL('../src/hooks/useAuditLogs.js', import.meta.url);
-const syncUrl = new URL('../src/lib/offlineSync.js', import.meta.url);
+const hookUrl = new URL('../src/modules/audit/hooks/useAuditLogs.js', import.meta.url);
+const syncUrl = new URL('../src/shared/sync/offlineSync.js', import.meta.url);
 
 test('audit integrity migration preserves existing data', async () => {
   const sql = await readFile(migrationUrl, 'utf8');

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createAuthEventScheduler } from '../src/security/authEventScheduler.js';
+import { createAuthEventScheduler } from '../src/shared/security/authEventScheduler.js';
 
 test('auth listener returns synchronously and releases the lock before API calls', async () => {
   let locked = true;

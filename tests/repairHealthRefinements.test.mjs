@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {normalizeCalendarDate,normalizeDateFields,normalizeOptionalTimestamp} from '../src/utils/dateUtils.js';
-import {saveSystemSetEdit} from '../src/lib/systemSetEdit.js';
-import {buildSystemHealth} from '../src/lib/systemHealth.js';
-import {repairListPage,repairStringList,hasMalformedRepairLists,uniqueAssignedMachine} from '../src/lib/repairList.js';
+import {normalizeCalendarDate,normalizeDateFields,normalizeOptionalTimestamp} from '../src/shared/utils/dateUtils.js';
+import {saveSystemSetEdit} from '../src/modules/equipment/lib/systemSetEdit.js';
+import {buildSystemHealth} from '../src/modules/dashboard/lib/systemHealth.js';
+import {repairListPage,repairStringList,hasMalformedRepairLists,uniqueAssignedMachine} from '../src/modules/repairs/lib/repairList.js';
 test('calendar dates preserve valid dates, convert Vietnamese input and reject impossible dates',()=>{
  for(const value of ['', '  ',null,undefined])assert.equal(normalizeCalendarDate(value),null);
  assert.equal(normalizeCalendarDate('20/10/2026'),'2026-10-20');assert.equal(normalizeCalendarDate('2024-02-29'),'2024-02-29');

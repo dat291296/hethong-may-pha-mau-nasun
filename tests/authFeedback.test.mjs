@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { getAuthErrorMessage, getPasswordRuleState, shouldCountLoginFailure } from '../src/security/authFeedback.js';
+import { getAuthErrorMessage, getPasswordRuleState, shouldCountLoginFailure } from '../src/shared/security/authFeedback.js';
 
 test('network and provider failures never count as incorrect passwords', () => {
   assert.equal(shouldCountLoginFailure({ code: 'invalid_credentials' }), true);

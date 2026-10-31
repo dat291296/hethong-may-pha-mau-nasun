@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {normalizeDeviceType} from '../src/lib/deviceType.js';
-import {dataCompletenessAlerts,missingDeviceFields,missingNppFields,missingSystemSetFields} from '../src/lib/dataCompleteness.js';
+import {normalizeDeviceType} from '../src/modules/equipment/lib/deviceType.js';
+import {dataCompletenessAlerts,missingDeviceFields,missingNppFields,missingSystemSetFields} from '../src/modules/equipment/lib/dataCompleteness.js';
 test('mixer types preserve mechanical values rather than computer enum values',()=>{
  for(const type of ['Lắc xoay khép kín','Lắc rung đứng',''])assert.equal(normalizeDeviceType('mixer',type),type);
  assert.equal(normalizeDeviceType('computer','All In One'),'AIO');assert.equal(normalizeDeviceType('computer','Case'),'Case');

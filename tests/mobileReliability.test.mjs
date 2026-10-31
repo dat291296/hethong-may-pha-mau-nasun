@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { completedSyncState } from '../src/lib/syncPresentation.js';
-import { nextWarehouseId } from '../src/lib/inventorySummary.js';
-import { requireReplaySession } from '../src/security/replaySession.js';
+import { completedSyncState } from '../src/shared/sync/syncPresentation.js';
+import { nextWarehouseId } from '../src/modules/equipment/lib/inventorySummary.js';
+import { requireReplaySession } from '../src/shared/security/replaySession.js';
 
 test('a suspended auth lock times out before any queued write is allowed', async () => {
   let continued = false;
@@ -28,8 +28,8 @@ test('corrected computer sequences continue after COMP-102', () => {
 });
 
 test('assembly acknowledgement uses the real set primary key and preserves blank serials', async () => {
-  const hook = await readFile(new URL('../src/hooks/useAssets.js', import.meta.url), 'utf8');
-  const app = await readFile(new URL('../src/App.jsx', import.meta.url), 'utf8');
+  const hook = await readFile(new URL('../src/modules/equipment/hooks/useAssets.js', import.meta.url), 'utf8');
+  const app = await readFile(new URL('../src/app/App.jsx', import.meta.url), 'utf8');
   assert.match(hook, /rpc\('assemble_system_set_atomic'/);
   assert.match(hook, /result.data\.setCode !== setCode/);
   assert.doesNotMatch(hook, /select\('id,set_code'\)/);

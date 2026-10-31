@@ -1,9 +1,9 @@
 import {useEffect,useState} from 'react';
-import {makeFieldCommand,createFieldOutbox,requireFieldReceipt} from '../../src/lib/fieldCommands.js';
-import {getOfflineOwner,getQueue,addToQueue,removeFromQueue,getCacheStrict,setCache,withOfflineLease} from '../../src/lib/offlineDb.js';
-import {fieldQueueSummary} from '../../src/lib/fieldAttachments.js';
-import {resolveFailureState} from '../../src/lib/syncQueue.js';
-import FieldReviewPanel from '../../src/components/FieldReviewPanel.jsx';
+import {makeFieldCommand,createFieldOutbox,requireFieldReceipt} from '../../src/modules/fieldwork/lib/fieldCommands.js';
+import {getOfflineOwner,getQueue,addToQueue,removeFromQueue,getCacheStrict,setCache,withOfflineLease} from '../../src/shared/sync/offlineDb.js';
+import {fieldQueueSummary} from '../../src/modules/fieldwork/lib/fieldAttachments.js';
+import {resolveFailureState} from '../../src/shared/sync/syncQueue.js';
+import FieldReviewPanel from '../../src/modules/fieldwork/components/FieldReviewPanel.jsx';
 const initialRevision='2026-10-27T01:00:00.000Z';
 export default function FieldCommandLab({mode,quota}){
  const [kind,setKind]=useState('REPAIR_EDIT'),[notes,setNotes]=useState('Kiểm tra dây nguồn tại hiện trường'),[confirmed,setConfirmed]=useState(false),[queue,setQueue]=useState([]),[message,setMessage]=useState(''),[busy,setBusy]=useState(false);

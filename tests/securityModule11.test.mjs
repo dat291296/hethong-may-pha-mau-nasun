@@ -3,8 +3,8 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const migrationUrl = new URL('../supabase/security_module_11_mfa_enforcement.sql', import.meta.url);
-const authUrl = new URL('../src/context/AuthContext.jsx', import.meta.url);
-const loginUrl = new URL('../src/components/LoginModal.jsx', import.meta.url);
+const authUrl = new URL('../src/shared/context/AuthContext.jsx', import.meta.url);
+const loginUrl = new URL('../src/shared/components/LoginModal.jsx', import.meta.url);
 
 test('MFA migration preserves business data and enables privileged MFA', async () => {
   const sql = await readFile(migrationUrl, 'utf8');

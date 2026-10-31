@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const migrationUrl = new URL('../supabase/security_module_15_sensitive_action_rate_limits.sql', import.meta.url);
-const usersUrl = new URL('../src/components/UserManagement.jsx', import.meta.url);
+const usersUrl = new URL('../src/modules/users/components/UserManagement.jsx', import.meta.url);
 
 test('rate-limit storage is isolated from browser roles', async () => {
   const sql = await readFile(migrationUrl, 'utf8');

@@ -3,10 +3,10 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const profileUrl = new URL('../security/masvs/profile.json', import.meta.url);
-const authUrl = new URL('../src/context/AuthContext.jsx', import.meta.url);
-const supabaseUrl = new URL('../src/lib/supabase.js', import.meta.url);
-const loginUrl = new URL('../src/components/LoginModal.jsx', import.meta.url);
-const syncUrl = new URL('../src/lib/offlineSync.js', import.meta.url);
+const authUrl = new URL('../src/shared/context/AuthContext.jsx', import.meta.url);
+const supabaseUrl = new URL('../src/shared/data-access/supabase.js', import.meta.url);
+const loginUrl = new URL('../src/shared/components/LoginModal.jsx', import.meta.url);
+const syncUrl = new URL('../src/shared/sync/offlineSync.js', import.meta.url);
 const viteUrl = new URL('../vite.config.js', import.meta.url);
 const verifierUrl = new URL('../scripts/verify-production-build.mjs', import.meta.url);
 

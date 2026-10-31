@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { isAssignedTo, repairNeedsAction, missingMachineFields, isDraftExpired, searchText, matchesSavedRepair } from '../src/lib/teamWorkspace.js';
+import { isAssignedTo, repairNeedsAction, missingMachineFields, isDraftExpired, searchText, matchesSavedRepair } from '../src/modules/fieldwork/lib/teamWorkspace.js';
 
 test('explicit account assignment wins over ambiguous legacy technician names', () => {
   const user = { id: 'a', name: 'Đạt' };

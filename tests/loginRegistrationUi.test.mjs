@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-const loginUrl = new URL('../src/components/LoginModal.jsx', import.meta.url);
+const loginUrl = new URL('../src/shared/components/LoginModal.jsx', import.meta.url);
 
 test('registration requires matching password confirmation', async () => {
   const source = await readFile(loginUrl, 'utf8');

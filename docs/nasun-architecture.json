@@ -27,11 +27,11 @@
     "retiredObjects": ["formula_versions", "agent_telemetry", "diagnostic_commands"]
   },
   "evidence": [
-    "src/context/AuthContext.jsx",
-    "src/security/rbac.js",
-    "src/lib/offlineDb.js",
-    "src/lib/offlineSync.js",
-    "src/lib/realtimeSync.js",
+    "src/shared/context/AuthContext.jsx",
+    "src/shared/security/rbac.js",
+    "src/shared/sync/offlineDb.js",
+    "src/shared/sync/offlineSync.js",
+    "src/shared/sync/realtimeSync.js",
     "supabase/enterprise_module_2_five_role_rbac.sql",
     "supabase/enterprise_module_3_legacy_component_retirement.sql",
     "wrangler.jsonc"

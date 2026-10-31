@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { assignedSetsForNpp, assertAdditionalSetConfirmed } from '../src/lib/assemblyGuard.js';
-import { registerEmailAccount } from '../src/security/authEmailFlows.js';
-import { getAuthErrorMessage } from '../src/security/authFeedback.js';
+import { assignedSetsForNpp, assertAdditionalSetConfirmed } from '../src/modules/equipment/lib/assemblyGuard.js';
+import { registerEmailAccount } from '../src/shared/security/authEmailFlows.js';
+import { getAuthErrorMessage } from '../src/shared/security/authFeedback.js';
 
 test('assembly requires explicit confirmation only when the selected NPP already has sets', () => {
   const sets = [{ nppId: 'NPP-1', setCode: 'SET-001' }, { npp_id: 'NPP-1', set_code: 'SET-002' }];

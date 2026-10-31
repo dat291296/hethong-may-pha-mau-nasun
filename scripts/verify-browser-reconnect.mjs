@@ -54,11 +54,11 @@ try {
   await writeFile(`${directory}/probe.jsx`, `
 import React from 'react';
 import {createRoot} from 'react-dom/client';
-import {AuthProvider,useAuth} from '/src/context/AuthContext.jsx';
-import {supabase} from '/src/lib/supabase.js';
-import * as db from '/src/lib/offlineDb.js';
-import {syncOfflineQueue} from '/src/lib/offlineSync.js';
-import {validateTrustedDeviceSession} from '/src/security/trustedDevice.js';
+import {AuthProvider,useAuth} from '/src/shared/context/AuthContext.jsx';
+import {supabase} from '/src/shared/data-access/supabase.js';
+import * as db from '/src/shared/sync/offlineDb.js';
+import {syncOfflineQueue} from '/src/shared/sync/offlineSync.js';
+import {validateTrustedDeviceSession} from '/src/shared/security/trustedDevice.js';
 async function control(action,account='A'){const r=await fetch('/__nasun_ui/'+action,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({account})});if(!r.ok)throw Error('CONTROL_FAILED');return r.json();}
 window.uiProbe={
  async ready(){try{const result=await validateTrustedDeviceSession();return result.supported&&result.state?.valid===true;}catch{return false;}},

@@ -1,0 +1,598 @@
+import { userErrorMessage } from '../../../shared/security/userError.js';
+import WorkspaceFilterBar from '../../../shared/components/WorkspaceFilterBar.jsx';
+import { matchesSearch, matchesDateRange, uniqueOptions, REGIONS, canEditRegion } from '../../../shared/workspace/workspaceFilters.js';
+import { useAuth } from '../../../shared/context/AuthContext.jsx';
+import { useWorkspaceState, useWorkspaceScroll } from '../../../shared/hooks/useWorkspaceState.js';
+import { resolveMachine } from '../../equipment/lib/machineWorkspace';
+import MaintenanceChecklist from './MaintenanceChecklist';
+import React, { useState, useMemo, useEffect } from 'react';
+import { CalendarClock, CheckCircle2, AlertTriangle, ShieldAlert, Wrench, Search, Edit3, Trash2, BarChart2, PieChart as PieChartIcon } from 'lucide-react';
+import { 
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  ResponsiveContainer, 
+  Cell, 
+  PieChart, 
+  Pie, 
+  Legend 
+} from 'recharts';
+import { formatDateVN } from '../../../shared/utils/dateUtils.js';
+import { getSystemSetMissingFields } from '../../equipment/utils/systemSetValidation.js';
+
+const MAINTENANCE_REGIONS = ['Miền Bắc', 'Miền Trung', 'Miền Nam'];
+
+function normalizeRegion(region = '') {
+  const value = String(region).toLowerCase();
+  if (value.includes('bắc') || value === 'mb') return 'Miền Bắc';
+  if (value.includes('trung') || value === 'mt') return 'Miền Trung';
+  if (value.includes('nam') || value === 'mn') return 'Miền Nam';
+  return 'Chưa xác định';
+}
+
+function isDateInYear(value, year) {
+  if (!value) return false;
+  const date = new Date(value);
+  return !Number.isNaN(date.getTime()) && date.getFullYear() === year;
+}
+
+export default function MaintenanceSchedule({ onReturnToProfile, globalSearch = '', initialFilter = 'ALL', systemSets, onCompleteMaintenance, onUpdateSystemSet, onDeleteSystemSet }) {
+  const { user } = useAuth();
+  useWorkspaceScroll('maintenance');
+  const [filter, setFilter] = useWorkspaceState('maintenance:state', initialFilter); // ALL | DUE_SOON | OVERDUE | OK
+  const [selectedSet, setSelectedSet] = useState(null);
+  const openedSearch = React.useRef('');
+  useEffect(() => {
+    if (!globalSearch) { openedSearch.current = ''; return; }
+    if (openedSearch.current === globalSearch) return;
+    const machine = resolveMachine(systemSets, globalSearch);
+    if (machine) { openedSearch.current = globalSearch; setSelectedSet(machine); }
+  }, [globalSearch, systemSets]);
+  useEffect(() => { if (initialFilter !== 'ALL') setFilter(initialFilter); }, [initialFilter]);
+  const [searchTerm, setSearchTerm] = useWorkspaceState('maintenance:search', '');
+  useEffect(() => { if (globalSearch) setSearchTerm(globalSearch); }, [globalSearch, setSearchTerm]);
+  const [regionWorkFilter, setRegionWorkFilter] = useWorkspaceState('maintenance:region', 'ALL');
+  const [provinceFilter, setProvinceFilter] = useWorkspaceState('maintenance:province', 'ALL');
+  const [ownerFilter, setOwnerFilter] = useWorkspaceState('maintenance:owner', 'ALL');
+  const [dateFrom, setDateFrom] = useWorkspaceState('maintenance:from', '');
+  const [dateTo, setDateTo] = useWorkspaceState('maintenance:to', '');
+
+  // Edit maintenance states
+  const [editingMaint, setEditingMaint] = useState(null);
+  const [editMaintFormData, setEditMaintFormData] = useState({});
+
+  const handleOpenEditMaint = (set) => {
+    if (!canEditRegion(user,set.region)) { alert('Bạn chỉ được sửa dữ liệu trong khu vực được phân công.'); return; }
+    setEditingMaint(set);
+    setEditMaintFormData({
+      lastMaintenanceDate: set.lastMaintenanceDate || '',
+      nextMaintenanceDue: set.nextMaintenanceDue || ''
+    });
+  };
+
+  const handleEditMaintSubmit = async (e) => {
+    e.preventDefault();
+    if (!editingMaint) return;
+    try {
+      await onUpdateSystemSet(editingMaint.setCode, editMaintFormData);
+      setEditingMaint(null);
+    } catch (error) { console.error('[Maintenance] Edit rejected', error); alert(userErrorMessage(error)); }
+  };
+
+  const handleDeleteMaint = async (setCode) => {
+    if (window.confirm(`Bạn có chắc chắn muốn xóa lịch bảo trì của bộ máy [${setCode}] không? Ngày bảo trì gần nhất và hạn tiếp theo sẽ được đặt về trống.`)) {
+      try { await onUpdateSystemSet(setCode, {
+        lastMaintenanceDate: null,
+        nextMaintenanceDue: null
+      }); } catch (error) { console.error('[Maintenance] Clear rejected', error); alert(userErrorMessage(error)); }
+    }
+  };
+
+  const naturalSortCode = (a, b, key = 'setCode') => {
+    const valA = String(a?.[key] || a?.setCode || a?.set_code || '');
+    const valB = String(b?.[key] || b?.setCode || b?.set_code || '');
+    return valA.localeCompare(valB, undefined, { numeric: true, sensitivity: 'base' });
+  };
+
+  const today = new Date();
+  const currentYear = today.getFullYear();
+
+  const annualRegionPlan = useMemo(() => {
+    const eligibleSets = systemSets.filter(set =>
+      (set.status === 'DA_LAP_DAT' || set.status === 'BAO_THUONG_BAO_TRI') &&
+      set.nppName && !String(set.nppName).includes('Kho Tổng')
+    );
+
+    return MAINTENANCE_REGIONS.map(region => {
+      const sets = eligibleSets.filter(set => normalizeRegion(set.region) === region);
+      const maintained = sets.filter(set => isDateInYear(set.lastMaintenanceDate, currentYear));
+      const pending = sets
+        .filter(set => !isDateInYear(set.lastMaintenanceDate, currentYear))
+        .sort((a, b) => {
+          const aTime = a.nextMaintenanceDue ? new Date(a.nextMaintenanceDue).getTime() : 0;
+          const bTime = b.nextMaintenanceDue ? new Date(b.nextMaintenanceDue).getTime() : 0;
+          if (aTime !== bTime) return aTime - bTime;
+          return naturalSortCode(a, b, 'setCode');
+        });
+      return {
+        region,
+        total: sets.length,
+        maintained,
+        pending,
+        progress: sets.length > 0 ? Math.round((maintained.length / sets.length) * 100) : 0
+      };
+    });
+  }, [systemSets, currentYear]);
+
+  const pendingAnnualWork = useMemo(() => annualRegionPlan
+    .flatMap(group => group.pending.map(set => ({ ...set, normalizedRegion: group.region })))
+    .filter(set => regionWorkFilter === 'ALL' || set.normalizedRegion === regionWorkFilter)
+    .sort((a, b) => {
+      const regionDelta = MAINTENANCE_REGIONS.indexOf(a.normalizedRegion) - MAINTENANCE_REGIONS.indexOf(b.normalizedRegion);
+      if (regionDelta !== 0) return regionDelta;
+      const aTime = a.nextMaintenanceDue ? new Date(a.nextMaintenanceDue).getTime() : 0;
+      const bTime = b.nextMaintenanceDue ? new Date(b.nextMaintenanceDue).getTime() : 0;
+      return aTime !== bTime ? aTime - bTime : naturalSortCode(a, b, 'setCode');
+    }), [annualRegionPlan, regionWorkFilter]);
+
+  const processedSets = useMemo(() => {
+    return systemSets.map(set => {
+      const missingFields = getSystemSetMissingFields(set);
+      if (!set.nextMaintenanceDue) {
+        return { ...set, dueDays: 999, statusType: 'NO_DATE', missingFields };
+      }
+      const dueDate = new Date(set.nextMaintenanceDue);
+      const diffTime = dueDate - today;
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+      let statusType = 'OK';
+      if (diffDays < 0) {
+        statusType = 'OVERDUE';
+      } else if (diffDays <= 30) {
+        statusType = 'DUE_SOON'; // Warning: within 1 month (30 days)
+      }
+
+      return { ...set, dueDays: diffDays, statusType, missingFields };
+    });
+  }, [systemSets]);
+
+  // Monthly stats for 12 months chart
+  const monthlyStats = useMemo(() => {
+    const months = [
+      { name: 'Thg 1', count: 0, overdue: 0 },
+      { name: 'Thg 2', count: 0, overdue: 0 },
+      { name: 'Thg 3', count: 0, overdue: 0 },
+      { name: 'Thg 4', count: 0, overdue: 0 },
+      { name: 'Thg 5', count: 0, overdue: 0 },
+      { name: 'Thg 6', count: 0, overdue: 0 },
+      { name: 'Thg 7', count: 0, overdue: 0 },
+      { name: 'Thg 8', count: 0, overdue: 0 },
+      { name: 'Thg 9', count: 0, overdue: 0 },
+      { name: 'Thg 10', count: 0, overdue: 0 },
+      { name: 'Thg 11', count: 0, overdue: 0 },
+      { name: 'Thg 12', count: 0, overdue: 0 },
+    ];
+    processedSets.forEach(s => {
+      if (s.nextMaintenanceDue) {
+        const d = new Date(s.nextMaintenanceDue);
+        if (!isNaN(d.getTime())) {
+          const m = d.getMonth();
+          if (m >= 0 && m < 12) {
+            months[m].count += 1;
+            if (s.statusType === 'OVERDUE') months[m].overdue += 1;
+          }
+        }
+      }
+    });
+    return months;
+  }, [processedSets]);
+
+  // Status breakdown data for donut chart
+  const statusPieData = useMemo(() => {
+    const okCount = processedSets.filter(s => s.statusType === 'OK').length;
+    const soonCount = processedSets.filter(s => s.statusType === 'DUE_SOON').length;
+    const overdueCount = processedSets.filter(s => s.statusType === 'OVERDUE').length;
+    const noDateCount = processedSets.filter(s => s.statusType === 'NO_DATE').length;
+
+    return [
+      { name: 'Bình thường (OK)', value: okCount, color: '#10b981' },
+      { name: 'Sắp hạn (≤30N)', value: soonCount, color: '#f59e0b' },
+      { name: 'Quá hạn bảo trì', value: overdueCount, color: '#f43f5e' },
+      { name: 'Chưa đặt lịch', value: noDateCount, color: '#64748b' }
+    ].filter(d => d.value > 0);
+  }, [processedSets]);
+
+  const filteredSets = processedSets.filter(s => {
+    if (!matchesSearch(searchTerm,[s.setCode,s.nppName,s.region,s.province,s.dispenserModel,s.dispenserSerial,s.technician])) return false;
+    if (provinceFilter !== 'ALL' && s.province !== provinceFilter) return false;
+    if (ownerFilter !== 'ALL' && s.technician !== ownerFilter) return false;
+    if (!matchesDateRange(s.nextMaintenanceDue,dateFrom,dateTo)) return false;
+    if (regionWorkFilter !== 'ALL' && normalizeRegion(s.region) !== regionWorkFilter) return false;
+    if (filter === 'DUE_SOON') return s.statusType === 'DUE_SOON';
+    if (filter === 'OVERDUE') return s.statusType === 'OVERDUE';
+    if (filter === 'OK') return s.statusType === 'OK';
+    if (filter === 'NO_DATE') return s.statusType === 'NO_DATE';
+    return true;
+  });
+
+  const [currentPage, setCurrentPage] = useWorkspaceState('maintenance:page', 1);
+  const [pageSize, setPageSize] = useState(10);
+
+  const filterSignature = [filter,regionWorkFilter,searchTerm,provinceFilter,ownerFilter,dateFrom,dateTo].join('|');
+  const previousFilters = React.useRef(filterSignature);
+  useEffect(() => { if (previousFilters.current !== filterSignature) { previousFilters.current = filterSignature; setCurrentPage(1); } }, [filterSignature,setCurrentPage]);
+
+  // Sort strictly in natural ascending order from 1 to N, top to bottom
+  const sortedSets = [...filteredSets].sort((a, b) => naturalSortCode(a, b, 'setCode'));
+
+  const totalPages = Math.ceil(sortedSets.length / pageSize) || 1;
+  const paginatedSets = sortedSets.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
+  );
+
+  return (
+    <div className="workspace-screen maintenanceschedule-screen" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      
+      {/* Header Info Panel */}
+      <div className="glass-panel" style={{ padding: '20px', background: 'linear-gradient(135deg, rgba(30,41,59,1) 0%, rgba(15,23,42,1) 100%)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <div style={{ padding: '12px', borderRadius: '12px', background: 'rgba(245,158,11,0.2)', color: '#fbbf24' }}>
+            <CalendarClock size={28} />
+          </div>
+          <div>
+            <h2 style={{ fontSize: '1.15rem', fontWeight: '800', color: 'var(--text-main)' }}>
+              Quy Trình & Biểu Đồ Lịch Bảo Trì Định Kỳ (1 Năm / Lần)
+            </h2>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+              Quy định: Mỗi bộ máy pha màu được bảo dưỡng 1 lần mỗi năm. Hệ thống phát <strong>Cảnh Báo Thông Báo Trước 1 Tháng (30 Ngày)</strong> để kỹ thuật viên chuẩn bị xếp lịch đi thị trường.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {processedSets.filter(set => set.missingFields.length > 0).length > 0 && (
+        <div style={{ padding: '14px 16px', borderRadius: '10px', border: '1px solid rgba(239,68,68,0.45)', background: 'rgba(239,68,68,0.10)', fontSize: '0.82rem', color: '#fecaca' }}>
+          <strong>⚠️ Nhắc việc cho kỹ thuật viên:</strong> Có {processedSets.filter(set => set.missingFields.length > 0).length} bộ máy thiếu thông tin. Khi đến NPP bảo dưỡng, kiểm tra và bổ sung các mục được cảnh báo trước khi hoàn tất lịch bảo trì.
+        </div>
+      )}
+
+      <WorkspaceFilterBar search={searchTerm} onSearch={setSearchTerm} placeholder="Tìm mã bộ, NPP, seri…" count={filteredSets.length} fields={[{key:'region',label:'Khu vực',value:regionWorkFilter,onChange:setRegionWorkFilter,options:uniqueOptions(REGIONS)},{key:'province',label:'Tỉnh / thành',value:provinceFilter,onChange:setProvinceFilter,options:uniqueOptions(systemSets.map(item=>item.province))},{key:'owner',label:'Kỹ thuật viên',value:ownerFilter,onChange:setOwnerFilter,options:uniqueOptions(systemSets.map(item=>item.technician))},{key:'from',label:'Hạn bảo trì · từ',type:'date',defaultValue:'',value:dateFrom,onChange:setDateFrom},{key:'to',label:'Hạn bảo trì · đến',type:'date',defaultValue:'',value:dateTo,onChange:setDateTo}]} quick={[{value:'ALL',label:'Tất cả',count:processedSets.length},{value:'DUE_SOON',label:'Sắp hạn',count:processedSets.filter(item=>item.statusType === 'DUE_SOON').length},{value:'OVERDUE',label:'Quá hạn',count:processedSets.filter(item=>item.statusType === 'OVERDUE').length},{value:'OK',label:'Bình thường',count:processedSets.filter(item=>item.statusType === 'OK').length},{value:'NO_DATE',label:'Chưa có lịch',count:processedSets.filter(item=>item.statusType === 'NO_DATE').length}]} quickValue={filter} onQuick={setFilter} onReset={() => { setSearchTerm(''); setFilter('ALL'); setRegionWorkFilter('ALL'); setProvinceFilter('ALL'); setOwnerFilter('ALL'); setDateFrom(''); setDateTo(''); }}/>
+
+      {/* Annual regional work plan */}
+      <div className="glass-panel" style={{ padding: '18px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap', marginBottom: '14px' }}>
+          <div>
+            <h3 style={{ fontSize: '1rem', fontWeight: '800', color: 'var(--accent-cyan)', margin: 0 }}>🗺️ Kế Hoạch Công Tác Bảo Trì Năm {currentYear}</h3>
+            <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: '4px 0 0' }}>Theo dõi NPP đã bảo trì và danh sách cần đi công tác theo ba miền.</p>
+          </div>
+          <button className={`btn btn-sm ${regionWorkFilter === 'ALL' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setRegionWorkFilter('ALL')}>Cả 3 miền</button>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '12px' }}>
+          {annualRegionPlan.map((group, index) => {
+            const colors = ['#38bdf8', '#f59e0b', '#10b981'];
+            const color = colors[index];
+            return (
+              <div key={group.region} onClick={() => setRegionWorkFilter(group.region)} style={{ padding: '14px', borderRadius: '10px', cursor: 'pointer', background: regionWorkFilter === group.region ? `${color}20` : 'rgba(15,23,42,0.55)', border: `1px solid ${regionWorkFilter === group.region ? color : 'var(--border-color)'}` }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <strong style={{ color }}>{group.region}</strong>
+                  <span style={{ fontSize: '1.1rem', fontWeight: '900', color }}>{group.progress}%</span>
+                </div>
+                <div style={{ height: '7px', background: 'rgba(255,255,255,0.08)', borderRadius: '999px', overflow: 'hidden', margin: '10px 0' }}>
+                  <div style={{ width: `${group.progress}%`, height: '100%', background: color }} />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '0.78rem' }}>
+                  <div style={{ padding: '8px', borderRadius: '7px', background: 'rgba(16,185,129,0.10)' }}><span style={{ color: 'var(--text-muted)' }}>Đã bảo trì</span><div style={{ fontSize: '1.15rem', fontWeight: '900', color: '#34d399' }}>{group.maintained.length}/{group.total}</div></div>
+                  <div style={{ padding: '8px', borderRadius: '7px', background: 'rgba(244,63,94,0.10)' }}><span style={{ color: 'var(--text-muted)' }}>Chưa bảo trì</span><div style={{ fontSize: '1.15rem', fontWeight: '900', color: '#fb7185' }}>{group.pending.length}</div></div>
+                </div>
+                <details onClick={event => event.stopPropagation()} style={{ marginTop: '10px', fontSize: '0.75rem' }}>
+                  <summary style={{ cursor: 'pointer', color: '#34d399', fontWeight: '700' }}>NPP đã bảo trì ({group.maintained.length})</summary>
+                  <div style={{ marginTop: '5px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>{group.maintained.length === 0 ? 'Chưa có' : group.maintained.map(set => <div key={set.setCode}>✓ {set.nppName} — {formatDateVN(set.lastMaintenanceDate)}</div>)}</div>
+                </details>
+                <details onClick={event => event.stopPropagation()} style={{ marginTop: '6px', fontSize: '0.75rem' }}>
+                  <summary style={{ cursor: 'pointer', color: '#fb7185', fontWeight: '700' }}>NPP cần đi bảo trì ({group.pending.length})</summary>
+                  <div style={{ marginTop: '5px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>{group.pending.length === 0 ? 'Đã hoàn thành khu vực' : group.pending.map(set => <div key={set.setCode}>• {set.nppName} [{set.setCode}]</div>)}</div>
+                </details>
+              </div>
+            );
+          })}
+        </div>
+
+        <div style={{ marginTop: '16px', paddingTop: '14px', borderTop: '1px solid var(--border-color)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap', marginBottom: '8px' }}>
+            <strong style={{ fontSize: '0.86rem' }}>📋 Danh sách cần xếp lịch: {pendingAnnualWork.length} bộ máy {regionWorkFilter !== 'ALL' ? `— ${regionWorkFilter}` : ''}</strong>
+            <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Ưu tiên: quá hạn/chưa có lịch → hạn gần nhất → mã bộ máy tăng dần</span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '310px', overflowY: 'auto' }}>
+            {pendingAnnualWork.length === 0 ? <div style={{ padding: '14px', color: '#34d399', textAlign: 'center' }}>✓ Đã hoàn thành bảo trì trong năm cho khu vực đang chọn.</div> : pendingAnnualWork.map(set => {
+              const dueDate = set.nextMaintenanceDue ? new Date(set.nextMaintenanceDue) : null;
+              const isOverdue = dueDate && !Number.isNaN(dueDate.getTime()) && dueDate < today;
+              return (
+                <div key={`${set.normalizedRegion}-${set.setCode}`} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px', alignItems: 'center', padding: '9px 10px', borderRadius: '7px', background: isOverdue ? 'rgba(244,63,94,0.09)' : 'rgba(15,23,42,0.50)', fontSize: '0.76rem' }}>
+                  <strong style={{ color: isOverdue ? '#fb7185' : 'var(--accent-cyan)' }}>{set.normalizedRegion}</strong>
+                  <span><strong>{set.nppName}</strong><br /><span style={{ color: 'var(--text-muted)' }}>{set.setCode}</span></span>
+                  <span>{set.province || set.region}</span>
+                  <span>{!dueDate || Number.isNaN(dueDate.getTime()) ? <span className="badge badge-warning">Chưa có lịch</span> : isOverdue ? <span className="badge badge-danger">Quá hạn {formatDateVN(set.nextMaintenanceDue)}</span> : <span className="badge badge-info">Hạn {formatDateVN(set.nextMaintenanceDue)}</span>}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* CHARTS & KPI SECTION */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
+        {/* Chart 1: Monthly Maintenance Load */}
+        <div className="glass-panel" style={{ padding: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+            <span style={{ fontSize: '0.9rem', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--accent-cyan)' }}>
+              <BarChart2 size={16} /> Phân Bổ Hạn Bảo Trì 12 Tháng
+            </span>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Tổng: {processedSets.length} bộ máy</span>
+          </div>
+          <div style={{ height: '190px', width: '100%' }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={monthlyStats} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                <XAxis dataKey="name" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} />
+                <YAxis allowDecimals={false} tick={{ fill: 'var(--text-muted)', fontSize: 11 }} />
+                <Tooltip 
+                  contentStyle={{ background: '#1e293b', border: '1px solid var(--border-color)', borderRadius: '8px', fontSize: '0.8rem' }}
+                  labelStyle={{ color: 'var(--accent-cyan)', fontWeight: 'bold' }}
+                />
+                <Bar dataKey="count" name="Số bộ máy đến hạn" fill="var(--accent-blue)" radius={[4, 4, 0, 0]}>
+                  {monthlyStats.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.overdue > 0 ? '#f43f5e' : 'var(--accent-blue)'} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Chart 2: Status Breakdown Pie */}
+        <div className="glass-panel" style={{ padding: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+            <span style={{ fontSize: '0.9rem', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--accent-emerald)' }}>
+              <PieChartIcon size={16} /> Tỷ Lệ Tình Trạng Bảo Trì
+            </span>
+          </div>
+          <div style={{ height: '190px', width: '100%' }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={statusPieData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={45}
+                  outerRadius={75}
+                  paddingAngle={4}
+                  dataKey="value"
+                >
+                  {statusPieData.map((entry, index) => (
+                    <Cell key={`pie-cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip 
+                  contentStyle={{ background: '#1e293b', border: '1px solid var(--border-color)', borderRadius: '8px', fontSize: '0.8rem' }}
+                />
+                <Legend 
+                  verticalAlign="bottom" 
+                  height={30} 
+                  formatter={(val) => <span style={{ fontSize: '0.75rem', color: 'var(--text-main)' }}>{val}</span>} 
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+
+      {/* Table of Maintenance Items */}
+      <div className="glass-panel" style={{ padding: '20px' }}>
+        {/* Desktop View Table */}
+        <div className="desktop-only data-table-container">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Mã Bộ Máy</th>
+                <th>Nhà Phân Phối</th>
+                <th>Khu Vực</th>
+                <th>Máy Chiết (Model/Seri)</th>
+                <th>Lần Bảo Trì Gần Nhất</th>
+                <th>Hạn Bảo Trì Tiếp Theo</th>
+                <th>Trạng Thái Cảnh Báo</th>
+                <th>Cần Bổ Sung Khi Đến NPP</th>
+                <th>Thao Tác</th>
+              </tr>
+            </thead>
+            <tbody>
+              {paginatedSets.map(set => (
+                <tr key={set.id}>
+                  <td style={{ fontWeight: '700', color: 'var(--accent-cyan)' }}>{set.setCode}</td>
+                  <td style={{ fontWeight: '600' }}>{set.nppName}</td>
+                  <td>{set.region}</td>
+                  <td>
+                    <div>{set.dispenserModel}</div>
+                    <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{set.dispenserSerial}</div>
+                  </td>
+                  <td>{formatDateVN(set.lastMaintenanceDate)}</td>
+                  <td style={{ fontWeight: '700' }}>{formatDateVN(set.nextMaintenanceDue)}</td>
+                  <td>
+                    {set.statusType === 'OVERDUE' && (
+                      <span className="badge badge-danger">🚨 Quá Hạn ({Math.abs(set.dueDays)} Ngày)</span>
+                    )}
+                    {set.statusType === 'DUE_SOON' && (
+                      <span className="badge badge-warning">⚠️ Còn {set.dueDays} Ngày (Báo Trước 1 Tháng)</span>
+                    )}
+                    {set.statusType === 'OK' && (
+                      <span className="badge badge-success">✓ Còn {set.dueDays} Ngày</span>
+                    )}
+                  </td>
+                  <td>
+                    {set.missingFields.length > 0 ? <span className="badge badge-danger" title={set.missingFields.join(', ')}>⚠️ {set.missingFields.join(', ')}</span> : <span className="badge badge-success">✓ Đủ dữ liệu</span>}
+                  </td>
+                  <td>
+                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                      <button className="btn btn-secondary btn-sm" style={{ display: 'flex', alignItems: 'center', gap: '4px' }} disabled={!canEditRegion(user,set.region)} onClick={() => setSelectedSet(set)}>
+                        <Wrench size={14} />
+                        <span>Xác Nhận Bảo Trì</span>
+                      </button>
+                      <button className="btn btn-secondary btn-sm" style={{ padding: '4px 8px' }} disabled={!canEditRegion(user,set.region)} onClick={() => handleOpenEditMaint(set)}>
+                        <Edit3 size={14} color="var(--accent-cyan)" />
+                      </button>
+                      <button className="btn btn-danger btn-sm" style={{ padding: '4px 8px' }} disabled={!canEditRegion(user,set.region)} onClick={() => handleDeleteMaint(set.setCode)}>
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Mobile View Cards */}
+        <div className="mobile-only mobile-card-list">
+          {paginatedSets.map(set => (
+            <div className="mobile-card" key={set.id}>
+              <div className="mobile-card-header">
+                <div>
+                  <span className="mobile-card-title" style={{ color: 'var(--accent-cyan)' }}>{set.setCode}</span>
+                  <div className="mobile-card-subtitle">{set.nppName} ({set.region})</div>
+                </div>
+                <div>
+                  {set.statusType === 'OVERDUE' && (
+                    <span className="badge badge-danger">🚨 Quá Hạn ({Math.abs(set.dueDays)}N)</span>
+                  )}
+                  {set.statusType === 'DUE_SOON' && (
+                    <span className="badge badge-warning">⚠️ Còn {set.dueDays}N</span>
+                  )}
+                  {set.statusType === 'OK' && (
+                    <span className="badge badge-success">✓ Còn {set.dueDays}N</span>
+                  )}
+                </div>
+              </div>
+              <div className="mobile-card-body">
+                <div className="mobile-card-row">
+                  <span className="mobile-card-label">Máy Chiết:</span>
+                  <span className="mobile-card-value">{set.dispenserModel} ({set.dispenserSerial})</span>
+                </div>
+                <div className="mobile-card-row">
+                  <span className="mobile-card-label">Bảo Trì Gần Nhất:</span>
+                  <span className="mobile-card-value">{formatDateVN(set.lastMaintenanceDate)}</span>
+                </div>
+                <div className="mobile-card-row">
+                  <span className="mobile-card-label">Hạn Tiếp Theo:</span>
+                  <span className="mobile-card-value" style={{ fontWeight: '700' }}>{formatDateVN(set.nextMaintenanceDue)}</span>
+                </div>
+                <div className="mobile-card-row">
+                  <span className="mobile-card-label">Cần bổ sung:</span>
+                  <span className="mobile-card-value">{set.missingFields.length > 0 ? <span className="badge badge-danger">⚠️ {set.missingFields.join(', ')}</span> : <span className="badge badge-success">✓ Đủ dữ liệu</span>}</span>
+                </div>
+              </div>
+              <div className="mobile-card-actions">
+                <button className="btn btn-secondary btn-sm" style={{ display: 'flex', alignItems: 'center', gap: '4px' }} disabled={!canEditRegion(user,set.region)} onClick={() => setSelectedSet(set)}>
+                  <Wrench size={14} />
+                  <span>Xác Nhận Bảo Trì</span>
+                </button>
+                <button className="btn btn-secondary btn-sm" disabled={!canEditRegion(user,set.region)} onClick={() => handleOpenEditMaint(set)}>
+                  <Edit3 size={14} color="var(--accent-cyan)" />
+                  <span>Sửa</span>
+                </button>
+                <button className="btn btn-danger btn-sm" disabled={!canEditRegion(user,set.region)} onClick={() => handleDeleteMaint(set.setCode)}>
+                  <Trash2 size={14} />
+                  <span>Xóa</span>
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Pagination Bar */}
+        <div className="pagination-bar" style={{ marginTop: '16px' }}>
+          <div className="pagination-info">
+            Hiển thị <strong>{sortedSets.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, sortedSets.length)}</strong> trong tổng số <strong>{sortedSets.length}</strong> bộ máy
+            <select 
+              className="form-select" 
+              value={pageSize} 
+              onChange={e => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}
+              style={{ marginLeft: '12px', padding: '2px 8px', fontSize: '0.8rem', width: 'auto', display: 'inline-block' }}
+            >
+              <option value={10}>10 bộ/trang</option>
+              <option value={20}>20 bộ/trang</option>
+              <option value={50}>50 bộ/trang</option>
+            </select>
+          </div>
+
+          <div className="pagination-controls">
+            <button 
+              className="pagination-btn" 
+              disabled={currentPage <= 1}
+              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+            >
+              ‹ Trang Trước
+            </button>
+            
+            <span style={{ fontSize: '0.8rem', fontWeight: '700', color: 'var(--accent-cyan)', padding: '0 8px' }}>
+              Trang {currentPage} / {totalPages}
+            </span>
+
+            <button 
+              className="pagination-btn" 
+              disabled={currentPage >= totalPages}
+              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+            >
+              Trang Sau ›
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {selectedSet && <MaintenanceChecklist machine={selectedSet} onSave={onCompleteMaintenance} onReturnToProfile={onReturnToProfile} onClose={() => {setSelectedSet(null);onReturnToProfile?.();}} />}
+
+      {/* EDIT MAINTENANCE MODAL */}
+      {editingMaint && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '440px' }}>
+            <div className="modal-header">
+              <h3 style={{ fontWeight: '800' }}>Sửa Lịch Bảo Trì Bộ Máy [{editingMaint.setCode}]</h3>
+              <button className="btn btn-secondary btn-sm" onClick={() => setEditingMaint(null)}>✕</button>
+            </div>
+            <form onSubmit={handleEditMaintSubmit}>
+              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div className="form-group">
+                  <label className="form-label">Ngày Bảo Trì Gần Nhất</label>
+                  <input 
+                    type="date" 
+                    className="form-input" 
+                    value={editMaintFormData.lastMaintenanceDate || ''} 
+                    onChange={e => setEditMaintFormData({ ...editMaintFormData, lastMaintenanceDate: e.target.value })} 
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Hạn Bảo Trì Tiếp Theo</label>
+                  <input 
+                    type="date" 
+                    className="form-input" 
+                    value={editMaintFormData.nextMaintenanceDue || ''} 
+                    onChange={e => setEditMaintFormData({ ...editMaintFormData, nextMaintenanceDue: e.target.value })} 
+                  />
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={() => setEditingMaint(null)}>Hủy Bỏ</button>
+                <button type="submit" className="btn btn-primary">Lưu Lịch Bảo Trì</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+}

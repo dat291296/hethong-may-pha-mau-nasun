@@ -6,7 +6,7 @@ import {
   completePasswordRecovery,
   requestPasswordRecovery,
   resendSignupVerification,
-} from '../src/security/authEmailFlows.js';
+} from '../src/shared/security/authEmailFlows.js';
 
 test('every email auth operation releases the UI when the provider never responds', async () => {
   const hanging = () => new Promise(() => {});

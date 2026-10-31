@@ -1,11 +1,11 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
-import App from './App.jsx'
-import { AuthProvider } from './context/AuthContext.jsx'
-import ErrorBoundary from './components/ErrorBoundary.jsx'
-import { startPerformanceMonitoring } from './lib/performanceMetrics.js'
-import { startErrorMonitoring } from './lib/operationalDiagnostics.js'
+import App from './app/App.jsx'
+import { AuthProvider } from './shared/context/AuthContext.jsx'
+import ErrorBoundary from './shared/components/ErrorBoundary.jsx'
+import { startPerformanceMonitoring } from './shared/diagnostics/performanceMetrics.js'
+import { startErrorMonitoring } from './shared/diagnostics/operationalDiagnostics.js'
 
 startPerformanceMonitoring()
 const stopErrorMonitoring = startErrorMonitoring()

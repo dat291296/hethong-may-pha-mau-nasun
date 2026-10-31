@@ -1,4 +1,4 @@
-import { getCacheStrict, setCache } from '../../src/lib/offlineDb.js';
+import { getCacheStrict, setCache } from '../../src/shared/sync/offlineDb.js';
 export const machines = [
   {setCode:'NS-DEMO-001',nppId:'DEMO-N1',nppName:'NPP Minh An · dữ liệu mẫu',region:'Miền Bắc',status:'DA_LAP_DAT',dispenserModel:'Hero 23',dispenserSerial:'DEMO-C01',mixerModel:'Gyro',mixerSerial:'DEMO-L01',computerModel:'Dell Optiplex',computerSerial:'DEMO-PC01',printerModel:'Brother',printerSerial:'DEMO-P01',nextMaintenanceDue:'2026-11-26'},
   {setCode:'NS-DEMO-002',nppId:'DEMO-N2',nppName:'NPP Hòa Bình · dữ liệu mẫu',region:'Miền Bắc',status:'DA_LAP_DAT',dispenserModel:'Satint',dispenserSerial:'DEMO-C02',mixerModel:'Shaker',mixerSerial:'',computerModel:'HP',computerSerial:'DEMO-PC02',printerModel:'Brother',printerSerial:'DEMO-P02'},

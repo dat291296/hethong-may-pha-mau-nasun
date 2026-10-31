@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { requireReplaySession } from '../src/security/replaySession.js';
-import { classifySyncError } from '../src/lib/syncQueue.js';
+import { requireReplaySession } from '../src/shared/security/replaySession.js';
+import { classifySyncError } from '../src/shared/sync/syncQueue.js';
 
 test('replay requires a matching server user, active profile and trusted session', async () => {
   const client = { auth: { getUser: async () => ({ data: { user: { id: 'A' } } }) },

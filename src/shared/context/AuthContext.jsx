@@ -1,0 +1,492 @@
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { createAuthEventScheduler } from '../security/authEventScheduler.js';
+import { redactSecurityDetails } from '../security/securityEvents.js';
+import { ROLES, ROLE_LABELS, hasPermission } from '../security/rbac.js';
+import { supabase, isSupabaseConfigured, isDevelopmentFallback } from '../data-access/supabase.js';
+import { clearOfflineStorage, getCacheStrict, getQueue, initializeOfflineStorage, setCache, removeCache } from '../sync/offlineDb.js';
+import { OFFLINE_GRANT_KEY, createOfflineAccessGrant, offlineAccessDecision, requireCurrentReplayScope } from '../security/offlineAccess.js';
+import { syncOfflineQueue } from '../sync/offlineSync.js';
+import { registerTrustedDeviceSession, validateTrustedDeviceSession } from '../security/trustedDevice.js';
+
+// ─── Auth Context ─────────────────────────────────────────────────────────────
+const AuthContext = createContext(null);
+const OFFLINE_USER_KEY = 'nasun_offline_user';
+const SESSION_VALIDATION_MS = 5 * 60 * 1000;
+const TOKEN_REFRESH_WINDOW_SECONDS = 5 * 60;
+
+async function getOfflineUser(authUser) {
+  const [cached,grant] = await Promise.all([getCacheStrict(OFFLINE_USER_KEY,null),getCacheStrict(OFFLINE_GRANT_KEY,null)]);
+  return cached?.id === authUser?.id && offlineAccessDecision(grant,cached).allowed ? cached : null;
+}
+
+async function persistOfflineUser(user) {
+  return user ? await setCache(OFFLINE_USER_KEY, user) : false;
+}
+
+async function persistOfflineAuthorization(user,limits={}) {
+  // Invalidate the previous scope before replacing profile and authorization.
+  await removeCache(OFFLINE_GRANT_KEY);
+  if (!await persistOfflineUser(user) || !await setCache(OFFLINE_GRANT_KEY,createOfflineAccessGrant(user,Date.now(),limits))) {
+    throw Object.assign(new Error('OFFLINE_GRANT_WRITE_FAILED'),{code:'OFFLINE_GRANT_WRITE_FAILED'});
+  }
+}
+
+// Default dev user (used when Supabase not configured)
+const DEV_USERS = {
+  [ROLES.ADMIN]:  { id: 'local-admin',  email: 'admin@local.invalid',  name: 'Local Admin',  role: ROLES.ADMIN,  managedRegion: 'Toàn Quốc'  },
+  [ROLES.MANAGER]: { id: 'local-manager', email: 'manager@local.invalid', name: 'Local Manager', role: ROLES.MANAGER, managedRegion: 'Toàn Quốc' },
+  [ROLES.TECHNICIAN]: { id: 'local-technician', email: 'technician@local.invalid', name: 'Local Technician', role: ROLES.TECHNICIAN, managedRegion: 'Miền Bắc' },
+  [ROLES.QC]:     { id: 'local-qc',     email: 'qc@local.invalid',     name: 'Local QC',     role: ROLES.QC,     managedRegion: 'Miền Bắc'  },
+  [ROLES.VIEWER]: { id: 'local-viewer', email: 'viewer@local.invalid', name: 'Local Viewer', role: ROLES.VIEWER, managedRegion: 'Miền Nam'  },
+};
+
+// ─── Auth Provider ────────────────────────────────────────────────────────────
+export function AuthProvider({ children }) {
+  const [user, setUser] = useState(null);
+  const [role, setRole] = useState(ROLES.ADMIN); // Default to Admin in dev
+  const [loading, setLoading] = useState(true);
+  const [securityEvents, setSecurityEvents] = useState([]);
+  const [emailVerifiedSuccess, setEmailVerifiedSuccess] = useState(false);
+  const [passwordRecovery, setPasswordRecovery] = useState(false);
+  const [authRedirectError, setAuthRedirectError] = useState('');
+  const sessionValidationRunning = useRef(false);
+  const trustedSessionRegistered = useRef(false);
+  const sessionOwner = useRef(undefined);
+
+  // ── Initialize auth ────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (isSupabaseConfigured && supabase) {
+      const urlParams = new URLSearchParams(window.location.search);
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      
+      const isVerified = urlParams.get('verified') === 'true';
+      const isRecovery = urlParams.get('recovery') === 'true' || hashParams.get('type') === 'recovery';
+      const hasErrorSearch = urlParams.has('error') || urlParams.has('error_description');
+      const hasErrorHash = hashParams.has('error') || hashParams.has('error_description');
+
+      let errorMsg = '';
+      if (hasErrorSearch) {
+        errorMsg = urlParams.get('error_description') || urlParams.get('error') || 'Xác thực email thất bại.';
+      } else if (hasErrorHash) {
+        errorMsg = hashParams.get('error_description') || hashParams.get('error') || 'Xác thực email thất bại.';
+      }
+
+      if (errorMsg) {
+        setPasswordRecovery(false);
+        setAuthRedirectError('Liên kết xác thực không hợp lệ hoặc đã hết hạn. Hãy yêu cầu liên kết mới.');
+
+        clearOfflineStorage().then(() => supabase.auth.signOut()).then(() => {
+          const newUrl = window.location.origin + window.location.pathname;
+          window.history.replaceState({}, document.title, newUrl);
+        });
+      } else if (isRecovery) {
+        setPasswordRecovery(true);
+      } else if (isVerified) {
+        setEmailVerifiedSuccess(true);
+        // Force logout to let user log in manually
+        clearOfflineStorage().then(() => supabase.auth.signOut()).then(() => {
+          // Clear query params so refreshing does not trigger this again
+          const newUrl = window.location.origin + window.location.pathname;
+          window.history.replaceState({}, document.title, newUrl);
+        });
+      }
+
+      // Production: Use Supabase Auth
+      supabase.auth.getSession().then(async ({ data: { session } }) => {
+        const currentUrlParams = new URLSearchParams(window.location.search);
+        const currentIsVerified = currentUrlParams.get('verified') === 'true';
+        const currentIsRecovery = currentUrlParams.get('recovery') === 'true';
+
+        if (currentIsRecovery) {
+          setPasswordRecovery(true);
+          setLoading(false);
+        } else if (session && !currentIsVerified) {
+          await initializeOfflineStorage(session.user.id);
+          if (!navigator.onLine) {
+            const cachedUser = await getOfflineUser(session.user);
+            if (!cachedUser) setAuthRedirectError('Cần kết nối mạng để xác minh quyền. Bản nháp và hàng chờ vẫn được giữ.');
+            setUser(cachedUser);
+            setRole(cachedUser?.role || ROLES.VIEWER);
+            setLoading(false);
+          } else {
+            loadUserProfile(session.user);
+          }
+        } else {
+          setLoading(false);
+        }
+      }).catch(error => {
+        console.warn('[Auth] Session restore failed:', error.message);
+        setLoading(false);
+      });
+
+      const authEvents = createAuthEventScheduler(
+        async (event, session) => {
+          if ((session?.user?.id || null) !== sessionOwner.current) return;
+          const currentUrlParams = new URLSearchParams(window.location.search);
+          const currentIsVerified = currentUrlParams.get('verified') === 'true';
+          const currentIsRecovery = currentUrlParams.get('recovery') === 'true';
+
+          if (event === 'PASSWORD_RECOVERY' || currentIsRecovery) {
+            setPasswordRecovery(true);
+            setUser(null);
+            setRole(ROLES.VIEWER);
+            setLoading(false);
+          } else if (session && !currentIsVerified) {
+            await initializeOfflineStorage(session.user.id);
+            if (!navigator.onLine) {
+              const cachedUser = await getOfflineUser(session.user);
+              if (!cachedUser) setAuthRedirectError('Cần kết nối mạng để xác minh quyền. Bản nháp và hàng chờ vẫn được giữ.');
+              setUser(cachedUser);
+              setRole(cachedUser?.role || ROLES.VIEWER);
+              setLoading(false);
+            } else {
+              await loadUserProfile(session.user);
+            }
+          } else {
+            if (event === 'SIGNED_OUT') await clearOfflineStorage();
+            trustedSessionRegistered.current = false;
+            setUser(null);
+            setRole(ROLES.VIEWER);
+            setLoading(false);
+          }
+        },
+        () => { console.warn('[Auth] Deferred auth event failed'); setLoading(false); }
+      );
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+        const owner = session?.user?.id || null;
+        if (sessionOwner.current !== owner) trustedSessionRegistered.current = false;
+        sessionOwner.current = owner;
+        authEvents.listener(event, session);
+      });
+      return () => { subscription.unsubscribe(); authEvents.dispose(); };
+    } else if (isDevelopmentFallback) {
+      // Development: use mock user (dropdown role selector in Header)
+      initializeOfflineStorage(DEV_USERS[ROLES.ADMIN].id).finally(() => {
+        setUser(DEV_USERS[ROLES.ADMIN]);
+        setRole(ROLES.ADMIN);
+        setLoading(false);
+      });
+    } else {
+      // Production must fail closed when cloud authentication is misconfigured.
+      setUser(null);
+      setRole(ROLES.VIEWER);
+      setLoading(false);
+    }
+  }, []);
+
+  // ── Load user profile + role from Supabase ──────────────────────────────────
+  const loadUserProfile = async (authUser) => {
+    try {
+      if (sessionOwner.current !== undefined && sessionOwner.current !== authUser.id) return;
+      sessionOwner.current = authUser.id;
+      await initializeOfflineStorage(authUser.id);
+
+      let verifiedLimits={};
+      if (navigator.onLine) {
+        const registration = await registerTrustedDeviceSession();
+        if (!registration.supported || registration.state?.valid !== true) {
+          throw Object.assign(new Error('SESSION_REJECTED'), { code: 'SESSION_REJECTED' });
+        }
+        trustedSessionRegistered.current = true;
+        const validation=await validateTrustedDeviceSession();
+        if(!validation.supported||validation.state?.valid!==true)throw Object.assign(new Error('SESSION_REJECTED'),{code:'SESSION_REJECTED'});
+        verifiedLimits={...registration.state,...validation.state};
+        if (registration.state?.anomaly_detected && !sessionStorage.getItem('nasun-device-alert-shown')) {
+          sessionStorage.setItem('nasun-device-alert-shown', 'true');
+          window.alert('Phát hiện đăng nhập từ thiết bị hoặc vị trí mới. Sự kiện đã được ghi lại để quản trị viên kiểm tra.');
+        }
+      }
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('id, full_name, role, avatar_url, managed_region, is_active')
+        .eq('id', authUser.id)
+        .single();
+
+      if (sessionOwner.current !== authUser.id) return;
+
+      if (profile?.is_active === false) {
+        await clearOfflineStorage(authUser.id);
+        await supabase.auth.signOut();
+        const disabledError = new Error('ACCOUNT_DISABLED');
+        disabledError.code = 'ACCOUNT_DISABLED';
+        throw disabledError;
+      }
+
+      if (error) throw error;
+      const finalRole = profile?.role || ROLES.VIEWER;
+      const finalRegion = profile?.managed_region || (finalRole===ROLES.ADMIN ? 'Toàn Quốc' : '');
+
+      const resolvedUser = {
+        id: authUser.id,
+        email: authUser.email,
+        name: profile?.full_name || authUser.email,
+        role: finalRole,
+        avatarUrl: profile?.avatar_url || null,
+        managedRegion: finalRegion,
+      };
+      setUser(resolvedUser);
+      await persistOfflineAuthorization(resolvedUser,verifiedLimits);
+      if (sessionOwner.current !== authUser.id) return;
+      setRole(finalRole);
+      if (navigator.onLine && !trustedSessionRegistered.current) {
+        try {
+          const { supported, state } = await registerTrustedDeviceSession();
+          if (sessionOwner.current !== authUser.id) return;
+          trustedSessionRegistered.current = supported;
+          if (supported && state?.valid === false) {
+            await supabase.auth.signOut({ scope: 'local' });
+            await clearOfflineStorage(authUser.id);
+            setUser(null);
+            setRole(ROLES.VIEWER);
+            return;
+          }
+          if (state?.anomaly_detected && !sessionStorage.getItem('nasun-device-alert-shown')) {
+            sessionStorage.setItem('nasun-device-alert-shown', 'true');
+            window.alert('Phát hiện đăng nhập từ thiết bị hoặc vị trí mới. Sự kiện đã được ghi lại để quản trị viên kiểm tra.');
+          }
+        } catch (deviceError) {
+          console.warn('[Auth] Trusted-device registration deferred:', deviceError.message);
+        }
+      }
+    } catch (err) {
+      if (sessionOwner.current !== authUser.id) return;
+      console.error('[Auth] Failed to load user profile:', err.message);
+      if (['ACCOUNT_DISABLED','SESSION_REJECTED','42501','PGRST301','PGRST303'].includes(err?.code) || err?.message === 'ACCOUNT_DISABLED') {
+        await supabase.auth.signOut({ scope: 'local' });
+        setUser(null);
+        setRole(ROLES.VIEWER);
+        await clearOfflineStorage(authUser.id);
+        return;
+      }
+      const fallbackUser = await getOfflineUser(authUser).catch(() => null);
+      if (sessionOwner.current !== authUser.id) return;
+      setUser(fallbackUser);
+      setRole(fallbackUser?.role || ROLES.VIEWER);
+      if (!fallbackUser) setAuthRedirectError('Chưa xác minh được quyền hiện tại. Kết nối mạng và đăng nhập lại; nháp chưa gửi được giữ nguyên.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!isSupabaseConfigured || !user?.id) return undefined;
+    let cancelled=false;
+    const validateOfflineRead=async()=>{
+      if (navigator.onLine) return;
+      const cached=await getOfflineUser({id:user.id}).catch(()=>null);
+      if (cancelled || cached) return;
+      setUser(null);setRole(ROLES.VIEWER);
+      setAuthRedirectError('Quyền đọc offline đã hết hạn. Kết nối lại để xác minh; nháp và hàng chờ được giữ.');
+      await clearOfflineStorage(user.id);
+    };
+    const timer=setInterval(validateOfflineRead,30000);
+    window.addEventListener('offline',validateOfflineRead);
+    document.addEventListener('visibilitychange',validateOfflineRead);
+    validateOfflineRead();
+    return ()=>{cancelled=true;clearInterval(timer);window.removeEventListener('offline',validateOfflineRead);document.removeEventListener('visibilitychange',validateOfflineRead);};
+  },[user?.id]);
+
+  // ── Dev-only: switch role via dropdown ─────────────────────────────────────
+  const switchDevRole = useCallback(async (newRole) => {
+    if (!isDevelopmentFallback) return;
+    await initializeOfflineStorage((DEV_USERS[newRole] || DEV_USERS[ROLES.VIEWER]).id);
+    setRole(newRole);
+    setUser(DEV_USERS[newRole] || DEV_USERS[ROLES.VIEWER]);
+  }, []);
+
+  // ── Permission check ───────────────────────────────────────────────────────
+  const can = useCallback(
+    (action) => hasPermission(role, action),
+    [role]
+  );
+
+  // ── Security event logging ────────────────────────────────────────────────
+  const reportSecurityEvent = useCallback((type, details) => {
+    const safeDetails = redactSecurityDetails(details || {});
+    const event = {
+      id: `SEC-${Date.now()}`,
+      type,
+      details: safeDetails,
+      timestamp: new Date().toISOString(),
+      userId: user?.id || 'unknown',
+      userEmail: user?.email || 'unknown',
+      severity: type.includes('VIOLATION') ? 'CRITICAL' : 'WARNING',
+    };
+    console.error(`[SECURITY][${event.severity}] ${type}:`, safeDetails);
+    setSecurityEvents(prev => [event, ...prev].slice(0, 50)); // Keep last 50 events
+
+    // Security events are stored separately from editable operational audit logs.
+    if (isSupabaseConfigured && supabase) {
+      supabase.rpc('record_security_event', {
+        p_event_type: type,
+        p_details: safeDetails,
+      }).then(({ error }) => {
+        if (error) console.error('[Auth] Failed to log security event:', error.message);
+      });
+    }
+  }, [user]);
+
+  // ── Sign out ───────────────────────────────────────────────────────────────
+  const signOut = useCallback(async () => {
+    try {
+    let pendingItems = await getQueue();
+    if (pendingItems.length > 0 && navigator.onLine) {
+      await syncOfflineQueue();
+      pendingItems = await getQueue();
+    }
+    if (pendingItems.length > 0) {
+      window.alert(`Không thể đăng xuất khi còn ${pendingItems.length} thay đổi chưa đồng bộ. Hãy kết nối mạng và đồng bộ trước để tránh mất dữ liệu.`);
+      return false;
+    }
+    const signedOutUserId = user?.id;
+    if (isSupabaseConfigured && supabase) {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+    }
+    await clearOfflineStorage(signedOutUserId);
+    setUser(null);
+    setRole(ROLES.VIEWER);
+    trustedSessionRegistered.current = false;
+    return true;
+    } catch {
+      window.alert('Chưa xác minh được dữ liệu chờ gửi. Hệ thống giữ nguyên dữ liệu và chưa đăng xuất.');
+      return false;
+    }
+  }, [user]);
+
+  const value = {
+    user,
+    role,
+    loading,
+    can,
+    switchDevRole,
+    signOut,
+    securityEvents,
+    reportSecurityEvent,
+    isDevMode: isDevelopmentFallback,
+    ROLES,
+    ROLE_LABELS,
+    emailVerifiedSuccess,
+    setEmailVerifiedSuccess,
+    passwordRecovery,
+    setPasswordRecovery,
+    authRedirectError,
+    setAuthRedirectError,
+  };
+
+  // Revalidate the server-side account state after reconnects and while the app is open.
+  useEffect(() => {
+    if (!isSupabaseConfigured || !supabase || !user?.id) return undefined;
+
+    let cancelled = false;
+
+    const clearInvalidSession = async (reason) => {
+      if (cancelled || sessionOwner.current !== user.id) return;
+      console.warn(`[Auth] Session invalidated: ${reason}`);
+      try {
+        await supabase.auth.signOut({ scope: 'local' });
+      } catch (error) {
+        console.warn('[Auth] Local session cleanup failed:', error.message);
+      }
+      if (cancelled || (sessionOwner.current && sessionOwner.current !== user.id)) return;
+      setUser(null);
+      setRole(ROLES.VIEWER);
+      await clearOfflineStorage(user.id);
+    };
+
+    const validateSession = async () => {
+      if (cancelled || !navigator.onLine || sessionValidationRunning.current) return;
+      sessionValidationRunning.current = true;
+      try {
+        const { data: state, error } = await supabase.rpc('get_session_security_state');
+        if (cancelled || sessionOwner.current !== user.id) return;
+        if (error) {
+          if ([401, 403].includes(error.status) || ['PGRST301', '28000', '42501'].includes(error.code)) {
+            await clearInvalidSession(error.code || 'AUTH_REJECTED');
+          } else {
+            console.warn('[Auth] Session validation deferred:', error.message);
+          }
+          return;
+        }
+
+        if (!state?.profile_found || !state?.is_active || state.user_id !== user.id) {
+          await clearInvalidSession('ACCOUNT_DISABLED_OR_MISSING');
+          return;
+        }
+
+        const trustedResult = trustedSessionRegistered.current
+          ? await validateTrustedDeviceSession()
+          : await registerTrustedDeviceSession();
+        if (cancelled || sessionOwner.current !== user.id) return;
+        trustedSessionRegistered.current = trustedResult.supported;
+        if (trustedResult.supported && trustedResult.state?.valid === false) {
+          await clearInvalidSession(trustedResult.state.reason || 'TRUSTED_SESSION_REJECTED');
+          return;
+        }
+
+        if (!trustedResult.supported || trustedResult.state?.valid !== true) { await clearInvalidSession('TRUSTED_SESSION_UNVERIFIED'); return; }
+        const currentScope=requireCurrentReplayScope(state,user.id);
+        if (state.role===user.role && state.managed_region===user.managedRegion) await persistOfflineAuthorization({...user,...currentScope},trustedResult.state);
+
+        const expiresIn = Number(state.token_expires_at || 0) - Math.floor(Date.now() / 1000);
+        if (expiresIn <= TOKEN_REFRESH_WINDOW_SECONDS) {
+          const { error: refreshError } = await supabase.auth.refreshSession();
+          if (cancelled || sessionOwner.current !== user.id) return;
+          if (refreshError) {
+            await clearInvalidSession('TOKEN_REFRESH_FAILED');
+            return;
+          }
+        }
+
+        if (state.role !== user.role || state.managed_region !== user.managedRegion) {
+          const { data: authData, error: userError } = await supabase.auth.getUser();
+          if (cancelled || sessionOwner.current !== user.id) return;
+          if (userError || !authData.user) {
+            await clearInvalidSession('USER_VALIDATION_FAILED');
+            return;
+          }
+          await loadUserProfile(authData.user);
+        }
+      } catch (error) {
+        console.warn('[Auth] Session validation deferred:', error.message);
+      } finally {
+        sessionValidationRunning.current = false;
+      }
+    };
+
+    const validateWhenVisible = () => {
+      if (document.visibilityState === 'visible') validateSession();
+    };
+
+    validateSession();
+    const timer = window.setInterval(validateSession, SESSION_VALIDATION_MS);
+    window.addEventListener('online', validateSession);
+    window.addEventListener('focus', validateSession);
+    document.addEventListener('visibilitychange', validateWhenVisible);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      window.removeEventListener('online', validateSession);
+      window.removeEventListener('focus', validateSession);
+      document.removeEventListener('visibilitychange', validateWhenVisible);
+    };
+  }, [user?.id, user?.role, user?.managedRegion]);
+
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+// ─── useAuth Hook ─────────────────────────────────────────────────────────────
+export function useAuth() {
+  const ctx = useContext(AuthContext);
+  if (!ctx) {
+    throw new Error('useAuth must be used inside <AuthProvider>');
+  }
+  return ctx;
+}
+
+export default AuthContext;

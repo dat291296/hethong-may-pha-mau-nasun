@@ -3,9 +3,9 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const migrationUrl = new URL('../supabase/sync_sec_module_1_foundation.sql', import.meta.url);
-const trustedDeviceUrl = new URL('../src/security/trustedDevice.js', import.meta.url);
-const syncQueueUrl = new URL('../src/lib/syncQueue.js', import.meta.url);
-const authUrl = new URL('../src/context/AuthContext.jsx', import.meta.url);
+const trustedDeviceUrl = new URL('../src/shared/security/trustedDevice.js', import.meta.url);
+const syncQueueUrl = new URL('../src/shared/sync/syncQueue.js', import.meta.url);
+const authUrl = new URL('../src/shared/context/AuthContext.jsx', import.meta.url);
 
 test('SYNC-SEC-1 migration is additive and does not mutate business records', async () => {
   const sql = await readFile(migrationUrl, 'utf8');

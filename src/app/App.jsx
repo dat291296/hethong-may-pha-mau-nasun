@@ -1,0 +1,1181 @@
+import RepairWorkspaceBoundary from '../modules/repairs/components/RepairWorkspaceBoundary.jsx';
+import {useReplacementEvents} from '../modules/equipment/hooks/useReplacementEvents.js';
+import { WorkspaceRegionContext } from '../shared/hooks/useWorkspaceState.js';
+import RegionalWorkspaceBar from './components/RegionalWorkspaceBar.jsx';
+import { defaultWorkspaceRegion, resolveWorkspaceRegion, scopeWorkspace } from '../shared/workspace/regionalWorkspace.js';
+import { assertAdditionalSetConfirmed } from '../modules/equipment/lib/assemblyGuard.js';
+import React, { useState, useEffect, useMemo, lazy, Suspense } from 'react';
+import Sidebar from './components/Sidebar';
+import Header from './components/Header';
+import FieldSyncStatus from '../modules/fieldwork/components/FieldSyncStatus.jsx';
+import WorkflowModal from '../modules/workflows/components/WorkflowModal';
+import HandoverPrintModal from '../modules/workflows/components/HandoverPrintModal';
+import MobileBottomNav from './components/MobileBottomNav';
+import LoginModal from '../shared/components/LoginModal';
+import { useSensitiveActionGate } from '../shared/components/SensitiveActionGate.jsx';
+import { useAuth } from '../shared/context/AuthContext';
+import { requireRegionEdit } from '../shared/workspace/workspaceFilters.js';
+import { supabase, isSupabaseConfigured } from '../shared/data-access/supabase';
+import { cacheOfflineData } from '../shared/sync/offlineSync.js';
+import { executeWorkflowTransaction } from '../modules/workflows/lib/workflowTransactions.js';
+import {submitFieldCommand} from '../modules/fieldwork/lib/fieldCommandClient.js';
+import { acknowledgeChangeFeedCursor, retryChangeFeedCursor, startChangeFeed } from '../shared/sync/changeFeed.js';
+import { refreshBeforeCheckpoint } from '../shared/sync/syncCheckpoint.js';
+import { startPrivateRealtimeSync } from '../shared/sync/realtimeSync.js';
+
+import { useNpps } from '../modules/distributors/hooks/useNpps.js';
+import { useAssets, generateNextSetCode } from '../modules/equipment/hooks/useAssets.js';
+import { useRepairs } from '../modules/repairs/hooks/useRepairs.js';
+import { useAuditLogs } from '../modules/audit/hooks/useAuditLogs.js';
+import { useLockedMonths } from '../modules/users/hooks/useLockedMonths.js';
+import { useTintingLogs } from '../modules/workflows/hooks/useTintingLogs.js';
+
+const Dashboard = lazy(() => import('../modules/dashboard/components/Dashboard'));
+const NppManagement = lazy(() => import('../modules/distributors/components/NppManagement'));
+const AssetManagement = lazy(() => import('../modules/equipment/components/AssetManagement'));
+const MaintenanceSchedule = lazy(() => import('../modules/maintenance/components/MaintenanceSchedule'));
+const AuditLogs = lazy(() => import('../modules/audit/components/AuditLogs'));
+const DeviceRepairProcessing = lazy(() => import('../modules/repairs/components/DeviceRepairProcessing'));
+const ExcelImportModal = lazy(() => import('../modules/imports/components/ExcelImportModal'));
+const UserManagement = lazy(() => import('../modules/users/components/UserManagement'));
+const TechHandbook = lazy(() => import('../modules/handbook/components/TechHandbook'));
+const FieldRouteMap = lazy(() => import('../modules/fieldwork/components/FieldRouteMap'));
+
+function AssetLoadingSkeleton() {
+  return (
+    <section role="status" aria-live="polite" aria-busy="true" aria-label="Đang tải dữ liệu máy" className="asset-loading-skeleton">
+      <p>Đang tải dữ liệu máy…</p>
+      <div className="asset-skeleton-cards" aria-hidden="true">
+        {[0, 1, 2, 3].map(item => <div className="card asset-skeleton-block" key={item} />)}
+      </div>
+      <div className="card asset-skeleton-table" aria-hidden="true">
+        {[0, 1, 2, 3, 4].map(item => <div className="asset-skeleton-line" key={item} />)}
+      </div>
+    </section>
+  );
+}
+
+function normalizeWarehouseRegion(region) {
+  const value = String(region || '').toLowerCase();
+  if (value.includes('bắc') || value === 'mb') return 'Miền Bắc';
+  if (value.includes('trung') || value === 'mt') return 'Miền Trung';
+  if (value.includes('nam') || value === 'mn') return 'Miền Nam';
+  return 'Miền Bắc';
+}
+
+function persistWorkflowCache(key, data) {
+  cacheOfflineData(key, data);
+}
+
+export default function App() {
+  const { user } = useAuth();
+  return user ? <AppWorkspace key={user.id} /> : <LoginModal />;
+}
+
+function AppWorkspace() {
+  const { user, isDevMode, can } = useAuth();
+  const { requireAuthentication, dialog: authenticationDialog } = useSensitiveActionGate();
+  const handleSensitiveSetDeletion = async setCode => {
+    await requireAuthentication();
+    return deleteSystemSet(setCode);
+  };
+  const [activeTab, setActiveTab] = useState(() => {
+    try {
+      const savedTab = window.localStorage.getItem('nasun_active_tab');
+      if (savedTab === 'technicianWork') return 'dashboard';
+      return ['documents', 'support', 'account'].includes(savedTab) ? 'techHandbook' : savedTab || 'dashboard';
+    } catch {
+      return 'dashboard';
+    }
+  });
+  const [globalSearch, setGlobalSearch] = useState('');
+  const [qcUsers, setQcUsers] = useState([]);
+  const [regionalSelection, setRegionalSelection] = useState(null);
+  const [nppCoverageFilter, setNppCoverageFilter] = useState('ALL');
+  const regionalIdentity = `${user?.id}:${user?.role}:${user?.managedRegion}`;
+  const workspaceRegion = regionalSelection?.identity === regionalIdentity
+    ? regionalSelection.region : defaultWorkspaceRegion(user);
+  const setWorkspaceRegion = region => setRegionalSelection({ identity: regionalIdentity, region });
+
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('nasun_active_tab', activeTab);
+    } catch (err) {
+      console.warn('[App] Failed to save active tab:', err);
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    async function loadQcProfiles() {
+      if (isSupabaseConfigured && supabase) {
+        try {
+          const { data, error } = await supabase
+            .from('profiles')
+            .select('id, full_name, role, managed_region')
+            .eq('is_active', true)
+            .in('role', ['technician', 'qc', 'manager', 'admin']);
+
+          if (data && !error && data.length > 0) {
+            const mapped = data.map(p => ({
+              id: p.id,
+              name: p.full_name || p.id,
+              role: p.role,
+              region: p.managed_region || 'Toàn Quốc'
+            }));
+            setQcUsers(mapped);
+            return;
+          }
+        } catch (err) {
+          console.warn('[App] Error loading QC profiles:', err);
+        }
+      }
+
+      // Fallback
+      const fallbackList = [];
+      if (user && (user.name || user.full_name)) {
+        fallbackList.push({
+          id: user.id || 'current-user',
+          name: user.name || user.full_name,
+          role: user.role || 'qc',
+          region: user.managedRegion || 'Toàn Quốc'
+        });
+      }
+      fallbackList.push({
+        id: 'qc-hung',
+        name: 'Nguyễn Văn Hùng',
+        role: 'qc',
+        region: 'Miền Bắc'
+      });
+      setQcUsers(fallbackList);
+    }
+    loadQcProfiles();
+  }, [user]);
+
+  // Main State via Supabase hooks
+  const { npps, setNpps, addNpp, editNpp, deleteNpp, importNpps, loading: nppsLoading, error: nppsLoadError, refetch: refetchNpps } = useNpps();
+  const {
+    dispensers, setDispensers, mixers, setMixers, computers, setComputers, printers, setPrinters, systemSets, setSystemSets,
+    addStockDevice, editDevice, editDeviceDetails, deleteDevice, deleteSystemSet, assembleSet, replaceEquipment, updateSystemSet, importDevices, importSystemSets, detailsReady: assetDetailsReady, summaryReady: assetSummaryReady, ensureDetails: ensureAssetDetails, loading: assetsLoading, loadError: assetsLoadError, refetch: refetchAssets
+  } = useAssets();
+  const replacementHistory=useReplacementEvents();
+  const handleReplaceEquipment=async payload=>{
+    if(!can('asset:edit'))throw Error('Bạn không có quyền thay thiết bị.');
+    if(payload.p_action==='relink'&&user?.role!=='admin')throw Error('Chỉ quản trị viên được đối chiếu liên kết.');
+    const result=await replaceEquipment(payload);
+    if(result.event)replacementHistory.addLocalEvent(result.event);
+    else await Promise.all([replacementHistory.refresh(),refetchAuditLogs()]);
+    return result;
+  };
+
+  const { repairTickets, addTicket, editTicket, deleteTicket, importTickets, loading: repairsLoading, loadError: repairsLoadError, refetch: refetchRepairs } = useRepairs();
+  const { auditLogs, addAuditLog, importAuditLogs, refetch: refetchAuditLogs } = useAuditLogs();
+  const { lockedMonths, lockMonth, unlockMonth, isDateLocked, loading: lockLoading, error: lockError, refetch: refetchLockedMonths } = useLockedMonths();
+  const { tintingLogs, importLogs, refetch: refetchTintingLogs } = useTintingLogs();
+
+  useEffect(() => {
+    if (!user?.id || !isSupabaseConfigured) return undefined;
+    return startChangeFeed();
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id || !isSupabaseConfigured) return undefined;
+    return startPrivateRealtimeSync({
+      id: user.id,
+      role: user.role,
+      managedRegion: user.managedRegion,
+    });
+  }, [user?.id, user?.role, user?.managedRegion]);
+
+  useEffect(() => {
+    const handleCloudChanges = async (event) => {
+      const detail = event.detail || {};
+      const changedTables = new Set((detail.events || []).map(item => item.table_name));
+      const refreshTasks = [];
+      if (changedTables.has('distributors')) refreshTasks.push(refetchNpps());
+      if (['system_sets', 'dispensers', 'mixers', 'computers', 'printers'].some(table => changedTables.has(table))) {
+        refreshTasks.push(refetchAssets(['system_sets', 'dispensers', 'mixers', 'computers', 'printers'].filter(table => changedTables.has(table))));
+      }
+      if (changedTables.has('repair_tickets')) refreshTasks.push(refetchRepairs());
+      if (changedTables.has('audit_logs')) refreshTasks.push(refetchAuditLogs());
+      if (changedTables.has('tinting_logs')) refreshTasks.push(refetchTintingLogs());
+      if (changedTables.has('locked_months')) refreshTasks.push(refetchLockedMonths());
+      try {
+        const committed = await refreshBeforeCheckpoint(refreshTasks, () => acknowledgeChangeFeedCursor(detail.nextCursor, detail.hasMore, detail.checkpoint));
+        if (!committed) retryChangeFeedCursor(detail.nextCursor, detail.checkpoint);
+      } catch { retryChangeFeedCursor(detail.nextCursor, detail.checkpoint); }
+    };
+    window.addEventListener('nasun-cloud-changes', handleCloudChanges);
+    return () => window.removeEventListener('nasun-cloud-changes', handleCloudChanges);
+  }, [refetchNpps, refetchAssets, refetchRepairs, refetchAuditLogs, refetchTintingLogs, refetchLockedMonths]);
+
+  useEffect(() => {
+    let refreshTimer = null;
+    const refreshAllData = () => {
+      if (!navigator.onLine || document.visibilityState !== 'visible') return;
+      window.clearTimeout(refreshTimer);
+      refreshTimer = window.setTimeout(() => {
+        Promise.allSettled([
+          refetchNpps(),
+          refetchAssets(),
+          refetchRepairs(),
+          refetchAuditLogs(),
+          refetchTintingLogs()
+        ]);
+      }, 200);
+    };
+
+    window.addEventListener('focus', refreshAllData);
+    window.addEventListener('online', refreshAllData);
+    window.addEventListener('nasun-sync-completed', refreshAllData);
+    document.addEventListener('visibilitychange', refreshAllData);
+    return () => {
+      window.clearTimeout(refreshTimer);
+      window.removeEventListener('focus', refreshAllData);
+      window.removeEventListener('online', refreshAllData);
+      window.removeEventListener('nasun-sync-completed', refreshAllData);
+      document.removeEventListener('visibilitychange', refreshAllData);
+    };
+  }, [refetchNpps, refetchAssets, refetchRepairs, refetchAuditLogs, refetchTintingLogs]);
+
+  // Excel Import Modal state
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importModalType, setImportModalType] = useState('npp');
+
+  const openImportModal = (type) => {
+    setImportModalType(type);
+    setShowImportModal(true);
+  };
+
+  // Workflow Modal state
+  const [workflowMode, setWorkflowMode] = useState(null); // 'INSTALL' | 'WITHDRAW' | 'TRANSFER' | null
+  useEffect(() => {
+    if (user && (['assets', 'npp', 'repairs', 'maintenance'].includes(activeTab) || workflowMode || showImportModal)) void ensureAssetDetails();
+  }, [user, activeTab, workflowMode, showImportModal, ensureAssetDetails]);
+  const [workflowResult, setWorkflowResult] = useState(null);
+  const [printProtocolData, setPrintProtocolData] = useState(null);
+
+  // Tech Handbook -> Repair Ticket Prefill State
+  const [prefilledRepairData, setPrefilledRepairData] = useState(null);
+  const [workspaceFilter, setWorkspaceFilter] = useState('ALL');
+  const [machineProfileReturn, setMachineProfileReturn] = useState(null);
+  const navigateMain = tab => { setWorkspaceFilter('ALL'); setGlobalSearch(''); setActiveTab(tab); };
+  const navigateWorkspace = (tab, query = '', filter = 'ALL') => { setGlobalSearch(query); setWorkspaceFilter(filter); setActiveTab(tab); };
+  const rememberMachineProfile = (machine,tab='equipment') => setMachineProfileReturn({ machine: { id: machine.id, setCode: machine.setCode, tab }, search: globalSearch, filter: workspaceFilter });
+  const returnToMachineProfile = () => { if (machineProfileReturn) navigateWorkspace('assets', machineProfileReturn.search, machineProfileReturn.filter); };
+  const requestMachineRepair = (machine,tab) => { rememberMachineProfile(machine,tab); setPrefilledRepairData({ assetCode:machine.dispenserId||'', nppId: machine.nppId, nppName: machine.nppName, machineModel: machine.dispenserModel, serialNumber: machine.dispenserSerial, productCategory: 'Máy chiết' }); navigateWorkspace('repairs'); };
+
+  const handleSelectErrorForRepair = (errorObj) => {
+    let cat = errorObj.category;
+    if (cat === 'Phần mềm') cat = 'Case';
+    else if (cat === 'Máy tính') cat = 'Case';
+    else if (cat === 'Máy in') cat = 'QL700';
+
+    setPrefilledRepairData({
+      productCategory: cat,
+      machineModel: errorObj.machineModel,
+      errorCategory: errorObj.category === 'Phần mềm' ? 'Lỗi phần mềm' : 'Lỗi phần cứng',
+      errorDescription: `[${errorObj.code}] ${errorObj.title}\n- Dấu hiệu: ${Array.isArray(errorObj.symptoms) ? errorObj.symptoms.join('; ') : errorObj.symptoms}\n- Nguyên nhân: ${errorObj.rootCause}`
+    });
+    setActiveTab('repairs');
+  };
+
+  // Calculate alerts
+  const today = new Date();
+  const maintenanceAlerts = systemSets.filter(s => {
+    if (!s.nextMaintenanceDue || s.status !== 'DA_LAP_DAT') return false;
+    const dueDate = new Date(s.nextMaintenanceDue);
+    const diffDays = Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24));
+    return diffDays <= 30; // Due within 1 month (30 days rule)
+  });
+
+  const unstabilizedAlerts = systemSets.filter(s => {
+    return s.status === 'DA_LAP_DAT' && (s.stabilizer?.includes('Chưa') || s.stabilizer?.includes('Không'));
+  });
+
+
+
+  // Helper for Dev/Mock mode local sync of device status
+  const updateLocalDeviceStatus = (cat, serial, newStatus) => {
+    if (cat === 'Máy chiết') {
+      setDispensers(prev => prev.map(d => d.serial === serial ? { ...d, status: newStatus } : d));
+    } else if (cat === 'Máy lắc') {
+      setMixers(prev => prev.map(m => m.serial === serial ? { ...m, status: newStatus } : m));
+    } else if (cat === 'Máy in') {
+      setPrinters(prev => prev.map(p => p.serial === serial ? { ...p, status: newStatus } : p));
+    }
+  };
+
+  // Repair Tickets Handlers
+  const handleAddTicket = async (newTicket) => {
+    try {
+      requireRegionEdit(user, npps.find(item => item.id === newTicket.nppId)?.region);
+      const added = await addTicket(newTicket);
+
+      // Local status sync for offline mock dev mode
+      if (isDevMode) {
+        const newStatus = added.processingStatus === 'Đã xử lý' ? 'Đang chạy tốt' : 'Cần bảo trì';
+        updateLocalDeviceStatus(added.productCategory, added.serialNumber, newStatus);
+      }
+
+      if(!isSupabaseConfigured)await addAuditLog({
+        type: 'TẠO PHIẾU SỬA CHỮA',
+        setCode: added.serialNumber,
+        nppId: added.nppId,
+        nppName: added.nppName,
+        serialList: `${added.productCategory}: ${added.machineModel} (${added.serialNumber})`,
+        technician: added.technician,
+        reason: `Tạo phiếu xử lý máy [${added.ticketCode}]`,
+        notes: added.errorDescription
+      }).catch(err => console.error('[Repair] Audit failed after confirmed save', err.code || err.name));
+      return added;
+    } catch (err) {
+      console.error(err);
+      throw err;
+    }
+  };
+
+  const handleEditTicket = async (updatedTicket) => {
+    try {
+      const source = repairTickets.find(item => item.id === updatedTicket.id);
+      requireRegionEdit(user, npps.find(item => item.id === source?.nppId)?.region);
+      requireRegionEdit(user, npps.find(item => item.id === updatedTicket.nppId)?.region);
+      const saved = await editTicket(updatedTicket.id, updatedTicket);
+
+      // Local status sync for offline mock dev mode
+      if (isDevMode) {
+        const newStatus = updatedTicket.processingStatus === 'Đã xử lý' ? 'Đang chạy tốt' : 'Cần bảo trì';
+        updateLocalDeviceStatus(updatedTicket.productCategory, updatedTicket.serialNumber, newStatus);
+      }
+      return saved;
+    } catch (err) {
+      console.error(err);
+      throw err;
+    }
+  };
+
+  const handleDeleteTicket = async (ticketId) => {
+    if (!can('repair:delete')) throw new Error('Bạn không có quyền xóa phiếu.');
+    return deleteTicket(ticketId);
+  };
+
+  // NPP CRUD Handlers
+  const handleAddNpp = async (newNpp) => {
+    try {
+      if (!can('npp:create')) throw new Error('Bạn không có quyền thêm nhà phân phối.');
+      requireRegionEdit(user, newNpp.region);
+      return await addNpp(newNpp);
+    } catch (err) {
+      console.error(err);
+      alert('Lỗi thêm NPP: ' + err.message);
+      throw err;
+    }
+  };
+
+  const handleEditNpp = async (updatedNpp) => {
+    try {
+      const previousNpp = npps.find(npp => npp.id === updatedNpp.id);
+      if (!can('npp:edit')) throw new Error('Bạn không có quyền sửa nhà phân phối.');
+      requireRegionEdit(user, previousNpp?.region);
+      requireRegionEdit(user, updatedNpp.region);
+      const wasInactive = String(previousNpp?.status || '').toLowerCase().includes('ngưng');
+      const isNowInactive = String(updatedNpp.status || '').toLowerCase().includes('ngưng');
+      const persistence = await editNpp(updatedNpp.id, updatedNpp);
+      if (!persistence?.queued) {
+        if (isDevMode) setSystemSets(previous => previous.map(machine => machine.nppId === updatedNpp.id ? { ...machine, region: updatedNpp.region, province: updatedNpp.province } : machine));
+        else await refetchAssets();
+      }
+
+      if (!wasInactive && isNowInactive) {
+        const assignedSets = systemSets.filter(set => String(set.nppId || set.npp_id || '') === String(updatedNpp.id));
+        const warehouseRegion = normalizeWarehouseRegion(updatedNpp.region);
+        for (const set of assignedSets) {
+          const setCode = set.setCode || set.set_code;
+          const recallNote = `Tự động thu hồi về kho ngày ${new Date().toISOString().split('T')[0]} do NPP ${updatedNpp.name} ngưng hợp tác.`;
+          await updateSystemSet(setCode, {
+            nppId: null,
+            npp_id: null,
+            nppName: 'Tự do trong kho',
+            npp_name: 'Tự do trong kho',
+            region: warehouseRegion,
+            province: updatedNpp.province || set.province || '',
+            status: 'TRONG_KHO',
+            notes: [set.notes, recallNote].filter(Boolean).join('\n')
+          });
+        }
+
+        if (assignedSets.length > 0) {
+          await addAuditLog({
+            type: 'THU HỒI TỰ ĐỘNG – NPP NGƯNG HỢP TÁC',
+            setCode: assignedSets.map(set => set.setCode || set.set_code).join(', '),
+            nppId: updatedNpp.id,
+            nppName: updatedNpp.name,
+            serialList: assignedSets.map(set => set.setCode || set.set_code).join(', '),
+            technician: user?.name || user?.full_name || 'Hệ thống',
+            reason: 'Nhà phân phối chuyển trạng thái Đã ngưng hợp tác',
+            notes: `Đã thu hồi ${assignedSets.length} bộ máy về kho tự do ${warehouseRegion}; thiết bị trong bộ được giữ nguyên.`
+          });
+        }
+      }
+      return persistence;
+    } catch (err) {
+      console.error(err);
+      alert('Lỗi sửa NPP: ' + err.message);
+      throw err;
+    }
+  };
+
+  const handleDeleteNpp = async (nppId) => {
+    const hasAssignedSets = systemSets.some(s => s.nppId === nppId && s.status === 'DA_LAP_DAT');
+    if (hasAssignedSets) {
+      alert('Không thể xóa NPP này vì vẫn còn bộ máy đang lắp đặt. Vui lòng thu hồi bộ máy trước!');
+      return;
+    }
+    try {
+      return await deleteNpp(nppId);
+    } catch (err) {
+      console.error(err);
+      alert('Lỗi xóa NPP: ' + err.message);
+      throw err;
+    }
+  };
+
+  // Device CRUD Handlers
+  const handleEditDevice = async (category, updatedData) => {
+    try {
+      const pluralCat = category === 'computer' ? 'computers' : category === 'dispenser' ? 'dispensers' : category === 'mixer' ? 'mixers' : 'printers';
+      const deviceList = category === 'dispenser' ? dispensers : category === 'mixer' ? mixers : category === 'computer' ? computers : printers;
+      const sourceId = updatedData.sourceId || updatedData.id;
+      const { sourceId: _ignoredSourceId, expectedRevision, ...deviceUpdates } = updatedData;
+      const oldDevice = deviceList.find(d => d.id === sourceId);
+      if (!can('asset:edit')) throw new Error('Bạn không có quyền sửa thiết bị.');
+      if (user?.role === 'technician') {
+        requireRegionEdit(user, systemSets.find(item => item.setCode === oldDevice?.setCode)?.region);
+        if (updatedData.setCode) requireRegionEdit(user, systemSets.find(item => item.setCode === updatedData.setCode)?.region);
+      }
+
+      if (!oldDevice) throw new Error('Thiết bị không còn tồn tại. Vui lòng tải lại dữ liệu.');
+      await editDeviceDetails(pluralCat, sourceId, { ...deviceUpdates, id: sourceId }, expectedRevision);
+    } catch (err) {
+      console.error(err);
+      throw err;
+    }
+  };
+
+  const handleDeleteDevice = async (category, deviceId, setCode) => {
+    try {
+      const pluralCat = category === 'computer' ? 'computers' : category === 'dispenser' ? 'dispensers' : category === 'mixer' ? 'mixers' : 'printers';
+      await deleteDevice(pluralCat, deviceId);
+
+      const targetSetCode = setCode || systemSets.find(s => s.dispenserId === deviceId || s.mixerId === deviceId || s.computerId === deviceId || s.printerId === deviceId)?.setCode;
+      if (targetSetCode) {
+        const targetSet = systemSets.find(s => s.setCode === targetSetCode);
+        if (targetSet) {
+          const updates = {};
+          if (category === 'dispenser' && targetSet.dispenserId === deviceId) {
+            updates.dispenserId = null; updates.dispenserSerial = null; updates.dispenserModel = null;
+          } else if (category === 'mixer' && targetSet.mixerId === deviceId) {
+            updates.mixerId = null; updates.mixerSerial = null; updates.mixerModel = null;
+          } else if (category === 'computer' && targetSet.computerId === deviceId) {
+            updates.computerId = null; updates.computerType = null;
+          } else if (category === 'printer' && targetSet.printerId === deviceId) {
+            updates.printerId = null; updates.printerSerial = null;
+          }
+          if (Object.keys(updates).length > 0) {
+            await updateSystemSet(targetSetCode, updates);
+          }
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Lỗi xóa thiết bị: ' + err.message);
+    }
+  };
+
+  const handleAddStockDevice = async (category, newDeviceData) => {
+    if (user?.role === 'technician') throw new Error('Thiết bị kho chưa gán khu vực cần quản trị viên hoặc quản lý thêm.');
+    return addStockDevice(category, newDeviceData);
+  };
+
+  const handleAssembleSet = async (newCombo) => {
+    let assignedSets = systemSets;
+    if (newCombo.nppId && isSupabaseConfigured) {
+      if (!navigator.onLine) throw new Error('Cần kết nối mạng để kiểm tra bộ máy NPP đang có trước khi ghép.');
+      const { data, error } = await supabase.from('system_sets').select('set_code,npp_id').eq('npp_id', newCombo.nppId).limit(100);
+      if (error) throw new Error('Chưa kiểm tra được bộ máy hiện có của NPP. Nội dung chưa được lưu.');
+      assignedSets = data || [];
+    }
+    assertAdditionalSetConfirmed(assignedSets, newCombo.nppId, newCombo.confirmAdditionalSet);
+
+    if (user?.role === 'technician') requireRegionEdit(user, newCombo.region);
+    const disp = dispensers.find(d => d.id === newCombo.dispenserId);
+    const mix = mixers.find(m => m.id === newCombo.mixerId);
+    const pc = computers.find(c => c.id === newCombo.computerId);
+    const prn = printers.find(p => p.id === newCombo.printerId);
+
+    const setCode = newCombo.setCode?.trim() || generateNextSetCode(systemSets);
+
+    const newSetObj = {
+      set_code: setCode,
+      operationId:newCombo.operationId,
+      npp_id: newCombo.nppId || null,
+      npp_name: newCombo.nppName || 'Kho Tổng Trung Tâm',
+      region: newCombo.region || 'Kho Tổng',
+      province: newCombo.province || '',
+      dispenser_id: disp?.id || null,
+      dispenser_serial: disp?.serial || '',
+      dispenser_model: disp?.model || 'N/A',
+      mixer_id: mix?.id || null,
+      mixer_serial: mix?.serial || '',
+      mixer_model: mix?.model || 'N/A',
+      computer_id: pc?.id || null,
+      computer_type: pc?.type || 'N/A',
+      printer_id: prn?.id || null,
+      printer_serial: prn?.serial || '',
+      printer_model: prn?.model || 'QL700',
+      stabilizer: pc?.stabilizer?.hasStabilizer ? pc.stabilizer.brand || 'Có ổn áp' : 'Chưa có ổn áp',
+      status: newCombo.status || (newCombo.nppId ? 'DA_LAP_DAT' : 'TRONG_KHO'),
+      install_date: newCombo.nppId ? (newCombo.installDate || new Date().toLocaleDateString('en-CA')) : null,
+      last_maintenance_date: null,
+      next_maintenance_due: null,
+      technician: newCombo.technician || 'Quản lý Kho',
+      salesperson: newCombo.salesperson || '',
+      notes: newCombo.notes || '',
+      tinting_software: 'ColorExpert 3',
+      software_version: 'Standard Stock',
+      installation_photos: newCombo.installationPhotos || newCombo.installation_photos || []
+    };
+
+    try {
+      await assembleSet(newSetObj);
+      if (!isSupabaseConfigured && disp) await editDevice('dispensers', disp.id, { is_assigned: true, set_code: setCode });
+      if (!isSupabaseConfigured && mix) await editDevice('mixers', mix.id, { is_assigned: true, set_code: setCode });
+      if (!isSupabaseConfigured && pc) await editDevice('computers', pc.id, { is_assigned: true, set_code: setCode });
+      if (!isSupabaseConfigured && prn) await editDevice('printers', prn.id, { is_assigned: true, set_code: setCode });
+    } catch (err) {
+      console.error(err);
+      throw err;
+    }
+  };
+
+  const handleInstallSubmit = async (data) => {
+    const targetNpp = npps.find(n => n.id === data.nppId);
+    const workflowData = {
+      ...data,
+      nppName: targetNpp?.name || 'NPP',
+      region: targetNpp?.region || 'Việt Nam',
+      province: targetNpp?.province || '',
+      photos: data.installationPhotos || []
+    };
+
+    try {
+      const transaction = await executeWorkflowTransaction('INSTALL', workflowData);
+      {
+        if (transaction.queued) {
+          setSystemSets(prev => {
+            const updated = prev.map(set => (set.setCode || set.set_code) === data.setCode ? {
+              ...set, nppId: data.nppId, npp_id: data.nppId,
+              nppName: workflowData.nppName, npp_name: workflowData.nppName,
+              region: workflowData.region, province: workflowData.province,
+              status: 'DA_LAP_DAT', installDate: data.installedDate,
+              lastMaintenanceDate: data.installedDate, nextMaintenanceDue: data.nextMaintenanceDue,
+            } : set);
+            persistWorkflowCache('system_sets', updated);
+            return updated;
+          });
+        } else {
+          await Promise.allSettled([refetchAssets(), refetchNpps(), refetchAuditLogs()]);
+        }
+        setWorkflowResult({ mode: 'INSTALL', setCode: data.setCode, destinationNpp: workflowData.nppName, queued: Boolean(transaction.queued) });
+        return;
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Lỗi lắp đặt máy: ' + err.message);
+      throw err;
+    }
+  };
+
+  const handleWithdrawSubmit = async (data) => {
+    const targetSet = systemSets.find(s => s.setCode === data.setCode);
+    const targetNpp = npps.find(npp => String(npp.id) === String(targetSet?.nppId || targetSet?.npp_id || ''));
+    const isDistributorClosure = String(data.reason || '').toLowerCase().includes('ngưng hợp tác');
+    const warehouseRegion = normalizeWarehouseRegion(targetNpp?.region || targetSet?.region);
+
+    try {
+      const workflowData = {
+        ...data,
+        sourceNppId: targetNpp?.id || targetSet?.nppId || targetSet?.npp_id || null,
+        sourceNppName: targetNpp?.name || targetSet?.nppName || '',
+        warehouseRegion,
+        isDistributorClosure,
+        photos: data.photos || [],
+        notes: `${data.deviceCondition} | ${data.notes || ''}`
+      };
+      const transaction = await executeWorkflowTransaction('WITHDRAW', workflowData);
+      {
+        if (transaction.queued) {
+          setSystemSets(prev => {
+            const updated = prev.map(set => {
+              const sameSet = (set.setCode || set.set_code) === data.setCode;
+              const sameNpp = isDistributorClosure && String(set.nppId || set.npp_id || '') === String(workflowData.sourceNppId || '');
+              return sameSet || sameNpp ? {
+                ...set, nppId: null, npp_id: null, nppName: 'Tự do trong kho', npp_name: 'Tự do trong kho',
+                region: warehouseRegion, status: 'TRONG_KHO'
+              } : set;
+            });
+            persistWorkflowCache('system_sets', updated);
+            return updated;
+          });
+          if (isDistributorClosure && targetNpp) {
+            setNpps(prev => {
+              const updated = prev.map(npp => npp.id === targetNpp.id ? { ...npp, status: 'Đã ngưng hợp tác' } : npp);
+              persistWorkflowCache('npps', updated);
+              return updated;
+            });
+          }
+        } else {
+          await Promise.allSettled([refetchAssets(), refetchNpps(), refetchAuditLogs()]);
+        }
+        setWorkflowResult({ mode: 'WITHDRAW', setCode: data.setCode, sourceNpp: workflowData.sourceNppName || targetSet?.nppName || 'NPP', destinationNpp: `Tự do trong kho - ${warehouseRegion}`, queued: Boolean(transaction.queued) });
+        return;
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Lỗi thu hồi máy: ' + err.message);
+      throw err;
+    }
+  };
+
+  const handleTransferSubmit = async (data) => {
+    const targetNpp = npps.find(n => n.id === data.newNppId);
+    const targetSet = systemSets.find(s => s.setCode === data.setCode);
+
+    try {
+      const workflowData = {
+        ...data,
+        nppId: data.newNppId,
+        nppName: targetNpp?.name || 'NPP Mới',
+        region: targetNpp?.region || targetSet?.region || '',
+        province: targetNpp?.province || '',
+        sourceNppName: targetSet?.nppName || '',
+        photos: data.photos || []
+      };
+      const transaction = await executeWorkflowTransaction('TRANSFER', workflowData);
+      {
+        if (transaction.queued) {
+          setSystemSets(prev => {
+            const updated = prev.map(set => (set.setCode || set.set_code) === data.setCode ? {
+              ...set, nppId: data.newNppId, npp_id: data.newNppId,
+              nppName: workflowData.nppName, npp_name: workflowData.nppName,
+              region: workflowData.region, province: workflowData.province, status: 'DA_LAP_DAT'
+            } : set);
+            persistWorkflowCache('system_sets', updated);
+            return updated;
+          });
+        } else {
+          await Promise.allSettled([refetchAssets(), refetchNpps(), refetchAuditLogs()]);
+        }
+        setWorkflowResult({ mode: 'TRANSFER', setCode: data.setCode, sourceNpp: workflowData.sourceNppName || targetSet?.nppName || 'NPP nguồn', destinationNpp: workflowData.nppName, queued: Boolean(transaction.queued) });
+        return;
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Lỗi điều chuyển máy: ' + err.message);
+      throw err;
+    }
+  };
+
+  const handleUpdateRegionalSet = async (setCode, updates) => {
+    if (!can('asset:edit')) throw new Error('Bạn không có quyền sửa bộ máy.');
+    const source = systemSets.find(item => item.setCode === setCode);
+    if (!source) throw new Error('Không tìm thấy bộ máy.');
+    if (user?.role === 'technician') {
+      requireRegionEdit(user, source.region);
+      requireRegionEdit(user, updates.region ?? source.region);
+      const nppId = updates.nppId ?? updates.npp_id ?? source.nppId;
+      if (nppId) requireRegionEdit(user, npps.find(item => item.id === nppId)?.region);
+    }
+    return updateSystemSet(setCode, updates);
+  };
+
+  const handleCompleteMaintenance = async (maintData) => {
+    if (!can('asset:edit')) throw new Error('Bạn không có quyền ghi nhận bảo trì.');
+    const targetSet = systemSets.find(s => s.setCode === maintData.setCode);
+    if (!targetSet) throw new Error('Không tìm thấy bộ máy.');
+    requireRegionEdit(user, targetSet.region);
+    if (isSupabaseConfigured) {
+      const {operationId,expectedRevision,...payload}=maintData;
+      const result=await submitFieldCommand({kind:'MAINTENANCE',entityId:maintData.setCode,expected:expectedRevision,payload,operationId});
+      if(!result.queued)await Promise.all([refetchAssets(['system_sets']), refetchAuditLogs()]);
+      return result;
+    }
+    try {
+      await updateSystemSet(maintData.setCode, {
+        last_maintenance_date: maintData.lastMaintenanceDate,
+        next_maintenance_due: maintData.hasIssues ? targetSet.nextMaintenanceDue : maintData.nextMaintenanceDue,
+        status: maintData.hasIssues ? 'BAO_THUONG_BAO_TRI' : targetSet.status === 'BAO_THUONG_BAO_TRI' ? 'DA_LAP_DAT' : targetSet.status,
+        ...(maintData.photos?.length ? { installationPhotos: [...(targetSet?.installationPhotos || []), ...maintData.photos] } : {})
+      });
+
+      await addAuditLog({
+        type: 'BẢO TRÌ / SỬA CHỮA',
+        setCode: maintData.setCode,
+        nppId: targetSet?.nppId,
+        nppName: targetSet?.nppName,
+        serialList: `Bảo trì bộ máy ${maintData.setCode}`,
+        technician: user?.name || user?.full_name || 'Kỹ thuật viên bảo trì',
+        reason: 'Bảo trì định kỳ 1 năm / lần',
+        notes: maintData.notes || 'Đã vệ sinh ống chiết và kiểm tra máy lắc.'
+      });
+    } catch (err) {
+      console.error(err);
+      throw err;
+    }
+  };
+
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+
+  const handleImportData = async (importedPackage) => {
+    if (!importedPackage) return;
+    if (importedPackage.npps && Array.isArray(importedPackage.npps)) {
+      await importNpps(importedPackage.npps);
+    }
+    if (importedPackage.dispensers && Array.isArray(importedPackage.dispensers)) {
+      await importDevices('dispensers', importedPackage.dispensers);
+    }
+    if (importedPackage.mixers && Array.isArray(importedPackage.mixers)) {
+      await importDevices('mixers', importedPackage.mixers);
+    }
+    if (importedPackage.computers && Array.isArray(importedPackage.computers)) {
+      await importDevices('computers', importedPackage.computers);
+    }
+    if (importedPackage.printers && Array.isArray(importedPackage.printers)) {
+      await importDevices('printers', importedPackage.printers);
+    }
+    if (importedPackage.systemSets && Array.isArray(importedPackage.systemSets)) {
+      await importSystemSets(importedPackage.systemSets);
+    }
+    if (importedPackage.repairTickets && Array.isArray(importedPackage.repairTickets)) {
+      await importTickets(importedPackage.repairTickets);
+    }
+    if (importedPackage.tintingLogs && Array.isArray(importedPackage.tintingLogs)) {
+      await importLogs(importedPackage.tintingLogs);
+    }
+    if (importedPackage.auditLogs && Array.isArray(importedPackage.auditLogs)) {
+      await importAuditLogs(importedPackage.auditLogs);
+    }
+  };
+
+  const regionalData = useMemo(() => scopeWorkspace({ npps, systemSets, dispensers, mixers, computers, printers, repairTickets, auditLogs, tintingLogs }, workspaceRegion), [npps, systemSets, dispensers, mixers, computers, printers, repairTickets, auditLogs, tintingLogs, workspaceRegion]);
+  const scopedMaintenanceAlerts = maintenanceAlerts.filter(item => workspaceRegion === 'ALL' || resolveWorkspaceRegion(item, npps, systemSets) === workspaceRegion);
+  const scopedUnstabilizedAlerts = unstabilizedAlerts.filter(item => workspaceRegion === 'ALL' || resolveWorkspaceRegion(item, npps, systemSets) === workspaceRegion);
+  const scopedPendingRepairCount = regionalData.repairTickets.filter(ticket => ticket.processingStatus === 'Chưa xử lý').length;
+  const regionCounts = Object.fromEntries(['Miền Bắc', 'Miền Trung', 'Miền Nam', 'UNASSIGNED'].map(region => [region, npps.filter(item => resolveWorkspaceRegion(item) === region).length]));
+  regionCounts.ALL = npps.length;
+
+  if (!user) {
+    return <LoginModal />;
+  }
+
+  return (
+    <>
+    {authenticationDialog}
+    <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg-main)' }}>
+
+      {/* Sidebar Navigation for Desktop & Mobile sliding drawer */}
+      <Sidebar
+        activeTab={activeTab}
+        setActiveTab={navigateMain}
+        maintenanceCount={scopedMaintenanceAlerts.length}
+        pendingRepairCount={scopedPendingRepairCount}
+        isOpen={isMobileSidebarOpen}
+        onClose={() => setIsMobileSidebarOpen(false)}
+      />
+
+      {/* Sidebar Backdrop Overlay on Mobile */}
+      {isMobileSidebarOpen && (
+        <div
+          className="sidebar-backdrop mobile-only"
+          onClick={() => setIsMobileSidebarOpen(false)}
+        />
+      )}
+
+      {/* Main Container */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+
+        {/* Top Header */}
+        <Header
+          activeTab={activeTab}
+          assetDetailsReady={assetDetailsReady}
+          onEnsureAssetDetails={ensureAssetDetails}
+          onNavigate={setActiveTab}
+          globalSearch={globalSearch}
+          setGlobalSearch={setGlobalSearch}
+          onOpenNewInstallation={() => setWorkflowMode('INSTALL')}
+          maintenanceAlerts={scopedMaintenanceAlerts}
+          unstabilizedAlerts={scopedUnstabilizedAlerts}
+          onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
+          npps={regionalData.npps}
+          dispensers={regionalData.dispensers}
+          mixers={regionalData.mixers}
+          computers={regionalData.computers}
+          printers={regionalData.printers}
+          systemSets={regionalData.systemSets}
+          repairTickets={regionalData.repairTickets}
+          auditLogs={regionalData.auditLogs}
+          tintingLogs={regionalData.tintingLogs}
+          onImportData={handleImportData}
+        />
+
+        {/* Dynamic View Content */}
+        <FieldSyncStatus dataLoading={assetsLoading || nppsLoading || repairsLoading} dataError={[assetsLoadError, nppsLoadError, repairsLoadError].filter(Boolean).join(' ')} />
+        {(nppsLoadError || assetsLoadError) && <div className="alert alert-warning" role="alert" style={{ margin: '12px 28px 0' }}>
+          <div>{[nppsLoadError, assetsLoadError].filter(Boolean).join(' ')}</div>
+          <button type="button" className="btn btn-secondary btn-sm" disabled={nppsLoading || assetsLoading} onClick={() => Promise.allSettled([refetchNpps(), refetchAssets()])}>Tải lại dữ liệu NPP và bộ máy</button>
+        </div>}
+        <main key={activeTab} className="page-transition nasun-workspace" data-page={activeTab} style={{ flex: 1, padding: '28px', overflowY: 'auto' }}>
+          {!['users', 'techHandbook'].includes(activeTab) && <RegionalWorkspaceBar key={regionalIdentity} user={user} region={workspaceRegion} onChange={setWorkspaceRegion} counts={regionCounts} compact={activeTab === 'npp'} extra={activeTab === 'npp' ? <label className="coverage-inline">Ghép bộ<select aria-label="Lọc NPP theo tình trạng ghép bộ" className="form-select" value={nppCoverageFilter} onChange={event => setNppCoverageFilter(event.target.value)}><option value="ALL">Tất cả NPP</option><option value="ASSIGNED">Đã ghép bộ</option><option value="UNASSIGNED">Chưa ghép bộ</option></select></label> : null} />}
+          <WorkspaceRegionContext.Provider value={workspaceRegion}><Suspense key={`${regionalIdentity}:${workspaceRegion}`} fallback={<div className="glass-panel" style={{ padding: '28px', color: 'var(--text-muted)' }}>Đang tải màn hình...</div>}>
+          {machineProfileReturn && ['repairs', 'maintenance'].includes(activeTab) && (
+            <div className="glass-panel" style={{ padding: 12, marginBottom: 16 }}>
+              <button className="btn btn-secondary" onClick={() => navigateWorkspace('assets', machineProfileReturn.search, machineProfileReturn.filter)}>← Quay lại hồ sơ máy {machineProfileReturn.machine.setCode}</button>
+            </div>
+          )}
+
+          {activeTab === 'dashboard' && ((!assetSummaryReady || nppsLoading && !npps.length || repairsLoading && !repairTickets.length) ? <AssetLoadingSkeleton /> : (
+            <Dashboard
+              replacementEvents={replacementHistory.events}
+              replacementHistoryError={replacementHistory.error}
+              teamUsers={qcUsers}
+              systemSets={regionalData.systemSets}
+              npps={regionalData.npps}
+              dispensers={regionalData.dispensers}
+              mixers={regionalData.mixers}
+              computers={regionalData.computers}
+              printers={regionalData.printers}
+              repairTickets={regionalData.repairTickets}
+              auditLogs={regionalData.auditLogs}
+              maintenanceAlerts={scopedMaintenanceAlerts}
+              unstabilizedAlerts={scopedUnstabilizedAlerts}
+              setActiveTab={navigateMain}
+              onNavigateWorkspace={navigateWorkspace}
+              onOpenNewInstallation={() => setWorkflowMode('INSTALL')}
+            />
+          ))}
+
+          {activeTab === 'npp' && (!assetDetailsReady ? <AssetLoadingSkeleton /> : (
+            <NppManagement
+              coverageFilter={nppCoverageFilter}
+              onCoverageFilterChange={setNppCoverageFilter}
+              globalSearch={globalSearch}
+              npps={regionalData.npps}
+              systemSets={regionalData.systemSets}
+              onAddNpp={handleAddNpp}
+              onEditNpp={handleEditNpp}
+              onDeleteNpp={handleDeleteNpp}
+              onOpenImportModal={() => openImportModal('npp')}
+            />
+          ))}
+
+          {activeTab === 'assets' && (!assetDetailsReady ? <AssetLoadingSkeleton /> : (
+            <AssetManagement
+              catalog={{ systemSets, npps, dispensers, mixers, computers, printers }}
+              globalSearch={globalSearch}
+              initialFilter={workspaceFilter}
+              repairTickets={regionalData.repairTickets}
+              auditLogs={regionalData.auditLogs}
+              onRequestRepair={requestMachineRepair}
+              onRequestMaintenance={(machine,tab) => { rememberMachineProfile(machine,tab); navigateWorkspace('maintenance', machine.setCode); }}
+              initialProfile={machineProfileReturn?.machine}
+              onProfileRestored={() => setMachineProfileReturn(null)}
+              systemSets={regionalData.systemSets}
+              npps={regionalData.npps}
+              dispensers={regionalData.dispensers}
+              mixers={regionalData.mixers}
+              computers={regionalData.computers}
+              printers={regionalData.printers}
+              onAssembleSet={handleAssembleSet}
+              onAddStockDevice={handleAddStockDevice}
+              onReplaceEquipment={handleReplaceEquipment}
+              replacementEvents={replacementHistory.events}
+              replacementHistoryError={replacementHistory.error}
+              onEditDevice={handleEditDevice}
+              onDeleteDevice={handleDeleteDevice}
+              onOpenImportModal={openImportModal}
+              onEditSet={handleUpdateRegionalSet}
+              onDeleteSet={handleSensitiveSetDeletion}
+            />
+          ))}
+
+          {activeTab === 'repairs' && (!assetDetailsReady ? <AssetLoadingSkeleton /> : (
+            <RepairWorkspaceBoundary><DeviceRepairProcessing
+              loading={repairsLoading}
+              loadError={repairsLoadError}
+              onReload={refetchRepairs}
+              ticketCatalog={repairTickets}
+              globalSearch={globalSearch}
+              initialFilter={workspaceFilter}
+              repairTickets={regionalData.repairTickets}
+              npps={regionalData.npps}
+              systemSets={regionalData.systemSets}
+              qcUsers={qcUsers}
+              onAddTicket={handleAddTicket}
+              onEditTicket={handleEditTicket}
+              onDeleteTicket={handleDeleteTicket}
+              prefilledTicket={prefilledRepairData}
+              onReturnToProfile={machineProfileReturn ? returnToMachineProfile : undefined}
+              onClearPrefill={() => setPrefilledRepairData(null)}
+              onOpenImportModal={() => openImportModal('repair')}
+              isDateLocked={isDateLocked}
+            /></RepairWorkspaceBoundary>
+          ))}
+
+          {activeTab === 'techHandbook' && (
+            <TechHandbook
+              globalSearch={globalSearch}
+              onSelectErrorForRepair={handleSelectErrorForRepair}
+            />
+          )}
+
+
+          {activeTab === 'routeMap' && (
+            <FieldRouteMap
+              npps={regionalData.npps}
+              systemSets={regionalData.systemSets}
+              repairTickets={regionalData.repairTickets}
+              onAddAuditLog={addAuditLog}
+              onNavigateTab={(tab) => setActiveTab(tab)}
+            />
+          )}
+
+          {activeTab === 'workflows' && (
+            <div className="workspace-screen workflow-screen" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              <div className="glass-panel" style={{ padding: '24px' }}>
+                <h2 style={{ fontSize: '1.2rem', fontWeight: '800', marginBottom: '8px' }}>
+                  Trung Tâm Nghiệp Vụ Cấp Phát, Thu Hồi & Điều Chuyển Thiết Bị
+                </h2>
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '20px' }}>
+                  Thực hiện các tác nghiệp trực quan với quy trình tự động thiết lập hạn bảo trì 1 năm và xuất biên bản bàn giao.
+                </p>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }}>
+                  <button className="btn btn-primary" style={{ padding: '20px', flexDirection: 'column', gap: '8px', fontSize: '1rem' }} onClick={() => setWorkflowMode('INSTALL')}>
+                    <span style={{ fontSize: '1.5rem' }}>📦</span>
+                    <span>1. Cấp Phát / Lắp Đặt Mới</span>
+                  </button>
+
+                  <button className="btn btn-danger" style={{ padding: '20px', flexDirection: 'column', gap: '8px', fontSize: '1rem' }} onClick={() => setWorkflowMode('WITHDRAW')}>
+                    <span style={{ fontSize: '1.5rem' }}>🔴</span>
+                    <span>2. Thu Hồi Bộ Máy Từ NPP</span>
+                  </button>
+
+                  <button className="btn btn-secondary" style={{ padding: '20px', flexDirection: 'column', gap: '8px', fontSize: '1rem' }} onClick={() => setWorkflowMode('TRANSFER')}>
+                    <span style={{ fontSize: '1.5rem' }}>🔄</span>
+                    <span>3. Điều Chuyển Trực Tiếp NPP A ➔ B</span>
+                  </button>
+                </div>
+              </div>
+
+              {workflowResult && (
+                <div className="glass-panel" style={{ padding: '18px 20px', borderColor: 'rgba(16, 185, 129, 0.4)' }}>
+                  <div style={{ color: 'var(--accent-emerald)', fontWeight: 800, marginBottom: '6px' }}>
+                    ✓ {workflowResult.mode === 'INSTALL' ? 'Đã cấp phát' : workflowResult.mode === 'WITHDRAW' ? 'Đã thu hồi' : 'Đã điều chuyển'} bộ máy {workflowResult.setCode}
+                  </div>
+                  <div style={{ color: 'var(--text-main)', fontSize: '0.9rem' }}>
+                    {workflowResult.mode === 'INSTALL' && <>Nhà phân phối nhận: <strong>{workflowResult.destinationNpp}</strong></>}
+                    {workflowResult.mode === 'WITHDRAW' && <>Thu hồi từ <strong>{workflowResult.sourceNpp}</strong> về <strong>{workflowResult.destinationNpp}</strong></>}
+                    {workflowResult.mode === 'TRANSFER' && <>Từ <strong>{workflowResult.sourceNpp}</strong> sang <strong>{workflowResult.destinationNpp}</strong></>}
+                  </div>
+                  {workflowResult.queued && (
+                    <div style={{ color: 'var(--accent-amber)', fontSize: '0.78rem', marginTop: '6px' }}>
+                      Đang chờ đồng bộ lên Cloud khi kết nối ổn định.
+                    </div>
+                  )}
+                  <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '8px' }}>
+                    Chi tiết tác vụ đã được lưu tại mục Nhật Ký Tác Nghiệp.
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'maintenance' && (!assetDetailsReady ? <AssetLoadingSkeleton /> : (
+            <MaintenanceSchedule
+              globalSearch={globalSearch}
+              initialFilter={workspaceFilter}
+              systemSets={regionalData.systemSets}
+              onCompleteMaintenance={handleCompleteMaintenance}
+              onReturnToProfile={machineProfileReturn ? returnToMachineProfile : undefined}
+              onUpdateSystemSet={handleUpdateRegionalSet}
+              onDeleteSystemSet={handleSensitiveSetDeletion}
+            />
+          ))}
+
+          {activeTab === 'auditLogs' && (
+            <AuditLogs
+              globalSearch={globalSearch}
+              auditLogs={regionalData.auditLogs}
+            />
+          )}
+
+          {activeTab === 'users' && (
+            <UserManagement
+              lockedMonths={lockedMonths}
+              lockMonth={lockMonth}
+              unlockMonth={unlockMonth}
+              lockLoading={lockLoading}
+              lockError={lockError}
+            />
+          )}
+
+          </Suspense></WorkspaceRegionContext.Provider>
+
+        </main>
+      </div>
+
+      {/* Mobile Bottom Navigation Bar for Mobile Phones */}
+      <MobileBottomNav
+        activeTab={activeTab}
+        setActiveTab={navigateMain}
+        maintenanceCount={scopedMaintenanceAlerts.length}
+        pendingRepairCount={scopedPendingRepairCount}
+        onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
+      />
+
+      {/* Workflow Execution Modal */}
+      {workflowMode && (!assetDetailsReady ? <div className="modal-overlay"><div className="modal-content"><AssetLoadingSkeleton /><p role="alert">{assetsLoadError}</p><button className="btn btn-secondary" onClick={() => setWorkflowMode(null)}>Đóng</button><button className="btn btn-primary" disabled={assetsLoading} onClick={() => void ensureAssetDetails()}>Tải lại</button></div></div> : (
+        <WorkflowModal
+          mode={workflowMode}
+          systemSets={systemSets}
+          npps={npps}
+          onClose={() => setWorkflowMode(null)}
+          onSubmitInstall={handleInstallSubmit}
+          onSubmitWithdraw={handleWithdrawSubmit}
+          onSubmitTransfer={handleTransferSubmit}
+          onPrintProtocol={(pData) => setPrintProtocolData(pData)}
+          isDateLocked={isDateLocked}
+        />
+      ))}
+
+      {/* Handover Printable Protocol Modal */}
+      {printProtocolData && (
+        <HandoverPrintModal
+          protocolData={printProtocolData}
+          onClose={() => setPrintProtocolData(null)}
+        />
+      )}
+
+      {/* Excel Import Modal */}
+      {showImportModal && (!assetDetailsReady ? <div className="modal-overlay"><div className="modal-content"><AssetLoadingSkeleton /><p role="alert">{assetsLoadError}</p><button className="btn btn-secondary" onClick={() => setShowImportModal(false)}>Đóng</button><button className="btn btn-primary" disabled={assetsLoading} onClick={() => void ensureAssetDetails()}>Tải lại</button></div></div> : (
+        <Suspense fallback={null}>
+        <ExcelImportModal
+          importType={importModalType}
+          existingNpps={npps}
+          existingDispensers={dispensers}
+          existingMixers={mixers}
+          existingComputers={computers}
+          existingPrinters={printers}
+          onImportNpps={async (newItems) => {
+            const result = await importNpps(newItems);
+            await addAuditLog({
+              type: 'IMPORT EXCEL – NPP',
+              setCode: '—',
+              nppId: '—',
+              nppName: `Đã import ${newItems.length} NPP từ Excel`,
+              serialList: newItems.map(n => n.name).join(', '),
+              technician: 'Hệ thống – Import Excel',
+              reason: 'Nhập hàng loạt từ file Excel',
+              notes: `Tổng ${newItems.length} NPP mới được thêm vào danh sách`
+            });
+            return result;
+          }}
+          onImportDispensers={async (newItems) => {
+            const result = await importDevices('dispenser', newItems);
+            await addAuditLog({
+              type: 'IMPORT EXCEL – MÁY CHIẾT',
+              setCode: '—', nppId: '—',
+              nppName: `Đã import ${newItems.length} Máy Chiết từ Excel`,
+              serialList: newItems.map(d => d.serial).join(', '),
+              technician: 'Hệ thống – Import Excel',
+              reason: 'Nhập hàng loạt từ file Excel',
+              notes: `Tổng ${newItems.length} Máy Chiết mới vào kho`
+            });
+            return result;
+          }}
+          onImportMixers={async (newItems) => {
+            const result = await importDevices('mixer', newItems);
+            await addAuditLog({
+              type: 'IMPORT EXCEL – MÁY LẮC',
+              setCode: '—', nppId: '—',
+              nppName: `Đã import ${newItems.length} Máy Lắc từ Excel`,
+              serialList: newItems.map(m => m.serial).join(', '),
+              technician: 'Hệ thống – Import Excel',
+              reason: 'Nhập hàng loạt từ file Excel',
+              notes: `Tổng ${newItems.length} Máy Lắc mới vào kho`
+            });
+            return result;
+          }}
+          onImportComputers={async (newItems) => {
+            const result = await importDevices('computer', newItems);
+            await addAuditLog({
+              type: 'IMPORT EXCEL – MÁY TÍNH',
+              setCode: '—', nppId: '—',
+              nppName: `Đã import ${newItems.length} Máy Tính từ Excel`,
+              serialList: newItems.map(c => c.serial).join(', '),
+              technician: 'Hệ thống – Import Excel',
+              reason: 'Nhập hàng loạt từ file Excel',
+              notes: `Tổng ${newItems.length} Máy Tính mới vào kho`
+            });
+            return result;
+          }}
+          onImportPrinters={async (newItems) => {
+            const result = await importDevices('printer', newItems);
+            await addAuditLog({
+              type: 'IMPORT EXCEL – MÁY IN',
+              setCode: '—', nppId: '—',
+              nppName: `Đã import ${newItems.length} Máy In từ Excel`,
+              serialList: newItems.map(p => p.serial).join(', '),
+              technician: 'Hệ thống – Import Excel',
+              reason: 'Nhập hàng loạt từ file Excel',
+              notes: `Tổng ${newItems.length} Máy In QL700 mới vào kho`
+            });
+            return result;
+          }}
+          onImportRepairs={async (newItems) => {
+            const normalizedItems = newItems.map((item) => {
+              const previousTicket = repairTickets.find(entry => entry.ticketCode?.trim().toLowerCase() === item.ticketCode?.trim().toLowerCase());
+              const npp = npps.find(entry => entry.name?.trim().toLowerCase() === item.nppName?.trim().toLowerCase());
+              return { ...item, id: previousTicket?.id || item.id, nppId: npp?.id || previousTicket?.nppId || '' };
+            });
+            const result = await importTickets(normalizedItems);
+            await addAuditLog({ type: 'IMPORT EXCEL – SỬA CHỮA', setCode: '—', nppId: '—', nppName: `Đã import ${normalizedItems.length} phiếu sửa chữa`, serialList: normalizedItems.map(item => item.ticketCode).join(', '), technician: 'Hệ thống – Import Excel', reason: 'Nhập phiếu sửa chữa từ Excel', notes: 'Dữ liệu được gộp theo mã phiếu, không xóa dữ liệu đang có' });
+            return result;
+          }}
+          onImportSystemSets={async (newItems) => {
+            const normalizedItems = newItems.map((item) => {
+              const npp = npps.find(entry => entry.name?.trim().toLowerCase() === item.nppName?.trim().toLowerCase());
+              const dispenser = dispensers.find(entry => entry.serial?.trim().toLowerCase() === item.dispenserSerial?.trim().toLowerCase());
+              const mixer = mixers.find(entry => entry.serial?.trim().toLowerCase() === item.mixerSerial?.trim().toLowerCase());
+              const printer = printers.find(entry => entry.serial?.trim().toLowerCase() === item.printerSerial?.trim().toLowerCase());
+              return {
+                ...item,
+                nppId: npp?.id || null,
+                dispenserId: dispenser?.id || null,
+                mixerId: mixer?.id || null,
+                printerId: printer?.id || null
+              };
+            });
+            const result = await importSystemSets(normalizedItems);
+            await addAuditLog({ type: 'IMPORT EXCEL – BỘ MÁY', setCode: '—', nppId: '—', nppName: `Đã import ${normalizedItems.length} bộ máy`, serialList: normalizedItems.map(item => item.setCode).join(', '), technician: 'Hệ thống – Import Excel', reason: 'Nhập bộ máy từ Excel', notes: 'Dữ liệu được gộp theo mã bộ máy, không xóa dữ liệu đang có' });
+            return result;
+          }}
+          onClose={() => setShowImportModal(false)}
+        />
+        </Suspense>
+      ))}
+
+    </div>
+    </>
+  );
+}

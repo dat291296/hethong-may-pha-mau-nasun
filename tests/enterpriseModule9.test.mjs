@@ -3,9 +3,9 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const migrationUrl = new URL('../supabase/enterprise_module_9_field_service_workflow.sql', import.meta.url);
-const repairHookUrl = new URL('../src/hooks/useRepairs.js', import.meta.url);
-const offlineSyncUrl = new URL('../src/lib/offlineSync.js', import.meta.url);
-const repairUiUrl = new URL('../src/components/DeviceRepairProcessing.jsx', import.meta.url);
+const repairHookUrl = new URL('../src/modules/repairs/hooks/useRepairs.js', import.meta.url);
+const offlineSyncUrl = new URL('../src/shared/sync/offlineSync.js', import.meta.url);
+const repairUiUrl = new URL('../src/modules/repairs/components/DeviceRepairProcessing.jsx', import.meta.url);
 
 test('ENT-9 migration is additive and records the field workflow schema', async () => {
   const source = await readFile(migrationUrl, 'utf8');

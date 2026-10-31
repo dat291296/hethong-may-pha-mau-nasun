@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createOfflineAccessGrant,offlineAccessDecision,requireCurrentReplayScope,MAX_OFFLINE_READ_MS} from '../src/security/offlineAccess.js';
-import {requireOfflineReplayPermission} from '../src/security/offlineReplayPolicy.js';
+import {createOfflineAccessGrant,offlineAccessDecision,requireCurrentReplayScope,MAX_OFFLINE_READ_MS} from '../src/shared/security/offlineAccess.js';
+import {requireOfflineReplayPermission} from '../src/shared/security/offlineReplayPolicy.js';
 const user={id:'A',role:'technician',managedRegion:'Miền Bắc'};
 test('offline reads require a matching account, bounded time window and unchanged scope',()=>{
  const grant=createOfflineAccessGrant(user,1000);

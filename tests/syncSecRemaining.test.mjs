@@ -6,13 +6,13 @@ import {
   SYNC_ENGINE_VERSION,
   migrateQueueItem,
   resolveFailureState
-} from '../src/lib/syncQueue.js';
+} from '../src/shared/sync/syncQueue.js';
 
 const conflictSqlUrl = new URL('../supabase/sync_sec_module_4_conflict_engine.sql', import.meta.url);
 const realtimeSqlUrl = new URL('../supabase/sync_sec_module_5_private_realtime.sql', import.meta.url);
 const healthSqlUrl = new URL('../supabase/sync_sec_module_6_observability.sql', import.meta.url);
-const realtimeClientUrl = new URL('../src/lib/realtimeSync.js', import.meta.url);
-const feedClientUrl = new URL('../src/lib/changeFeed.js', import.meta.url);
+const realtimeClientUrl = new URL('../src/shared/sync/realtimeSync.js', import.meta.url);
+const feedClientUrl = new URL('../src/shared/sync/changeFeed.js', import.meta.url);
 
 test('module 4 uses RLS-visible versions and optimistic conflict checks', async () => {
   const sql = await readFile(conflictSqlUrl, 'utf8');

@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import { createSecureBackup, parseAndValidateBackup } from '../src/utils/secureBackup.js';
+import { createSecureBackup, parseAndValidateBackup } from '../src/shared/utils/secureBackup.js';
 
-const utilityUrl = new URL('../src/utils/secureBackup.js', import.meta.url);
-const modalUrl = new URL('../src/components/DataBackupSyncModal.jsx', import.meta.url);
+const utilityUrl = new URL('../src/shared/utils/secureBackup.js', import.meta.url);
+const modalUrl = new URL('../src/modules/fieldwork/components/DataBackupSyncModal.jsx', import.meta.url);
 
 test('backup files use a versioned schema and SHA-256 integrity checksum', async () => {
   const utility = await readFile(utilityUrl, 'utf8');

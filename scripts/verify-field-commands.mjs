@@ -3,7 +3,7 @@ import {randomUUID} from 'node:crypto';
 import {mkdir,writeFile} from 'node:fs/promises';
 import {createClient} from '@supabase/supabase-js';
 import {registerTestSession} from './register-test-session.mjs';
-import {makeFieldCommand,requireFieldReceipt} from '../src/lib/fieldCommands.js';
+import {makeFieldCommand,requireFieldReceipt} from '../src/modules/fieldwork/lib/fieldCommands.js';
 export async function verifyFieldCommands(service,env){
  if(new URL(env.RLS_TEST_URL).origin!=='https://kenznmtdfuexmfrtzypb.supabase.co')throw Error('ISOLATED_STAGING_REQUIRED');
  const prefix=`SYN-FIELD-${randomUUID()}`,nppIds=[`${prefix}-A`,`${prefix}-B`,`${prefix}-SOUTH`],code=`${prefix}-MACHINE`;

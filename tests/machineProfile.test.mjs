@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {resolveMachineProfile} from '../src/lib/machineProfile.js';
-import {resolveMachineCode} from '../src/lib/machineWorkspace.js';
-import {recordOperationalError,getOperationalDiagnostics} from '../src/lib/operationalDiagnostics.js';
+import {resolveMachineProfile} from '../src/modules/equipment/lib/machineProfile.js';
+import {resolveMachineCode} from '../src/modules/equipment/lib/machineWorkspace.js';
+import {recordOperationalError,getOperationalDiagnostics} from '../src/shared/diagnostics/operationalDiagnostics.js';
 const machine={id:'a',setCode:'A',nppId:'n',dispenserSerial:'S',dispenserId:'d'};
 test('machine code lookup rejects device serials and ambiguous codes',()=>{
  assert.equal(resolveMachineCode([machine],' a '),machine);

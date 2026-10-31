@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-const offlineDbUrl = new URL('../src/lib/offlineDb.js', import.meta.url);
-const bridgeUrl = new URL('../src/platform/mobileSecurityBridge.js', import.meta.url);
+const offlineDbUrl = new URL('../src/shared/sync/offlineDb.js', import.meta.url);
+const bridgeUrl = new URL('../src/shared/platform/mobileSecurityBridge.js', import.meta.url);
 const profileUrl = new URL('../security/masvs/profile.json', import.meta.url);
 
 test('encrypted records bind owner, store, and logical key with AES-GCM AAD', async () => {

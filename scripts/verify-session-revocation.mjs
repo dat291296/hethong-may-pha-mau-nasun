@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createClient } from '@supabase/supabase-js';
-import { requireReplaySession } from '../src/security/replaySession.js';
+import { requireReplaySession } from '../src/shared/security/replaySession.js';
 
 export async function verifySessionRevocation(service, environment) {
   const client = createClient(environment.RLS_TEST_URL, environment.RLS_TEST_ANON_KEY, {

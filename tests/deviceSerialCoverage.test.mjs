@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeOptionalSerial, isUnknownSerial } from '../src/lib/deviceSerial.js';
-import { nppCoverage } from '../src/lib/nppCoverage.js';
-import { missingMachineFields } from '../src/lib/teamWorkspace.js';
+import { normalizeOptionalSerial, isUnknownSerial } from '../src/modules/equipment/lib/deviceSerial.js';
+import { nppCoverage } from '../src/modules/distributors/lib/nppCoverage.js';
+import { missingMachineFields } from '../src/modules/fieldwork/lib/teamWorkspace.js';
 
 test('unknown and generated serials stay unknown instead of creating fake serials', () => {
   for (const value of ['', null, 'N/A', '—', 'AUTO-MIXE-123']) {

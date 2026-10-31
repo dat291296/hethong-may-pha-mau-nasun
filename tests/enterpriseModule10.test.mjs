@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-const metricsUrl = new URL('../src/lib/performanceMetrics.js', import.meta.url);
+const metricsUrl = new URL('../src/shared/diagnostics/performanceMetrics.js', import.meta.url);
 const mainUrl = new URL('../src/main.jsx', import.meta.url);
 const packageUrl = new URL('../package.json', import.meta.url);
 const budgetUrl = new URL('../scripts/verify-bundle-budget.mjs', import.meta.url);
