@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { requireCompleteWrite, updateWithRevision } from '../src/lib/guardedWrite.js';
-import { persistMutation } from '../src/lib/durableMutation.js';
+import { requireCompleteWrite, updateWithRevision } from '../src/shared/lib/guardedWrite.js';
+import { persistMutation } from '../src/shared/lib/durableMutation.js';
 
 test('schema mismatch never drops fields or becomes offline success', async () => {
   let queued = false;

@@ -31,8 +31,8 @@
         "tests/securityMasvs2.test.mjs"
       ],
       "evidence": [
-        "src/lib/offlineDb.js",
-        "src/platform/mobileSecurityBridge.js"
+        "src/shared/lib/offlineDb.js",
+        "src/shared/platform/mobileSecurityBridge.js"
       ]
     },
     {
@@ -45,8 +45,8 @@
         "tests/securityMasvs3.test.mjs"
       ],
       "evidence": [
-        "src/security/authRuntime.js",
-        "src/context/AuthContext.jsx"
+        "src/shared/security/authRuntime.js",
+        "src/shared/context/AuthContext.jsx"
       ]
     },
     {
@@ -60,7 +60,7 @@
       ],
       "evidence": [
         "security/masvs/network-policy.json",
-        "src/security/networkPolicy.js"
+        "src/shared/security/networkPolicy.js"
       ]
     },
     {
@@ -73,7 +73,7 @@
       ],
       "evidence": [
         "security/masvs/platform-permissions.json",
-        "src/security/permissionPolicy.js"
+        "src/shared/security/permissionPolicy.js"
       ]
     },
     {
@@ -151,7 +151,7 @@
     {
       "id": "MASVS-STORAGE",
       "source": [
-        "src/lib/offlineDb.js"
+        "src/shared/lib/offlineDb.js"
       ],
       "evidence": [
         "security/masvs/offline-session-browser.json"
@@ -161,7 +161,7 @@
     {
       "id": "MASVS-CRYPTO",
       "source": [
-        "src/lib/offlineDb.js",
+        "src/shared/lib/offlineDb.js",
         "scripts/encrypt-recovery-backup.mjs"
       ],
       "evidence": [
@@ -172,8 +172,8 @@
     {
       "id": "MASVS-AUTH",
       "source": [
-        "src/context/AuthContext.jsx",
-        "src/security/replaySession.js",
+        "src/shared/context/AuthContext.jsx",
+        "src/shared/security/replaySession.js",
         "supabase/revoked_session_write_guard.sql"
       ],
       "evidence": [
@@ -185,7 +185,7 @@
     {
       "id": "MASVS-NETWORK",
       "source": [
-        "src/security/networkPolicy.js"
+        "src/shared/security/networkPolicy.js"
       ],
       "evidence": [
         "scripts/verify-storage-access.mjs"
@@ -195,7 +195,7 @@
     {
       "id": "MASVS-PLATFORM",
       "source": [
-        "src/security/permissionPolicy.js"
+        "src/shared/security/permissionPolicy.js"
       ],
       "evidence": [],
       "remaining": "iOS camera/location denial, revocation, lifecycle and native integration"

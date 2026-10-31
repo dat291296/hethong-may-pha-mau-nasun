@@ -4,7 +4,7 @@ import test from 'node:test';
 
 const module1Url = new URL('../supabase/sync_sec_module_1_foundation.sql', import.meta.url);
 const module2Url = new URL('../supabase/sync_sec_module_2_atomic_mutations.sql', import.meta.url);
-const offlineSyncUrl = new URL('../src/lib/offlineSync.js', import.meta.url);
+const offlineSyncUrl = new URL('../src/shared/lib/offlineSync.js', import.meta.url);
 
 test('legacy workflow ledger is upgraded without deleting operations', async () => {
   const sql = await readFile(module1Url, 'utf8');

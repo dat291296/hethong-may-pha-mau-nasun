@@ -7,7 +7,7 @@
       "title": "Lưu trữ",
       "state": "source-only",
       "evidence": [
-        "src/lib/offlineDb.js"
+        "src/shared/lib/offlineDb.js"
       ],
       "implemented": "Cache mã hóa theo tài khoản",
       "next": "Kiểm thử đổi tài khoản, logout và giới hạn cache; bảo toàn hàng đợi chưa gửi",
@@ -40,7 +40,7 @@
       "title": "Kết nối",
       "state": "source-only",
       "evidence": [
-        "src/security/networkPolicy.js"
+        "src/shared/security/networkPolicy.js"
       ],
       "implemented": "HTTPS, allowlist và timeout",
       "next": "Kiểm tra HTTPS, upload, download và Realtime trên môi trường chạy",
@@ -51,7 +51,7 @@
       "title": "Quyền thiết bị",
       "state": "source-only",
       "evidence": [
-        "src/security/permissionPolicy.js"
+        "src/shared/security/permissionPolicy.js"
       ],
       "implemented": "Quyền camera và định vị có chính sách",
       "next": "Test từ chối quyền, thu hồi quyền và cleanup camera",
@@ -133,9 +133,9 @@
       "remaining": "Chưa nghiệm thu đầy đủ mọi màn hình có bản nháp và vòng đời PWA trên Safari/iOS; production chưa áp dụng.",
       "acceptance": "Không mất bản nháp, không ghi trùng và không âm thầm ghi đè.",
       "evidence": [
-        "src/lib/offlineDb.js",
-        "src/lib/offlineSync.js",
-        "src/lib/syncQueue.js",
+        "src/shared/lib/offlineDb.js",
+        "src/shared/lib/offlineSync.js",
+        "src/shared/lib/syncQueue.js",
         "tests/syncQueue.test.mjs",
         "security/masvs/offline-session-browser.json"
       ],
@@ -155,9 +155,9 @@
       "acceptance": "Thu hồi phiên có hiệu lực khi reconnect; xuất dữ liệu và đổi quyền được kiểm soát.",
       "evidence": [
         "supabase/sensitive_action_reauthentication.sql",
-        "src/security/sensitiveAction.js",
+        "src/shared/security/sensitiveAction.js",
         "tests/sensitiveAction.test.mjs",
-        "src/security/replaySession.js",
+        "src/shared/security/replaySession.js",
         "supabase/trusted_session_revocation.sql",
         "scripts/verify-session-revocation.mjs",
         "supabase/revoked_session_write_guard.sql"

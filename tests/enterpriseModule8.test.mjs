@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-const healthUrl = new URL('../src/lib/syncHealth.js', import.meta.url);
-const modalUrl = new URL('../src/components/DataBackupSyncModal.jsx', import.meta.url);
+const healthUrl = new URL('../src/shared/lib/syncHealth.js', import.meta.url);
+const modalUrl = new URL('../src/shared/components/DataBackupSyncModal.jsx', import.meta.url);
 
 test('ENT-8 exposes actionable sync health without business payloads', async () => {
   const source = await readFile(healthUrl, 'utf8');

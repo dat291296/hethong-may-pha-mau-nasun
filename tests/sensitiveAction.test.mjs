@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { authorizeSensitiveAction, reauthenticateSensitiveAction } from '../src/security/sensitiveAction.js';
+import { authorizeSensitiveAction, reauthenticateSensitiveAction } from '../src/shared/security/sensitiveAction.js';
 
 test('sensitive actions fail closed for missing server control and rejected authentication', async () => {
   for (const code of ['PGRST202', '42883']) {

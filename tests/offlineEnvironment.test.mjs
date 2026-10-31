@@ -22,7 +22,7 @@ test('preview only serves integrity-listed assets and cannot expose repository o
   assert.equal(page.status,200);assert.match(page.headers.get('content-security-policy'),/connect-src 'self'/);
   assert.equal(page.headers.get('x-content-type-options'),'nosniff');
   assert.equal(page.headers.get('access-control-allow-origin'),null);
-  for(const path of ['/.env','/.git/config','/src/lib/supabase.js','/@fs/C:/Windows','/api/customer','/%2e%2e/.env'])assert.equal((await fetch(instance.origin+path)).status,404);
+  for(const path of ['/.env','/.git/config','/src/shared/lib/supabase.js','/@fs/C:/Windows','/api/customer','/%2e%2e/.env'])assert.equal((await fetch(instance.origin+path)).status,404);
   assert.equal((await fetch(instance.origin,{headers:{Origin:'https://untrusted.example'}})).status,403);
   const spoofedHost=await new Promise((accept,reject)=>{const req=request(instance.origin,{headers:{Host:'untrusted.example'}},response=>{response.resume();accept(response.statusCode);});req.on('error',reject);req.end();});
   assert.equal(spoofedHost,403);

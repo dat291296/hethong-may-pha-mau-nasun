@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeRegion, regionalMachineCounts, inManagedRegion, taskPriority } from '../src/lib/teamWorkspace.js';
+import { normalizeRegion, regionalMachineCounts, inManagedRegion, taskPriority } from '../src/modules/fieldwork/lib/teamWorkspace.js';
 
 test('regional totals normalize legacy values and use NPP region when absent', () => {
   assert.equal(normalizeRegion('BẮC'), 'Miền Bắc');

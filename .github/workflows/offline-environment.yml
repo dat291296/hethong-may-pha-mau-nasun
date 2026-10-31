@@ -8,13 +8,13 @@ on:
       - previews/offline/**
       - scripts/*offline*
       - scripts/restore-preflight.mjs
-      - src/lib/offlineDb.js
-      - src/lib/syncQueue.js
-      - src/lib/field*.js
-      - src/lib/appUpdateSafety.js
-      - src/components/Field*.jsx
-      - src/components/Field*.css
-      - src/hooks/useFormDraft.js
+      - src/shared/lib/offlineDb.js
+      - src/shared/lib/syncQueue.js
+      - src/modules/fieldwork/lib/field*.js
+      - src/shared/lib/appUpdateSafety.js
+      - src/modules/fieldwork/components/Field*.jsx
+      - src/modules/fieldwork/components/Field*.css
+      - src/shared/hooks/useFormDraft.js
       - tests/fieldCommands.test.mjs
       - tests/*offline*
       - .github/workflows/offline-environment.yml

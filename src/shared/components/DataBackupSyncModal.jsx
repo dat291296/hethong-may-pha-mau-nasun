@@ -1,0 +1,479 @@
+import { userErrorMessage } from '../security/userError.js';
+import FieldOfflinePanel from '../../modules/fieldwork/components/FieldOfflinePanel.jsx';
+import FieldReviewPanel from '../../modules/fieldwork/components/FieldReviewPanel.jsx';
+import {loadFieldDocuments} from '../../modules/fieldwork/lib/fieldDocumentClient.js';
+import React, { useState } from 'react';
+import { 
+  Database, 
+  Download, 
+  Upload, 
+  RefreshCw, 
+  CheckCircle2, 
+  AlertTriangle, 
+  X, 
+  HardDrive,
+  Copy,
+  Check
+} from 'lucide-react';
+import { syncOfflineQueue } from '../lib/offlineSync.js';
+import { getSyncHealthSnapshot } from '../lib/syncHealth.js';
+import { getOperationalDiagnostics } from '../lib/operationalDiagnostics.js';
+import { getPerformanceSnapshot } from '../lib/performanceMetrics.js';
+import { buildSupportReport } from '../lib/supportReport.js';
+import { createSecureBackup, parseAndValidateBackup, MAX_BACKUP_BYTES } from '../utils/secureBackup.js';
+import { useAuth } from '../context/AuthContext.jsx';
+import { ROLES } from '../security/rbac.js';
+import { PERMISSION_PURPOSES, writeSensitiveClipboard } from '../security/permissionPolicy.js';
+import { useSensitiveActionGate } from './SensitiveActionGate.jsx';
+
+/**
+ * DataBackupSyncModal - Export/Import local device data & trigger cloud sync
+ */
+export default function DataBackupSyncModal({ 
+  isOpen, 
+  onClose,
+  npps = [],
+  dispensers = [],
+  mixers = [],
+  computers = [],
+  printers = [],
+  systemSets = [],
+  repairTickets = [],
+  auditLogs = [],
+  tintingLogs = [],
+  onImportData
+}) {
+  const { role } = useAuth();
+  const { requireAuthentication, dialog: authenticationDialog } = useSensitiveActionGate();
+  const canManageBackups = role === ROLES.ADMIN;
+  const [activeTab, setActiveTab] = useState('export'); // 'export' | 'import' | 'sync'
+  const [importJsonText, setImportJsonText] = useState('');
+  const [syncStatus, setSyncStatus] = useState('idle'); // 'idle' | 'syncing' | 'success' | 'error'
+  const [syncMsg, setSyncMsg] = useState('');
+  const [copied, setCopied] = useState(false);
+  const [queueCount, setQueueCount] = useState(0);
+  const [syncHealth, setSyncHealth] = useState(null);
+
+  const refreshSyncHealth = React.useCallback(async () => {
+    try {
+    const snapshot = await getSyncHealthSnapshot();
+    setSyncHealth(snapshot);
+    setQueueCount(snapshot.queueTotal);
+    } catch {
+      setSyncStatus('error');
+      setSyncMsg('Không đọc được hàng đợi. Không xóa dữ liệu; vui lòng thử lại.');
+    }
+  }, []);
+
+  // Check offline queue count on mount/tab change
+  React.useEffect(() => {
+    if (isOpen) {
+      refreshSyncHealth();
+      if (!canManageBackups) setActiveTab('sync');
+    }
+  }, [isOpen, activeTab, canManageBackups, refreshSyncHealth]);
+
+  React.useEffect(() => {
+    if (!isOpen) return undefined;
+    const interval = window.setInterval(refreshSyncHealth, 5000);
+    window.addEventListener('offline-queue-updated', refreshSyncHealth);
+    window.addEventListener('nasun-sync-completed', refreshSyncHealth);
+    window.addEventListener('online', refreshSyncHealth);
+    window.addEventListener('offline', refreshSyncHealth);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('offline-queue-updated', refreshSyncHealth);
+      window.removeEventListener('nasun-sync-completed', refreshSyncHealth);
+      window.removeEventListener('online', refreshSyncHealth);
+      window.removeEventListener('offline', refreshSyncHealth);
+    };
+  }, [isOpen, refreshSyncHealth]);
+
+  if (!isOpen) return null;
+
+  // Prepare full data package
+  const getBackupData = () => ({
+    npps, dispensers, mixers, computers, printers, systemSets,
+    repairTickets, auditLogs, tintingLogs,
+  });
+
+  // Export JSON file download
+  const handleExportFile = async () => {
+    if (!canManageBackups) return alert('Chỉ Admin được phép xuất toàn bộ dữ liệu.');
+    try {
+      await requireAuthentication();
+      const dataPkg = await createSecureBackup(getBackupData());
+      const jsonStr = JSON.stringify(dataPkg, null, 2);
+      const blob = new Blob([jsonStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const dateStr = new Date().toISOString().split('T')[0];
+      a.href = url;
+      a.download = `nasun-secure-backup-${dateStr}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      alert(`Không thể tạo tệp sao lưu: ${userErrorMessage(error)}`);
+    }
+  };
+
+  // Copy JSON string to clipboard
+  const handleCopyJson = async () => {
+    if (!canManageBackups) return alert('Chỉ Admin được phép sao chép toàn bộ dữ liệu.');
+    try {
+      await requireAuthentication();
+      const dataPkg = await createSecureBackup(getBackupData());
+      await writeSensitiveClipboard(JSON.stringify(dataPkg), PERMISSION_PURPOSES.BACKUP_CLIPBOARD);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch (error) {
+      alert(`Không thể sao chép dữ liệu: ${userErrorMessage(error)}`);
+    }
+  };
+
+  // Process Import File Upload
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!canManageBackups) return alert('Chỉ Admin được phép nhập dữ liệu sao lưu.');
+    if (file.size > MAX_BACKUP_BYTES) {
+      alert('Tệp sao lưu vượt quá giới hạn 10 MB. Vui lòng chia nhỏ hoặc dùng bản sao lưu khác.');
+      e.target.value = '';
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      setImportJsonText(evt.target.result);
+    };
+    reader.readAsText(file);
+  };
+
+  // Perform Import & Merge Data
+  const handleExecuteImport = async () => {
+    if (!canManageBackups) return alert('Chỉ Admin được phép nhập dữ liệu sao lưu.');
+    if (!importJsonText.trim()) {
+      alert('Vui lòng chọn tệp JSON hoặc dán chuỗi dữ liệu sao lưu.');
+      return;
+    }
+
+    try {
+      await requireAuthentication();
+      const result = await parseAndValidateBackup(importJsonText);
+      const integrityMessage = result.integrityVerified
+        ? 'Tệp đã vượt qua kiểm tra toàn vẹn SHA-256.'
+        : 'Đây là tệp sao lưu phiên bản cũ, không có mã kiểm tra toàn vẹn.';
+      const confirmed = window.confirm(
+        `${integrityMessage}\nTổng cộng ${result.totalRecords} bản ghi sẽ được hợp nhất. Dữ liệu trùng mã có thể được cập nhật. Tiếp tục?`
+      );
+      if (!confirmed) return;
+
+      if (onImportData) await onImportData(result.data);
+
+      alert('Đã nhập dữ liệu từ tệp sao lưu thành công!');
+      setImportJsonText('');
+      onClose();
+    } catch (err) {
+      alert(`Không thể nhập tệp sao lưu: ${userErrorMessage(err)}`);
+    }
+  };
+
+  // Cloud Sync Handler
+  const handleTriggerCloudSync = async () => {
+    setSyncStatus('syncing');
+    setSyncMsg('Đang gửi dữ liệu từ hàng chờ offline lên Supabase Cloud...');
+
+    try {
+      const success = await syncOfflineQueue((status, remaining, err) => {
+        if (status === 'error') {
+          setSyncMsg(`Lỗi đồng bộ: ${err}`);
+        }
+      });
+
+      if (success) {
+        setSyncStatus('success');
+        setSyncMsg('Tất cả dữ liệu từ điện thoại đã được đồng bộ thành công lên Cloud!');
+        setQueueCount(0);
+      } else {
+        setSyncStatus('error');
+      }
+    } catch (err) {
+      setSyncStatus('error');
+      setSyncMsg(`Lỗi kết nối đồng bộ: ${userErrorMessage(err)}`);
+    } finally {
+      await refreshSyncHealth();
+    }
+  };
+
+  return (
+    <>
+    {authenticationDialog}
+    <div className="modal-backdrop" onClick={onClose}>
+      <div 
+        className="modal-container" 
+        style={{ maxWidth: '640px', width: '94%' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="modal-header" style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <div className="badge badge-purple" style={{ padding: '0.5rem', borderRadius: '50%' }}>
+              <Database size={22} />
+            </div>
+            <div>
+              <h3 style={{ margin: 0, fontSize: '1.15rem', color: 'var(--text-primary)' }}>
+                Sao Lưu & Đồng Bộ Dữ Liệu Thiết Bị (Mobile ⇄ Web)
+              </h3>
+              <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                Xuất/Nhập dữ liệu lưu trữ giữa điện thoại và tài khoản Admin trên Web
+              </p>
+            </div>
+          </div>
+          <button onClick={onClose} className="btn btn-ghost" style={{ padding: '0.25rem' }}>
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Tab Navigation */}
+        <div style={{ display: 'flex', borderBottom: '1px solid var(--border-color)', margin: '0.75rem 0' }}>
+          {canManageBackups && <button
+            className={`btn ${activeTab === 'export' ? 'btn-primary' : 'btn-ghost'}`}
+            style={{ borderRadius: 0, borderBottom: activeTab === 'export' ? '2px solid var(--primary-color)' : 'none' }}
+            onClick={() => setActiveTab('export')}
+          >
+            <Download size={16} style={{ marginRight: '0.4rem' }} />
+            1. Xuất Dữ Liệu Điện Thoại
+          </button>}
+
+          {canManageBackups && <button
+            className={`btn ${activeTab === 'import' ? 'btn-primary' : 'btn-ghost'}`}
+            style={{ borderRadius: 0, borderBottom: activeTab === 'import' ? '2px solid var(--primary-color)' : 'none' }}
+            onClick={() => setActiveTab('import')}
+          >
+            <Upload size={16} style={{ marginRight: '0.4rem' }} />
+            2. Nạp Dữ Liệu Vào Web
+          </button>}
+
+          <button
+            className={`btn ${activeTab === 'sync' ? 'btn-primary' : 'btn-ghost'}`}
+            style={{ borderRadius: 0, borderBottom: activeTab === 'sync' ? '2px solid var(--primary-color)' : 'none' }}
+            onClick={() => setActiveTab('sync')}
+          >
+            <RefreshCw size={16} style={{ marginRight: '0.4rem' }} />
+            3. Đồng Bộ Đám Mây ({queueCount})
+          </button>
+        </div>
+
+        {/* Tab 1: EXPORT */}
+        {activeTab === 'export' && canManageBackups && (
+          <div className="modal-body">
+            <div className="alert alert-info" style={{ marginBottom: '1rem' }}>
+              <HardDrive size={18} style={{ flexShrink: 0 }} />
+              <span style={{ fontSize: '0.85rem' }}>
+                Xuất toàn bộ bản ghi hiện có trên điện thoại ra tệp JSON hoặc copy chuỗi dữ liệu để nạp vào tài khoản Admin trên Web máy tính.
+              </span>
+            </div>
+
+            {syncHealth && (
+              <div className="card" style={{ padding: '0.85rem', marginBottom: '1rem', fontSize: '0.82rem' }}>
+                <div><strong>Sync Engine:</strong> v{syncHealth.engineVersion} · {syncHealth.online ? 'Online' : 'Offline'}</div>
+                <div><strong>Hàng chờ:</strong> {syncHealth.queueTotal} · cần duyệt {syncHealth.counts.needs_review || 0} · dừng retry {syncHealth.counts.dead_letter || 0}</div>
+                <div><strong>Realtime:</strong> {syncHealth.transport.status}{syncHealth.transport.error ? ` · ${userErrorMessage({code:"REALTIME_UNAVAILABLE"})}` : ''}</div>
+                {syncHealth.server && <div><strong>Cloud 24h:</strong> thành công {syncHealth.server.applied24h || 0} · lỗi {syncHealth.server.failed24h || 0}</div>}
+              </div>
+            )}
+
+            <div style={{ background: 'var(--bg-secondary)', padding: '1rem', borderRadius: '8px', marginBottom: '1rem' }}>
+              <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.9rem' }}>📊 Thống kê dữ liệu hiện tại trên thiết bị:</h4>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem', fontSize: '0.825rem' }}>
+                <div>• Nhà phân phối: <strong>{npps.length}</strong></div>
+                <div>• Máy chiết: <strong>{dispensers.length}</strong></div>
+                <div>• Máy lắc: <strong>{mixers.length}</strong></div>
+                <div>• Máy tính: <strong>{computers.length}</strong></div>
+                <div>• Máy in: <strong>{printers.length}</strong></div>
+                <div>• Bộ hệ thống: <strong>{systemSets.length}</strong></div>
+                <div>• Phiếu sửa chữa: <strong>{repairTickets.length}</strong></div>
+                <div>• Nhật ký tác nghiệp: <strong>{auditLogs.length}</strong></div>
+                <div>• Nhật ký pha màu: <strong>{tintingLogs.length}</strong></div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <button 
+                className="btn btn-primary" 
+                onClick={handleExportFile}
+                style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem' }}
+              >
+                <Download size={18} />
+                Tải Tệp Backup (.json)
+              </button>
+
+              <button 
+                className="btn btn-secondary" 
+                onClick={handleCopyJson}
+                style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+              >
+                {copied ? <Check size={18} style={{ color: '#10b981' }} /> : <Copy size={18} />}
+                {copied ? 'Đã Sao Chép!' : 'Sao Chép JSON'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Tab 2: IMPORT */}
+        {activeTab === 'import' && canManageBackups && (
+          <div className="modal-body">
+            <div className="alert alert-warning" style={{ marginBottom: '1rem' }}>
+              <AlertTriangle size={18} style={{ flexShrink: 0 }} />
+              <span style={{ fontSize: '0.85rem' }}>
+                Nhập tệp dữ liệu sao lưu từ điện thoại vào Web Admin để hiển thị và đồng bộ toàn bộ danh sách.
+              </span>
+            </div>
+
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.4rem' }}>
+                📁 Tải tệp sao lưu (.json):
+              </label>
+              <input 
+                type="file" 
+                accept=".json" 
+                onChange={handleFileUpload} 
+                className="form-control"
+                style={{ fontSize: '0.85rem' }}
+              />
+            </div>
+
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.4rem' }}>
+                Hoặc dán chuỗi JSON dữ liệu vào đây:
+              </label>
+              <textarea
+                className="form-control"
+                rows={5}
+                value={importJsonText}
+                onChange={(e) => setImportJsonText(e.target.value)}
+                placeholder="Dán nội dung tệp .json vào đây..."
+                style={{ fontFamily: 'monospace', fontSize: '0.8rem' }}
+              />
+            </div>
+
+            <button 
+              className="btn btn-success" 
+              onClick={handleExecuteImport}
+              style={{ width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem' }}
+            >
+              <Upload size={18} />
+              Bắt Đầu Nạp Dữ Liệu Vào Hệ Thống
+            </button>
+          </div>
+        )}
+
+        {/* Tab 3: SYNC */}
+        {activeTab === 'sync' && (
+          <div className="modal-body">
+            <FieldOfflinePanel machines={systemSets} npps={npps} repairs={repairTickets} online={syncHealth?.online ?? navigator.onLine} documentLoader={loadFieldDocuments} />
+            <FieldReviewPanel/>
+            {syncHealth && (
+              <div className="card" style={{ padding: '0.9rem', marginBottom: '1rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <div>
+                    <strong style={{ color: syncHealth.state === 'healthy' ? 'var(--accent-emerald)' : syncHealth.state === 'critical' ? 'var(--accent-rose)' : 'var(--accent-amber)' }}>
+                      {syncHealth.state === 'healthy' ? '● Đồng bộ ổn định' : syncHealth.state === 'critical' ? '● Cần xử lý lỗi' : syncHealth.state === 'offline' ? '● Thiết bị đang offline' : '● Đang chờ đồng bộ'}
+                    </strong>
+                    <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                      Engine v{syncHealth.engineVersion} · Realtime {syncHealth.transport.status} · hàng chờ cũ nhất {Math.floor(syncHealth.oldestQueueAgeSeconds / 60)} phút
+                    </div>
+                  </div>
+                  <button type="button" className="btn btn-secondary btn-sm" onClick={refreshSyncHealth}>
+                    <RefreshCw size={14} /> Làm mới
+                  </button>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(80px, 1fr))', gap: '8px', marginTop: '12px' }}>
+                  {[
+                    ['Chờ', (syncHealth.counts.pending || 0) + (syncHealth.counts.retry_wait || 0)],
+                    ['Cần duyệt', syncHealth.counts.needs_review || 0],
+                    ['Dừng retry', syncHealth.counts.dead_letter || 0],
+                    ['Tổng', syncHealth.queueTotal],
+                  ].map(([label, value]) => (
+                    <div key={label} style={{ background: 'var(--bg-secondary)', borderRadius: '8px', padding: '8px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '1.1rem', fontWeight: 800 }}>{value}</div>
+                      <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>{label}</div>
+                    </div>
+                  ))}
+                </div>
+
+                <button type="button" className="btn btn-secondary" style={{marginTop:12}} onClick={()=>{
+                  const report=buildSupportReport({health:syncHealth,diagnostics:getOperationalDiagnostics(),performance:getPerformanceSnapshot()});
+                  const url=URL.createObjectURL(new Blob([JSON.stringify(report,null,2)],{type:'application/json'}));
+                  const link=document.createElement('a');link.href=url;link.download='nasun-support.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+                }}>Tải chẩn đoán an toàn</button>
+                <p className="resource-muted">Chỉ gồm số lượng hàng chờ, lỗi và chỉ số tải trang; không gồm nội dung bản ghi, mã khách hàng hoặc token.</p>
+                <details style={{marginTop:12}}><summary>Dùng NASUN trên màn hình chính điện thoại</summary><p>iPhone: mở bằng Safari → Chia sẻ → Thêm vào Màn hình chính. Android: mở menu trình duyệt → Cài đặt ứng dụng hoặc Thêm vào màn hình chính.</p><p>Mở app và có mạng để gửi dữ liệu chờ. Không xóa dữ liệu trình duyệt khi còn bản nháp hoặc hàng đợi.</p></details>
+                {syncHealth.queueItems?.length > 0 && (
+                  <div style={{ marginTop: '12px', maxHeight: '180px', overflowY: 'auto', borderTop: '1px solid var(--border-color)' }}>
+                    {syncHealth.queueItems.map(item => (
+                      <div key={item.id} style={{ padding: '8px 2px', borderBottom: '1px solid var(--border-color)', fontSize: '0.76rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px' }}>
+                          <strong>{item.action} {item.entityId ? `· ${item.entityId}` : ''}</strong>
+                          <span className={`badge ${['needs_review', 'dead_letter'].includes(item.status) ? 'badge-danger' : 'badge-info'}`}>{item.status}</span>
+                        </div>
+                        <div style={{ color: 'var(--text-muted)', marginTop: '3px' }}>
+                          {item.attempts > 0 && `Thử ${item.attempts} lần · `}{['needs_review', 'dead_letter'].includes(item.status) ? `Đã lưu trong hàng chờ ${Math.floor(item.ageSeconds / 60)} phút` : `Đã chờ ${Math.floor(item.ageSeconds / 60)} phút`}{item.nextRetryInSeconds ? ` · thử lại sau ${item.nextRetryInSeconds}s` : ''}
+                        </div>
+                        {item.lastError && <div style={{ color: 'var(--accent-rose)', marginTop: '3px', overflowWrap: 'anywhere' }}>{userErrorMessage({code:item.lastErrorCode || "SYNC_OPERATION_FAILED"})}</div>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {syncHealth.serverError && (
+                  <div className="alert alert-warning" style={{ marginTop: '10px', marginBottom: 0, fontSize: '0.75rem' }}>
+                    Không đọc được trạng thái cloud: {syncHealth.serverError}
+                  </div>
+                )}
+              </div>
+            )}
+            <div className="alert alert-info" style={{ marginBottom: '1rem' }}>
+              <RefreshCw size={18} style={{ flexShrink: 0 }} />
+              <span style={{ fontSize: '0.85rem' }}>
+                Đẩy trực tiếp các thao tác tạo mới/chỉnh sửa ở hàng chờ offline ({queueCount} hành động) lên cơ sở dữ liệu Supabase Cloud.
+              </span>
+            </div>
+
+            {syncMsg && (
+              <div 
+                className={`alert ${syncStatus === 'success' ? 'alert-success' : syncStatus === 'error' ? 'alert-danger' : 'alert-info'}`}
+                style={{ marginBottom: '1rem' }}
+              >
+                {syncStatus === 'success' && <CheckCircle2 size={18} />}
+                {syncStatus === 'error' && <AlertTriangle size={18} />}
+                <span>{syncMsg}</span>
+              </div>
+            )}
+
+            <button 
+              className="btn btn-primary" 
+              onClick={handleTriggerCloudSync}
+              disabled={syncStatus === 'syncing'}
+              style={{ width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem', padding: '0.75rem' }}
+            >
+              <RefreshCw size={18} className={syncStatus === 'syncing' ? 'spin' : ''} />
+              {syncStatus === 'syncing' ? 'Đang Đồng Bộ Đám Mây...' : 'Đồng Bộ Hàng Chờ Lên Supabase Cloud Ngay'}
+            </button>
+          </div>
+        )}
+
+        {/* Footer */}
+        <div className="modal-footer" style={{ borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem', marginTop: '1rem', textAlign: 'right' }}>
+          <button className="btn btn-secondary" onClick={onClose}>
+            Đóng
+          </button>
+        </div>
+      </div>
+    </div>
+    </>
+  );
+}

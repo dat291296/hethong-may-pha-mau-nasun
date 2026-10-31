@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {EQUIPMENT_SLOTS,resolveEquipmentSlot,replacementCandidates,equipmentFields,saveEquipmentReplacement,readReplacementEvents} from '../src/lib/equipmentReplacement.js';
-import {buildSystemHealth} from '../src/lib/systemHealth.js';
+import {EQUIPMENT_SLOTS,resolveEquipmentSlot,replacementCandidates,equipmentFields,saveEquipmentReplacement,readReplacementEvents} from '../src/modules/equipment/lib/equipmentReplacement.js';
+import {buildSystemHealth} from '../src/shared/lib/systemHealth.js';
 const machine={setCode:'S1',dispenserId:'D1',nppId:'N1',status:'DA_LAP_DAT'};
 const old={id:'D1',setCode:'S1',isAssigned:true,status:'Đang chạy tốt',serial:'DUPLICATE'};
 const free={id:'D2',setCode:null,isAssigned:false,status:'Đang chạy tốt',serial:'DUPLICATE'};

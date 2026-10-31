@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { prepareDeviceEdit, saveDeviceEdit, findAssignedDevice, requireUniqueDeviceSerial } from '../src/lib/deviceEdit.js';
+import { prepareDeviceEdit, saveDeviceEdit, findAssignedDevice, requireUniqueDeviceSerial } from '../src/modules/equipment/lib/deviceEdit.js';
 import { verifyDeviceEdit } from '../scripts/verify-device-edit.mjs';
 
 test('serial conflicts identify the other device and its distributor without rejecting the original device', () => {

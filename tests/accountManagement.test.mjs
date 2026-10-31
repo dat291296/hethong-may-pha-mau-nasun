@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { authorizeAccountManagement, confirmAccountUpdate } from '../src/security/accountManagement.js';
-import { hasPermission } from '../src/security/rbac.js';
-import { canEditRegion } from '../src/lib/workspaceFilters.js';
+import { authorizeAccountManagement, confirmAccountUpdate } from '../src/shared/security/accountManagement.js';
+import { hasPermission } from '../src/shared/security/rbac.js';
+import { canEditRegion } from '../src/shared/lib/workspaceFilters.js';
 
 test('account management validates the current session without signing in again', async () => {
   const calls = [];
@@ -24,7 +24,7 @@ test('technicians may create and edit NPP data only in their concrete region', (
 });
 
 test('account UI uses a session check and preserves separate recent-authentication protection', async () => {
-  const ui = await readFile(new URL('../src/components/UserManagement.jsx', import.meta.url), 'utf8');
+  const ui = await readFile(new URL('../src/modules/users/components/UserManagement.jsx', import.meta.url), 'utf8');
   assert.doesNotMatch(ui, /requireAuthentication|signInWithPassword|useSensitiveActionGate/);
   const sql = await readFile(new URL('../supabase/technician_national_read_admin_session.sql', import.meta.url), 'utf8');
   assert.match(sql, /auth\.sessions/);

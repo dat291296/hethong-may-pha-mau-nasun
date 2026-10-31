@@ -1,0 +1,3225 @@
+import { isRepairAwaitingReturn } from '../../repairs/lib/repairClassification.js';
+import { userErrorMessage } from '../../../shared/security/userError.js';
+import {EQUIPMENT_SLOTS,resolveEquipmentSlot} from '../lib/equipmentReplacement.js';
+import EquipmentReplacementDialog from './EquipmentReplacementDialog.jsx';
+import {missingSystemSetFields} from '../../../shared/lib/dataCompleteness.js';
+import { assignedSetsForNpp, assertAdditionalSetConfirmed } from '../lib/assemblyGuard.js';
+import { isUnknownSerial } from '../lib/deviceSerial.js';
+import { summarizeInventory, nextWarehouseId, inventoryLinkIssues } from '../lib/inventorySummary.js';
+import { prepareDeviceEdit, findAssignedDevice, requireUniqueDeviceSerial } from '../lib/deviceEdit.js';
+import WorkspaceFilterBar from '../../../shared/components/WorkspaceFilterBar.jsx';
+import { matchesSearch, matchesDateRange, uniqueOptions, canEditRegion } from '../../../shared/lib/workspaceFilters.js';
+import TechnicalResources from '../../handbook/components/TechnicalResources';
+import { resolveMachine, resolveMachineCode } from '../lib/machineWorkspace';
+import { resolveMachineProfile, sameMachine } from '../lib/machineProfile.js';
+import { MachineProfileSummary, MachineProfileHistory } from './MachineProfileSummary.jsx';
+import { recordOperationalError } from '../../../shared/lib/operationalDiagnostics.js';
+import { useFormDraft } from '../../../shared/hooks/useFormDraft.js';
+import DraftNotice from '../../../shared/components/DraftNotice.jsx';
+import { searchText, missingMachineFields } from '../../fieldwork/lib/teamWorkspace';
+import React, { useState, useEffect } from 'react';
+import SafePortal from '../../../shared/components/SafePortal.jsx';
+import { useAuth } from '../../../shared/context/AuthContext.jsx';
+import { supabase, isSupabaseConfigured } from '../../../shared/lib/supabase.js';
+import { generateNextSetCode } from '../hooks/useAssets.js';
+import { 
+  Cpu, 
+  Flame, 
+  Monitor, 
+  Printer, 
+  PlusCircle, 
+  Filter, 
+  CheckCircle2, 
+  AlertTriangle, 
+  Layers,
+  Edit3,
+  Trash2,
+  X,
+  FileSpreadsheet,
+  Camera,
+  Image as ImageIcon,
+  Eye,
+  ChevronLeft,
+  ChevronRight,
+  ZoomIn,
+  ZoomOut,
+  ExternalLink,
+  Upload
+} from 'lucide-react';
+import { compressImage } from '../../../shared/utils/imageCompressor.js';
+import QrScannerModal from '../../../shared/components/QrScannerModal';
+import {
+  INITIAL_DISPENSERS,
+  INITIAL_MIXERS,
+  INITIAL_COMPUTERS,
+  INITIAL_PRINTERS
+} from '../../../shared/data/mockData';
+import { useModalScrollLock } from '../../../shared/hooks/useModalScrollLock.js';
+import { exportExcel } from '../../../shared/utils/excelExport.js';
+import { getSystemSetMissingFields } from '../utils/systemSetValidation.js';
+import { useWorkspaceState, useWorkspaceScroll } from '../../../shared/hooks/useWorkspaceState';
+
+export default function AssetManagement({ onReplaceEquipment,replacementEvents=[],replacementHistoryError='', initialProfile, onProfileRestored, globalSearch = '', initialFilter = 'ALL', repairTickets = [], auditLogs = [], onRequestRepair, onRequestMaintenance,
+  systemSets,
+  catalog,
+  npps = [],
+  dispensers,
+  mixers,
+  computers,
+  printers,
+  onAssembleSet,
+  onAddStockDevice,
+  onEditDevice,
+  onDeleteDevice,
+  onOpenImportModal,
+  onExportDevicesExcel,
+  isDateLocked = () => false,
+  onEditSet,
+  onDeleteSet
+}) {
+  const { user, can } = useAuth();
+  const fullCatalog = catalog || { systemSets, npps, dispensers, mixers, computers, printers };
+  const exportCurrentInventory = () => {
+    const config = {
+      dispensers: { rows: dispensers, name: 'Kho_May_Chiet', columns: [{ key: 'id', label: 'Mã QL' }, { key: 'model', label: 'Model' }, { key: 'serial', label: 'Số Seri' }, { key: 'status', label: 'Tình Trạng' }, { key: 'setCode', label: 'Mã Bộ Máy' }] },
+      mixers: { rows: mixers, name: 'Kho_May_Lac', columns: [{ key: 'id', label: 'Mã QL' }, { key: 'model', label: 'Model' }, { key: 'type', label: 'Loại Máy Lắc' }, { key: 'serial', label: 'Số Seri' }, { key: 'status', label: 'Tình Trạng' }, { key: 'setCode', label: 'Mã Bộ Máy' }] },
+      computers: { rows: computers, name: 'Kho_May_Tinh', columns: [{ key: 'id', label: 'Mã QL' }, { key: 'type', label: 'Loại Máy' }, { key: 'os', label: 'Hệ Điều Hành' }, { key: 'specs', label: 'Cấu Hình' }, { key: 'network', label: 'Kết Nối Mạng' }, { key: 'status', label: 'Tình Trạng' }, { key: 'setCode', label: 'Mã Bộ Máy' }] },
+      printers: { rows: printers, name: 'Kho_May_In', columns: [{ key: 'id', label: 'Mã QL' }, { key: 'model', label: 'Model' }, { key: 'serial', label: 'Số Seri' }, { key: 'connection', label: 'Kết Nối' }, { key: 'status', label: 'Tình Trạng' }, { key: 'setCode', label: 'Mã Bộ Máy' }] },
+      comboSets: { rows: systemSets, name: 'Bo_May_Pha_Mau', columns: [{ key: 'setCode', label: 'Mã Bộ Máy' }, { key: 'nppName', label: 'Nhà Phân Phối' }, { key: 'region', label: 'Khu Vực' }, { key: 'province', label: 'Tỉnh / Thành Phố' }, { key: 'status', label: 'Trạng Thái' }, { key: 'dispenserModel', label: 'Máy Chiết' }, { key: 'dispenserSerial', label: 'Seri Máy Chiết' }, { key: 'mixerModel', label: 'Máy Lắc' }, { key: 'mixerSerial', label: 'Seri Máy Lắc' }, { key: 'computerType', label: 'Máy Tính' }, { key: 'printerSerial', label: 'Seri Máy In' }, { key: 'installDate', label: 'Ngày Lắp Đặt (YYYY-MM-DD)' }, { key: 'lastMaintenanceDate', label: 'Bảo Trì Gần Nhất (YYYY-MM-DD)' }, { key: 'nextMaintenanceDue', label: 'Bảo Trì Kế Tiếp (YYYY-MM-DD)' }, { key: 'technician', label: 'Kỹ Thuật Viên' }, { key: 'salesperson', label: 'Nhân Viên Kinh Doanh' }, { key: 'stabilizer', label: 'Ổn Áp' }, { key: 'notes', label: 'Ghi Chú' }] }
+    }[activeSubTab];
+    exportExcel(config.rows, config.columns, config.name, 'Data');
+  };
+  const [qcUsers, setQcUsers] = useState([]);
+
+  // Fetch QC and Admin user profiles for technician selection
+  useEffect(() => {
+    async function loadQcProfiles() {
+      if (isSupabaseConfigured && supabase) {
+        try {
+          const { data, error } = await supabase
+            .from('profiles')
+            .select('id, full_name, role, managed_region')
+            .in('role', ['technician', 'qc', 'manager', 'admin']);
+
+          if (data && !error && data.length > 0) {
+            const mapped = data.map(p => ({
+              id: p.id,
+              name: p.full_name || p.id,
+              role: p.role,
+              region: p.managed_region || 'Toàn Quốc'
+            }));
+            setQcUsers(mapped);
+            return;
+          }
+        } catch (err) {
+          console.warn('[AssetManagement] Error loading QC profiles:', err);
+        }
+      }
+
+      // Fallback: Current logged in user or dev QC
+      const fallbackList = [];
+      if (user && (user.name || user.full_name)) {
+        fallbackList.push({
+          id: user.id || 'current-user',
+          name: user.name || user.full_name,
+          role: user.role || 'qc',
+          region: user.managedRegion || 'Toàn Quốc'
+        });
+      }
+      setQcUsers(fallbackList);
+    }
+    loadQcProfiles();
+  }, [user]);
+
+  const [activeSubTab, setActiveSubTab] = useState(() => {
+    try {
+      if (initialFilter !== 'ALL') return 'comboSets';
+      return localStorage.getItem('nasun_assets_subtab') || 'comboSets';
+    } catch {
+      return 'comboSets';
+    }
+  }); // comboSets | dispensers | mixers | computers | printers
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('nasun_assets_subtab', activeSubTab);
+    } catch (err) {
+      console.warn('[AssetManagement] Failed to save active sub-tab:', err);
+    }
+  }, [activeSubTab]);
+  const [searchTerm, setSearchTerm] = useWorkspaceState('assets:search', '');
+  useEffect(() => { if (globalSearch) setSearchTerm(globalSearch); }, [globalSearch, setSearchTerm]);
+  useEffect(()=>{if(!globalSearch)return;const target=[['dispensers',dispensers],['mixers',mixers],['computers',computers],['printers',printers]].find(([,list])=>list.some(device=>device.id===globalSearch));if(target)setActiveSubTab(target[0]);},[globalSearch,dispensers,mixers,computers,printers]);
+  useWorkspaceScroll('assets');
+  const [modelFilter, setModelFilter] = useWorkspaceState('assets:model', 'ALL');
+  const [statusFilter, setStatusFilter] = useWorkspaceState('assets:status', 'ALL');
+  const [provinceFilter, setProvinceFilter] = useWorkspaceState('assets:province', 'ALL');
+  const [ownerFilter, setOwnerFilter] = useWorkspaceState('assets:owner', 'ALL');
+  const [dateFrom, setDateFrom] = useWorkspaceState('assets:from', '');
+  const [dateTo, setDateTo] = useWorkspaceState('assets:to', '');
+  const targetSetFound = !!globalSearch && systemSets.some(item => item.setCode === globalSearch);
+  useEffect(() => {
+    if (targetSetFound) {
+      setActiveSubTab('comboSets');
+      setModelFilter('ALL');
+      setStatusFilter('ALL');
+    }
+  }, [globalSearch, targetSetFound]);
+  const [currentPage, setCurrentPage] = useWorkspaceState('assets:page', 1);
+  const [pageSize, setPageSize] = useState(10);
+  const [showAssembleModal, setShowAssembleModal] = useState(false);
+  const [showScanSerialModal, setShowScanSerialModal] = useState(false);
+  const [scanTargetField, setScanTargetField] = useState('add');
+  const [nppSearchTerm, setNppSearchTerm] = useState('');
+  const [editNppSearchTerm, setEditNppSearchTerm] = useState('');
+
+  const [deviceSort, setDeviceSort] = useState('DEFAULT'); // 'DEFAULT' | 'NEWEST'
+
+  // Reset pagination on tab or filter change
+  const initialFilters = React.useRef(`${activeSubTab}:${modelFilter}:${statusFilter}:${searchTerm}:${deviceSort}:${provinceFilter}:${ownerFilter}:${dateFrom}:${dateTo}`);
+  useEffect(() => {
+    const signature = `${activeSubTab}:${modelFilter}:${statusFilter}:${searchTerm}:${deviceSort}:${provinceFilter}:${ownerFilter}:${dateFrom}:${dateTo}`;
+    if (initialFilters.current === signature) return;
+    initialFilters.current = signature;
+    setCurrentPage(1);
+  }, [activeSubTab, modelFilter, statusFilter, searchTerm, deviceSort, provinceFilter, ownerFilter, dateFrom, dateTo, setCurrentPage]);
+
+  // Helper to find assigned set & NPP info for any device item
+  const getAssignedInfo = (item) => {
+    const isAssigned = item.isAssigned || !!item.setCode;
+    if (!isAssigned) {
+      return { isAssigned: false, setCode: '—', nppName: null };
+    }
+    const assignedSet = systemSets.find(s => s.setCode === item.setCode);
+    return {
+      isAssigned: true,
+      setCode: item.setCode || '—',
+      nppName: assignedSet?.nppName || 'Kho Tổng Trung Tâm'
+    };
+  };
+
+  // Set Edit state
+  const [editingSet, setEditingSet] = useState(null);
+  const [editSetFormData, setEditSetFormData] = useState({});
+
+  // Fullscreen Photo Lightbox State
+  const [selectedPhotoViewer, setSelectedPhotoViewer] = useState(null); // { isOpen: true, photos: [], activeIndex: 0, title: '' }
+
+  // Set Details & Full Photo Gallery Modal State
+  const [selectedSetDetails, setSelectedSetDetails] = useState(null);
+  const [replacement,setReplacement]=useState(null);
+  const openedSearch = React.useRef('');
+  const [profileTab, setProfileTab] = useState('equipment');
+  useEffect(() => {
+    if (!initialProfile) return;
+    setProfileTab(initialProfile.tab || 'equipment');
+    const matches = systemSets.filter(machine => sameMachine(machine, initialProfile));
+    if (matches.length !== 1) return;
+    setSelectedSetDetails(matches[0]);
+    openedSearch.current = globalSearch;
+    onProfileRestored?.();
+  }, [initialProfile, systemSets, globalSearch, onProfileRestored]);
+  const [quickFilter, setQuickFilter] = useState(initialFilter);
+  useEffect(() => { setQuickFilter(initialFilter); }, [initialFilter]);
+  const [scanError, setScanError] = useState('');
+  const [scanInput, setScanInput] = useState('');
+  const [showManualScan, setShowManualScan] = useState(false);
+  const initialQuickFilter = React.useRef(quickFilter);
+  useEffect(() => { if (initialQuickFilter.current === quickFilter) return; initialQuickFilter.current = quickFilter; setCurrentPage(1); }, [quickFilter, setCurrentPage]);
+  useEffect(() => {
+    if (!globalSearch) { openedSearch.current = ''; return; }
+    if (openedSearch.current === globalSearch) return;
+    const machine = resolveMachine(systemSets, globalSearch);
+    if (machine) { openedSearch.current = globalSearch; setSelectedSetDetails(machine); }
+  }, [globalSearch, systemSets]);
+
+  const openScannedMachine = value => {
+    const code = String(value || '').trim();
+    setScanInput(code);
+    const machine = resolveMachineCode(systemSets, code);
+    if (!machine) { setScanError('Không tìm thấy bộ máy duy nhất. Hãy quét hoặc nhập đúng mã bộ máy.'); return; }
+    setScanInput(machine.setCode);
+    setScanError('');
+    setSelectedSetDetails(machine);
+  };
+
+  // Device Edit Modal state
+  const [isSavingDevice, setIsSavingDevice] = useState(false);
+  const [editingDevice, setEditingDevice] = useState(null); // { category: 'dispenser'|'mixer'|'computer'|'printer', data }
+  const [editFormData, setEditFormData] = useState({});
+
+  // New Device Add Modal state
+  const [showAddDeviceModal, setShowAddDeviceModal] = useState(false);
+  const [addDeviceCategory, setAddDeviceCategory] = useState('dispenser');
+
+  // Auto scroll lock & reset position when any modal opens
+  useModalScrollLock(showAssembleModal || !!editingSet || !!editingDevice || showAddDeviceModal || !!selectedPhotoViewer || !!selectedSetDetails || !!replacement);
+
+  // Keyboard navigation for Lightbox Photo Viewer
+  useEffect(() => {
+    if (!selectedPhotoViewer || !selectedPhotoViewer.isOpen) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setSelectedPhotoViewer(null);
+      } else if (e.key === 'ArrowLeft' && selectedPhotoViewer.photos.length > 1) {
+        setSelectedPhotoViewer(prev => ({
+          ...prev,
+          activeIndex: (prev.activeIndex - 1 + prev.photos.length) % prev.photos.length
+        }));
+      } else if (e.key === 'ArrowRight' && selectedPhotoViewer.photos.length > 1) {
+        setSelectedPhotoViewer(prev => ({
+          ...prev,
+          activeIndex: (prev.activeIndex + 1) % prev.photos.length
+        }));
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedPhotoViewer]);
+
+  // Helper to get all photos for a system set (combines direct installation photos with NPP photos fallback)
+  const getSetPhotos = (set) => {
+    if (!set) return [];
+    const directPhotos = Array.isArray(set.installationPhotos) ? set.installationPhotos : 
+                         (Array.isArray(set.installation_photos) ? set.installation_photos : []);
+    if (directPhotos.length > 0) return directPhotos;
+    // Fallback: Check associated NPP's photos
+    const targetNpp = npps.find(n => n.id === set.nppId);
+    if (targetNpp && Array.isArray(targetNpp.photos) && targetNpp.photos.length > 0) {
+      return targetNpp.photos;
+    }
+    return [];
+  };
+
+  // Photo handlers for editing a set
+  const handleUploadEditSetPhotos = async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length > 6) { alert('Tối đa 6 ảnh cho mỗi bộ máy.'); return; }
+    for (const file of files) {
+      try {
+        const compressed = await compressImage(file);
+        setEditSetFormData(prev => ({
+          ...prev,
+          installationPhotos: [...(prev.installationPhotos || []), compressed]
+        }));
+      } catch (err) {
+        console.error('Lỗi nén ảnh:', err);
+        alert(`Không thể thêm ảnh ${file.name}: ${userErrorMessage(err)}`);
+      }
+    }
+  };
+
+  const handleRemoveEditSetPhoto = (index) => {
+    setEditSetFormData(prev => ({
+      ...prev,
+      installationPhotos: (prev.installationPhotos || []).filter((_, i) => i !== index)
+    }));
+  };
+
+  // Photo handlers for assembling a new combo set
+  const handleUploadNewSetPhotos = async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length + (newSetData.installationPhotos || []).length > 6) { alert('Tối đa 6 ảnh cho mỗi bộ máy.'); return; }
+    for (const file of files) {
+      try {
+        const compressed = await compressImage(file);
+        setNewSetData(prev => ({
+          ...prev,
+          installationPhotos: [...(prev.installationPhotos || []), compressed]
+        }));
+      } catch (err) {
+        console.error('Lỗi nén ảnh:', err);
+        alert(`Không thể thêm ảnh ${file.name}: ${userErrorMessage(err)}`);
+      }
+    }
+  };
+
+  const handleRemoveNewSetPhoto = (index) => {
+    setNewSetData(prev => ({
+      ...prev,
+      installationPhotos: (prev.installationPhotos || []).filter((_, i) => i !== index)
+    }));
+  };
+
+  const [addFormData, setAddFormData] = useState({
+    model: '',
+    serial: '',
+    status: 'Mới 100%',
+    type: 'All In One',
+    os: 'Windows 11 Pro',
+    specs: 'Core i5 / 16GB RAM / 512GB SSD',
+    network: 'Có mạng LAN',
+    connection: 'USB',
+    hasStabilizer: false,
+    stabilizerBrand: ''
+  });
+
+  const [assemblySaving, setAssemblySaving] = useState(false);
+  const [assemblyError, setAssemblyError] = useState('');
+  // Combo Assembly Form State
+  const [newSetData, setNewSetData] = useState({
+    dispenserId: '',
+    mixerId: '',
+    computerId: '',
+    printerId: '',
+    nppId: '',
+    nppName: '',
+    region: '',
+    province: '',
+    salesperson: '',
+    technician: user?.name || user?.full_name || '',
+    installationPhotos: []
+  });
+
+  const isMissingSerial = device => isUnknownSerial(device?.serial);
+
+  const generateNextWarehouseId = (category) => {
+    const source = {
+      dispenser: fullCatalog.dispensers,
+      mixer: fullCatalog.mixers,
+      computer: fullCatalog.computers,
+      printer: fullCatalog.printers
+    }[category] || [];
+    return nextWarehouseId(category, source);
+  };
+
+  const stockSavingRef=React.useRef(false);
+  const stockDraft=useFormDraft(`${user?.id}:stock:${addDeviceCategory}`,addFormData,showAddDeviceModal,saved=>{setAddFormData(saved);return true;});
+  const closeStockEditor=async()=>{if(stockSavingRef.current)return;try {await stockDraft.flush();setShowAddDeviceModal(false);}catch(error){alert(userErrorMessage(error));}};
+  const assemblingRef=React.useRef(false);
+  const [assembling,setAssembling]=useState(false);
+  const assemblyDraft=useFormDraft(`${user?.id}:assembly`,newSetData,showAssembleModal,saved=>{setNewSetData(saved);return true;});
+  const closeAssembly=async()=>{if(assemblingRef.current)return;try {await assemblyDraft.flush();setShowAssembleModal(false);}catch(error){alert(userErrorMessage(error));}};
+
+  const handleOpenAssembleModal = () => {
+    const defaultTech = (user && ['admin', 'manager', 'technician', 'qc'].includes(user.role)) ? (user.name || user.full_name) : (qcUsers[0]?.name || '');
+    const autoCode = generateNextSetCode(fullCatalog.systemSets);
+    setNppSearchTerm('');
+    setNewSetData({
+      setCode: autoCode,
+      operationId:crypto.randomUUID(),
+      installDate:new Date().toLocaleDateString('en-CA'),
+      dispenserId: '',
+      mixerId: '',
+      computerId: '',
+      printerId: '',
+      nppId: '',
+      nppName: '',
+      region: '',
+      province: '',
+      salesperson: '',
+      technician: defaultTech,
+      installationPhotos: []
+    });
+    setShowAssembleModal(true);
+  };
+
+  const existingNppSets = assignedSetsForNpp(systemSets, newSetData.nppId);
+  const handleAssembleSubmit = async (e) => {
+    e.preventDefault();
+    if(assemblingRef.current || assemblyDraft.existing)return;
+    setAssemblyError('');
+    try {assertAdditionalSetConfirmed(systemSets,newSetData.nppId,newSetData.confirmAdditionalSet);} catch(error){setAssemblyError(userErrorMessage(error));return;}
+    if (!newSetData.dispenserId || !newSetData.mixerId || !newSetData.computerId || !newSetData.printerId) {
+      alert('Vui lòng chọn đủ 4 thiết bị: 1 Máy Chiết + 1 Máy Lắc + 1 Máy Tính + 1 Máy In QL700!');
+      return;
+    }
+    const selectedDevices = [
+      { label: 'Máy chiết', device: dispensers.find(item => item.id === newSetData.dispenserId) },
+      { label: 'Máy lắc', device: mixers.find(item => item.id === newSetData.mixerId) },
+      { label: 'Máy in', device: printers.find(item => item.id === newSetData.printerId) }
+    ];
+    const missingSerialDevices = selectedDevices.filter(item => isMissingSerial(item.device));
+    if (missingSerialDevices.length > 0 && !window.confirm(`⚠️ CẢNH BÁO SERI\n\n${missingSerialDevices.map(item => `• ${item.label}`).join('\n')} chưa có số seri. Khi ghép xong, thiết bị sẽ được đánh dấu nổi bật trong danh mục đã cấp phát.\n\nBạn vẫn muốn ghép bộ máy?`)) {
+      return;
+    }
+    assemblingRef.current=true;setAssembling(true);setAssemblySaving(true);
+    try {
+    await onAssembleSet(newSetData);
+    await assemblyDraft.clear();
+    setShowAssembleModal(false);
+    setNewSetData({
+      dispenserId: '', mixerId: '', computerId: '', printerId: '',
+      nppId: '', nppName: '', region: '', province: '', salesperson: '',
+      technician: '', installationPhotos: []
+    });
+    } catch(error){alert(userErrorMessage(error) || 'Không ráp được bộ máy. Bản nháp được giữ nguyên.');}
+    finally {assemblingRef.current=false;setAssembling(false);setAssemblySaving(false);}
+  };
+
+  const handleOpenAddDevice = (category) => {
+    setAddDeviceCategory(category);
+    setAddFormData({
+      id: generateNextWarehouseId(category),
+      model: category === 'computer' ? 'All In One' : '',
+      serial: '',
+      status: 'Mới 100%',
+      type: category === 'computer' ? 'All In One' : (category === 'mixer' ? 'Lắc xoay khép kín' : ''),
+      os: 'Windows 11 Pro',
+      specs: 'Core i5 / 16GB RAM / 512GB SSD',
+      network: 'Có mạng LAN',
+      connection: 'USB',
+      hasStabilizer: false,
+      stabilizerBrand: ''
+    });
+    setShowAddDeviceModal(true);
+  };
+
+  useEffect(() => {
+    if (!selectedSetDetails) return;
+    const matches = systemSets.filter(item => sameMachine(item, selectedSetDetails));
+    if (matches.length === 1 && matches[0] !== selectedSetDetails) setSelectedSetDetails(matches[0]);
+  }, [systemSets, selectedSetDetails]);
+  const machineProfile = selectedSetDetails ? resolveMachineProfile(selectedSetDetails, systemSets,
+    {dispenser:dispensers,mixer:mixers,computer:computers,printer:printers}, npps, repairTickets, auditLogs) : null;
+  const deviceDraftValue = React.useMemo(() => ({ deviceId:editingDevice?.data.id, category:editingDevice?.category,
+    revision:editingDevice?.data.updatedAt, form:editFormData }), [editingDevice,editFormData]);
+  const deviceDraft = useFormDraft(editingDevice ? `${user?.id}:device:${editingDevice.category}:${editingDevice.data.id}` : null,
+    deviceDraftValue, Boolean(editingDevice), saved => {
+      if (saved.deviceId !== editingDevice?.data.id || saved.category !== editingDevice?.category || saved.revision !== editingDevice?.data.updatedAt) {
+        alert('Bản nháp thuộc phiên bản thiết bị cũ. Đối chiếu nội dung trước khi sửa; chưa ghi đè dữ liệu.'); return false;
+      }
+      setEditFormData(saved.form); return true;
+    });
+  const closeDeviceEditor = async () => {
+    try { await deviceDraft.flush(); setEditingDevice(null); }
+    catch (error) { alert(userErrorMessage(error)); }
+  };
+
+  const modelOptions = category => [...new Set([...(category === 'dispenser' ? ['Satint', 'First-1', 'Satint A2', 'Hero', 'Corob', 'Fast & Fluid'] : category === 'mixer' ? ['Satint', 'First-1', 'Satint ST-50', 'KMC', 'Evoshake-200', 'YSA-2A'] : ['QL700']), ...({ dispenser: dispensers, mixer: mixers, printer: printers }[category] || []).map(device => device.model)].filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const handleOpenEditDevice = (category, data) => {
+    const machine = systemSets.find(item=>item.setCode === data.setCode);
+    if (!can('asset:edit') || !canEditRegion(user,machine?.region)) { alert('Thiết bị chưa có khu vực hoặc thuộc miền khác cần quản trị viên xử lý.'); return; }
+    setEditingDevice({ category, data });
+    const cleanType = category === 'computer' 
+      ? (data.type === 'Case' ? 'Case' : 'All In One')
+      : (data.type || '');
+    setEditFormData({
+      ...data,
+      serial: category !== 'computer' && isUnknownSerial(data.serial) ? '' : data.serial || '',
+      sourceId: data.id || '',
+      type: cleanType,
+      model: category === 'computer' ? cleanType : (data.model || ''),
+      ...(category === 'computer' ? {
+        tintingSoftware: machine?.tintingSoftware ?? data.tintingSoftware ?? '',
+        softwareVersion: machine?.softwareVersion ?? data.softwareVersion ?? '',
+      } : {}),
+      id: data.id || '',
+      isAssigned: data.isAssigned || !!data.setCode,
+      setCode: data.setCode || ''
+    });
+  };
+
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    if (!editingDevice || isSavingDevice) return;
+    if (deviceDraft.existing) { alert('Khôi phục hoặc bỏ bản nháp cũ trước khi lưu.'); return; }
+    const isAssigned = !!editFormData.isAssigned && !!editFormData.setCode;
+    const cleanType = editingDevice.category === 'computer'
+      ? (editFormData.type === 'Case' ? 'Case' : 'All In One')
+      : editFormData.type;
+    try {
+      const finalData = prepareDeviceEdit(editingDevice.category, {
+      ...editFormData,
+      type: cleanType,
+      model: editingDevice.category === 'computer' ? cleanType : editFormData.model,
+      serial: editFormData.serial,
+      isAssigned,
+      setCode: isAssigned ? editFormData.setCode : null
+      }, editingDevice.data);
+      if (finalData.serial !== editingDevice.data.serial) {
+        const inventory = { computer: fullCatalog.computers, dispenser: fullCatalog.dispensers, mixer: fullCatalog.mixers, printer: fullCatalog.printers }[editingDevice.category];
+        requireUniqueDeviceSerial(finalData.serial, editingDevice.data.id, inventory, fullCatalog.systemSets, fullCatalog.npps);
+      }
+      setIsSavingDevice(true);
+      await onEditDevice(editingDevice.category, finalData);
+      await deviceDraft.clear().catch(() => recordOperationalError('draft',{code:'DRAFT_WRITE_FAILED'}));
+      const conflictingSet = finalData.setCode && systemSets.find(set => set.setCode === finalData.setCode && set[`${editingDevice.category}Id`] && set[`${editingDevice.category}Id`] !== finalData.id);
+      if (conflictingSet) alert('Đã lưu thiết bị. Liên kết cũ với bộ máy chưa khớp; hãy đối chiếu hồ sơ NPP. Thiết bị đang gán chính thức không bị thay thế.');
+      alert(finalData.serial ? '✅ Đã lưu thông tin chỉnh sửa thành công!' : 'Đã lưu thiết bị. ⚠️ Chưa có serial; cần kỹ thuật viên phụ trách khu vực bổ sung trong hồ sơ máy.');
+      setEditingDevice(null);
+    } catch (err) {
+      recordOperationalError('device',err);
+      console.error('[Device] Save failed without payload');
+      alert('⚠️ ' + (userErrorMessage(err) || 'Không lưu được thiết bị. Giữ nội dung đang nhập và thử lại.'));
+    } finally {
+      setIsSavingDevice(false);
+    }
+  };
+
+  const handleDeleteDevice = (category, item) => {
+    const categoryNameMap = {
+      dispenser: 'Máy chiết',
+      mixer: 'Máy lắc',
+      computer: 'Máy tính',
+      printer: 'Máy in'
+    };
+    const catLabel = categoryNameMap[category] || 'Thiết bị';
+    const assignedSet = item.setCode ? systemSets.find(s => s.setCode === item.setCode) : null;
+    const nppText = assignedSet?.nppName ? ` (Đã gán cho NPP: ${assignedSet.nppName})` : '';
+
+    if (item.isAssigned || item.setCode) {
+      if (window.confirm(`⚠️ [CẢNH BÁO ADMIN]\n${catLabel} [${item.id || item.model}] đang được gán trong bộ máy [${item.setCode}]${nppText}.\n\nBạn có chắc chắn muốn XÓA THIẾT BỊ NÀY khỏi hệ thống không?\n(Hệ thống sẽ tự động gỡ/giải phóng thiết bị khỏi bộ máy ${item.setCode}).`)) {
+        onDeleteDevice(category, item.id, item.setCode);
+      }
+    } else {
+      if (window.confirm(`Bạn có chắc chắn muốn xóa ${catLabel} [${item.id || item.model}] khỏi kho?`)) {
+        onDeleteDevice(category, item.id, null);
+      }
+    }
+  };
+
+  const handleAddDeviceSubmit = async (e) => {
+    e.preventDefault();
+    if(stockSavingRef.current || stockDraft.existing)return;
+    if (!addFormData.id) {
+      alert('Chưa tạo được mã quản lý. Vui lòng tải lại kho rồi thử lại.');
+      return;
+    }
+    if (addDeviceCategory !== 'computer' && !addFormData.model && !addFormData.type) {
+      alert('Vui lòng nhập Model / Hệ máy!');
+      return;
+    }
+    const cleanType = addDeviceCategory === 'computer'
+      ? (addFormData.type === 'Case' ? 'Case' : 'All In One')
+      : addFormData.type;
+    const finalData = {
+      ...addFormData,
+      type: cleanType,
+      model: addDeviceCategory === 'computer' ? cleanType : addFormData.model,
+      serial: addDeviceCategory === 'computer' ? '—' : (addFormData.serial?.trim() || null)
+    };
+    stockSavingRef.current=true;setIsSavingDevice(true);
+    try {
+      const result=await onAddStockDevice(addDeviceCategory, finalData);
+      await stockDraft.clear();
+      alert(result?.queued ? 'Đã lưu trên thiết bị, chờ đồng bộ.' : 'Đã thêm thiết bị vào kho thành công.');
+      setShowAddDeviceModal(false);
+    } catch(error){alert(userErrorMessage(error) || 'Không thêm được thiết bị. Bản nháp được giữ nguyên.');}
+    finally {stockSavingRef.current=false;setIsSavingDevice(false);}
+  };
+
+  const handleOpenEditSet = (set) => {
+    if (!can('asset:edit') || !canEditRegion(user,set.region)) { alert('Bạn chỉ được sửa bộ máy thuộc khu vực được phân công.'); return; }
+    const targetNpp = npps.find(n => n.id === set.nppId);
+    setEditNppSearchTerm('');
+    setEditingSet(set);
+    setEditSetFormData({
+      expectedRevision:set.updatedAt,
+      setCode: set.setCode || set.set_code || '',
+      nppId: set.nppId || '',
+      nppName: set.nppName || '',
+      region: set.region || '',
+      province: set.province || '',
+      status: set.status || 'TRONG_KHO',
+      stabilizer: set.stabilizer || 'Không dùng ổn áp',
+      technician: set.technician || ((user && ['admin', 'manager', 'technician', 'qc'].includes(user.role)) ? (user.name || user.full_name) : (qcUsers[0]?.name || '')),
+      salesperson: set.salesperson || targetNpp?.salesperson || '',
+      notes: set.notes || '',
+      lastMaintenanceDate: set.lastMaintenanceDate || '',
+      computerSerial: set.computerSerial || '',
+      tintingSoftware: set.tintingSoftware || '',
+      softwareVersion: set.softwareVersion || '',
+      nextMaintenanceDue: set.nextMaintenanceDue || '',
+      installationPhotos: set.installationPhotos || set.installation_photos || []
+    });
+  };
+
+  const setSavingRef=React.useRef(false);
+  const [setSaving,setSetSaving]=useState(false);
+  const setDraft=useFormDraft(editingSet?`${user?.id}:system-set:${editingSet.setCode}`:null,editSetFormData,Boolean(editingSet),saved=>{
+    if(saved.expectedRevision!==editingSet?.updatedAt){alert('Hồ sơ đã thay đổi. Giữ nháp cũ để đối chiếu trước khi lưu.');return false;}
+    setEditSetFormData(saved);return true;
+  });
+  const closeSetEditor=async()=>{if(setSavingRef.current)return;try {await setDraft.flush();setEditingSet(null);}catch(error){alert(userErrorMessage(error));}};
+  const handleEditSetSubmit = async (e) => {
+    e.preventDefault();
+    if (!editingSet || setSavingRef.current || setDraft.existing) return;
+    setSavingRef.current=true;setSetSaving(true);
+    try {
+      const result=await onEditSet(editingSet.setCode, editSetFormData);
+      await setDraft.clear().catch(()=>console.warn('[SystemSet] Draft cleanup failed'));
+      alert(result?.queued?'Đã lưu trên thiết bị, chờ đồng bộ.':'Đã lưu thông tin bộ máy.');
+      setEditingSet(null);
+    } catch (err) {
+      console.error('Lỗi khi lưu bộ máy:', err);
+      alert(userErrorMessage(err) || 'Không thể lưu bộ máy. Giữ bản nháp để đối chiếu.');
+    } finally {setSavingRef.current=false;setSetSaving(false);}
+  };
+
+  const handleDeleteSet = async (setCode) => {
+    if (window.confirm(`Bạn có chắc chắn muốn xóa bộ máy [${setCode}] không? Các thiết bị liên kết sẽ tự động được giải phóng và đưa lại về kho lẻ.`)) {
+      try {
+        await onDeleteSet(setCode);
+      } catch (err) {
+        console.error('Lỗi khi xóa bộ máy:', err);
+        alert('⚠️ Không thể xóa bộ máy. Dữ liệu vẫn được giữ để đồng bộ lại.');
+      }
+    }
+  };
+
+  const naturalSortCode = (a, b, key = 'id') => {
+    const valA = String(a?.[key] || a?.id || a?.setCode || '');
+    const valB = String(b?.[key] || b?.id || b?.setCode || '');
+    return valA.localeCompare(valB, undefined, { numeric: true, sensitivity: 'base' });
+  };
+
+  const renderIssuedSerial = (item) => {
+    const shouldWarn = isMissingSerial(item);
+    if (!shouldWarn) {
+      return <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent-cyan)' }}>{item.serial || 'N/A'}</span>;
+    }
+    return <span className="badge badge-danger" title="Thiết bị đã cấp phát nhưng chưa có số seri" style={{ fontSize: '0.72rem' }}>⚠️ Chưa có seri</span>;
+  };
+
+  const filteredSets = [...systemSets]
+    .filter(s => {
+      const distributor = npps.find(item => item.id === s.nppId);
+      const matchesModel = modelFilter === 'ALL' || s.dispenserModel === modelFilter;
+      const matchesStatus = statusFilter === 'ALL' || s.status === statusFilter;
+      const matchesSearch = !searchTerm || searchText([s.setCode, s.nppName, s.dispenserSerial, s.mixerSerial, s.computerSerial, s.printerSerial, s.province, s.region, distributor?.phone].join(' ')).includes(searchText(searchTerm));
+      const tickets = repairTickets.filter(ticket => ticket.nppId === s.nppId && [s.dispenserSerial, s.mixerSerial, s.computerSerial, s.printerSerial].filter(Boolean).includes(ticket.serialNumber));
+      const matchesQuick = quickFilter === 'ALL' || (quickFilter === 'STOCK' && s.status === 'TRONG_KHO') || (quickFilter === 'PENDING' && tickets.some(ticket => ticket.processingStatus === 'Chưa xử lý')) || (quickFilter === 'RETURN' && tickets.some(ticket => ticket.processingStatus === 'Đã xử lý' && isRepairAwaitingReturn(ticket))) || (quickFilter === 'OVERDUE' && s.nextMaintenanceDue && s.nextMaintenanceDue < new Date().toLocaleDateString('en-CA'));
+      return matchesModel && matchesStatus && matchesSearch && matchesQuick && (provinceFilter === 'ALL' || (s.province || distributor?.province) === provinceFilter) && (ownerFilter === 'ALL' || s.technician === ownerFilter) && matchesDateRange(s.installDate || s.installedDate,dateFrom,dateTo);
+    })
+    .sort((a, b) => naturalSortCode(a, b, 'setCode'));
+
+  const filterDevice = (list) => {
+    return [...list].filter(item => {
+      let matchesStatus = true;
+      if (statusFilter === 'ALL') {
+        matchesStatus = true;
+      } else if (statusFilter === 'NEW') {
+        matchesStatus = !!item.isNew || item.status === 'Mới 100%';
+      } else if (statusFilter === 'UPDATED') {
+        matchesStatus = !!item.isUpdated || !!item.updatedAt;
+      } else if (statusFilter === 'ASSIGNED') {
+        matchesStatus = !!item.isAssigned || !!item.setCode;
+      } else if (statusFilter === 'FREE') {
+        matchesStatus = !item.isAssigned && !item.setCode;
+      } else if (statusFilter === 'DOI_TRA_MOI') {
+        matchesStatus = item.status === 'Đã đổi trả máy mới';
+      } else if (statusFilter === 'DOI_TRA_CU') {
+        matchesStatus = item.status === 'Đổi trả máy cũ' || item.status === 'Đã đổi trả máy cũ';
+      } else {
+        matchesStatus = item.status === statusFilter;
+      }
+
+      const found = matchesSearch(searchTerm,[item.id,item.model,item.serial,item.type,item.specs,item.os,item.setCode]);
+      return matchesStatus && found;
+    });
+  };
+
+  const sortDeviceList = (list) => {
+    if (deviceSort === 'NEWEST') {
+      return [...list].sort((a, b) => {
+        const timeA = new Date(a.updatedAt || a.createdAt || 0).getTime();
+        const timeB = new Date(b.updatedAt || b.createdAt || 0).getTime();
+        if (timeB !== timeA) return timeB - timeA;
+        return naturalSortCode(a, b, 'id');
+      });
+    }
+    return [...list].sort((a, b) => naturalSortCode(a, b, 'id'));
+  };
+
+  const sortedDispensers = sortDeviceList(filterDevice(dispensers));
+  const sortedMixers = sortDeviceList(filterDevice(mixers));
+  const sortedComputers = sortDeviceList(filterDevice(computers));
+  const sortedPrinters = sortDeviceList(filterDevice(printers));
+
+  const renderDeviceFilterBar = (categoryName, totalCount, isComputer = false) => {
+    const rows = categoryName === 'Máy Chiết' ? sortedDispensers : categoryName === 'Máy Lắc' ? sortedMixers : isComputer ? sortedComputers : sortedPrinters;
+    return <WorkspaceFilterBar search={searchTerm} onSearch={setSearchTerm} placeholder={`Tìm ${categoryName.toLocaleLowerCase('vi')}, mã, seri…`} count={rows.length} fields={[{key:'status',label:'Tình trạng',value:statusFilter,onChange:setStatusFilter,options:uniqueOptions(['NEW','UPDATED','ASSIGNED','FREE','Mới 100%','Đang chạy tốt','Cần bảo trì',...(isComputer ? ['DOI_TRA_MOI','DOI_TRA_CU'] : [])]).map(option=>({...option,label:({NEW:'Mới thêm',UPDATED:'Mới chỉnh sửa',ASSIGNED:'Đã gán bộ máy',FREE:'Tự do trong kho',DOI_TRA_MOI:'Đã đổi trả máy mới',DOI_TRA_CU:'Đổi trả máy cũ'})[option.value] || option.label}))},{key:'sort',label:'Sắp xếp',defaultValue:'DEFAULT',allLabel:'Mã quản lý (A–Z)',value:deviceSort,onChange:setDeviceSort,options:[{value:'NEWEST',label:'Mới cập nhật'}]}]} onReset={()=>{setSearchTerm('');setStatusFilter('ALL');setDeviceSort('DEFAULT');}}/>;
+  };
+
+  const getPaginatedList = (list) => {
+    const start = (currentPage - 1) * pageSize;
+    return list.slice(start, start + pageSize);
+  };
+
+  const renderPaginationBar = (totalCount) => {
+    const totalPages = Math.ceil(totalCount / pageSize) || 1;
+    const startItem = totalCount === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+    const endItem = Math.min(currentPage * pageSize, totalCount);
+
+    return (
+      <div className="pagination-bar">
+        <div className="pagination-info">
+          Hiển thị <strong>{startItem}–{endItem}</strong> trong tổng số <strong>{totalCount}</strong> mục
+          <select 
+            className="form-select" 
+            value={pageSize} 
+            onChange={e => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}
+            style={{ marginLeft: '12px', padding: '2px 8px', fontSize: '0.8rem', width: 'auto', display: 'inline-block' }}
+          >
+            <option value={10}>10 dòng/trang</option>
+            <option value={25}>25 dòng/trang</option>
+            <option value={50}>50 dòng/trang</option>
+          </select>
+        </div>
+
+        <div className="pagination-controls">
+          <button 
+            className="pagination-btn" 
+            disabled={currentPage <= 1}
+            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+          >
+            ‹ Trang Trước
+          </button>
+          
+          <span style={{ fontSize: '0.8rem', fontWeight: '700', color: 'var(--accent-cyan)', padding: '0 8px' }}>
+            Trang {currentPage} / {totalPages}
+          </span>
+
+          <button 
+            className="pagination-btn" 
+            disabled={currentPage >= totalPages}
+            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+          >
+            Trang Sau ›
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  // Inventory Stock Calculations (Items not yet assigned to any combo or setCode is null)
+  const stockBundleSummary = React.useMemo(() => summarizeInventory({ systemSets, dispensers, mixers, computers, printers }), [systemSets, dispensers, mixers, computers, printers]);
+  const { dispensers: stockDispensers, mixers: stockMixers, computers: stockComputers, printers: stockPrinters } = stockBundleSummary.stock;
+  const stockSets = stockBundleSummary.stockSets;
+  const linkIssues = React.useMemo(() => inventoryLinkIssues({ systemSets, dispensers, mixers, computers, printers }), [systemSets, dispensers, mixers, computers, printers]);
+
+  const looseInventoryGroups = React.useMemo(() => [
+    { key: 'dispensers', label: 'Máy chiết lẻ', icon: '🖨️', color: '#ec4899', items: stockBundleSummary.loose.dispensers, getName: item => `${item.model || 'Máy chiết'} · ${item.serial || item.id}` },
+    { key: 'mixers', label: 'Máy lắc lẻ', icon: '🔄', color: '#38bdf8', items: stockBundleSummary.loose.mixers, getName: item => `${item.model || item.type || 'Máy lắc'} · ${item.serial || item.id}` },
+    { key: 'computers', label: 'Máy tính lẻ', icon: '💻', color: '#a855f7', items: stockBundleSummary.loose.computers, getName: item => `${item.type || 'Máy tính'} · ${item.id}` },
+    { key: 'printers', label: 'Máy in lẻ', icon: '🖨️', color: '#10b981', items: stockBundleSummary.loose.printers, getName: item => `${item.model || 'QL700'} · ${item.serial || item.id}` }
+  ], [stockBundleSummary]);
+  const incompleteSystemSets = React.useMemo(() => (systemSets || []).filter(set => getSystemSetMissingFields(set).length > 0), [systemSets]);
+
+  // Breakdown by model/type for stock items
+  const dispenserStockBreakdown = React.useMemo(() => {
+    const map = {};
+    stockDispensers.forEach(d => {
+      const model = d.model || 'Khác';
+      map[model] = (map[model] || 0) + 1;
+    });
+    return map;
+  }, [stockDispensers]);
+
+  const mixerStockBreakdown = React.useMemo(() => {
+    const map = {};
+    stockMixers.forEach(m => {
+      const key = m.model || m.type || 'Khác';
+      map[key] = (map[key] || 0) + 1;
+    });
+    return map;
+  }, [stockMixers]);
+
+  const computerStockBreakdown = React.useMemo(() => {
+    const map = {};
+    stockComputers.forEach(c => {
+      const key = c.type || (c.os?.includes('Windows') ? 'Case/AIO' : 'Máy Tính');
+      map[key] = (map[key] || 0) + 1;
+    });
+    return map;
+  }, [stockComputers]);
+
+  const printerStockBreakdown = React.useMemo(() => {
+    const map = {};
+    stockPrinters.forEach(p => {
+      const key = p.model || 'QL700';
+      map[key] = (map[key] || 0) + 1;
+    });
+    return map;
+  }, [stockPrinters]);
+
+  return (
+    <div className="workspace-screen assetmanagement-screen" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      
+
+      {activeSubTab === 'comboSets' && <WorkspaceFilterBar search={searchTerm} onSearch={setSearchTerm} placeholder="Tìm mã bộ, NPP, seri…" count={filteredSets.length} fields={[{key:'province',label:'Tỉnh / thành',value:provinceFilter,onChange:setProvinceFilter,options:uniqueOptions([...systemSets.map(item=>item.province),...npps.map(item=>item.province)])},{key:'owner',label:'Kỹ thuật viên',value:ownerFilter,onChange:setOwnerFilter,options:uniqueOptions(systemSets.map(item=>item.technician))},{key:'model',label:'Máy chiết',value:modelFilter,onChange:setModelFilter,options:uniqueOptions(systemSets.map(item=>item.dispenserModel))},{key:'status',label:'Trạng thái bộ máy',value:statusFilter,onChange:setStatusFilter,options:[{value:'DA_LAP_DAT',label:'Đã lắp đặt'},{value:'TRONG_KHO',label:'Trong kho'},{value:'DA_THU_HOI',label:'Đã thu hồi'},{value:'BAO_THUONG_BAO_TRI',label:'Đang bảo trì'}]},{key:'from',label:'Ngày lắp đặt · từ',type:'date',defaultValue:'',value:dateFrom,onChange:setDateFrom},{key:'to',label:'Ngày lắp đặt · đến',type:'date',defaultValue:'',value:dateTo,onChange:setDateTo}]} quick={[{value:'ALL',label:'Tất cả'},{value:'STOCK',label:'Trong kho'},{value:'PENDING',label:'Chờ sửa'},{value:'RETURN',label:'Chờ trả'},{value:'OVERDUE',label:'Quá hạn'}]} quickValue={quickFilter} onQuick={setQuickFilter} onReset={() => { setSearchTerm(''); setModelFilter('ALL'); setStatusFilter('ALL'); setQuickFilter('ALL'); setProvinceFilter('ALL'); setOwnerFilter('ALL'); setDateFrom(''); setDateTo(''); }}/>}
+
+      {scanError && <p role="alert" className="resource-error">{scanError}</p>}
+      {linkIssues.length > 0 && <details className="resource-error"><summary>Kiểm tra liên kết thiết bị: {linkIssues.length} điểm cần đối chiếu</summary><p>Thiết bị đã được bộ máy tham chiếu không được tính lại vào tồn kho. Hãy đối chiếu hồ sơ thực tế trước khi sửa liên kết.</p><ol>{linkIssues.map((issue, index) => <li key={index}>{issue}</li>)}</ol></details>}
+      {/* 📦 BẢNG TỔNG HỢP TỒN KHO THIẾT BỊ HIỆN TẠI */}
+      <div className="glass-panel" style={{ padding: '20px', background: 'linear-gradient(135deg, rgba(15,23,42,0.95) 0%, rgba(30,41,59,0.85) 100%)', border: '1px solid rgba(56,189,248,0.3)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
+          <div>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: '800', color: 'var(--accent-cyan)', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+              <span>📦 Thống Kê Tồn Kho Thiết Bị Hiện Tại (Sẵn Sàng Cấp Phát)</span>
+            </h3>
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '4px 0 0 0' }}>
+              Thiết bị tự do được quy đổi theo công thức: 1 máy chiết + 1 máy lắc + 1 máy tính + 1 máy in = 1 bộ máy
+            </p>
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <span className="badge badge-info" style={{ fontSize: '0.75rem', padding: '4px 10px' }}>
+              ● Sẵn sàng: {stockBundleSummary.totalReadySets} bộ máy · Lẻ: {looseInventoryGroups.reduce((total, group) => total + group.items.length, 0)} thiết bị
+            </span>
+          </div>
+        </div>
+
+        {/* 5 Stock Cards Grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
+          
+          {/* 1. Máy Chiết Tồn Kho */}
+          <div 
+            className="glass-panel glass-panel-hover" 
+            style={{ padding: '14px', cursor: 'pointer', borderTop: '3px solid #ec4899', background: activeSubTab === 'dispensers' ? 'rgba(236,72,153,0.12)' : 'rgba(15,23,42,0.6)' }}
+            onClick={() => { setActiveSubTab('dispensers'); setStatusFilter('ALL'); }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700', textTransform: 'uppercase' }}>Máy Chiết Trong Kho</span>
+              <Flame size={18} color="#ec4899" />
+            </div>
+            <div style={{ fontSize: '1.6rem', fontWeight: '900', color: '#ec4899', lineHeight: 1 }}>
+              {stockDispensers.length} <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 'normal' }}>máy</span>
+            </div>
+            <div style={{ marginTop: '10px', fontSize: '0.75rem', color: 'var(--text-main)', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '8px' }}>
+              {Object.keys(dispenserStockBreakdown).length === 0 ? (
+                <span style={{ color: 'var(--text-muted)' }}>Hết máy chiết tồn kho</span>
+              ) : (
+                Object.entries(dispenserStockBreakdown).map(([model, qty]) => (
+                  <div key={model} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                    <span style={{ color: 'var(--text-muted)' }}>• {model}:</span>
+                    <strong style={{ color: '#fff' }}>{qty} cái</strong>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* 2. Máy Lắc Tồn Kho */}
+          <div 
+            className="glass-panel glass-panel-hover" 
+            style={{ padding: '14px', cursor: 'pointer', borderTop: '3px solid #38bdf8', background: activeSubTab === 'mixers' ? 'rgba(56,189,248,0.12)' : 'rgba(15,23,42,0.6)' }}
+            onClick={() => { setActiveSubTab('mixers'); setStatusFilter('ALL'); }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700', textTransform: 'uppercase' }}>Máy Lắc Trong Kho</span>
+              <Cpu size={18} color="#38bdf8" />
+            </div>
+            <div style={{ fontSize: '1.6rem', fontWeight: '900', color: '#38bdf8', lineHeight: 1 }}>
+              {stockMixers.length} <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 'normal' }}>máy</span>
+            </div>
+            <div style={{ marginTop: '10px', fontSize: '0.75rem', color: 'var(--text-main)', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '8px' }}>
+              {Object.keys(mixerStockBreakdown).length === 0 ? (
+                <span style={{ color: 'var(--text-muted)' }}>Hết máy lắc tồn kho</span>
+              ) : (
+                Object.entries(mixerStockBreakdown).map(([model, qty]) => (
+                  <div key={model} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                    <span style={{ color: 'var(--text-muted)' }}>• {model}:</span>
+                    <strong style={{ color: '#fff' }}>{qty} cái</strong>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* 3. Máy Tính Tồn Kho */}
+          <div 
+            className="glass-panel glass-panel-hover" 
+            style={{ padding: '14px', cursor: 'pointer', borderTop: '3px solid #a855f7', background: activeSubTab === 'computers' ? 'rgba(168,85,247,0.12)' : 'rgba(15,23,42,0.6)' }}
+            onClick={() => { setActiveSubTab('computers'); setStatusFilter('ALL'); }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700', textTransform: 'uppercase' }}>Máy Tính Trong Kho</span>
+              <Monitor size={18} color="#a855f7" />
+            </div>
+            <div style={{ fontSize: '1.6rem', fontWeight: '900', color: '#a855f7', lineHeight: 1 }}>
+              {stockComputers.length} <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 'normal' }}>bộ</span>
+            </div>
+            <div style={{ marginTop: '10px', fontSize: '0.75rem', color: 'var(--text-main)', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '8px' }}>
+              {Object.keys(computerStockBreakdown).length === 0 ? (
+                <span style={{ color: 'var(--text-muted)' }}>Hết máy tính tồn kho</span>
+              ) : (
+                Object.entries(computerStockBreakdown).map(([type, qty]) => (
+                  <div key={type} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                    <span style={{ color: 'var(--text-muted)' }}>• {type}:</span>
+                    <strong style={{ color: '#fff' }}>{qty} cái</strong>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* 4. Máy In QL700 Tồn Kho */}
+          <div 
+            className="glass-panel glass-panel-hover" 
+            style={{ padding: '14px', cursor: 'pointer', borderTop: '3px solid #10b981', background: activeSubTab === 'printers' ? 'rgba(16,185,129,0.12)' : 'rgba(15,23,42,0.6)' }}
+            onClick={() => { setActiveSubTab('printers'); setStatusFilter('ALL'); }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700', textTransform: 'uppercase' }}>Máy In Trong Kho</span>
+              <Printer size={18} color="#10b981" />
+            </div>
+            <div style={{ fontSize: '1.6rem', fontWeight: '900', color: '#10b981', lineHeight: 1 }}>
+              {stockPrinters.length} <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 'normal' }}>máy</span>
+            </div>
+            <div style={{ marginTop: '10px', fontSize: '0.75rem', color: 'var(--text-main)', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '8px' }}>
+              {Object.keys(printerStockBreakdown).length === 0 ? (
+                <span style={{ color: 'var(--text-muted)' }}>Hết máy in tồn kho</span>
+              ) : (
+                Object.entries(printerStockBreakdown).map(([model, qty]) => (
+                  <div key={model} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                    <span style={{ color: 'var(--text-muted)' }}>• {model}:</span>
+                    <strong style={{ color: '#fff' }}>{qty} cái</strong>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* 5. Bộ Máy Sẵn Sàng (TRONG_KHO) */}
+          <div 
+            className="glass-panel glass-panel-hover" 
+            style={{ padding: '14px', cursor: 'pointer', borderTop: '3px solid #f59e0b', background: activeSubTab === 'comboSets' ? 'rgba(245,158,11,0.12)' : 'rgba(15,23,42,0.6)' }}
+            onClick={() => { setActiveSubTab('comboSets'); setStatusFilter('ALL'); }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700', textTransform: 'uppercase' }}>Bộ Máy Trong Kho</span>
+              <Layers size={18} color="#f59e0b" />
+            </div>
+            <div style={{ fontSize: '1.6rem', fontWeight: '900', color: '#f59e0b', lineHeight: 1 }}>
+              {stockBundleSummary.totalReadySets} <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 'normal' }}>bộ máy</span>
+            </div>
+            <div style={{ marginTop: '10px', fontSize: '0.75rem', color: 'var(--text-main)', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '8px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: 'var(--text-muted)' }}>• Tự quy đổi:</span><strong>{stockBundleSummary.completeFromLooseDevices} bộ</strong></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '3px' }}><span style={{ color: 'var(--text-muted)' }}>• Đã ghép trong kho:</span><strong>{stockSets.length} bộ</strong></div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+      
+      <div className="filter-scan-actions"><button className="btn btn-secondary" aria-expanded={showManualScan} onClick={()=>setShowManualScan(value=>!value)}>Nhập mã bộ máy</button></div>
+      {showManualScan && <form className="machine-serial-form" onSubmit={event => { event.preventDefault(); openScannedMachine(scanInput); }}><label>Mã bộ máy<input className="form-input" required maxLength={160} value={scanInput} onChange={event => { setScanInput(event.target.value); setScanError(''); }} placeholder="Nhập hoặc quét mã bộ máy" /></label><button type="button" className="btn btn-secondary" onClick={()=>{setScanTargetField('profile');setShowScanSerialModal(true);}}>Quét mã bộ máy</button><button type="submit" className="btn btn-primary">Mở hồ sơ</button></form>}
+      {/* Sub-Tab Navigation Header */}
+      <div className="glass-panel" style={{ padding: '12px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          <button 
+            className={`btn ${activeSubTab === 'comboSets' ? 'btn-primary' : 'btn-secondary'} btn-sm`}
+            onClick={() => setActiveSubTab('comboSets')}
+          >
+            <Layers size={16} />
+            <span>Bộ Máy Pha Màu ({stockBundleSummary.totalReadySets})</span>
+          </button>
+
+          <button 
+            className={`btn ${activeSubTab === 'dispensers' ? 'btn-primary' : 'btn-secondary'} btn-sm`}
+            onClick={() => setActiveSubTab('dispensers')}
+          >
+            <Flame size={16} />
+            <span>Kho Máy Chiết ({dispensers.length})</span>
+          </button>
+
+          <button 
+            className={`btn ${activeSubTab === 'mixers' ? 'btn-primary' : 'btn-secondary'} btn-sm`}
+            onClick={() => setActiveSubTab('mixers')}
+          >
+            <Cpu size={16} />
+            <span>Kho Máy Lắc ({mixers.length})</span>
+          </button>
+
+          <button 
+            className={`btn ${activeSubTab === 'computers' ? 'btn-primary' : 'btn-secondary'} btn-sm`}
+            onClick={() => setActiveSubTab('computers')}
+          >
+            <Monitor size={16} />
+            <span>Kho Máy Tính ({computers.length})</span>
+          </button>
+
+          <button 
+            className={`btn ${activeSubTab === 'printers' ? 'btn-primary' : 'btn-secondary'} btn-sm`}
+            onClick={() => setActiveSubTab('printers')}
+          >
+            <Printer size={16} />
+            <span>Kho Máy In QL700 ({printers.length})</span>
+          </button>
+        </div>
+
+        <div style={{ display: 'flex', gap: '10px' }}>
+          {activeSubTab !== 'comboSets' && (
+            <>
+              <button className="btn btn-secondary btn-sm" onClick={exportCurrentInventory}><FileSpreadsheet size={16} /><span>📤 Xuất Excel</span></button>
+              <button className="btn btn-secondary btn-sm" style={{ borderColor: 'rgba(16,185,129,0.4)', color: 'var(--accent-emerald)' }}
+                onClick={() => {
+                  const typeMap = { dispensers: 'dispenser', mixers: 'mixer', computers: 'computer', printers: 'printer' };
+                  onOpenImportModal(typeMap[activeSubTab] || 'dispenser');
+                }}
+              >
+                <FileSpreadsheet size={16} />
+                <span>📥 Import Từ Excel</span>
+              </button>
+              <button className="btn btn-secondary btn-sm" onClick={() => handleOpenAddDevice(activeSubTab.slice(0, -1))}>
+                <PlusCircle size={16} />
+                <span>Thêm Thiết Bị Lẻ Vào Kho</span>
+              </button>
+            </>
+          )}
+
+          {activeSubTab === 'comboSets' && (
+            <><button className="btn btn-secondary btn-sm" onClick={exportCurrentInventory}><FileSpreadsheet size={16} /><span>📤 Xuất Bộ Máy</span></button><button className="btn btn-secondary btn-sm" style={{ borderColor: 'rgba(16,185,129,0.4)', color: 'var(--accent-emerald)' }} onClick={() => onOpenImportModal('systemSet')}><FileSpreadsheet size={16} /><span>📥 Nhập Bộ Máy</span></button><button className="btn btn-primary" onClick={handleOpenAssembleModal}><PlusCircle size={18} /><span>+ Ghép Bộ Thiết Bị Mới (Combo)</span></button></>
+          )}
+        </div>
+      </div>
+
+      {/* VIEW 1: COMBO SETS MANAGEMENT */}
+      {activeSubTab === 'comboSets' && (
+        <div className="glass-panel" style={{ padding: '20px' }}>
+          <details style={{ padding: '14px', marginBottom: '16px', border: '1px solid rgba(245,158,11,0.35)', borderRadius: '10px', background: 'rgba(245,158,11,0.08)' }}>
+            <summary style={{ cursor: 'pointer' }}>Bộ máy tự do trong kho: {stockBundleSummary.completeFromLooseDevices} bộ · Mở chi tiết</summary>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+              <div>
+                <div style={{ fontWeight: '800', color: '#f59e0b' }}>📦 Bộ máy tự do trong kho: {stockBundleSummary.completeFromLooseDevices} bộ</div>
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '4px' }}>Tính tự động từ thiết bị chưa ghép NPP; không tự tạo hoặc thay đổi dữ liệu bộ máy.</div>
+              </div>
+              <span className="badge badge-info">Đã ghép sẵn trong kho: {stockSets.length} bộ</span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '10px', marginTop: '12px' }}>
+              {looseInventoryGroups.map(group => (
+                <div key={group.key} style={{ padding: '10px', borderRadius: '8px', background: 'rgba(15,23,42,0.55)', borderLeft: `3px solid ${group.color}` }}>
+                  <div style={{ fontSize: '0.78rem', fontWeight: '800', color: group.color }}>{group.icon} {group.label}: {group.items.length}</div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '6px', lineHeight: 1.5 }}>
+                    {group.items.length === 0 ? 'Không có thiết bị lẻ' : group.items.slice(0, 4).map(item => <div key={item.id}>• {group.getName(item)}</div>)}
+                    {group.items.length > 4 && <div>+ {group.items.length - 4} thiết bị khác</div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </details>
+          {incompleteSystemSets.length > 0 && (
+            <div style={{ padding: '12px 14px', marginBottom: '16px', border: '1px solid rgba(239,68,68,0.45)', borderRadius: '10px', background: 'rgba(239,68,68,0.10)', color: '#fecaca', fontSize: '0.8rem' }}>
+              <strong>⚠️ {incompleteSystemSets.length} bộ máy thiếu dữ liệu cần bổ sung khi đi NPP/bảo dưỡng.</strong>
+              <span style={{ marginLeft: '6px', color: 'var(--text-secondary)' }}>Cảnh báo áp dụng cho mọi trạng thái bộ máy.</span>
+            </div>
+          )}
+          
+
+          {/* Desktop View Table */}
+          <div className="desktop-only data-table-container">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Mã Bộ Máy</th>
+                  <th style={{ minWidth: '130px' }}>Ảnh Hiện Trường</th>
+                  <th>Nhà Phân Phối</th>
+                  <th>Máy Chiết (Seri)</th>
+                  <th>Máy Lắc (Seri)</th>
+                  <th>Máy Tính (Cấu hình)</th>
+                  <th>Máy In (Model/Seri)</th>
+                  <th>Cán Bộ Phụ Trách</th>
+                  <th>Ổn Áp (Ghi Nhận)</th>
+                  <th>Trạng Thái</th>
+                  <th>Thiếu Thông Tin</th>
+                  <th>Thao Tác</th>
+                </tr>
+              </thead>
+              <tbody>
+                {getPaginatedList(filteredSets).map(set => {
+                  const missingFields = getSystemSetMissingFields(set);
+                  const missingDispenserInfo = missingFields.filter(field => field.toLowerCase().includes('máy chiết'));
+                  const missingMixerInfo = missingFields.filter(field => field.toLowerCase().includes('máy lắc'));
+                  const missingPrinterInfo = missingFields.filter(field => field.toLowerCase().includes('máy in'));
+                  const pcObj = (computers || []).find(c => set.computerId && c.id === set.computerId);
+                  const pcSpecsText = pcObj?.specs || set.pcSpecs || (set.pcType ? `${set.pcType} (${set.pcOs || ''})` : set.computerType || 'Chưa có cấu hình');
+
+                  const prnObj = (printers || []).find(p => (set.printerId && p.id === set.printerId) || (set.printerSerial && p.serial === set.printerSerial));
+                  const printerModelText = prnObj?.model || set.printerModel || 'QL700';
+                  const printerSerialText = set.printerSerial || prnObj?.serial || 'N/A';
+                  const photos = getSetPhotos(set);
+                  const isDirect = (set.installationPhotos && set.installationPhotos.length > 0) || (set.installation_photos && set.installation_photos.length > 0);
+
+                  return (
+                    <tr key={set.id || set.setCode}>
+                      <td style={{ fontWeight: '700', color: 'var(--accent-cyan)' }}>{set.setCode}</td>
+                      <td>
+                        {photos.length === 0 ? (
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-sm"
+                            style={{ fontSize: '0.72rem', padding: '3px 8px', display: 'inline-flex', alignItems: 'center', gap: '4px', opacity: 0.8 }}
+                            onClick={() => handleOpenEditSet(set)}
+                            title="Bấm để tải thêm ảnh cho bộ máy"
+                          >
+                            <Camera size={13} />
+                            <span>+ Thêm ảnh</span>
+                          </button>
+                        ) : (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                              {photos.slice(0, 2).map((imgUrl, imgIdx) => (
+                                <div
+                                  key={imgIdx}
+                                  onClick={() => setSelectedPhotoViewer({
+                                    isOpen: true,
+                                    photos: photos,
+                                    activeIndex: imgIdx,
+                                    title: `Ảnh ${imgIdx + 1}/${photos.length} - Bộ Máy [${set.setCode}] (${set.nppName || 'Kho Tổng'})`
+                                  })}
+                                  style={{
+                                    width: '42px',
+                                    height: '42px',
+                                    borderRadius: '6px',
+                                    overflow: 'hidden',
+                                    cursor: 'pointer',
+                                    border: '1.5px solid var(--border-color)',
+                                    position: 'relative',
+                                    boxShadow: '0 2px 4px rgba(0,0,0,0.25)',
+                                    flexShrink: 0
+                                  }}
+                                  title="Bấm để phóng to xem đầy đủ ảnh"
+                                >
+                                  <img
+                                    src={imgUrl}
+                                    alt={`Ảnh ${set.setCode}`}
+                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                    loading="lazy"
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                            {photos.length > 2 && (
+                              <button
+                                type="button"
+                                onClick={() => setSelectedPhotoViewer({
+                                  isOpen: true,
+                                  photos: photos,
+                                  activeIndex: 0,
+                                  title: `Bộ Máy [${set.setCode}] (${set.nppName || 'Kho Tổng'})`
+                                })}
+                                className="badge badge-info"
+                                style={{ cursor: 'pointer', fontSize: '0.7rem', padding: '3px 6px', border: 'none' }}
+                                title="Xem tất cả ảnh"
+                              >
+                                +{photos.length - 2}
+                              </button>
+                            )}
+                            {!isDirect && (
+                              <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }} title="Ảnh liên kết từ NPP">🏢</span>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                      <td style={{ fontWeight: '600' }}>{set.nppName || 'Kho Tổng Trung Tâm'}</td>
+                      <td>
+                        <div style={{ fontWeight: '600' }}>{set.dispenserModel}</div>
+                        {missingDispenserInfo.length > 0 ? (
+                          <span className="badge badge-danger" style={{ marginTop: '4px', fontSize: '0.68rem' }} title={missingDispenserInfo.join(', ')}>⚠️ {missingDispenserInfo.join(', ')}</span>
+                        ) : (
+                          <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{set.dispenserSerial}</div>
+                        )}
+                      </td>
+                      <td>
+                        <div>{set.mixerModel}</div>
+                        {missingMixerInfo.length > 0 ? (
+                          <span className="badge badge-danger" style={{ marginTop: '4px', fontSize: '0.68rem' }} title={missingMixerInfo.join(', ')}>⚠️ {missingMixerInfo.join(', ')}</span>
+                        ) : (
+                          <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{set.mixerSerial}</div>
+                        )}
+                      </td>
+                      <td>
+                        <div style={{ fontWeight: '600' }}>{pcSpecsText}</div>
+                        <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
+                          <span>💻 {set.computerId || pcObj?.id || 'Máy Tính'}</span>
+                          {(pcObj?.status === 'Đã đổi trả máy mới' || set.computerStatus === 'Đã đổi trả máy mới') && (
+                            <span className="badge badge-warning" style={{ fontSize: '0.65rem' }}>🔄 Đã đổi trả máy mới</span>
+                          )}
+                          {(pcObj?.status === 'Đổi trả máy cũ' || pcObj?.status === 'Đã đổi trả máy cũ' || set.computerStatus === 'Đổi trả máy cũ' || set.computerStatus === 'Đã đổi trả máy cũ') && (
+                            <span className="badge badge-purple" style={{ fontSize: '0.65rem' }}>🔁 Đổi trả máy cũ</span>
+                          )}
+                        </div>
+                      </td>
+                      <td>
+                        <div style={{ fontWeight: '600' }}>{printerModelText}</div>
+                        {missingPrinterInfo.length > 0 ? (
+                          <span className="badge badge-danger" style={{ marginTop: '4px', fontSize: '0.68rem' }} title={missingPrinterInfo.join(', ')}>⚠️ {missingPrinterInfo.join(', ')}</span>
+                        ) : (
+                          <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>Seri: {printerSerialText}</div>
+                        )}
+                      </td>
+                      <td>
+                        <div style={{ fontSize: '0.8rem', fontWeight: '600' }}>🛠️ {set.technician || 'Chưa gán KTV'}</div>
+                        <div style={{ fontSize: '0.775rem', color: 'var(--accent-cyan)', marginTop: '2px' }}>💼 KD: {set.salesperson || 'Chưa gán NVKD'}</div>
+                      </td>
+                      <td>
+                        {set.stabilizer?.includes('Chưa') || set.stabilizer?.includes('Không') ? (
+                          <span className="badge badge-warning">⚠️ {set.stabilizer}</span>
+                        ) : (
+                          <span className="badge badge-success">✓ {set.stabilizer}</span>
+                        )}
+                      </td>
+                      <td>
+                        {set.status === 'DA_LAP_DAT' && <span className="badge badge-success">● Đã Lắp Đặt</span>}
+                        {set.status === 'TRONG_KHO' && <span className="badge badge-info">● Trong Kho</span>}
+                        {set.status === 'DA_THU_HOI' && <span className="badge badge-danger">● Đã Thu Hồi</span>}
+                        {set.status === 'BAO_THUONG_BAO_TRI' && <span className="badge badge-warning">● Bảo Trì</span>}
+                      </td>
+                      <td>
+                        {missingFields.length > 0 ? (
+                          <span className="badge badge-danger" title={missingFields.join(', ')}>⚠️ {missingFields.length} mục thiếu</span>
+                        ) : <span className="badge badge-success">✓ Đủ dữ liệu</span>}
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
+                          <button 
+                            className="btn btn-secondary btn-sm" 
+                            style={{ padding: '4px 8px' }} 
+                            onClick={() => setSelectedSetDetails(set)}
+                            title="Xem chi tiết bộ máy & thư viện ảnh đầy đủ"
+                          >
+                            <Eye size={14} color="var(--accent-blue)" />
+                          </button>
+                          <button className="btn btn-secondary btn-sm" style={{ padding: '4px 8px' }} onClick={() => handleOpenEditSet(set)} title="Chỉnh sửa bộ máy">
+                            <Edit3 size={14} color="var(--accent-cyan)" />
+                          </button>
+                          <button className="btn btn-danger btn-sm" style={{ padding: '4px 8px' }} onClick={() => handleDeleteSet(set.setCode)} title="Xóa bộ máy">
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile View Cards */}
+          <div className="mobile-only mobile-card-list">
+            {getPaginatedList(filteredSets).map(set => {
+              const missingFields = getSystemSetMissingFields(set);
+              const missingDispenserInfo = missingFields.filter(field => field.toLowerCase().includes('máy chiết'));
+              const missingMixerInfo = missingFields.filter(field => field.toLowerCase().includes('máy lắc'));
+              const missingPrinterInfo = missingFields.filter(field => field.toLowerCase().includes('máy in'));
+                  const pcObj = (computers || []).find(c => set.computerId && c.id === set.computerId);
+              const pcSpecsText = pcObj?.specs || set.pcSpecs || (set.pcType ? `${set.pcType} (${set.pcOs || ''})` : set.computerType || 'Chưa có cấu hình');
+
+              const prnObj = (printers || []).find(p => (set.printerId && p.id === set.printerId) || (set.printerSerial && p.serial === set.printerSerial));
+              const printerModelText = prnObj?.model || set.printerModel || 'QL700';
+              const printerSerialText = set.printerSerial || prnObj?.serial || 'N/A';
+              const photos = getSetPhotos(set);
+
+              return (
+                <div className="mobile-card" key={set.id || set.setCode}>
+                  <div className="mobile-card-header">
+                    <div>
+                      <span className="mobile-card-title" style={{ color: 'var(--accent-cyan)' }}>{set.setCode}</span>
+                      <div className="mobile-card-subtitle">{set.nppName || 'Kho Tổng Trung Tâm'}</div>
+                    </div>
+                    <div>
+                      {set.status === 'DA_LAP_DAT' && <span className="badge badge-success">🟢 Đã Lắp</span>}
+                      {set.status === 'TRONG_KHO' && <span className="badge badge-info">🔵 Kho</span>}
+                      {set.status === 'DA_THU_HOI' && <span className="badge badge-danger">🔴 Thu Hồi</span>}
+                      {set.status === 'BAO_THUONG_BAO_TRI' && <span className="badge badge-warning">🟡 Bảo Trì</span>}
+                    </div>
+                  </div>
+                  <div className="mobile-card-body">
+                    <div className="mobile-card-row">
+                      <span className="mobile-card-label">Máy Chiết:</span>
+                      <span className="mobile-card-value">{set.dispenserModel} {missingDispenserInfo.length > 0 ? <span className="badge badge-danger">⚠️ {missingDispenserInfo.join(', ')}</span> : `(${set.dispenserSerial})`}</span>
+                    </div>
+                    <details className="mobile-extra"><summary>Thông tin thiết bị & phụ trách</summary>
+                    <div className="mobile-card-row">
+                      <span className="mobile-card-label">Máy Lắc:</span>
+                      <span className="mobile-card-value">{set.mixerModel} {missingMixerInfo.length > 0 ? <span className="badge badge-danger">⚠️ {missingMixerInfo.join(', ')}</span> : `(${set.mixerSerial})`}</span>
+                    </div>
+                    <div className="mobile-card-row">
+                      <span className="mobile-card-label">Máy Tính:</span>
+                      <span className="mobile-card-value">
+                        {pcSpecsText}
+                        {(pcObj?.status === 'Đã đổi trả máy mới' || set.computerStatus === 'Đã đổi trả máy mới') && (
+                          <span className="badge badge-warning" style={{ fontSize: '0.65rem', marginLeft: '6px' }}>🔄 Đã đổi trả máy mới</span>
+                        )}
+                        {(pcObj?.status === 'Đổi trả máy cũ' || pcObj?.status === 'Đã đổi trả máy cũ' || set.computerStatus === 'Đổi trả máy cũ' || set.computerStatus === 'Đã đổi trả máy cũ') && (
+                          <span className="badge badge-purple" style={{ fontSize: '0.65rem', marginLeft: '6px' }}>🔁 Đổi trả máy cũ</span>
+                        )}
+                      </span>
+                    </div>
+                    <div className="mobile-card-row">
+                      <span className="mobile-card-label">Máy In:</span>
+                      <span className="mobile-card-value">{printerModelText} {missingPrinterInfo.length > 0 ? <span className="badge badge-danger">⚠️ {missingPrinterInfo.join(', ')}</span> : `(Seri: ${printerSerialText})`}</span>
+                    </div>
+                    <div className="mobile-card-row">
+                      <span className="mobile-card-label">Cán bộ phụ trách:</span>
+                      <span className="mobile-card-value">🛠️ KTV: {set.technician || 'Chưa gán'} | 💼 KD: {set.salesperson || 'Chưa gán'}</span>
+                    </div>
+                    <div className="mobile-card-row">
+                      <span className="mobile-card-label">Ổn Áp:</span>
+                      <span className="mobile-card-value">{set.stabilizer}</span>
+                    </div>
+                    <div className="mobile-card-row">
+                      <span className="mobile-card-label">Dữ liệu cần bổ sung:</span>
+                      <span className="mobile-card-value">{missingFields.length > 0 ? <span className="badge badge-danger">⚠️ {missingFields.join(', ')}</span> : <span className="badge badge-success">✓ Đủ dữ liệu</span>}</span>
+                    </div>
+
+                    {/* Attached Photos Strip on Mobile Card */}
+                    {photos.length > 0 && (
+                      <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px dashed var(--border-color)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                          <span style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <ImageIcon size={13} color="var(--accent-cyan)" />
+                            <span>Ảnh Hiện Trường ({photos.length})</span>
+                          </span>
+                          <button
+                            type="button"
+                            style={{ background: 'none', border: 'none', color: 'var(--accent-cyan)', fontSize: '0.725rem', cursor: 'pointer', padding: 0 }}
+                            onClick={() => setSelectedPhotoViewer({
+                              isOpen: true,
+                              photos: photos,
+                              activeIndex: 0,
+                              title: `Bộ Máy [${set.setCode}]`
+                            })}
+                          >
+                            Phóng to tất cả ↗
+                          </button>
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
+                          {photos.map((url, idx) => (
+                            <img
+                              key={idx}
+                              src={url}
+                              alt={`Ảnh hiện trường ${idx + 1}`}
+                              onClick={() => setSelectedPhotoViewer({
+                                isOpen: true,
+                                photos: photos,
+                                activeIndex: idx,
+                                title: `Ảnh ${idx + 1}/${photos.length} - [${set.setCode}]`
+                              })}
+                              style={{
+                                width: '60px',
+                                height: '60px',
+                                borderRadius: '6px',
+                                objectFit: 'cover',
+                                border: '1px solid var(--border-color)',
+                                flexShrink: 0,
+                                cursor: 'pointer'
+                              }}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    </details>
+                  </div>
+                  <div className="mobile-card-actions">
+                    <button className="btn btn-secondary btn-sm" onClick={() => setSelectedSetDetails(set)}>
+                      <Eye size={14} color="var(--accent-blue)" />
+                      <span>Chi tiết & Ảnh</span>
+                    </button>
+                    <button className="btn btn-secondary btn-sm" onClick={() => handleOpenEditSet(set)}>
+                      <Edit3 size={14} color="var(--accent-cyan)" />
+                      <span>Sửa</span>
+                    </button>
+                    <button className="btn btn-danger btn-sm" onClick={() => handleDeleteSet(set.setCode)}>
+                      <Trash2 size={14} />
+                      <span>Xóa</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Pagination Footer */}
+          {renderPaginationBar(filteredSets.length)}
+        </div>
+      )}
+
+      {/* VIEW 2: RAW DISPENSERS STOCK */}
+      {activeSubTab === 'dispensers' && (
+        <div className="glass-panel" style={{ padding: '20px' }}>
+          <div style={{ marginBottom: '14px' }}>
+            <h3 style={{ fontSize: '1rem', fontWeight: '800', marginBottom: '10px' }}>Danh Mục Máy Chiết (Kho & Đã Cấp Phát)</h3>
+            {renderDeviceFilterBar('Máy Chiết', dispensers.length, false)}
+          </div>
+          {/* Desktop View Table */}
+          <div className="desktop-only data-table-container">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Mã QL</th>
+                  <th>Hệ Máy / Model</th>
+                  <th>Số Seri (Unique)</th>
+                  <th>Tình Trạng Kỹ Thuật</th>
+                  <th>Tình Trạng Cấp Phát</th>
+                  <th>Mã Bộ Máy Gắn Vào</th>
+                  <th>Thao Tác</th>
+                </tr>
+              </thead>
+              <tbody>
+                {getPaginatedList(sortedDispensers).map(item => (
+                  <tr key={item.id}>
+                    <td>
+                      <span style={{ fontWeight: '700' }}>{item.id}</span>
+                      {item.isNew && <span className="badge badge-success" style={{ fontSize: '0.65rem', marginLeft: '6px' }}>🆕 Mới</span>}
+                    </td>
+                    <td style={{ fontWeight: '700' }}>{item.model}</td>
+                    <td>{renderIssuedSerial(item)}</td>
+                    <td>
+                      {item.status === 'Mới 100%' && <span className="badge badge-success">{item.status}</span>}
+                      {item.status === 'Đang chạy tốt' && <span className="badge badge-info">{item.status}</span>}
+                      {item.status === 'Cần bảo trì' && <span className="badge badge-warning">{item.status}</span>}
+                      {item.status === 'Hỏng đầu phun' && <span className="badge badge-danger">⚠️ {item.status}</span>}
+                    </td>
+                    <td>
+                      {(() => {
+                        const info = getAssignedInfo(item);
+                        return info.isAssigned ? (
+                          <div>
+                            <span className="badge badge-success">🟢 Đã gán bộ</span>
+                            <div style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--accent-cyan)', marginTop: '2px' }}>{info.setCode}</div>
+                            <div style={{ fontSize: '0.725rem', color: 'var(--text-secondary)' }}>🏢 {info.nppName}</div>
+                          </div>
+                        ) : (
+                          <span className="badge badge-neutral">⚪ Tự do trong kho</span>
+                        );
+                      })()}
+                    </td>
+                    <td>{item.setCode || 'Chưa gán'}</td>
+                    <td>
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        <button className="btn btn-secondary btn-sm" style={{ padding: '4px 8px' }} onClick={() => handleOpenEditDevice('dispenser', item)}>
+                          <Edit3 size={14} color="var(--accent-cyan)" />
+                        </button>
+                        <button className="btn btn-danger btn-sm" style={{ padding: '4px 8px' }} onClick={() => handleDeleteDevice('dispenser', item)}>
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile View Cards */}
+          <div className="mobile-only mobile-card-list">
+            {getPaginatedList(sortedDispensers).map(item => (
+              <div className="mobile-card" key={item.id}>
+                <div className="mobile-card-header">
+                  <div>
+                    <span className="mobile-card-title">
+                      {item.model}
+                      {item.isNew && <span className="badge badge-success" style={{ fontSize: '0.65rem', marginLeft: '6px' }}>🆕 Mới</span>}
+                    </span>
+                    <div className="mobile-card-subtitle">Seri: {renderIssuedSerial(item)}</div>
+                  </div>
+                  <div>
+                    {item.status === 'Mới 100%' && <span className="badge badge-success">{item.status}</span>}
+                    {item.status === 'Đang chạy tốt' && <span className="badge badge-info">{item.status}</span>}
+                    {item.status === 'Cần bảo trì' && <span className="badge badge-warning">{item.status}</span>}
+                    {item.status === 'Hỏng đầu phun' && <span className="badge badge-danger">⚠️ {item.status}</span>}
+                  </div>
+                </div>
+                <div className="mobile-card-body">
+                  <div className="mobile-card-row">
+                    <span className="mobile-card-label">Mã Quản Lý:</span>
+                    <span className="mobile-card-value">{item.id}</span>
+                  </div>
+                  <div className="mobile-card-row">
+                    <span className="mobile-card-label">Trạng thái cấp phát:</span>
+                    <span className="mobile-card-value">
+                      {(() => {
+                        const info = getAssignedInfo(item);
+                        return info.isAssigned ? `🟢 Gán [${info.setCode}] (${info.nppName})` : '⚪ Tự do trong kho';
+                      })()}
+                    </span>
+                  </div>
+                </div>
+                <div className="mobile-card-actions">
+                  <button className="btn btn-secondary btn-sm" onClick={() => handleOpenEditDevice('dispenser', item)}>
+                    <Edit3 size={14} color="var(--accent-cyan)" />
+                    <span>Sửa</span>
+                  </button>
+                  <button className="btn btn-danger btn-sm" onClick={() => handleDeleteDevice('dispenser', item)}>
+                    <Trash2 size={14} />
+                    <span>Xóa</span>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Pagination Footer */}
+          {renderPaginationBar(sortedDispensers.length)}
+        </div>
+      )}
+
+      {/* VIEW 3: RAW MIXERS STOCK */}
+      {activeSubTab === 'mixers' && (
+        <div className="glass-panel" style={{ padding: '20px' }}>
+          <div style={{ marginBottom: '14px' }}>
+            <h3 style={{ fontSize: '1rem', fontWeight: '800', marginBottom: '10px' }}>Danh Mục Máy Lắc (Kho & Đã Cấp Phát)</h3>
+            {renderDeviceFilterBar('Máy Lắc', mixers.length, false)}
+          </div>
+          {/* Desktop View Table */}
+          <div className="desktop-only data-table-container">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Mã QL</th>
+                  <th>Hệ Máy</th>
+                  <th>Loại Máy Lắc</th>
+                  <th>Số Seri (Unique)</th>
+                  <th>Tình Trạng Kỹ Thuật</th>
+                  <th>Tình Trạng Cấp Phát & NPP</th>
+                  <th>Thao Tác</th>
+                </tr>
+              </thead>
+              <tbody>
+                {getPaginatedList(sortedMixers).map(item => (
+                  <tr key={item.id}>
+                    <td>
+                      <span style={{ fontWeight: '700' }}>{item.id}</span>
+                      {item.isNew && <span className="badge badge-success" style={{ fontSize: '0.65rem', marginLeft: '6px' }}>🆕 Mới</span>}
+                    </td>
+                    <td style={{ fontWeight: '700' }}>{item.model}</td>
+                    <td>{item.type}</td>
+                    <td>{renderIssuedSerial(item)}</td>
+                    <td><span className="badge badge-info">{item.status}</span></td>
+                    <td>
+                      {(() => {
+                        const info = getAssignedInfo(item);
+                        return info.isAssigned ? (
+                          <div>
+                            <span className="badge badge-success">🟢 Đã gán bộ</span>
+                            <div style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--accent-cyan)', marginTop: '2px' }}>{info.setCode}</div>
+                            <div style={{ fontSize: '0.725rem', color: 'var(--text-secondary)' }}>🏢 {info.nppName}</div>
+                          </div>
+                        ) : (
+                          <span className="badge badge-neutral">⚪ Tự do trong kho</span>
+                        );
+                      })()}
+                    </td>
+                    <td>
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        <button className="btn btn-secondary btn-sm" style={{ padding: '4px 8px' }} onClick={() => handleOpenEditDevice('mixer', item)}>
+                          <Edit3 size={14} color="var(--accent-cyan)" />
+                        </button>
+                        <button className="btn btn-danger btn-sm" style={{ padding: '4px 8px' }} onClick={() => handleDeleteDevice('mixer', item)}>
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile View Cards */}
+          <div className="mobile-only mobile-card-list">
+            {getPaginatedList(sortedMixers).map(item => (
+              <div className="mobile-card" key={item.id}>
+                <div className="mobile-card-header">
+                  <div>
+                    <span className="mobile-card-title">
+                      {item.model}
+                      {item.isNew && <span className="badge badge-success" style={{ fontSize: '0.65rem', marginLeft: '6px' }}>🆕 Mới</span>}
+                    </span>
+                    <div className="mobile-card-subtitle">Seri: {renderIssuedSerial(item)}</div>
+                  </div>
+                  <div>
+                    <span className="badge badge-info">{item.status}</span>
+                  </div>
+                </div>
+                <div className="mobile-card-body">
+                  <div className="mobile-card-row">
+                    <span className="mobile-card-label">Mã Quản Lý:</span>
+                    <span className="mobile-card-value">{item.id}</span>
+                  </div>
+                  <div className="mobile-card-row">
+                    <span className="mobile-card-label">Loại máy:</span>
+                    <span className="mobile-card-value">{item.type}</span>
+                  </div>
+                  <div className="mobile-card-row">
+                    <span className="mobile-card-label">Tình trạng cấp phát:</span>
+                    <span className="mobile-card-value">
+                      {(() => {
+                        const info = getAssignedInfo(item);
+                        return info.isAssigned ? `🟢 Gán [${info.setCode}] (${info.nppName})` : '⚪ Tự do trong kho';
+                      })()}
+                    </span>
+                  </div>
+                </div>
+                <div className="mobile-card-actions">
+                  <button className="btn btn-secondary btn-sm" onClick={() => handleOpenEditDevice('mixer', item)}>
+                    <Edit3 size={14} color="var(--accent-cyan)" />
+                    <span>Sửa</span>
+                  </button>
+                  <button className="btn btn-danger btn-sm" onClick={() => handleDeleteDevice('mixer', item)}>
+                    <Trash2 size={14} />
+                    <span>Xóa</span>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Pagination Footer */}
+          {renderPaginationBar(sortedMixers.length)}
+        </div>
+      )}
+
+      {/* VIEW 4: RAW COMPUTERS STOCK */}
+      {activeSubTab === 'computers' && (
+        <div className="glass-panel" style={{ padding: '20px' }}>
+          <div style={{ marginBottom: '14px' }}>
+            <h3 style={{ fontSize: '1rem', fontWeight: '800', marginBottom: '4px' }}>Danh Mục Máy Tính (Case & AIO)</h3>
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '10px' }}>
+              *Lưu ý: Mã quản lý được giữ nguyên khi chỉnh sửa. Ổn áp do NPP tự trang bị.
+            </span>
+            {renderDeviceFilterBar('Máy Tính', computers.length, true)}
+          </div>
+          {/* Desktop View Table */}
+          <div className="desktop-only data-table-container">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Mã QL</th>
+                  <th>Loại Máy</th>
+                  <th>Hệ Điều Hành</th>
+                  <th>Cấu Hình (Chi Tiết)</th>
+                  <th>Tình Trạng Kỹ Thuật</th>
+                  <th>Kết Nối Mạng</th>
+                  <th>Ổn Áp (NPP Trang Bị)</th>
+                  <th>Tình Trạng Cấp Phát & NPP</th>
+                  <th>Thao Tác</th>
+                </tr>
+              </thead>
+              <tbody>
+                {getPaginatedList(sortedComputers).map(item => (
+                  <tr key={item.id}>
+                    <td>
+                      <span style={{ fontWeight: '700' }}>{item.id}</span>
+                      {item.isNew && <span className="badge badge-success" style={{ fontSize: '0.65rem', marginLeft: '6px' }}>🆕 Mới</span>}
+                    </td>
+                    <td style={{ fontWeight: '700' }}>{item.type === 'Case' ? 'Case' : 'All In One'}</td>
+                    <td>{item.os}</td>
+                    <td style={{ fontSize: '0.825rem', color: 'var(--accent-cyan)', fontWeight: '600' }}>{item.specs}</td>
+                    <td>
+                      {item.status === 'Đã đổi trả máy mới' ? (
+                        <span className="badge badge-warning" style={{ fontWeight: '700' }}>🔄 Đã đổi trả máy mới</span>
+                      ) : (item.status === 'Đổi trả máy cũ' || item.status === 'Đã đổi trả máy cũ') ? (
+                        <span className="badge badge-purple" style={{ fontWeight: '700' }}>🔁 Đổi trả máy cũ</span>
+                      ) : item.status === 'Mới 100%' ? (
+                        <span className="badge badge-success">{item.status}</span>
+                      ) : (
+                        <span className="badge badge-info">{item.status || 'Đang chạy tốt'}</span>
+                      )}
+                    </td>
+                    <td>{item.network}</td>
+                    <td>
+                      {item.stabilizer?.hasStabilizer ? (
+                        <span className="badge badge-success">✓ {item.stabilizer.brand}</span>
+                      ) : (
+                        <span className="badge badge-warning">⚠ Chưa có ổn áp</span>
+                      )}
+                    </td>
+                    <td>
+                      {(() => {
+                        const info = getAssignedInfo(item);
+                        return info.isAssigned ? (
+                          <div>
+                            <span className="badge badge-success" style={{ fontWeight: '700' }}>🟢 {info.setCode}</span>
+                            <div style={{ fontSize: '0.75rem', marginTop: '2px', color: 'var(--text-muted)' }}>
+                              {info.nppName}
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="badge badge-neutral">⚪ Tự do trong kho</span>
+                        );
+                      })()}
+                    </td>
+                    <td>
+                      <div className="action-buttons">
+                        <button 
+                          className="btn btn-secondary btn-sm" 
+                          onClick={() => handleOpenEditDevice('computer', item)} 
+                          title="Sửa Máy Tính"
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                        >
+                          <Edit3 size={14} color="var(--accent-cyan)" />
+                          <span>Sửa</span>
+                        </button>
+                        <button 
+                          className="btn btn-secondary btn-sm" 
+                          onClick={() => handleDeleteDevice('computer', item)} 
+                          title="Xóa Máy Tính"
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'var(--accent-red)', border: '1px solid rgba(239,68,68,0.3)' }}
+                        >
+                          <Trash2 size={14} color="var(--accent-red)" />
+                          <span>Xóa</span>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile View Cards */}
+          <div className="mobile-only mobile-card-list">
+            {getPaginatedList(sortedComputers).map(item => (
+              <div className="mobile-card" key={item.id}>
+                <div className="mobile-card-header">
+                  <div>
+                    <span className="mobile-card-title">
+                      {item.type === 'Case' ? 'Case' : 'All In One'}
+                      {item.isNew && <span className="badge badge-success" style={{ fontSize: '0.65rem', marginLeft: '6px' }}>🆕 Mới</span>}
+                    </span>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--accent-purple)' }}>HĐH: {item.os}</div>
+                  </div>
+                  <div>
+                    {item.status === 'Đã đổi trả máy mới' ? (
+                      <span className="badge badge-warning">🔄 Đổi trả mới</span>
+                    ) : (item.status === 'Đổi trả máy cũ' || item.status === 'Đã đổi trả máy cũ') ? (
+                      <span className="badge badge-purple">🔁 Đổi trả cũ</span>
+                    ) : (
+                      <span className="badge badge-purple">{item.status || item.os}</span>
+                    )}
+                  </div>
+                </div>
+                <div className="mobile-card-body">
+                  <div className="mobile-card-row">
+                    <span className="mobile-card-label">Mã Quản Lý:</span>
+                    <span className="mobile-card-value">{item.id}</span>
+                  </div>
+                  <div className="mobile-card-row">
+                    <span className="mobile-card-label">Cấu hình:</span>
+                    <span className="mobile-card-value" style={{ fontSize: '0.8rem', color: 'var(--accent-cyan)' }}>{item.specs}</span>
+                  </div>
+                  <div className="mobile-card-row">
+                    <span className="mobile-card-label">Tình trạng cấp phát:</span>
+                    <span className="mobile-card-value">
+                      {(() => {
+                        const info = getAssignedInfo(item);
+                        return info.isAssigned ? `🟢 Gán [${info.setCode}] (${info.nppName})` : '⚪ Tự do trong kho';
+                      })()}
+                    </span>
+                  </div>
+                  <div className="mobile-card-row">
+                    <span className="mobile-card-label">Mạng:</span>
+                    <span className="mobile-card-value">{item.network}</span>
+                  </div>
+                  <div className="mobile-card-row">
+                    <span className="mobile-card-label">Ổn áp (NPP):</span>
+                    <span className="mobile-card-value">
+                      {item.stabilizer?.hasStabilizer ? <span className="badge badge-success">✓ {item.stabilizer.brand}</span> : <span className="badge badge-warning">⚠ Chưa có ổn áp</span>}
+                    </span>
+                  </div>
+                </div>
+                <div className="mobile-card-actions">
+                  <button className="btn btn-secondary btn-sm" onClick={() => handleOpenEditDevice('computer', item)}>
+                    <Edit3 size={14} color="var(--accent-cyan)" />
+                    <span>Sửa</span>
+                  </button>
+                  <button className="btn btn-danger btn-sm" onClick={() => handleDeleteDevice('computer', item)}>
+                    <Trash2 size={14} />
+                    <span>Xóa</span>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Pagination Footer */}
+          {renderPaginationBar(sortedComputers.length)}
+        </div>
+      )}
+
+      {/* VIEW 5: RAW PRINTERS STOCK */}
+      {activeSubTab === 'printers' && (
+        <div className="glass-panel" style={{ padding: '20px' }}>
+          <div style={{ marginBottom: '14px' }}>
+            <h3 style={{ fontSize: '1rem', fontWeight: '800', marginBottom: '10px' }}>Danh Mục Máy In (Model Chuẩn: QL700)</h3>
+            {renderDeviceFilterBar('Máy In', printers.length, false)}
+          </div>
+          {/* Desktop View Table */}
+          <div className="desktop-only data-table-container">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Mã QL</th>
+                  <th>Model Máy In</th>
+                  <th>Số Seri</th>
+                  <th>Cổng Kết Nối</th>
+                  <th>Tình Trạng</th>
+                  <th>Tình Trạng Cấp Phát & NPP</th>
+                  <th>Thao Tác</th>
+                </tr>
+              </thead>
+              <tbody>
+                {getPaginatedList(sortedPrinters).map(item => (
+                  <tr key={item.id}>
+                    <td>
+                      <span style={{ fontWeight: '700' }}>{item.id}</span>
+                      {item.isNew && <span className="badge badge-success" style={{ fontSize: '0.65rem', marginLeft: '6px' }}>🆕 Mới</span>}
+                    </td>
+                    <td style={{ fontWeight: '700' }}>{item.model}</td>
+                    <td>{renderIssuedSerial(item)}</td>
+                    <td>{item.connection}</td>
+                    <td><span className="badge badge-info">{item.status}</span></td>
+                    <td>
+                      {(() => {
+                        const info = getAssignedInfo(item);
+                        return info.isAssigned ? (
+                          <div>
+                            <span className="badge badge-success">🟢 Đã gán bộ</span>
+                            <div style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--accent-cyan)', marginTop: '2px' }}>{info.setCode}</div>
+                            <div style={{ fontSize: '0.725rem', color: 'var(--text-secondary)' }}>🏢 {info.nppName}</div>
+                          </div>
+                        ) : (
+                          <span className="badge badge-neutral">⚪ Tự do trong kho</span>
+                        );
+                      })()}
+                    </td>
+                    <td>
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        <button className="btn btn-secondary btn-sm" style={{ padding: '4px 8px' }} onClick={() => handleOpenEditDevice('printer', item)}>
+                          <Edit3 size={14} color="var(--accent-cyan)" />
+                        </button>
+                        <button className="btn btn-danger btn-sm" style={{ padding: '4px 8px' }} onClick={() => handleDeleteDevice('printer', item)}>
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile View Cards */}
+          <div className="mobile-only mobile-card-list">
+            {getPaginatedList(sortedPrinters).map(item => (
+              <div className="mobile-card" key={item.id}>
+                <div className="mobile-card-header">
+                  <div>
+                    <span className="mobile-card-title">
+                      {item.model}
+                      {item.isNew && <span className="badge badge-success" style={{ fontSize: '0.65rem', marginLeft: '6px' }}>🆕 Mới</span>}
+                    </span>
+                    <div className="mobile-card-subtitle">Seri: {renderIssuedSerial(item)}</div>
+                  </div>
+                  <div>
+                    <span className="badge badge-info">{item.status}</span>
+                  </div>
+                </div>
+                <div className="mobile-card-body">
+                  <div className="mobile-card-row">
+                    <span className="mobile-card-label">Mã Quản Lý:</span>
+                    <span className="mobile-card-value">{item.id}</span>
+                  </div>
+                  <div className="mobile-card-row">
+                    <span className="mobile-card-label">Kết nối:</span>
+                    <span className="mobile-card-value">{item.connection}</span>
+                  </div>
+                  <div className="mobile-card-row">
+                    <span className="mobile-card-label">Tình trạng cấp phát:</span>
+                    <span className="mobile-card-value">
+                      {(() => {
+                        const info = getAssignedInfo(item);
+                        return info.isAssigned ? `🟢 Gán [${info.setCode}] (${info.nppName})` : '⚪ Tự do trong kho';
+                      })()}
+                    </span>
+                  </div>
+                </div>
+                <div className="mobile-card-actions">
+                  <button className="btn btn-secondary btn-sm" onClick={() => handleOpenEditDevice('printer', item)}>
+                    <Edit3 size={14} color="var(--accent-cyan)" />
+                    <span>Sửa</span>
+                  </button>
+                  <button className="btn btn-danger btn-sm" onClick={() => handleDeleteDevice('printer', item)}>
+                    <Trash2 size={14} />
+                    <span>Xóa</span>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Pagination Footer */}
+          {renderPaginationBar(sortedPrinters.length)}
+        </div>
+      )}
+
+      {/* ADD STOCK DEVICE MODAL */}
+      {showAddDeviceModal && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '560px' }}>
+            <div className="modal-header">
+              <h3 style={{ fontWeight: '800' }}>
+                Thêm Thiết Bị Lẻ Vào Kho —&nbsp;
+                {addDeviceCategory === 'dispenser' && '🖱️ Máy Chiết'}
+                {addDeviceCategory === 'mixer' && '🔄 Máy Lắc'}
+                {addDeviceCategory === 'computer' && '💻 Máy Tính'}
+                {addDeviceCategory === 'printer' && '🖨️ Máy In QL700'}
+              </h3>
+              <button className="btn btn-secondary btn-sm" onClick={closeStockEditor} disabled={isSavingDevice}>✕</button>
+            </div>
+            <form onSubmit={handleAddDeviceSubmit}>
+              <div className="modal-body"><DraftNotice draft={stockDraft} />
+                <div style={{ padding: '12px', marginBottom: '14px', borderRadius: '8px', background: 'rgba(56,189,248,0.10)', border: '1px solid rgba(56,189,248,0.35)', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                  💡 Gợi ý nhập kho: chọn model và tình trạng thiết bị. Mã QL tự tăng theo loại máy và tiếp tục từ mã lớn nhất đã có. Số seri là tùy chọn; thiết bị thiếu seri sẽ được cảnh báo khi ghép bộ (trừ máy tính).
+                </div>
+
+                {/* Mã QL (ID) */}
+                <div className="form-group">
+                  <label className="form-label">
+                    Mã Quản Lý (Mã QL) <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>(Tự động theo loại)</span>
+                  </label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Tự động tạo"
+                    value={addFormData.id || ''}
+                    readOnly
+                    aria-readonly="true"
+                  />
+                </div>
+
+                {/* Model - Ẩn đối với Máy tính vì chỉ phân biệt All In One và Case */}
+                {addDeviceCategory !== 'computer' && (
+                  <div className="form-group">
+                    <label className="form-label">
+                      {addDeviceCategory === 'dispenser' && 'Model Máy Chiết (Satint / Hero / Corob)'}
+                      {addDeviceCategory === 'mixer' && 'Model Máy Lắc'}
+                      {addDeviceCategory === 'printer' && 'Model Máy In (thường là QL700)'}
+                    </label>
+                    <input className="form-input" aria-label="Model thiết bị mới" list={`stock-models-${addDeviceCategory}`} placeholder="Chọn hoặc nhập model mới" maxLength={120} required value={addFormData.model} onChange={e => setAddFormData({ ...addFormData, model: e.target.value })} />
+                    <datalist id={`stock-models-${addDeviceCategory}`}>{modelOptions(addDeviceCategory).map(model => <option key={model} value={model} />)}</datalist>
+                  </div>
+                )}
+
+                {/* Serial - Ẩn hoàn toàn đối với Máy tính */}
+                {addDeviceCategory !== 'computer' && (
+                  <div className="form-group">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                      <label className="form-label" style={{ marginBottom: 0 }}>
+                        Số Seri (Serial Number) <span style={{ color: 'var(--text-muted)', fontWeight: '400' }}>(Tùy chọn)</span>
+                      </label>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        style={{ padding: '2px 10px', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'var(--accent-cyan)', border: '1px solid var(--accent-cyan)' }}
+                        onClick={() => {
+                          setScanTargetField('add');
+                          setShowScanSerialModal(true);
+                        }}
+                      >
+                        <Camera size={14} />
+                        <span>📷 Quét Mã Vạch</span>
+                      </button>
+                    </div>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="Có thể để trống hoặc bấm Quét mã vạch"
+                      value={addFormData.serial}
+                      onChange={e => setAddFormData({ ...addFormData, serial: e.target.value })}
+                    />
+                  </div>
+                )}
+
+                {/* Status */}
+                <div className="form-group">
+                  <label className="form-label">Tình Trạng Kỹ Thuật</label>
+                  <select className="form-select" value={addFormData.status} onChange={e => setAddFormData({ ...addFormData, status: e.target.value })}>
+                    <option value="Mới 100%">Mới 100%</option>
+                    <option value="Đang chạy tốt">Đang chạy tốt</option>
+                    {addDeviceCategory === 'computer' && (
+                      <>
+                        <option value="Đã đổi trả máy mới">🔄 Đã đổi trả máy mới</option>
+                        <option value="Đổi trả máy cũ">🔁 Đổi trả máy cũ</option>
+                      </>
+                    )}
+                    <option value="Cần bảo trì">Cần bảo trì</option>
+                    {addDeviceCategory === 'dispenser' && <option value="Hỏng đầu phun">Hỏng đầu phun</option>}
+                    {addDeviceCategory === 'mixer' && <option value="Hỏng motor">Hỏng motor</option>}
+                    {addDeviceCategory === 'printer' && <option value="Hỏng đầu in">Hỏng đầu in</option>}
+                    <option value="Hỏng nặng">Hỏng nặng</option>
+                  </select>
+                </div>
+
+                {/* Mixer-specific: type */}
+                {addDeviceCategory === 'mixer' && (
+                  <div className="form-group">
+                    <label className="form-label">Loại Máy Lắc</label>
+                    <select className="form-select" value={addFormData.type} onChange={e => setAddFormData({ ...addFormData, type: e.target.value })}>
+                      <option value="Lắc xoay khép kín">Lắc xoay khép kín</option>
+                      <option value="Lắc rung đứng">Lắc rung đứng</option>
+                      <option value="Lắc rung ngang">Lắc rung ngang</option>
+                      <option value="Lắc mâm xoay">Lắc mâm xoay</option>
+                    </select>
+                  </div>
+                )}
+
+                {/* Computer-specific */}
+                {addDeviceCategory === 'computer' && (
+                  <>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                      <div className="form-group">
+                        <label className="form-label">Loại Máy Tính (Chỉ gồm 2 loại)</label>
+                        <select 
+                          className="form-select" 
+                          value={addFormData.type === 'Case' ? 'Case' : 'All In One'} 
+                          onChange={e => setAddFormData({ ...addFormData, type: e.target.value, model: e.target.value })}
+                        >
+                          <option value="All In One">All In One</option>
+                          <option value="Case">Case</option>
+                        </select>
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">Hệ Điều Hành</label>
+                        <input type="text" className="form-input" placeholder="Windows 11 Pro" value={addFormData.os} onChange={e => setAddFormData({ ...addFormData, os: e.target.value })} />
+                      </div>
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Cấu Hình (Specs)</label>
+                      <input type="text" className="form-input" placeholder="Core i5 / 16GB RAM / 512GB SSD" value={addFormData.specs} onChange={e => setAddFormData({ ...addFormData, specs: e.target.value })} />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Kết Nối Mạng</label>
+                      <select className="form-select" value={addFormData.network} onChange={e => setAddFormData({ ...addFormData, network: e.target.value })}>
+                        <option value="Có mạng LAN">Có mạng LAN</option>
+                        <option value="Có mạng Wifi">Có mạng Wifi</option>
+                        <option value="Không có mạng">Không có mạng</option>
+                      </select>
+                    </div>
+                  </>
+                )}
+
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={closeStockEditor} disabled={isSavingDevice}>Hủy Bỏ</button>
+                <button type="submit" className="btn btn-primary" disabled={isSavingDevice || Boolean(stockDraft.existing)}>✅ Thêm Vào Kho</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT DEVICE MODAL */}
+      {editingDevice && (
+        <SafePortal>
+          <div className="modal-overlay">
+            <div className="modal-content" style={{ maxWidth: '580px' }}>
+              <div className="modal-header">
+                <h3 style={{ fontWeight: '800' }}>
+                  Chỉnh Sửa Thông Tin {editingDevice.category === 'computer' ? `Máy Tính [Mã: ${editFormData.id}]` : `Thiết Bị [${editFormData.serial || 'Không seri'}]`}
+                </h3>
+                <button className="btn btn-secondary btn-sm" disabled={isSavingDevice} onClick={closeDeviceEditor}>✕</button>
+              </div>
+              <form onSubmit={handleEditSubmit}>
+                <div className="modal-body" ref={el => { if (el) el.scrollTop = 0; }}><DraftNotice draft={deviceDraft} />
+                  
+                  {/* ROW 1: SERIAL NUMBER & MODEL - TOP OF FORM */}
+                  <div className="responsive-form-grid">
+                    {editingDevice && (
+                      <div className="form-group">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                          <label className="form-label" style={{ marginBottom: 0 }}>
+                            🏷️ Số Seri (Serial) <span style={{ color: 'var(--text-muted)', fontWeight: '400' }}>{editingDevice.category === 'computer' ? '(giữ nguyên nếu để trống)' : '(có thể để trống)'}</span>
+                          </label>
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-sm"
+                            style={{ padding: '2px 8px', fontSize: '0.725rem', display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'var(--accent-cyan)', border: '1px solid var(--accent-cyan)' }}
+                            onClick={() => {
+                              setScanTargetField('edit');
+                              setShowScanSerialModal(true);
+                            }}
+                          >
+                            <Camera size={12} />
+                            <span>📷 Quét Mã</span>
+                          </button>
+                        </div>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="Nhập seri hoặc bấm Quét mã"
+                          aria-label="Số serial thiết bị"
+                          required={false}
+                          value={editFormData.serial || ''}
+                          onChange={e => setEditFormData({ ...editFormData, serial: e.target.value })}
+                        />
+                      </div>
+                    )}
+
+                    {editingDevice.category !== 'computer' && (
+                      <div className="form-group">
+                        <label className="form-label">⚙️ Model / Hệ Máy *</label>
+                        <input className="form-input" aria-label="Model thiết bị" list={`edit-models-${editingDevice.category}`} placeholder="Chọn hoặc nhập model mới" maxLength={120} required value={editFormData.model || ''} onChange={e => setEditFormData({ ...editFormData, model: e.target.value })} />
+                        <datalist id={`edit-models-${editingDevice.category}`}>{[...new Set([...modelOptions(editingDevice.category), editFormData.model].filter(Boolean))].map(model => <option key={model} value={model} />)}</datalist>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* ROW 2: MÃ QL & TÌNH TRẠNG KỸ THUẬT */}
+                  <div className="responsive-form-grid">
+                    <div className="form-group">
+                      <label className="form-label">Mã Quản Lý (Nội bộ)</label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        required
+                        value={editFormData.id || ''}
+                        readOnly
+                        aria-readonly="true"
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label">🛠️ Tình Trạng Kỹ Thuật</label>
+                      <select className="form-select" value={editFormData.status || 'Đang chạy tốt'} onChange={e => setEditFormData({ ...editFormData, status: e.target.value })}>
+                        <option value="Mới 100%">Mới 100%</option>
+                        <option value="Đang chạy tốt">Đang chạy tốt</option>
+                        {editingDevice.category === 'computer' && (
+                          <>
+                            <option value="Đã đổi trả máy mới">🔄 Đã đổi trả máy mới</option>
+                            <option value="Đổi trả máy cũ">🔁 Đổi trả máy cũ</option>
+                          </>
+                        )}
+                        <option value="Cần bảo trì">Cần bảo trì</option>
+                        {editingDevice.category === 'dispenser' && <option value="Hỏng đầu phun">Hỏng đầu phun</option>}
+                        {editingDevice.category === 'mixer' && <option value="Hỏng motor">Hỏng motor</option>}
+                        {editingDevice.category === 'printer' && <option value="Hỏng đầu in">Hỏng đầu in</option>}
+                        <option value="Hỏng nặng">Hỏng nặng</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* CATEGORY SPECIFIC OPTIONS */}
+                  {editingDevice.category === 'printer' && (
+                    <div className="form-group">
+                      <label className="form-label">Cổng Kết Nối</label>
+                      <select className="form-select" value={editFormData.connection || 'USB'} onChange={e => setEditFormData({ ...editFormData, connection: e.target.value })}>
+                        <option value="USB">USB</option>
+                        <option value="LAN">LAN</option>
+                        <option value="Wifi">Wifi</option>
+                        <option value="Bluetooth">Bluetooth</option>
+                      </select>
+                    </div>
+                  )}
+
+                  {editingDevice.category === 'mixer' && (
+                    <div className="form-group">
+                      <label className="form-label">Loại Máy Lắc</label>
+                      <select
+                        className="form-select"
+                        value={editFormData.type || 'Lắc xoay khép kín'}
+                        onChange={e => setEditFormData({ ...editFormData, type: e.target.value })}
+                      >
+                        <option value="Lắc xoay khép kín">Lắc xoay khép kín</option>
+                        <option value="Lắc rung đứng">Lắc rung đứng</option>
+                        <option value="Lắc rung ngang">Lắc rung ngang</option>
+                        <option value="Lắc mâm xoay">Lắc mâm xoay</option>
+                      </select>
+                    </div>
+                  )}
+
+                  {editingDevice.category === 'computer' && (
+                    <div className="responsive-form-grid">
+                      { [['tintingSoftware', 'Phần mềm pha màu'], ['softwareVersion', 'Phiên bản phần mềm']].map(([key, label]) => (
+                        <div className="form-group" key={key}>
+                          <label className="form-label" htmlFor={`edit-computer-${key}`}>{label}</label>
+                          <input id={`edit-computer-${key}`} className="form-input" maxLength={120} value={editFormData[key] || ''} onChange={event => setEditFormData(previous => ({ ...previous, [key]: event.target.value }))} />
+                        </div>
+                      ))}
+                      <div className="form-group">
+                        <label className="form-label">Loại Máy Tính & OS</label>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <select 
+                            className="form-select" 
+                            style={{ width: '130px' }} 
+                            value={editFormData.type === 'Case' ? 'Case' : 'All In One'} 
+                            onChange={e => setEditFormData({ ...editFormData, type: e.target.value, model: e.target.value })}
+                          >
+                            <option value="All In One">All In One</option>
+                            <option value="Case">Case</option>
+                          </select>
+                          <input type="text" className="form-input" style={{ flex: 1 }} placeholder="Hệ điều hành..." value={editFormData.os || ''} onChange={e => setEditFormData({ ...editFormData, os: e.target.value })} />
+                        </div>
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">Kết Nối Mạng</label>
+                        <select className="form-select" value={editFormData.network || 'Có mạng LAN'} onChange={e => setEditFormData({ ...editFormData, network: e.target.value })}>
+                          <option value="Có mạng LAN">Có mạng LAN</option>
+                          <option value="Có mạng Wifi">Có mạng Wifi</option>
+                          <option value="Không có mạng">Không có mạng</option>
+                        </select>
+                      </div>
+                      <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                        <label className="form-label">💻 Cấu Hình Chi Tiết (Specs: CPU / RAM / SSD)</label>
+                        <input 
+                          type="text" 
+                          className="form-input" 
+                          placeholder="VD: Core i5 / 16GB RAM / 512GB SSD" 
+                          value={editFormData.specs || ''} 
+                          onChange={e => setEditFormData({ ...editFormData, specs: e.target.value })} 
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ASSIGNMENT & NPP SECTION */}
+                  {selectedSetDetails && <p className="resource-muted">Sửa thông tin giữ nguyên bộ máy đang gán. Dùng nút Thay thiết bị trong hồ sơ để chọn máy khác từ kho.</p>}
+                  <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px dashed var(--border-color)' }}>
+                    <div className="responsive-form-grid">
+                      <div className="form-group">
+                        <label className="form-label">📌 Trạng Thái Cấp Phát</label>
+                        <select
+                          className="form-select"
+                          disabled={Boolean(selectedSetDetails)}
+                          value={editFormData.isAssigned ? 'ASSIGNED' : 'FREE'}
+                          onChange={e => {
+                            const isAssigned = e.target.value === 'ASSIGNED';
+                            setEditFormData({
+                              ...editFormData,
+                              isAssigned,
+                              setCode: isAssigned ? editFormData.setCode : ''
+                            });
+                          }}
+                        >
+                          <option value="FREE">⚪ Tự do trong kho</option>
+                          <option value="ASSIGNED">🟢 Đã gán vào Bộ máy / NPP</option>
+                        </select>
+                      </div>
+
+                      {editFormData.isAssigned && (
+                        <div className="form-group">
+                          <label className="form-label">🏢 Bộ Máy & NPP Gán Cho *</label>
+                          <select
+                            className="form-select"
+                            disabled={Boolean(selectedSetDetails)}
+                            required={editFormData.isAssigned}
+                            value={editFormData.setCode || ''}
+                            onChange={e => setEditFormData({ ...editFormData, setCode: e.target.value })}
+                          >
+                            <option value="">-- Chọn bộ máy / NPP --</option>
+                            {systemSets.map(s => (
+                              <option key={s.setCode} value={s.setCode}>
+                                {s.setCode} — {s.nppName || 'Kho Trung Tâm'}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                </div>
+                <div className="modal-footer">
+                  <button type="button" className="btn btn-secondary" disabled={isSavingDevice} onClick={closeDeviceEditor}>{selectedSetDetails ? '← Quay lại hồ sơ máy' : 'Hủy Bỏ'}</button>
+                  <button type="submit" className="btn btn-primary" disabled={isSavingDevice}>{isSavingDevice ? 'Đang lưu…' : 'Lưu Thay Đổi'}</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </SafePortal>
+      )}
+
+      {/* Assemble Combo Modal */}
+      {showAssembleModal && (
+        <SafePortal>
+          <div className="modal-overlay">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h3 style={{ fontWeight: '800' }}>Ghép Bộ Máy Pha Màu Mới (Combo Set)</h3>
+                <button className="btn btn-secondary btn-sm" onClick={closeAssembly} disabled={assembling}>✕</button>
+              </div>
+              <form onSubmit={handleAssembleSubmit}>
+                <div className="modal-body" ref={el => { if (el) el.scrollTop = 0; }}><DraftNotice draft={assemblyDraft}/>
+                  <div style={{ padding: '12px', background: 'rgba(56, 189, 248, 0.1)', border: '1px solid var(--accent-blue)', borderRadius: '8px', marginBottom: '16px', fontSize: '0.825rem' }}>
+                    💡 Quy chuẩn 1 Bộ Máy Pha Màu bao gồm: 1 Máy Chiết + 1 Máy Lắc + 1 Máy Tính + 1 Máy In QL700. (Ổn áp sẽ ghi nhận thêm khi lắp đặt tại NPP).
+                  </div>
+
+                  {assemblyError && <p className="resource-error" role="alert">{assemblyError}</p>}
+                  {existingNppSets.length > 0 && <div className="repair-missing-fields" role="alert">
+                    <strong>{newSetData.nppName} đã có {existingNppSets.length} bộ máy: {existingNppSets.map(item => item.setCode || item.set_code).join(', ')}</strong>
+                    <p>Kiểm tra bộ máy đang sử dụng trước khi ghép thêm để tránh cấp phát nhầm.</p>
+                    <label><input type="checkbox" checked={newSetData.confirmAdditionalSet === true} onChange={event => setNewSetData(previous => ({ ...previous, confirmAdditionalSet: event.target.checked }))} /> Tôi xác nhận cần ghép thêm một bộ máy mới cho NPP này</label>
+                  </div>}
+                  {/* NPP Selector & Set Code */}
+                  <div className="responsive-form-grid" style={{ marginBottom: '12px' }}>
+                    <div className="form-group">
+                      <label className="form-label">🏷️ Mã Bộ Máy (Tự động tăng dần *)</label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        required
+                        placeholder="VD: SET-2026-003"
+                        value={newSetData.setCode || ''}
+                        onChange={e => setNewSetData({ ...newSetData, setCode: e.target.value })}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span>🏢 Chọn Nhà Phân Phối (Mục NPP)</span>
+                        {nppSearchTerm && (
+                          <span 
+                            style={{ color: '#ef4444', fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline' }}
+                            onClick={() => setNppSearchTerm('')}
+                          >
+                            ✕ Xóa lọc
+                          </span>
+                        )}
+                      </label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="🔍 Tìm tên hoặc mã NPP..."
+                        value={nppSearchTerm}
+                        onChange={e => setNppSearchTerm(e.target.value)}
+                        style={{ marginBottom: '6px', fontSize: '0.8rem', padding: '4px 8px' }}
+                      />
+                      <select
+                        className="form-select"
+                        value={newSetData.nppId || ''}
+                        onChange={e => {
+                          const selectedId = e.target.value;
+                          const targetNpp = npps.find(n => n.id === selectedId);
+                          setNewSetData({
+                            ...newSetData,
+                            nppId: selectedId,
+                            confirmAdditionalSet: false,
+                            nppName: targetNpp ? targetNpp.name : 'Kho Tổng Trung Tâm',
+                            region: targetNpp ? (targetNpp.region || '') : '',
+                            province: targetNpp ? (targetNpp.province || '') : '',
+                            salesperson: targetNpp ? (targetNpp.salesperson || '') : '',
+                            status: targetNpp ? 'DA_LAP_DAT' : 'TRONG_KHO'
+                          });
+                        }}
+                      >
+                        <option value="">-- Kho Tổng Trung Tâm (Chưa chọn NPP) --</option>
+                        {npps
+                          .filter(npp => {
+                            if (!nppSearchTerm.trim()) return true;
+                            return matchesSearch(nppSearchTerm,[npp.name,npp.code,npp.id,npp.province,npp.salesperson,npp.phone]);
+                          })
+                          .map(npp => (
+                            <option key={npp.id} value={npp.id}>
+                              {npp.name} ({npp.code || npp.id}) — {npp.province || npp.region || 'TQ'} {npp.salesperson ? `(KD: ${npp.salesperson})` : ''}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                    <div className="form-group">
+                      <label className="form-label">🛠️ Kỹ Thuật Viên Phụ Trách</label>
+                      <select
+                        className="form-select"
+                        value={newSetData.technician || ''}
+                        onChange={e => setNewSetData({ ...newSetData, technician: e.target.value })}
+                      >
+                        <option value="">-- Chọn tài khoản Kỹ Thuật Viên (QC) --</option>
+                        {qcUsers.map(u => (
+                          <option key={u.id || u.name} value={u.name}>
+                            👤 {u.name} ({u.role?.toUpperCase() === 'QC' ? 'QC/KTV' : u.role?.toUpperCase() || 'KTV'} - {u.region || 'TQ'})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">💼 Kinh Doanh Phụ Trách (Tự động từ NPP)</label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="Tự động điền theo NPP chọn ở trên..."
+                        value={newSetData.salesperson || ''}
+                        onChange={e => setNewSetData({ ...newSetData, salesperson: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Helper logic for filtering available devices */}
+                  {(() => {
+                    const isDeviceFree = (dev) => {
+                      if (!dev) return false;
+                      return !dev.isAssigned && (!dev.setCode || dev.setCode === '');
+                    };
+
+                    const availDisp = dispensers
+                      .filter(d => isDeviceFree(d) || d.id === newSetData.dispenserId)
+                      .sort((a, b) => naturalSortCode(a, b, 'id'));
+
+                    const availMix = mixers
+                      .filter(m => isDeviceFree(m) || m.id === newSetData.mixerId)
+                      .sort((a, b) => naturalSortCode(a, b, 'id'));
+
+                    const availComp = computers
+                      .filter(c => isDeviceFree(c) || c.id === newSetData.computerId)
+                      .sort((a, b) => naturalSortCode(a, b, 'id'));
+
+                    const availPrn = printers
+                      .filter(p => isDeviceFree(p) || p.id === newSetData.printerId)
+                      .sort((a, b) => naturalSortCode(a, b, 'id'));
+
+                    return (
+                      <>
+                        <div className="form-group">
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <label className="form-label" style={{ marginBottom: 0 }}>1. Chọn Máy Chiết *</label>
+                            <button 
+                              type="button" 
+                              style={{ background: 'none', border: 'none', color: 'var(--accent-cyan)', fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline' }}
+                              onClick={async () => { try { await assemblyDraft.flush(); setShowAssembleModal(false); handleOpenAddDevice('dispenser'); } catch(error) { alert(userErrorMessage(error)); } }}
+                            >
+                              + Thêm máy chiết mới vào kho
+                            </button>
+                          </div>
+                          <select className="form-select" required value={newSetData.dispenserId} onChange={e => setNewSetData({ ...newSetData, dispenserId: e.target.value })}>
+                            <option value="">-- Chọn máy chiết ({availDisp.length} máy) --</option>
+                            {availDisp.map(d => (
+                              <option key={d.id} value={d.id}>
+                                [{d.id}] {d.model} — Seri: {isMissingSerial(d) ? '⚠️ CHƯA CÓ' : d.serial} {isDeviceFree(d) ? '🟢 (Tự do trong kho)' : `🟡 (Đang gán bộ ${d.setCode || d.set_code || ''})`}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="form-group">
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <label className="form-label" style={{ marginBottom: 0 }}>2. Chọn Máy Lắc *</label>
+                            <button 
+                              type="button" 
+                              style={{ background: 'none', border: 'none', color: 'var(--accent-cyan)', fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline' }}
+                              onClick={async () => { try { await assemblyDraft.flush(); setShowAssembleModal(false); handleOpenAddDevice('mixer'); } catch(error) { alert(userErrorMessage(error)); } }}
+                            >
+                              + Thêm máy lắc mới vào kho
+                            </button>
+                          </div>
+                          <select className="form-select" required value={newSetData.mixerId} onChange={e => setNewSetData({ ...newSetData, mixerId: e.target.value })}>
+                            <option value="">-- Chọn máy lắc ({availMix.length} máy) --</option>
+                            {availMix.map(m => (
+                              <option key={m.id} value={m.id}>
+                                [{m.id}] {m.model} ({m.type || 'Lắc xoay'}) — Seri: {isMissingSerial(m) ? '⚠️ CHƯA CÓ' : m.serial} {isDeviceFree(m) ? '🟢 (Tự do trong kho)' : `🟡 (Đang gán bộ ${m.setCode || m.set_code || ''})`}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="form-group">
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <label className="form-label" style={{ marginBottom: 0 }}>3. Chọn Máy Tính *</label>
+                            <button 
+                              type="button" 
+                              style={{ background: 'none', border: 'none', color: 'var(--accent-cyan)', fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline' }}
+                              onClick={async () => { try { await assemblyDraft.flush(); setShowAssembleModal(false); handleOpenAddDevice('computer'); } catch(error) { alert(userErrorMessage(error)); } }}
+                            >
+                              + Thêm máy tính mới vào kho
+                            </button>
+                          </div>
+                          <select className="form-select" required value={newSetData.computerId} onChange={e => setNewSetData({ ...newSetData, computerId: e.target.value })}>
+                            <option value="">-- Chọn máy tính ({availComp.length} máy) --</option>
+                            {availComp.map(c => (
+                              <option key={c.id} value={c.id}>
+                                [{c.id}] {c.type} ({c.os || 'Win'} | {c.specs || 'N/A'}) {c.status === 'Đã đổi trả máy mới' ? '🔄 [Đã đổi trả máy mới]' : (c.status === 'Đổi trả máy cũ' || c.status === 'Đã đổi trả máy cũ') ? '🔁 [Đổi trả máy cũ]' : ''} {isDeviceFree(c) ? '🟢 (Tự do trong kho)' : `🟡 (Đang gán bộ ${c.setCode || c.set_code || ''})`}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="form-group">
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <label className="form-label" style={{ marginBottom: 0 }}>4. Chọn Máy In QL700 *</label>
+                            <button 
+                              type="button" 
+                              style={{ background: 'none', border: 'none', color: 'var(--accent-cyan)', fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline' }}
+                              onClick={async () => { try { await assemblyDraft.flush(); setShowAssembleModal(false); handleOpenAddDevice('printer'); } catch(error) { alert(userErrorMessage(error)); } }}
+                            >
+                              + Thêm máy in mới vào kho
+                            </button>
+                          </div>
+                          <select className="form-select" required value={newSetData.printerId} onChange={e => setNewSetData({ ...newSetData, printerId: e.target.value })}>
+                            <option value="">-- Chọn máy in QL700 ({availPrn.length} máy) --</option>
+                            {availPrn.map(p => (
+                              <option key={p.id} value={p.id}>
+                                [{p.id}] {p.model} — Seri: {isMissingSerial(p) ? '⚠️ CHƯA CÓ' : p.serial} {isDeviceFree(p) ? '🟢 (Tự do trong kho)' : `🟡 (Đang gán bộ ${p.setCode || p.set_code || ''})`}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Attached Photos in Assemble Modal */}
+                        <div className="form-group" style={{ marginTop: '14px', paddingTop: '12px', borderTop: '1px solid var(--border-color)' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                            <label className="form-label" style={{ marginBottom: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <Camera size={16} color="var(--accent-cyan)" />
+                              <span>Ảnh Lắp Đặt / Hiện Trường ({newSetData.installationPhotos?.length || 0})</span>
+                            </label>
+                            <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer', fontSize: '0.75rem', padding: '3px 8px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                              <PlusCircle size={13} color="var(--accent-cyan)" />
+                              <span>Chọn ảnh</span>
+                              <input type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={handleUploadNewSetPhotos} />
+                            </label>
+                          </div>
+                          {newSetData.installationPhotos && newSetData.installationPhotos.length > 0 && (
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(75px, 1fr))', gap: '8px', marginTop: '6px' }}>
+                              {newSetData.installationPhotos.map((url, idx) => (
+                                <div key={idx} style={{ position: 'relative', width: '100%', height: '65px', borderRadius: '6px', overflow: 'hidden', border: '1px solid var(--border-color)' }}>
+                                  <img
+                                    src={url}
+                                    alt={`Ảnh ${idx + 1}`}
+                                    style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'pointer' }}
+                                    onClick={() => setSelectedPhotoViewer({
+                                      isOpen: true,
+                                      photos: newSetData.installationPhotos,
+                                      activeIndex: idx,
+                                      title: `Ảnh lắp đặt ${idx + 1}`
+                                    })}
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveNewSetPhoto(idx)}
+                                    style={{
+                                      position: 'absolute',
+                                      top: '2px',
+                                      right: '2px',
+                                      background: 'rgba(239, 68, 68, 0.9)',
+                                      color: '#fff',
+                                      border: 'none',
+                                      borderRadius: '50%',
+                                      width: '18px',
+                                      height: '18px',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      fontSize: '10px',
+                                      cursor: 'pointer'
+                                    }}
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+                <div className="modal-footer">
+                  <button type="button" className="btn btn-secondary" onClick={closeAssembly} disabled={assembling}>Hủy Bỏ</button>
+                  <button type="submit" className="btn btn-primary" disabled={assembling || Boolean(assemblyDraft.existing) || (existingNppSets.length>0 && newSetData.confirmAdditionalSet!==true)}>Xác Nhận Tạo Bộ Combo</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </SafePortal>
+      )}
+
+      {/* EDIT SYSTEM SET MODAL */}
+      {editingSet && (
+        <SafePortal>
+          <div className="modal-overlay">
+            <div className="modal-content" style={{ maxWidth: '600px' }}>
+              <div className="modal-header">
+                <h3 style={{ fontWeight: '800' }}>Chỉnh Sửa Thông Tin Bộ Máy [{editingSet.setCode}]</h3>
+                <button className="btn btn-secondary btn-sm" onClick={closeSetEditor}>✕</button>
+              </div>
+              <form onSubmit={handleEditSetSubmit} aria-busy={setSaving}>
+                <div className="modal-body" ref={el => { if (el) el.scrollTop = 0; }}><DraftNotice draft={setDraft} />
+                  <div className="responsive-form-grid">{[['computerSerial','Seri máy tính'],['tintingSoftware','Phần mềm pha màu'],['softwareVersion','Phiên bản phần mềm']].map(([key,label]) => <label key={key}>{label}<input className="form-input" maxLength={120} value={editSetFormData[key] || ''} onChange={event => setEditSetFormData(previous => ({ ...previous, [key]: event.target.value.trimStart() }))} /></label>)}</div>
+                  
+                  {/* PRIMARY EDIT FIELDS - TOP OF FORM */}
+                  <div className="responsive-form-grid" style={{ marginBottom: '12px' }}>
+                    <div className="form-group">
+                      <label className="form-label">🏷️ Mã Bộ Máy *</label>
+                      <input 
+                        type="text" 
+                        className="form-input" 
+                        required
+                        placeholder="VD: SET-2026-002"
+                        value={editSetFormData.setCode || ''} readOnly title="Mã bộ máy được giữ cố định để bảo toàn lịch sử"
+                        onChange={e => setEditSetFormData({ ...editSetFormData, setCode: e.target.value })} 
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span>🏢 Chọn Nhà Phân Phối Gán Cho</span>
+                        {editNppSearchTerm && (
+                          <span 
+                            style={{ color: '#ef4444', fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline' }}
+                            onClick={() => setEditNppSearchTerm('')}
+                          >
+                            ✕ Xóa lọc
+                          </span>
+                        )}
+                      </label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="🔍 Tìm tên hoặc mã NPP..."
+                        value={editNppSearchTerm}
+                        onChange={e => setEditNppSearchTerm(e.target.value)}
+                        style={{ marginBottom: '6px', fontSize: '0.8rem', padding: '4px 8px' }}
+                      />
+                      <select
+                        className="form-select"
+                        value={editSetFormData.nppId || ''}
+                        onChange={e => {
+                          const selectedId = e.target.value;
+                          if (!selectedId) {
+                            setEditSetFormData({
+                              ...editSetFormData,
+                              nppId: '',
+                              nppName: 'Kho Tổng Trung Tâm',
+                              region: 'Kho Tổng',
+                              province: 'Kho Tổng',
+                              salesperson: ''
+                            });
+                          } else {
+                            const targetNpp = npps.find(n => n.id === selectedId);
+                            setEditSetFormData({
+                              ...editSetFormData,
+                              nppId: selectedId,
+                              nppName: targetNpp ? targetNpp.name : editSetFormData.nppName,
+                              region: targetNpp ? (targetNpp.region || editSetFormData.region) : editSetFormData.region,
+                              province: targetNpp ? (targetNpp.province || editSetFormData.province) : editSetFormData.province,
+                              salesperson: targetNpp ? (targetNpp.salesperson || editSetFormData.salesperson) : editSetFormData.salesperson
+                            });
+                          }
+                        }}
+                      >
+                        <option value="">-- Kho Trung Tâm (Chưa gán NPP) --</option>
+                        {npps
+                          .filter(npp => {
+                            if (!editNppSearchTerm.trim()) return true;
+                            return matchesSearch(editNppSearchTerm,[npp.name,npp.code,npp.id,npp.province,npp.salesperson,npp.phone]);
+                          })
+                          .map(npp => (
+                            <option key={npp.id} value={npp.id}>
+                              {npp.name} ({npp.code || npp.id}) — {npp.province || npp.region || 'TQ'}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">⚡ Trạng Thái Bộ Máy</label>
+                      <select 
+                        className="form-select" 
+                        value={editSetFormData.status} 
+                        onChange={e => setEditSetFormData({ ...editSetFormData, status: e.target.value })}
+                      >
+                        <option value="DA_LAP_DAT">🟢 Đã Lắp Đặt</option>
+                        <option value="TRONG_KHO">⚪ Trong Kho</option>
+                        <option value="DA_THU_HOI">🔴 Đã Thu Hồi</option>
+                        <option value="BAO_THUONG_BAO_TRI">🟡 Đang Bảo Trì</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="responsive-form-grid">
+                    <div className="form-group">
+                      <label className="form-label">🔌 Ghi Nhận Ổn Áp</label>
+                      <input 
+                        type="text" 
+                        className="form-input" 
+                        placeholder="Lioa 2000VA..."
+                        value={editSetFormData.stabilizer} 
+                        onChange={e => setEditSetFormData({ ...editSetFormData, stabilizer: e.target.value })} 
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label">Hạn Bảo Trì Tiếp Theo</label>
+                      <input 
+                        type="date" 
+                        className="form-input" 
+                        value={editSetFormData.nextMaintenanceDue || ''} 
+                        onChange={e => setEditSetFormData({ ...editSetFormData, nextMaintenanceDue: e.target.value })} 
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <div className="form-group">
+                      <label className="form-label">🛠️ Kỹ Thuật Viên Phụ Trách</label>
+                      <select
+                        className="form-select"
+                        value={editSetFormData.technician || ''}
+                        onChange={e => setEditSetFormData({ ...editSetFormData, technician: e.target.value })}
+                      >
+                        <option value="">-- Chọn tài khoản Kỹ Thuật Viên (QC) --</option>
+                        {qcUsers.map(u => (
+                          <option key={u.id || u.name} value={u.name}>
+                            👤 {u.name} ({u.role?.toUpperCase() === 'QC' ? 'QC/KTV' : u.role?.toUpperCase() || 'KTV'} - {u.region || 'TQ'})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">💼 Kinh Doanh Phụ Trách (Tự động từ NPP)</label>
+                      <input 
+                        type="text" 
+                        className="form-input" 
+                        placeholder="Tự động điền theo NPP..."
+                        value={editSetFormData.salesperson || ''} 
+                        onChange={e => setEditSetFormData({ ...editSetFormData, salesperson: e.target.value })} 
+                      />
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Ghi Chú Chi Tiết</label>
+                    <textarea 
+                      className="form-textarea" 
+                      rows={2} 
+                      value={editSetFormData.notes} 
+                      onChange={e => setEditSetFormData({ ...editSetFormData, notes: e.target.value })} 
+                    />
+                  </div>
+
+                  {/* Attached Photos in Edit Modal */}
+                  <div className="form-group" style={{ marginTop: '14px', paddingTop: '12px', borderTop: '1px solid var(--border-color)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                      <label className="form-label" style={{ marginBottom: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Camera size={16} color="var(--accent-cyan)" />
+                        <span style={{ fontWeight: '700' }}>Hình Ảnh Hiện Trường Lắp Đặt ({editSetFormData.installationPhotos?.length || 0})</span>
+                      </label>
+                      <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer', fontSize: '0.75rem', padding: '4px 10px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                        <PlusCircle size={14} color="var(--accent-cyan)" />
+                        <span>Tải thêm ảnh</span>
+                        <input type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={handleUploadEditSetPhotos} />
+                      </label>
+                    </div>
+                    {editSetFormData.installationPhotos && editSetFormData.installationPhotos.length > 0 ? (
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(85px, 1fr))', gap: '8px', marginTop: '6px' }}>
+                        {editSetFormData.installationPhotos.map((url, idx) => (
+                          <div key={idx} style={{ position: 'relative', width: '100%', height: '75px', borderRadius: '6px', overflow: 'hidden', border: '1px solid var(--border-color)' }}>
+                            <img
+                              src={url}
+                              alt={`Ảnh ${idx + 1}`}
+                              style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'pointer' }}
+                              onClick={() => setSelectedPhotoViewer({
+                                isOpen: true,
+                                photos: editSetFormData.installationPhotos,
+                                activeIndex: idx,
+                                title: `Ảnh ${idx + 1} - Bộ [${editSetFormData.setCode}]`
+                              })}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveEditSetPhoto(idx)}
+                              style={{
+                                position: 'absolute',
+                                top: '3px',
+                                right: '3px',
+                                background: 'rgba(239, 68, 68, 0.9)',
+                                color: '#fff',
+                                border: 'none',
+                                borderRadius: '50%',
+                                width: '20px',
+                                height: '20px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '11px',
+                                cursor: 'pointer',
+                                boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
+                              }}
+                              title="Xóa ảnh này"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div style={{ padding: '14px', background: 'rgba(255,255,255,0.02)', border: '1px dashed var(--border-color)', borderRadius: '8px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                        Chưa có ảnh hiện trường nào cho bộ máy này.
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="modal-footer">
+                  <button type="button" className="btn btn-secondary" onClick={closeSetEditor}>{selectedSetDetails ? '← Quay lại hồ sơ máy' : 'Hủy Bỏ'}</button>
+                  <button type="submit" className="btn btn-primary" disabled={isSavingDevice}>{isSavingDevice ? 'Đang lưu…' : 'Lưu Thay Đổi'}</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </SafePortal>
+      )}
+
+      {/* FULLSCREEN PHOTO VIEWER / LIGHTBOX MODAL */}
+      {selectedPhotoViewer && selectedPhotoViewer.isOpen && (
+        <SafePortal>
+          <div 
+            className="modal-overlay" 
+            style={{ 
+              backgroundColor: 'rgba(0, 0, 0, 0.93)', 
+              backdropFilter: 'blur(8px)',
+              zIndex: 99999,
+              padding: '12px',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'center',
+              alignItems: 'center'
+            }}
+            onClick={() => setSelectedPhotoViewer(null)}
+          >
+            <div 
+              style={{ 
+                maxWidth: '92vw', 
+                maxHeight: '94vh', 
+                display: 'flex', 
+                flexDirection: 'column', 
+                position: 'relative',
+                width: '100%',
+                alignItems: 'center'
+              }}
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Lightbox Top Header */}
+              <div style={{
+                width: '100%',
+                maxWidth: '960px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                color: '#fff',
+                padding: '10px 16px',
+                background: 'rgba(15, 23, 42, 0.88)',
+                borderRadius: '12px 12px 0 0',
+                borderBottom: '1px solid rgba(255,255,255,0.1)'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <span style={{ fontWeight: '700', fontSize: '0.925rem' }}>
+                    📸 {selectedPhotoViewer.title || 'Xem Ảnh Đầy Đủ'}
+                  </span>
+                  {selectedPhotoViewer.photos.length > 1 && (
+                    <span className="badge badge-info" style={{ fontSize: '0.75rem' }}>
+                      {selectedPhotoViewer.activeIndex + 1} / {selectedPhotoViewer.photos.length}
+                    </span>
+                  )}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <a
+                    href={selectedPhotoViewer.photos[selectedPhotoViewer.activeIndex]}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="btn btn-secondary btn-sm"
+                    style={{ padding: '4px 10px', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                    title="Mở ảnh gốc trong tab mới"
+                  >
+                    <ExternalLink size={14} />
+                    <span>Xem ảnh gốc</span>
+                  </a>
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    style={{ padding: '4px 8px', borderRadius: '50%', width: '32px', height: '32px' }}
+                    onClick={() => setSelectedPhotoViewer(null)}
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+
+              {/* Main Image Viewport with Nav Arrows */}
+              <div style={{
+                position: 'relative',
+                width: '100%',
+                maxWidth: '960px',
+                height: '65vh',
+                minHeight: '360px',
+                background: '#090d16',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                overflow: 'hidden',
+                borderLeft: '1px solid rgba(255,255,255,0.1)',
+                borderRight: '1px solid rgba(255,255,255,0.1)'
+              }}>
+                {selectedPhotoViewer.photos.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPhotoViewer(prev => ({
+                      ...prev,
+                      activeIndex: (prev.activeIndex - 1 + prev.photos.length) % prev.photos.length
+                    }))}
+                    style={{
+                      position: 'absolute',
+                      left: '12px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'rgba(0,0,0,0.65)',
+                      color: '#fff',
+                      border: '1px solid rgba(255,255,255,0.3)',
+                      borderRadius: '50%',
+                      width: '42px',
+                      height: '42px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      zIndex: 10,
+                      transition: 'background 0.2s'
+                    }}
+                    title="Ảnh trước (Phím mũi tên trái)"
+                  >
+                    <ChevronLeft size={24} />
+                  </button>
+                )}
+
+                <img
+                  src={selectedPhotoViewer.photos[selectedPhotoViewer.activeIndex]}
+                  alt="Ảnh chi tiết"
+                  style={{
+                    maxWidth: '100%',
+                    maxHeight: '100%',
+                    objectFit: 'contain',
+                    userSelect: 'none',
+                    boxShadow: '0 4px 24px rgba(0,0,0,0.6)'
+                  }}
+                />
+
+                {selectedPhotoViewer.photos.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPhotoViewer(prev => ({
+                      ...prev,
+                      activeIndex: (prev.activeIndex + 1) % prev.photos.length
+                    }))}
+                    style={{
+                      position: 'absolute',
+                      right: '12px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'rgba(0,0,0,0.65)',
+                      color: '#fff',
+                      border: '1px solid rgba(255,255,255,0.3)',
+                      borderRadius: '50%',
+                      width: '42px',
+                      height: '42px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      zIndex: 10,
+                      transition: 'background 0.2s'
+                    }}
+                    title="Ảnh tiếp theo (Phím mũi tên phải)"
+                  >
+                    <ChevronRight size={24} />
+                  </button>
+                )}
+              </div>
+
+              {/* Bottom Thumbnail Strip */}
+              {selectedPhotoViewer.photos.length > 1 && (
+                <div style={{
+                  width: '100%',
+                  maxWidth: '960px',
+                  background: 'rgba(15, 23, 42, 0.92)',
+                  padding: '10px 14px',
+                  display: 'flex',
+                  gap: '8px',
+                  overflowX: 'auto',
+                  justifyContent: 'center',
+                  borderRadius: '0 0 12px 12px',
+                  borderTop: '1px solid rgba(255,255,255,0.1)'
+                }}>
+                  {selectedPhotoViewer.photos.map((pUrl, pIdx) => (
+                    <div
+                      key={pIdx}
+                      onClick={() => setSelectedPhotoViewer(prev => ({ ...prev, activeIndex: pIdx }))}
+                      style={{
+                        width: '56px',
+                        height: '56px',
+                        borderRadius: '6px',
+                        overflow: 'hidden',
+                        cursor: 'pointer',
+                        border: pIdx === selectedPhotoViewer.activeIndex ? '2px solid var(--accent-cyan)' : '1px solid rgba(255,255,255,0.2)',
+                        opacity: pIdx === selectedPhotoViewer.activeIndex ? 1 : 0.5,
+                        transition: 'all 0.15s ease',
+                        flexShrink: 0
+                      }}
+                    >
+                      <img src={pUrl} alt={`Thumbnail ${pIdx + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </SafePortal>
+      )}
+
+      {/* COMBO SET DETAIL & FULL PHOTO GALLERY MODAL */}
+      {selectedSetDetails && !editingDevice && !editingSet && !replacement && (
+        <SafePortal>
+          <div className="modal-overlay">
+            <div className="modal-content machine-profile-modal" style={{ maxWidth: '820px', width: '95%' }}>
+              <div className="modal-header">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <Camera size={22} color="var(--accent-cyan)" />
+                  <div>
+                    <h3 style={{ fontWeight: '800', margin: 0 }}>
+                      Hồ Sơ Máy · {selectedSetDetails.setCode}
+                    </h3>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                      🏢 {selectedSetDetails.nppName || 'Kho Tổng Trung Tâm'} ({selectedSetDetails.province || selectedSetDetails.region || 'Toàn Quốc'})
+                    </div>
+                  </div>
+                </div>
+                <button className="btn btn-secondary btn-sm" aria-label="Đóng hồ sơ máy" onClick={() => setSelectedSetDetails(null)}>✕</button>
+              </div>
+
+              <div className="modal-body machine-profile-body">{profileTab!=='equipment' && <button className="btn btn-secondary btn-sm" onClick={()=>setProfileTab('equipment')}>← Quay lại hồ sơ máy</button>}
+<div className="workspace-tabs">{[['equipment','Thiết bị'],['history','Lịch sử'],['documents','Tài liệu & Ảnh']].map(([key,label]) => <button key={key} aria-pressed={profileTab === key} onClick={() => setProfileTab(key)}>{label}</button>)}<button disabled={!can('repair:create') || !onRequestRepair} onClick={() => { onRequestRepair(selectedSetDetails,profileTab); }}>Tạo phiếu sửa chữa</button><button disabled={!can('asset:edit') || !onRequestMaintenance} onClick={() => { onRequestMaintenance(selectedSetDetails,profileTab); }}>Bảo trì</button></div>
+                {profileTab === 'history' && <>{replacementHistoryError&&<p role="alert" className="resource-error">{replacementHistoryError}</p>}<MachineProfileHistory items={[...machineProfile.history.filter(item=>!replacementEvents.some(event=>item.key==='audit:AUDIT-'+event.operation_id)),...replacementEvents.filter(event=>event.set_code===selectedSetDetails.setCode).map(event=>({key:'replacement:'+event.operation_id,title:event.action==='relink'?'Đối chiếu liên kết':'Lắp / tháo thiết bị',at:event.changed_at,detail:`${event.category}: ${event.old_device_id||'Chưa gán'} → ${event.new_device_id}. ${event.reason}`,status:event.old_condition}))].sort((a,b)=>(Date.parse(b.at)||0)-(Date.parse(a.at)||0))}/></>}
+                {profileTab === 'documents' && <TechnicalResources machineModel={selectedSetDetails.dispenserModel} modelOptions={[...new Set(systemSets.map(machine => machine.dispenserModel).filter(Boolean))]} />}
+                <div hidden={profileTab !== 'equipment'}>
+                <p className="resource-muted">Cần bổ sung: {missingSystemSetFields(selectedSetDetails).join(' · ') || 'Đã có các trường thông tin chính'}</p>
+                <div className="equipment-slot-grid">{EQUIPMENT_SLOTS.map(spec=>{const devices={computer:computers,dispenser:dispensers,mixer:mixers,printer:printers}[spec.category];const slot={...spec,...resolveEquipmentSlot(selectedSetDetails,spec.category,devices)};return <article className="equipment-slot" key={slot.category}><h4>{slot.label}</h4>{slot.device?<><strong>{slot.device.model||slot.device.type}</strong><code>{slot.device.id} · {slot.device.serial||'Chưa có seri'}</code><small>{slot.device.status}</small></>:<p role="status" className="repair-missing-fields">{slot.state==='empty'?'Chưa gán thiết bị':'Liên kết chưa khớp — cần đối chiếu'}{slot.pointer&&<small> Mã đang ghi nhận: {slot.pointer}</small>}</p>}<div className="workspace-actions"><button className="btn btn-secondary btn-sm" disabled={!can('asset:edit')||!slot.device} onClick={()=>handleOpenEditDevice(slot.category,slot.device)}>Chỉnh sửa {slot.label.toLocaleLowerCase('vi')}</button><button className="btn btn-primary btn-sm" disabled={!can('asset:edit')||!onReplaceEquipment||(slot.state==='conflict'&&user?.role!=='admin')} onClick={()=>setReplacement({machine:selectedSetDetails,slot,devices})}>{slot.state==='conflict'?'Đối chiếu liên kết':slot.device?'Thay thiết bị':'Chọn từ kho'}</button></div></article>;})}</div>
+                <MachineProfileSummary machine={selectedSetDetails} profile={machineProfile} showEquipment={false} />
+
+                <div className="machine-profile-extra">{[['computerSerial','Seri máy tính'],['tintingSoftware','Phần mềm pha màu'],['softwareVersion','Phiên bản'],['agentStatus','Trạng thái kết nối'],['lastMaintenanceDate','Bảo trì gần nhất'],['province','Tỉnh / Thành'],['region','Khu vực'],['notes','Ghi chú']].map(([key,label]) => <div key={key}><strong>{label}:</strong> {selectedSetDetails[key] || 'Chưa ghi nhận'}</div>)}</div>
+                {/* Additional details bar */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '10px', background: 'rgba(255,255,255,0.02)', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-color)', marginBottom: '18px', fontSize: '0.825rem' }}>
+                  <div><strong>Trạng thái:</strong> {selectedSetDetails.status === 'DA_LAP_DAT' ? '🟢 Đã Lắp Đặt' : (selectedSetDetails.status === 'TRONG_KHO' ? '⚪ Trong Kho' : selectedSetDetails.status)}</div>
+                  <div><strong>Ổn áp:</strong> {selectedSetDetails.stabilizer || 'N/A'}</div>
+                  <div><strong>Kỹ thuật viên:</strong> {selectedSetDetails.technician || 'Chưa phân công'}</div>
+                  <div><strong>Kinh doanh:</strong> {selectedSetDetails.salesperson || 'N/A'}</div>
+                  <div><strong>Ngày lắp đặt:</strong> {selectedSetDetails.installDate || selectedSetDetails.installedDate || 'Chưa ghi nhận'}</div>
+                  <div><strong>Hạn bảo trì:</strong> {selectedSetDetails.nextMaintenanceDue || 'Chưa ghi nhận'}</div>
+                </div>
+
+                </div>
+                <div hidden={profileTab !== 'documents'}>
+                {/* Full Photos Gallery */}
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                    <h4 style={{ margin: 0, fontWeight: '800', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Camera size={18} color="var(--accent-cyan)" />
+                      <span>Thư Viện Ảnh Hiện Trường Lắp Đặt ({getSetPhotos(selectedSetDetails).length} ảnh)</span>
+                    </h4>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      style={{ fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                      onClick={() => {
+                        const set = selectedSetDetails;
+                        handleOpenEditSet(set);
+                      }}
+                    >
+                      <Upload size={14} />
+                      <span>Quản lý / Tải thêm ảnh</span>
+                    </button>
+                  </div>
+
+                  {getSetPhotos(selectedSetDetails).length > 0 ? (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '14px' }}>
+                      {getSetPhotos(selectedSetDetails).map((url, idx) => (
+                        <div
+                          key={idx}
+                          onClick={() => setSelectedPhotoViewer({
+                            isOpen: true,
+                            photos: getSetPhotos(selectedSetDetails),
+                            activeIndex: idx,
+                            title: `Ảnh ${idx + 1}/${getSetPhotos(selectedSetDetails).length} - [${selectedSetDetails.setCode}]`
+                          })}
+                          style={{
+                            height: '130px',
+                            borderRadius: '8px',
+                            overflow: 'hidden',
+                            position: 'relative',
+                            cursor: 'pointer',
+                            border: '1.5px solid var(--border-color)',
+                            boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                            transition: 'transform 0.2s ease, border-color 0.2s ease'
+                          }}
+                          title="Bấm để phóng to xem đầy đủ ảnh"
+                        >
+                          <img
+                            src={url}
+                            alt={`Ảnh hiện trường ${idx + 1}`}
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            loading="lazy"
+                          />
+                          <div style={{
+                            position: 'absolute',
+                            bottom: 0,
+                            left: 0,
+                            right: 0,
+                            background: 'linear-gradient(transparent, rgba(0,0,0,0.85))',
+                            color: '#fff',
+                            fontSize: '0.7rem',
+                            padding: '6px 8px',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center'
+                          }}>
+                            <span>Ảnh #{idx + 1}</span>
+                            <ZoomIn size={12} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ padding: '32px', textAlign: 'center', background: 'rgba(255,255,255,0.02)', border: '1px dashed var(--border-color)', borderRadius: '8px', color: 'var(--text-muted)' }}>
+                      <Camera size={36} style={{ opacity: 0.4, marginBottom: '8px' }} />
+                      <div>Bộ máy này hiện chưa có ảnh hiện trường lắp đặt.</div>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        style={{ marginTop: '12px', fontSize: '0.75rem' }}
+                        onClick={() => {
+                          const set = selectedSetDetails;
+                          handleOpenEditSet(set);
+                        }}
+                      >
+                        + Tải lên ảnh ngay
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+              </div>
+
+              <div className="modal-footer">
+                <button className="btn btn-secondary" onClick={() => setSelectedSetDetails(null)}>Đóng</button>
+                <button 
+                  className="btn btn-primary" 
+                  onClick={() => {
+                    const set = selectedSetDetails;
+                    handleOpenEditSet(set);
+                  }}
+                >
+                  Chỉnh Sửa Bộ Máy
+                </button>
+              </div>
+            </div>
+          </div>
+        </SafePortal>
+      )}
+
+      {replacement && <EquipmentReplacementDialog machine={replacement.machine} slot={replacement.slot} devices={replacement.devices} onSave={onReplaceEquipment} onClose={()=>setReplacement(null)}/>}
+      {/* QR & BARCODE CAMERA SCANNER MODAL */}
+      {showScanSerialModal && (
+        <QrScannerModal
+          title={scanTargetField === 'profile' ? 'Quét mã bộ máy' : undefined}
+          onScanSuccess={(scannedText) => {
+            if (scanTargetField === 'profile') { openScannedMachine(scannedText); } else if (scanTargetField === 'add') {
+              setAddFormData(prev => ({ ...prev, serial: scannedText }));
+            } else if (scanTargetField === 'edit') {
+              setEditFormData(prev => ({ ...prev, serial: scannedText }));
+            }
+            setShowScanSerialModal(false);
+          }}
+          onClose={() => setShowScanSerialModal(false)}
+        />
+      )}
+
+    </div>
+  );
+}

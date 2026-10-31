@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const migrationUrl = new URL('../supabase/security_module_1_admin_bootstrap.sql', import.meta.url);
-const authContextUrl = new URL('../src/context/AuthContext.jsx', import.meta.url);
+const authContextUrl = new URL('../src/shared/context/AuthContext.jsx', import.meta.url);
 
 test('legacy admin bootstrap fails closed', async () => {
   const sql = await readFile(migrationUrl, 'utf8');

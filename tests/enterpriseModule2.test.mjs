@@ -3,8 +3,8 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const migrationUrl = new URL('../supabase/enterprise_module_2_five_role_rbac.sql', import.meta.url);
-const rbacUrl = new URL('../src/security/rbac.js', import.meta.url);
-const userManagementUrl = new URL('../src/components/UserManagement.jsx', import.meta.url);
+const rbacUrl = new URL('../src/shared/security/rbac.js', import.meta.url);
+const userManagementUrl = new URL('../src/modules/users/components/UserManagement.jsx', import.meta.url);
 
 test('ENT-2 defines five roles consistently in database and frontend', async () => {
   const [sql, rbac, users] = await Promise.all([

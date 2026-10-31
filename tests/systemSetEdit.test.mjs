@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {saveSystemSetEdit} from '../src/lib/systemSetEdit.js';
+import {saveSystemSetEdit} from '../src/modules/equipment/lib/systemSetEdit.js';
 const revision='2026-10-19T01:00:00Z';
 function query(result,calls){const builder={update(value){calls.push(['update',value]);return this;},eq(key,value){calls.push(['eq',key,value]);return this;},select(){return Promise.resolve(result);}};return fn=>fn({from:table=>{calls.push(['from',table]);return builder;}});}
 test('machine profile edits use the original server revision and cannot change machine identity',async()=>{
@@ -16,7 +16,7 @@ test('stale or permission-filtered writes and missing revisions never report sav
 });
 
 test('missing server capabilities require review while network loss remains retryable',async()=>{
- const {classifySyncError}=await import('../src/lib/syncQueue.js');
+ const {classifySyncError}=await import('../src/shared/lib/syncQueue.js');
  for(const code of ['REVISION_REQUIRED','SCHEMA_MIGRATION_REQUIRED','WORKFLOW_MIGRATION_REQUIRED'])assert.equal(classifySyncError({code}),'needs_review');
  assert.equal(classifySyncError({message:'Failed to fetch'}),'retry_wait');
 });

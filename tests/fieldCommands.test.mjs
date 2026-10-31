@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {makeFieldCommand,requireFieldReceipt,createFieldOutbox,validateMaintenanceChecklist} from '../src/lib/fieldCommands.js';
-import {attachFieldFiles,fieldQueueSummary} from '../src/lib/fieldAttachments.js';
-import {flushBeforeAppUpdate} from '../src/lib/appUpdateSafety.js';
-import {retainReviewedCommand} from '../src/lib/fieldReview.js';
+import {makeFieldCommand,requireFieldReceipt,createFieldOutbox,validateMaintenanceChecklist} from '../src/modules/fieldwork/lib/fieldCommands.js';
+import {attachFieldFiles,fieldQueueSummary} from '../src/modules/fieldwork/lib/fieldAttachments.js';
+import {flushBeforeAppUpdate} from '../src/shared/lib/appUpdateSafety.js';
+import {retainReviewedCommand} from '../src/modules/fieldwork/lib/fieldReview.js';
 const base={owner:'synthetic-A',kind:'REPAIR_EDIT',entityId:'ticket-A',expected:3,payload:{id:'ticket-A',notes:'Thay linh kiện tại hiện trường'}};
 const receipt=command=>({ok:true,operationId:command.operationId,kind:command.kind,entityId:command.entityId,version:4,checksum:command.checksum});
 test('field identity survives reload and changes for a changed revision, actor or payload',async()=>{

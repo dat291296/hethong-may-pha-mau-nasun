@@ -3,9 +3,9 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const migrationUrl = new URL('../supabase/enterprise_module_1_server_admin_provisioning.sql', import.meta.url);
-const authContextUrl = new URL('../src/context/AuthContext.jsx', import.meta.url);
+const authContextUrl = new URL('../src/shared/context/AuthContext.jsx', import.meta.url);
 const schemaUrl = new URL('../supabase/schema.sql', import.meta.url);
-const userManagementUrl = new URL('../src/components/UserManagement.jsx', import.meta.url);
+const userManagementUrl = new URL('../src/modules/users/components/UserManagement.jsx', import.meta.url);
 
 test('ENT-1 provisions administrators from an authenticated active administrator', async () => {
   const sql = await readFile(migrationUrl, 'utf8');

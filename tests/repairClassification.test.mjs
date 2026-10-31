@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {SERVICE_CHECKLIST,failureComponents,summarizeFailureComponents,requiresRepairReturn,isRepairAwaitingReturn,repairReturnLabel} from '../src/lib/repairClassification.js';
-import {repairMissingFields} from '../src/lib/repairCompleteness.js';
-import {repairNeedsAction} from '../src/lib/teamWorkspace.js';
+import {SERVICE_CHECKLIST,failureComponents,summarizeFailureComponents,requiresRepairReturn,isRepairAwaitingReturn,repairReturnLabel} from '../src/modules/repairs/lib/repairClassification.js';
+import {repairMissingFields} from '../src/modules/repairs/lib/repairCompleteness.js';
+import {repairNeedsAction} from '../src/modules/fieldwork/lib/teamWorkspace.js';
 test('local service never creates a return backlog, exchanges and explicit collections do',()=>{
  const local={actionDirection:'Sửa chữa',processingStatus:'Đã xử lý',customerReturnStatus:'Chưa gửi trả'};
  assert.equal(requiresRepairReturn(local),false);assert.equal(isRepairAwaitingReturn(local),false);assert.equal(repairReturnLabel(local),'Không cần gửi trả');assert.equal(repairNeedsAction(local),false);

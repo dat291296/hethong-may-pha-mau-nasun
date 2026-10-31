@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validateDocumentUrl, validateContactPhone, contactLinks, validateDocumentFile } from '../src/lib/technicalResources.js';
+import { validateDocumentUrl, validateContactPhone, contactLinks, validateDocumentFile } from '../src/modules/handbook/lib/technicalResources.js';
 
 test('document links accept public HTTPS URLs and reject unsafe targets', () => {
   assert.equal(validateDocumentUrl(' https://example.com/manual.pdf '), 'https://example.com/manual.pdf');

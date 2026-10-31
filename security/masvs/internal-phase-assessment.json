@@ -62,7 +62,7 @@
     "MASVS-STORAGE": {
       "status": "partial",
       "evidence": [
-        "src/lib/operationalDiagnostics.js",
+        "src/shared/lib/operationalDiagnostics.js",
         "tests/machineProfile.test.mjs"
       ],
       "gap": "Native secure storage and backup exclusions unverified"
@@ -94,7 +94,7 @@
       "evidence": [
         "tests/machineProfile.test.mjs",
         "tests/internalReadiness.test.mjs",
-        "src/lib/machineProfile.js"
+        "src/modules/equipment/lib/machineProfile.js"
       ],
       "gap": "Passing source tests and build do not establish full runtime or native platform security"
     },
@@ -105,8 +105,8 @@
     "MASVS-PRIVACY": {
       "status": "partial",
       "evidence": [
-        "src/components/ErrorBoundary.jsx",
-        "src/lib/operationalDiagnostics.js"
+        "src/shared/components/ErrorBoundary.jsx",
+        "src/shared/lib/operationalDiagnostics.js"
       ],
       "gap": "Data retention, deletion and future native disclosures require acceptance; no privacy UI added"
     }

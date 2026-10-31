@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { defaultWorkspaceRegion, resolveWorkspaceRegion, scopeWorkspace } from '../src/lib/regionalWorkspace.js';
-import { inManagedRegion, isAssignedTo } from '../src/lib/teamWorkspace.js';
-import { canEditRegion } from '../src/lib/workspaceFilters.js';
+import { defaultWorkspaceRegion, resolveWorkspaceRegion, scopeWorkspace } from '../src/shared/lib/regionalWorkspace.js';
+import { inManagedRegion, isAssignedTo } from '../src/modules/fieldwork/lib/teamWorkspace.js';
+import { canEditRegion } from '../src/shared/lib/workspaceFilters.js';
 
 const npps = [{ id: 'north', region: 'Miền Bắc' }, { id: 'central', region: 'Miền Trung' }, { id: 'south', region: 'Miền Nam' }];
 const systemSets = [{ setCode: 'A', nppId: 'central', region: 'Miền Bắc', mixerId: 'm1' }, { setCode: 'B', nppId: 'south' }];

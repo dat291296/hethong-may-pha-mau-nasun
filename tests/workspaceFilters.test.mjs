@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { matchesSearch, matchesDateRange, canEditRegion, requireRegionEdit } from '../src/lib/workspaceFilters.js';
+import { matchesSearch, matchesDateRange, canEditRegion, requireRegionEdit } from '../src/shared/lib/workspaceFilters.js';
 
 test('search supports unaccented Vietnamese and missing legacy fields', () => {
   assert.equal(matchesSearch('da nang', ['Đà Nẵng', null, undefined]), true);

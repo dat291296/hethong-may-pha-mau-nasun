@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createEvidenceGateway } from '../supabase/functions/_shared/evidenceProtocol.js';
-import { redactSecurityDetails } from '../src/security/securityEvents.js';
+import { redactSecurityDetails } from '../src/shared/security/securityEvents.js';
 import { validateStagingDestination } from '../scripts/apply-staging-safety.mjs';
 import { readFile, readdir } from 'node:fs/promises';
 

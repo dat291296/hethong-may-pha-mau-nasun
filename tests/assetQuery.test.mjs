@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ASSET_TABLES, assetColumns, assetCacheKey, cachedAssetSnapshot, createAssetRefreshQueue } from '../src/lib/assetQuery.js';
-import { summarizeInventory } from '../src/lib/inventorySummary.js';
-import { fetchAllRows } from '../src/lib/paginatedQuery.js';
+import { ASSET_TABLES, assetColumns, assetCacheKey, cachedAssetSnapshot, createAssetRefreshQueue } from '../src/modules/equipment/lib/assetQuery.js';
+import { summarizeInventory } from '../src/modules/equipment/lib/inventorySummary.js';
+import { fetchAllRows } from '../src/shared/lib/paginatedQuery.js';
 
 test('dashboard projections retain inventory identities and defer heavy editable fields', async () => {
   for (const table of ASSET_TABLES) {

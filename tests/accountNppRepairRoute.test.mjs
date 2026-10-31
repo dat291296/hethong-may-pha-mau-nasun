@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { nextNppCode, validateNppCode } from '../src/lib/nppCodes.js';
-import { repairMissingFields } from '../src/lib/repairCompleteness.js';
-import { parseCoordinates, calculateRoadRoute } from '../src/lib/routeEstimate.js';
+import { nextNppCode, validateNppCode } from '../src/modules/distributors/lib/nppCodes.js';
+import { repairMissingFields } from '../src/modules/repairs/lib/repairCompleteness.js';
+import { parseCoordinates, calculateRoadRoute } from '../src/modules/fieldwork/lib/routeEstimate.js';
 
 test('NPP code suggestions respect region sequences and allow manual numbered codes', () => {
   const rows = [{ id: 'NPP-MB-060' }, { id: 'uuid', code: 'NPP-MB-072' }, { id: 'NPP-MT-010' }];

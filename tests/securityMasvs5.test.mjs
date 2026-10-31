@@ -7,15 +7,15 @@ import {
   PERMISSION_PURPOSES,
   validateSelectedFile,
   writeSensitiveClipboard,
-} from '../src/security/permissionPolicy.js';
+} from '../src/shared/security/permissionPolicy.js';
 
 const profileUrl = new URL('../security/masvs/profile.json', import.meta.url);
 const permissionsUrl = new URL('../security/masvs/platform-permissions.json', import.meta.url);
-const qrUrl = new URL('../src/components/QrScannerModal.jsx', import.meta.url);
-const gpsUrl = new URL('../src/utils/gpsHelper.js', import.meta.url);
-const routesUrl = new URL('../src/components/FieldRouteMap.jsx', import.meta.url);
-const compressorUrl = new URL('../src/utils/imageCompressor.js', import.meta.url);
-const backupUrl = new URL('../src/components/DataBackupSyncModal.jsx', import.meta.url);
+const qrUrl = new URL('../src/shared/components/QrScannerModal.jsx', import.meta.url);
+const gpsUrl = new URL('../src/shared/utils/gpsHelper.js', import.meta.url);
+const routesUrl = new URL('../src/modules/fieldwork/components/FieldRouteMap.jsx', import.meta.url);
+const compressorUrl = new URL('../src/shared/utils/imageCompressor.js', import.meta.url);
+const backupUrl = new URL('../src/shared/components/DataBackupSyncModal.jsx', import.meta.url);
 
 test('image selection enforces MIME, extension, and size limits', () => {
   const valid = { name: 'evidence.jpg', size: 1024, type: 'image/jpeg' };

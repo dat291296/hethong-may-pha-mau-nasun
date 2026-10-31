@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { resolveMachine, maintenanceSteps, maintenanceNotes, matchesDocumentModel } from '../src/lib/machineWorkspace.js';
+import { resolveMachine, maintenanceSteps, maintenanceNotes, matchesDocumentModel } from '../src/modules/equipment/lib/machineWorkspace.js';
 
 test('scanner resolves exact codes and refuses ambiguous serials or partial matches', () => {
   const sets = [{ setCode: 'SET-1', dispenserSerial: 'HERO-20' }, { setCode: 'SET-2', mixerSerial: 'HERO-20' }];

@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const migrationUrl = new URL('../supabase/security_module_8_profile_property_access.sql', import.meta.url);
-const usersUrl = new URL('../src/components/UserManagement.jsx', import.meta.url);
+const usersUrl = new URL('../src/modules/users/components/UserManagement.jsx', import.meta.url);
 
 test('profile property migration preserves all existing data', async () => {
   const sql = await readFile(migrationUrl, 'utf8');

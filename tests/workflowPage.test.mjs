@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-const appUrl = new URL('../src/App.jsx', import.meta.url);
+const appUrl = new URL('../src/app/App.jsx', import.meta.url);
 
 test('workflow page does not embed the operational audit-log component', async () => {
   const source = await readFile(appUrl, 'utf8');

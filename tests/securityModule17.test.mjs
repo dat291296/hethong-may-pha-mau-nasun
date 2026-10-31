@@ -3,8 +3,8 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const migrationUrl = new URL('../supabase/security_module_17_immutable_security_events.sql', import.meta.url);
-const authUrl = new URL('../src/context/AuthContext.jsx', import.meta.url);
-const usersUrl = new URL('../src/components/UserManagement.jsx', import.meta.url);
+const authUrl = new URL('../src/shared/context/AuthContext.jsx', import.meta.url);
+const usersUrl = new URL('../src/modules/users/components/UserManagement.jsx', import.meta.url);
 
 test('security events are append-only and admin-readable', async () => {
   const sql = await readFile(migrationUrl, 'utf8');
