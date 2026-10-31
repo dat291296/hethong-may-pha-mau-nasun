@@ -18,5 +18,9 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npm run lint
       - run: npm run test:all
-      - run: npm run build
+      - name: Build configured production branches with synthetic public settings
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: https://syntheticplaceholder01.supabase.co
+          VITE_SUPABASE_ANON_KEY: sb_publishable_syntheticplaceholder000000000000
       - run: npm audit --omit=dev --audit-level=critical
