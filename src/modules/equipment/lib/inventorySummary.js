@@ -30,15 +30,23 @@ export function nextWarehouseId(category, devices = []) {
 
 export function inventoryLinkIssues({ systemSets = [], ...devices }) {
   const issues = [];
+  const parents = new Map(systemSets.map(set => [set.setCode, set]));
   for (const [table, category] of Object.entries(categories)) {
     const rows = devices[table] || [];
+    const deviceIds = new Set(rows.map(device => device.id));
+    const references = new Map();
+    for (const set of systemSets) {
+      const id = set[`${category}Id`];
+      if (!references.has(id)) references.set(id, []);
+      references.get(id).push(set);
+    }
     for (const device of rows) {
-      const owners = systemSets.filter(set => set[`${category}Id`] === device.id);
+      const owners = references.get(device.id) || [];
       if (owners.length && (!device.isAssigned || owners.some(set => set.setCode !== device.setCode))) {
         issues.push(`${device.id}: bộ máy ${owners.map(set => set.setCode).join(', ')} tham chiếu nhưng trạng thái hoặc mã bộ trên thiết bị chưa khớp.`);
       }
       if (device.setCode) {
-        const parent = systemSets.find(set => set.setCode === device.setCode);
+        const parent = parents.get(device.setCode);
         if (!parent || parent[`${category}Id`] !== device.id) {
           issues.push(`${device.id}: khai báo thuộc bộ ${device.setCode}, bộ máy đang liên kết ${parent?.[`${category}Id`] || 'chưa có thiết bị tương ứng'}.`);
         }
@@ -46,7 +54,7 @@ export function inventoryLinkIssues({ systemSets = [], ...devices }) {
     }
     for (const set of systemSets) {
       const id = set[`${category}Id`];
-      if (id && !rows.some(device => device.id === id)) issues.push(`${set.setCode}: không tìm thấy thiết bị ${id} trong dữ liệu đã tải.`);
+      if (id && !deviceIds.has(id)) issues.push(`${set.setCode}: không tìm thấy thiết bị ${id} trong dữ liệu đã tải.`);
     }
   }
   return issues;

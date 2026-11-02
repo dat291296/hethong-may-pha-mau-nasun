@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import { createClient } from '@supabase/supabase-js';
 import { verifyWriteIntegrity } from './verify-write-integrity.mjs';
 import { requireRlsConfiguration } from './rls-preflight.mjs';
+import { verifyNppAuthorization } from './verify-npp-authorization.mjs';
 
 const REQUIRED_REGIONS = ['Miền Bắc', 'Miền Trung', 'Miền Nam'];
 const url = process.env.RLS_TEST_URL?.trim();
@@ -116,6 +117,8 @@ async function main() {
         }
       }
     }
+    const nppAuthorization = await verifyNppAuthorization(admin, clients);
+    console.log(`NPP real JWT authorization passed: ${nppAuthorization.checks} read/create/edit/move/delete checks and own fixture cleanup.`);
     console.log('RLS integration passed: anonymous + five roles, own/foreign region, rollback-only insert probes.');
   } finally {
     for (const { client } of clients) await client.auth.signOut({ scope: 'local' });

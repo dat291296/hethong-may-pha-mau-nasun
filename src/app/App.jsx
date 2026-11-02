@@ -250,7 +250,7 @@ function AppWorkspace() {
   // Workflow Modal state
   const [workflowMode, setWorkflowMode] = useState(null); // 'INSTALL' | 'WITHDRAW' | 'TRANSFER' | null
   useEffect(() => {
-    if (user && (['assets', 'npp', 'repairs', 'maintenance'].includes(activeTab) || workflowMode || showImportModal)) void ensureAssetDetails();
+    if (user && (['assets', 'npp'].includes(activeTab) || workflowMode || showImportModal)) void ensureAssetDetails();
   }, [user, activeTab, workflowMode, showImportModal, ensureAssetDetails]);
   const [workflowResult, setWorkflowResult] = useState(null);
   const [printProtocolData, setPrintProtocolData] = useState(null);
@@ -866,6 +866,9 @@ function AppWorkspace() {
 
           {activeTab === 'npp' && (!assetDetailsReady ? <AssetLoadingSkeleton /> : (
             <NppManagement
+              loading={nppsLoading}
+              loadError={nppsLoadError}
+              onReload={refetchNpps}
               coverageFilter={nppCoverageFilter}
               onCoverageFilterChange={setNppCoverageFilter}
               globalSearch={globalSearch}
@@ -908,7 +911,7 @@ function AppWorkspace() {
             />
           ))}
 
-          {activeTab === 'repairs' && (!assetDetailsReady ? <AssetLoadingSkeleton /> : (
+          {activeTab === 'repairs' && (!assetSummaryReady ? <AssetLoadingSkeleton /> : (
             <RepairWorkspaceBoundary><DeviceRepairProcessing
               loading={repairsLoading}
               loadError={repairsLoadError}
@@ -1000,8 +1003,9 @@ function AppWorkspace() {
             </div>
           )}
 
-          {activeTab === 'maintenance' && (!assetDetailsReady ? <AssetLoadingSkeleton /> : (
+          {activeTab === 'maintenance' && (!assetSummaryReady ? <AssetLoadingSkeleton /> : (
             <MaintenanceSchedule
+              loading={assetsLoading}
               globalSearch={globalSearch}
               initialFilter={workspaceFilter}
               systemSets={regionalData.systemSets}
@@ -1068,7 +1072,7 @@ function AppWorkspace() {
 
       {/* Excel Import Modal */}
       {showImportModal && (!assetDetailsReady ? <div className="modal-overlay"><div className="modal-content"><AssetLoadingSkeleton /><p role="alert">{assetsLoadError}</p><button className="btn btn-secondary" onClick={() => setShowImportModal(false)}>Đóng</button><button className="btn btn-primary" disabled={assetsLoading} onClick={() => void ensureAssetDetails()}>Tải lại</button></div></div> : (
-        <Suspense fallback={null}>
+        <Suspense fallback={<AssetLoadingSkeleton />}>
         <ExcelImportModal
           importType={importModalType}
           existingNpps={npps}

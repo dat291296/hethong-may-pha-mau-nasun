@@ -27,6 +27,7 @@ migrations.push('migrations/20261028015716_security_upgrade_canonical_guards.sql
 migrations.push('migrations/20261028063410_security_upgrade_internal_rate_limit_grants.sql');
 migrations.push('migrations/20261028063846_security_upgrade_private_realtime_guard.sql');
 migrations.push('migrations/20261029074910_security_upgrade_definer_hardening_20261029.sql');
+if (security) migrations.push('migrations/20261102063708_release_withdrawn_equipment.sql');
 const statements = await Promise.all(migrations.map(async name => (await readFile(`supabase/${name}`, 'utf8'))
   .replace(/^\s*(BEGIN|COMMIT);\s*$/gm, '')));
 const securityContract = (await readFile('scripts/verify-security-upgrade-state.sql', 'utf8'))

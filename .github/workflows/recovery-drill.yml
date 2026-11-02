@@ -40,6 +40,15 @@ jobs:
           DO_NOT_TRACK: '1'
           SYNTHETIC_SCHEMA_ARCHIVE: ${{ runner.temp }}/nasun-staging-schema.dump
         run: node scripts/synthetic-recovery-drill.mjs
+      - name: Distinguish runtime recovery evidence from production archive acceptance
+        run: node scripts/recovery-acceptance.mjs output/synthetic-recovery-runtime.json output/recovery-acceptance.json
+      - name: Preserve aggregate recovery evidence without business rows or credentials
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: recovery-acceptance-${{ github.run_id }}
+          path: output/recovery-acceptance.json
+          if-no-files-found: error
+          retention-days: 30
       - name: Remove temporary schema-only archive
         if: always()
         run: rm -f -- "$RUNNER_TEMP/nasun-staging-schema.dump"

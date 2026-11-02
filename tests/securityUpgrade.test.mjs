@@ -5,7 +5,7 @@ import { redactSecurityDetails } from '../src/shared/security/securityEvents.js'
 import { validateStagingDestination } from '../scripts/apply-staging-safety.mjs';
 import { readFile, readdir } from 'node:fs/promises';
 
-test('every workflow job with production database or backup credentials requires the backup environment and protected main', async () => {
+test('production credentials require backup environment and protected main or the reviewed manual SHA release', async () => {
   const root = new URL('../.github/workflows/', import.meta.url);
   let checked = 0;
   for (const file of await readdir(root)) {
@@ -13,7 +13,17 @@ test('every workflow job with production database or backup credentials requires
     for (const job of content.split(/(?=^  [a-zA-Z][\w-]*:\s*$)/m)) {
       if (!/secrets\.(?:SUPABASE_DB_URL|BACKUP_SUPABASE_SERVICE_ROLE_KEY|BACKUP_ENCRYPTION_PASSPHRASE)/.test(job)) continue;
       assert.match(job, /^    environment: backup$/m, file);
-      assert.match(job, /^    if: github\.ref == 'refs\/heads\/main' && github\.ref_protected$/m, file);
+      if (file === 'release-pinned.yml') {
+        assert.match(job, /^    if: github\.ref == 'refs\/heads\/main' && inputs\.release_sha == github\.sha$/m);
+        assert.match(job, /ref: \$\{\{ inputs\.release_sha \}\}/);
+        assert.equal((job.match(/run: node scripts\/verify-release-revision\.mjs/g) || []).length, 3);
+        assert.match(content, /workflow_dispatch:/);
+        assert.doesNotMatch(content, /^  (?:push|pull_request|schedule):/m);
+        assert.ok(job.indexOf('Upload encrypted recovery archive') < job.indexOf('Apply reviewed schema'));
+        assert.ok(job.indexOf('Verify production authorization metadata') < job.indexOf('Reconcile the explicitly reviewed'));
+      } else {
+        assert.match(job, /^    if: github\.ref == 'refs\/heads\/main' && github\.ref_protected$/m, file);
+      }
       checked++;
     }
   }

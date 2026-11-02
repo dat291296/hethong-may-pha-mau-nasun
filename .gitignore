@@ -11,6 +11,8 @@ node_modules
 supabase/.temp/
 dist
 dist-ssr
+output/completion-ui/
+.playwright-cli/
 *.local
 
 # Local environment and credentials

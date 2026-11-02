@@ -31,7 +31,10 @@ test('ENT-9 repair mapping and offline queue retain every workflow field', async
 });
 
 test('ENT-9 UI supports QR, SLA, checklist, evidence, materials and NPP confirmation', async () => {
-  const source = await readFile(repairUiUrl, 'utf8');
+  const source = (await Promise.all([repairUiUrl,
+    new URL('../src/modules/repairs/components/RepairEditorDialog.jsx', import.meta.url),
+    new URL('../src/modules/repairs/components/RepairDetailDialog.jsx', import.meta.url),
+  ].map(url => readFile(url, 'utf8')))).join('\n');
   assert.match(source, /Mã QR \/ Mã QL thiết bị/);
   assert.doesNotMatch(source, /Hạn SLA xử lý/);
   assert.match(source, /Checklist bắt buộc/);

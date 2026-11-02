@@ -1,3 +1,4 @@
+import { queryWithDeadline } from './queryDeadline.js';
 /**
  * Supabase Client – Paint Tinting & Stock Manager v2.0
  * Uses env vars: VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY
@@ -58,16 +59,7 @@ export async function safeQuery(queryFn, context = 'unknown') {
     return { data: null, error: new Error('Supabase not configured') };
   }
   try {
-    const timeoutMs = 15000;
-    let timeoutId;
-    const timeoutPromise = new Promise(resolve => {
-      timeoutId = window.setTimeout(() => resolve({
-        data: null,
-        error: Object.assign(new Error(`Yêu cầu Supabase quá thời gian ${timeoutMs / 1000} giây`), { code: 'QUERY_TIMEOUT' })
-      }), timeoutMs);
-    });
-    const result = await Promise.race([Promise.resolve(queryFn(supabase)), timeoutPromise]);
-    window.clearTimeout(timeoutId);
+    const result = await queryWithDeadline(supabase, queryFn);
     if (result.error) {
       console.error(`[Supabase][${context}] Query error:`, result.error.message);
     }

@@ -1,5 +1,8 @@
+import { pageWindow } from '../../../shared/data-access/pageWindow.js';
+import { DataLoadingState, EmptyState, InputFeedback } from '../../../shared/components/DataState.jsx';
+import { validatePhone } from '../../../shared/security/sanitize.js';
 import { userErrorMessage } from '../../../shared/security/userError.js';
-import {missingNppFields} from '../../equipment/lib/dataCompleteness.js';
+import { missingNppFields } from '../../equipment/lib/dataCompleteness.js';
 import { isSupabaseConfigured } from '../../../shared/data-access/supabase.js';
 import { nextNppCode, validateNppCode } from '../lib/nppCodes.js';
 import { nppCoverage, assignedNppSets } from '../lib/nppCoverage.js';
@@ -7,26 +10,7 @@ import WorkspaceFilterBar from '../../../shared/components/WorkspaceFilterBar.js
 import { matchesSearch, matchesDateRange, uniqueOptions } from '../../../shared/workspace/workspaceFilters.js';
 import { useWorkspaceState, useWorkspaceScroll } from '../../../shared/hooks/useWorkspaceState.js';
 import React, { useState, useEffect } from 'react';
-import { createPortal } from 'react-dom';
-import { 
-  Building2, 
-  PlusCircle, 
-  Search, 
-  Filter, 
-  Phone, 
-  MapPin, 
-  Cpu, 
-  Edit3, 
-  Trash2, 
-  Camera, 
-  ExternalLink,
-  Eye,
-  X,
-  Upload,
-  Image as ImageIcon,
-  FileSpreadsheet,
-  Layers
-} from 'lucide-react';
+import { Phone, MapPin, Cpu, Edit3, Trash2, Camera, ExternalLink, Eye, X, Image as ImageIcon, Layers } from 'lucide-react';
 
 import { compressImage } from '../../../shared/utils/imageCompressor.js';
 import { useAuth } from '../../../shared/context/AuthContext.jsx';
@@ -36,13 +20,13 @@ import SafePortal from '../../../shared/components/SafePortal.jsx';
 import { useModalScrollLock } from '../../../shared/hooks/useModalScrollLock.js';
 import { exportExcel } from '../../../shared/utils/excelExport.js';
 
-export default function NppManagement({ globalSearch = '', coverageFilter = 'ALL', onCoverageFilterChange = () => {}, npps, systemSets, onAddNpp, onEditNpp, onDeleteNpp, onOpenImportModal }) {
+export default function NppManagement({ globalSearch = '', loading = false, loadError = '', onReload, coverageFilter = 'ALL', onCoverageFilterChange = () => {}, npps, systemSets, onAddNpp, onEditNpp, onDeleteNpp, onOpenImportModal }) {
   const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useWorkspaceState('npps:search', '');
   useEffect(() => { if (globalSearch) setSearchTerm(globalSearch); }, [globalSearch, setSearchTerm]);
   useWorkspaceScroll('npps');
   const [customCode, setCustomCode] = useState(false);
-  const coverage = nppCoverage(npps, systemSets);
+  const coverage = React.useMemo(() => nppCoverage(npps, systemSets), [npps, systemSets]);
   const [statusFilter, setStatusFilter] = useWorkspaceState('npps:status', 'ALL');
   const [brandFilter, setBrandFilter] = useWorkspaceState('npps:brand', 'ALL');
   const [selectedNpp, setSelectedNpp] = useState(null);
@@ -88,14 +72,16 @@ export default function NppManagement({ globalSearch = '', coverageFilter = 'ALL
     photos: []
   });
 
-  const filteredNpps = npps.filter(npp => {
+  const filteredNpps = React.useMemo(() => npps.filter(npp => {
     const found = matchesSearch(searchTerm, [npp.name,npp.code,npp.id,npp.phone,npp.address,npp.salesperson,npp.province,npp.region,npp.contactPerson]);
     const owners = systemSets.filter(machine => machine.nppId === npp.id).map(machine => machine.technician);
     const matchesExtra = (provinceFilter === 'ALL' || npp.province === provinceFilter) && (ownerFilter === 'ALL' || owners.includes(ownerFilter)) && matchesDateRange(npp.createdAt,dateFrom,dateTo);
     const matchesStatus = statusFilter === 'ALL' || npp.status === statusFilter;
     const matchesBrand = brandFilter === 'ALL' || (npp.brand || 'Nasun') === brandFilter;
     return found && matchesExtra && matchesStatus && matchesBrand && (coverageFilter === 'ALL' || (coverageFilter === 'ASSIGNED' ? coverage.assigned : coverage.unassigned).some(item => item.id === npp.id));
-  });
+  }), [npps, systemSets, searchTerm, provinceFilter, ownerFilter, dateFrom, dateTo, statusFilter, brandFilter, coverageFilter, coverage]);
+
+  const nppPage = pageWindow(filteredNpps.length, currentPage, pageSize);
 
   const isRegionAllowed = (nppRegion) => {
     if (!user) return false;
@@ -320,6 +306,9 @@ export default function NppManagement({ globalSearch = '', coverageFilter = 'ALL
 
   return (
     <div className="workspace-screen nppmanagement-screen" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      {loading && npps.length === 0 && <DataLoadingState label="Đang tải danh sách NPP…" />}
+      {loadError && <div role="alert" className="resource-error">{loadError}<button className="btn btn-secondary" disabled={loading} onClick={onReload}>Thử tải lại</button></div>}
+      {!loading && !loadError && filteredNpps.length === 0 && <EmptyState title="Chưa có NPP phù hợp" description="Bỏ bộ lọc hoặc chọn Thêm NPP để tạo nhà phân phối trong miền được phân công." onAction={() => { setSearchTerm(''); setStatusFilter('ALL'); setBrandFilter('ALL'); setProvinceFilter('ALL'); setOwnerFilter('ALL'); setDateFrom(''); setDateTo(''); onCoverageFilterChange('ALL'); }} />}
       {saveNotice && <div role="status" className="glass-panel" style={{ padding: '12px' }}>{saveNotice}</div>}
       
       <WorkspaceFilterBar search={searchTerm} onSearch={setSearchTerm} placeholder="Tìm mã, tên NPP, điện thoại…" count={filteredNpps.length} fields={[{key:'province',label:'Tỉnh / thành',value:provinceFilter,onChange:setProvinceFilter,options:uniqueOptions(npps.map(item=>item.province))},{key:'owner',label:'Kỹ thuật viên phụ trách bộ máy',value:ownerFilter,onChange:setOwnerFilter,options:uniqueOptions(systemSets.map(item=>item.technician))},{key:'brand',label:'Hãng',value:brandFilter,onChange:setBrandFilter,options:uniqueOptions(['Nasun','Natos'])},{key:'status',label:'Trạng thái',value:statusFilter,onChange:setStatusFilter,options:uniqueOptions(['Đang hợp tác','Đã ngưng hợp tác'])},{key:'from',label:'Ngày tạo NPP · từ',type:'date',defaultValue:'',value:dateFrom,onChange:setDateFrom},{key:'to',label:'Ngày tạo NPP · đến',type:'date',defaultValue:'',value:dateTo,onChange:setDateTo}]} onReset={() => { onCoverageFilterChange('ALL'); setSearchTerm(''); setStatusFilter('ALL'); setBrandFilter('ALL'); setProvinceFilter('ALL'); setOwnerFilter('ALL'); setDateFrom(''); setDateTo(''); }} actions={<><details className="filter-more-actions"><summary>Thao tác khác</summary><div><button className="btn btn-secondary" onClick={onOpenImportModal}>Nhập Excel</button><button className="btn btn-secondary" onClick={exportNpps}>Xuất Excel</button></div></details><button className="btn btn-primary" onClick={handleOpenAdd}>Thêm NPP</button></>}/>
@@ -328,7 +317,7 @@ export default function NppManagement({ globalSearch = '', coverageFilter = 'ALL
       {/* NPP Cards Grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}>
         {filteredNpps
-          .slice((currentPage - 1) * pageSize, currentPage * pageSize)
+          .slice(nppPage.start, nppPage.end)
           .map((npp) => {
           const linkedSets = systemSets.filter(s => s.nppId === npp.id);
           const assignedSets = assignedNppSets(npp, systemSets);
@@ -460,8 +449,8 @@ export default function NppManagement({ globalSearch = '', coverageFilter = 'ALL
       {(() => {
         const totalCount = filteredNpps.length;
         const totalPages = Math.ceil(totalCount / pageSize) || 1;
-        const startItem = totalCount === 0 ? 0 : (currentPage - 1) * pageSize + 1;
-        const endItem = Math.min(currentPage * pageSize, totalCount);
+        const startItem = totalCount === 0 ? 0 : nppPage.start + 1;
+        const endItem = nppPage.end;
 
         return (
           <div className="pagination-bar">
@@ -482,20 +471,20 @@ export default function NppManagement({ globalSearch = '', coverageFilter = 'ALL
             <div className="pagination-controls">
               <button 
                 className="pagination-btn" 
-                disabled={currentPage <= 1}
-                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                disabled={nppPage.page <= 1}
+                onClick={() => setCurrentPage(Math.max(nppPage.page - 1, 1))}
               >
                 ‹ Trang Trước
               </button>
               
               <span style={{ fontSize: '0.8rem', fontWeight: '700', color: 'var(--accent-cyan)', padding: '0 8px' }}>
-                Trang {currentPage} / {totalPages}
+                Trang {nppPage.page} / {totalPages}
               </span>
 
               <button 
                 className="pagination-btn" 
-                disabled={currentPage >= totalPages}
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                disabled={nppPage.page >= totalPages}
+                onClick={() => setCurrentPage(Math.min(nppPage.page + 1, totalPages))}
               >
                 Trang Sau ›
               </button>
@@ -534,7 +523,7 @@ export default function NppManagement({ globalSearch = '', coverageFilter = 'ALL
                     </div>
                     <div className="form-group">
                       <label className="form-label">📞 Số Điện Thoại *</label>
-                      <input type="text" className="form-input" required placeholder="09xx xxx xxx" value={formData.phone} onChange={e => setFormData({ ...formData, phone: e.target.value })} />
+                      <input type="text" className="form-input" required placeholder="09xx xxx xxx" aria-describedby="npp-phone-feedback" aria-invalid={!!formData.phone && !validatePhone(formData.phone).valid} value={formData.phone} onChange={e => setFormData({ ...formData, phone: e.target.value })} /><InputFeedback id="npp-phone-feedback" message={formData.phone ? validatePhone(formData.phone).error : null} />
                     </div>
                   </div>
 
@@ -556,7 +545,7 @@ export default function NppManagement({ globalSearch = '', coverageFilter = 'ALL
                   </div>
 
                   <div className="responsive-form-grid">
-                    <div className="form-group"><label className="form-label">Mã NPP (có thể sửa)</label><input className="form-input" aria-label="Mã NPP" value={formData.code || ''} onChange={event => { setCustomCode(true); setFormData({ ...formData, code: event.target.value.toUpperCase() }); }} /><small>Tự đánh số theo miền; mã chính thức được xác nhận khi lưu.</small></div>
+                    <div className="form-group"><label className="form-label">Mã NPP (có thể sửa)</label><input className="form-input" aria-label="Mã NPP" value={formData.code || ''} onChange={event => { setCustomCode(true); setFormData({ ...formData, code: event.target.value.toUpperCase() }); }} /><small>Tự đánh số theo miền; mã chính thức được xác nhận khi lưu.</small><InputFeedback id="npp-code-feedback" message={customCode && formData.code && !validateNppCode(formData.code, formData.region) ? "Mã phải đúng miền, ví dụ NPP-MB-060." : null} /></div>
                     <div className="form-group">
                       <label className="form-label">📍 Khu Vực</label>
                       <select 
