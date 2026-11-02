@@ -76,6 +76,9 @@ jobs:
       - name: Verify frontend permission matrix against effective staging RLS and session guards
         run: node scripts/authorization-boundaries.mjs
 
+      - name: Verify withdrawal releases all four inventory categories atomically
+        run: psql "$STAGING_DB_URL" -X -q -v ON_ERROR_STOP=1 -f scripts/verify-withdrawal.rollback.sql
+
       - name: Run RLS integration checks
         run: |
           if [ -n "$STAGING_SUPABASE_SERVICE_ROLE_KEY" ]; then

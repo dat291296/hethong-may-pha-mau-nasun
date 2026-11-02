@@ -2,6 +2,16 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { summarizeInventory, nextWarehouseId, inventoryLinkIssues } from '../src/modules/equipment/lib/inventorySummary.js';
 
+test('withdrawn machine snapshots do not reserve returned physical inventory', () => {
+  const systemSets = [{ setCode: 'RETURNED', status: 'DA_THU_HOI', dispenserId: null, mixerId: null, computerId: null, printerId: null, dispenserSerial: 'HISTORY' }];
+  const devices = Object.fromEntries(['dispensers','mixers','computers','printers'].map(table => [table,[{id:table,isAssigned:false,setCode:null}]]));
+  const result = summarizeInventory({systemSets,...devices});
+  for (const table of Object.keys(devices)) assert.equal(result.stock[table].length,1);
+  assert.equal(result.stockSets.length,0);
+  assert.equal(result.totalReadySets,1);
+  assert.deepEqual(inventoryLinkIssues({systemSets,...devices}),[]);
+});
+
 test('dashboard and warehouse include equivalent loose sets without double counting assembled stock', () => {
   const devices = Object.fromEntries(['dispensers', 'mixers', 'computers', 'printers'].map(table => [table, Array.from({ length: 23 }, (_, i) => ({ id: `${table}-${i}` }))]));
   const inventory = summarizeInventory({ ...devices, systemSets: [{ setCode: 'S1', status: 'TRONG_KHO' }, { setCode: 'S2', status: 'DA_LAP_DAT' }] });

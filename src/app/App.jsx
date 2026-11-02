@@ -250,7 +250,7 @@ function AppWorkspace() {
   // Workflow Modal state
   const [workflowMode, setWorkflowMode] = useState(null); // 'INSTALL' | 'WITHDRAW' | 'TRANSFER' | null
   useEffect(() => {
-    if (user && (['assets', 'npp', 'repairs', 'maintenance'].includes(activeTab) || workflowMode || showImportModal)) void ensureAssetDetails();
+    if (user && (['assets', 'npp'].includes(activeTab) || workflowMode || showImportModal)) void ensureAssetDetails();
   }, [user, activeTab, workflowMode, showImportModal, ensureAssetDetails]);
   const [workflowResult, setWorkflowResult] = useState(null);
   const [printProtocolData, setPrintProtocolData] = useState(null);
@@ -911,7 +911,7 @@ function AppWorkspace() {
             />
           ))}
 
-          {activeTab === 'repairs' && (!assetDetailsReady ? <AssetLoadingSkeleton /> : (
+          {activeTab === 'repairs' && (!assetSummaryReady ? <AssetLoadingSkeleton /> : (
             <RepairWorkspaceBoundary><DeviceRepairProcessing
               loading={repairsLoading}
               loadError={repairsLoadError}
@@ -1003,7 +1003,7 @@ function AppWorkspace() {
             </div>
           )}
 
-          {activeTab === 'maintenance' && (!assetDetailsReady ? <AssetLoadingSkeleton /> : (
+          {activeTab === 'maintenance' && (!assetSummaryReady ? <AssetLoadingSkeleton /> : (
             <MaintenanceSchedule
               loading={assetsLoading}
               globalSearch={globalSearch}
