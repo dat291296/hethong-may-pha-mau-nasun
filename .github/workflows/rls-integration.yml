@@ -77,7 +77,7 @@ jobs:
         run: node scripts/authorization-boundaries.mjs
 
       - name: Verify withdrawal releases all four inventory categories atomically
-        run: psql "$STAGING_DB_URL" -X -q -v ON_ERROR_STOP=1 -f scripts/verify-withdrawal.rollback.sql
+        run: node scripts/verify-withdrawal.mjs
 
       - name: Run RLS integration checks
         run: |

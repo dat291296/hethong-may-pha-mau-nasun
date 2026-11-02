@@ -46,7 +46,7 @@ export async function verifyEquipmentWorkflows(service, env) {
       assert.ifError((await invoke('TRANSFER',{setCode:code,newNppId:distributorIds[1]})).error);
       assert.ifError((await invoke('WITHDRAW',{setCode:code,reason:'Synthetic acceptance',warehouseRegion:'Miền Bắc'})).error);
       const final=await service.from('system_sets').select('status,npp_id').eq('set_code',code).single();
-      assert.ifError(final.error);assert.equal(final.data.status,'TRONG_KHO');assert.equal(final.data.npp_id,null);
+      assert.ifError(final.error);assert.equal(final.data.status,'DA_THU_HOI');assert.equal(final.data.npp_id,null);
       const logs=await service.from('audit_logs').select('id',{count:'exact',head:true}).eq('set_code',code);
       assert.ifError(logs.error);assert.equal(logs.count,4,'Replay must not duplicate audit entries');
     }
