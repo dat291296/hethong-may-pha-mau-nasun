@@ -24,6 +24,12 @@ BEGIN
   END LOOP;
   -- A repeated acknowledged operation returns the receipt rather than releasing twice.
   PERFORM public.execute_equipment_workflow(prefix,'WITHDRAW',jsonb_build_object('setCode',prefix,'warehouseRegion','Miền Trung','reason','Synthetic withdrawal','isDistributorClosure',true));
+  BEGIN
+    UPDATE public.system_sets SET status='DA_LAP_DAT',npp_id=prefix WHERE set_code=prefix;
+    RAISE EXCEPTION 'EMPTY_ARCHIVE_INSTALL_ALLOWED';
+  EXCEPTION WHEN check_violation THEN
+    IF SQLERRM<>'WITHDRAWN_SET_REQUIRES_NEW_ASSEMBLY' THEN RAISE; END IF;
+  END;
 END $$;
 ROLLBACK;
 

@@ -6,6 +6,11 @@ CREATE OR REPLACE FUNCTION public.release_withdrawn_set_devices()
 RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER SET search_path = public, pg_temp AS $$
 DECLARE item record; linked record; owners integer; changed integer;
 BEGIN
+  IF OLD.status='DA_THU_HOI' AND NEW.status='DA_LAP_DAT'
+     AND NEW.dispenser_id IS NULL AND NEW.mixer_id IS NULL
+     AND NEW.computer_id IS NULL AND NEW.printer_id IS NULL THEN
+    RAISE EXCEPTION 'WITHDRAWN_SET_REQUIRES_NEW_ASSEMBLY' USING ERRCODE='23514';
+  END IF;
   IF NEW.npp_id IS NOT NULL OR NEW.status NOT IN ('TRONG_KHO','DA_THU_HOI')
      OR NOT (OLD.npp_id IS NOT NULL OR OLD.status IN ('DA_LAP_DAT','BAO_THUONG_BAO_TRI')
        OR (OLD.status='TRONG_KHO' AND NEW.status='DA_THU_HOI' AND EXISTS
