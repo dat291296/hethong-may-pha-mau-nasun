@@ -9,6 +9,9 @@ BEGIN
   PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',actor,'role','authenticated','session_id',sid,'aal','aal1','exp',extract(epoch from now()+interval '1 hour')::bigint)::text,true);
   SET LOCAL ROLE authenticated;
   PERFORM public.register_trusted_device_session(prefix,'Synthetic withdrawal','UTC');
+  INSERT INTO public.system_sets(set_code,npp_name,region,status) VALUES(prefix||'-WAREHOUSE','Synthetic warehouse maintenance','Miền Trung','BAO_THUONG_BAO_TRI');
+  UPDATE public.system_sets SET status='TRONG_KHO' WHERE set_code=prefix||'-WAREHOUSE';
+  IF NOT EXISTS(SELECT 1 FROM public.system_sets WHERE set_code=prefix||'-WAREHOUSE' AND status='TRONG_KHO') THEN RAISE EXCEPTION 'WAREHOUSE_MAINTENANCE_MISCLASSIFIED'; END IF;
   INSERT INTO public.distributors(id,name,region,status) VALUES(prefix,'Synthetic withdrawal NPP','Miền Trung','Đang hợp tác');
   INSERT INTO public.system_sets(set_code,npp_id,npp_name,region,status,dispenser_serial) VALUES(prefix,prefix,'Synthetic withdrawal NPP','Miền Trung','DA_LAP_DAT','SYN-SERIAL');
   INSERT INTO public.dispensers(id,model,set_code,is_assigned) VALUES(prefix,'Synthetic',prefix,true);
