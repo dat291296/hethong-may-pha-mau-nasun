@@ -1,0 +1,175 @@
+name: Reviewed SHA production release
+on:
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: Full main commit SHA explicitly approved for this release
+        required: true
+        type: string
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+jobs:
+  rls-gate:
+    if: github.ref == 'refs/heads/main' && inputs.release_sha == github.sha
+    uses: ./.github/workflows/rls-integration.yml
+    secrets: inherit
+  release:
+    if: github.ref == 'refs/heads/main' && inputs.release_sha == github.sha
+    needs: rls-gate
+    environment: backup
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    concurrency:
+      group: production-schema-update
+      cancel-in-progress: false
+    env:
+      RELEASE_SHA: ${{ inputs.release_sha }}
+      GITHUB_TOKEN: ${{ github.token }}
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      PRODUCTION_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL || secrets.VITE_SUPABASE_URL }}
+      BACKUP_ENCRYPTION_PASSPHRASE: ${{ secrets.BACKUP_ENCRYPTION_PASSPHRASE }}
+      VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL || secrets.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY || secrets.VITE_SUPABASE_ANON_KEY }}
+      VITE_REMOTE_REPORTING_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.release_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Confirm approved main revision before reading production
+        run: node scripts/verify-release-revision.mjs
+      - run: npm run test:all
+      - run: npm run lint
+      - run: npm audit --omit=dev --audit-level=critical
+      - run: npm run build
+      - name: Install PostgreSQL client
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y curl ca-certificates
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl --fail --show-error --silent -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          . /etc/os-release
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+      - name: Validate recovery configuration
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          BACKUP_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL || secrets.VITE_SUPABASE_URL }}
+          BACKUP_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.BACKUP_SUPABASE_SERVICE_ROLE_KEY }}
+          BACKUP_ENCRYPTION_PASSPHRASE: ${{ secrets.BACKUP_ENCRYPTION_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          for variable in SUPABASE_DB_URL BACKUP_SUPABASE_URL BACKUP_SUPABASE_SERVICE_ROLE_KEY; do
+            if [ -z "${!variable}" ]; then echo "::error::$variable is required."; exit 1; fi
+          done
+          case "$SUPABASE_DB_URL" in postgres://*|postgresql://*) ;; *) exit 1 ;; esac
+          if [ "${#BACKUP_ENCRYPTION_PASSPHRASE}" -lt 24 ]; then echo "::error::Backup passphrase requires 24 characters."; exit 1; fi
+          mkdir -p backup/recovery
+          chmod 700 backup/recovery
+      - name: Export database schemas, Auth, policies and grants
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -euo pipefail
+          umask 077
+          pg_dump --schema=public --schema=auth --schema=storage --schema=nasun_internal --format=custom --no-owner --file=backup/recovery/database.dump --dbname="$SUPABASE_DB_URL"
+          pg_dumpall --roles-only --no-role-passwords --file=backup/recovery/roles.sql --database="$SUPABASE_DB_URL"
+          pg_restore --list backup/recovery/database.dump > backup/recovery/database-toc.txt
+          grep -Eq 'TABLE DATA auth users' backup/recovery/database-toc.txt
+          grep -Eq 'TABLE DATA storage buckets' backup/recovery/database-toc.txt
+          grep -Eq 'TABLE DATA nasun_internal field_commands' backup/recovery/database-toc.txt
+      - name: Export Storage file contents and verify inventory
+        env:
+          BACKUP_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL || secrets.VITE_SUPABASE_URL }}
+          BACKUP_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.BACKUP_SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/export-storage-backup.mjs backup/recovery/storage
+      - name: Independently verify exported Storage files
+        run: node scripts/verify-storage-archive.mjs backup/recovery/storage
+      - name: Bind database, roles and Storage files to one recovery manifest
+        run: |
+          printf '%s\n' 'Includes public/auth/storage/nasun_internal, grants, role definitions without passwords, and Storage contents.' 'Full Supabase restore drill has not been performed by this export job.' > backup/recovery/coverage.txt
+          node scripts/recovery-integrity.mjs create backup/recovery
+          node scripts/recovery-integrity.mjs verify backup/recovery
+      - name: Encrypt recovery archive
+        env:
+          BACKUP_ENCRYPTION_PASSPHRASE: ${{ secrets.BACKUP_ENCRYPTION_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          tar -czf backup/recovery.tar.gz -C backup recovery
+          node scripts/encrypt-recovery-backup.mjs backup/recovery.tar.gz backup/recovery.tar.gz.enc
+          sha256sum backup/recovery.tar.gz.enc > backup/recovery.tar.gz.enc.sha256
+      - name: Upload encrypted recovery archive
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: nasun-recovery-${{ github.run_id }}
+          path: |
+            backup/recovery.tar.gz.enc
+            backup/recovery.tar.gz.enc.sha256
+          retention-days: 30
+          if-no-files-found: error
+      - name: Confirm main has not moved before schema changes
+        run: node scripts/verify-release-revision.mjs
+      - name: Apply reviewed schema with existing-row preservation checks
+        run: node scripts/apply-production-safety.mjs --security
+      - name: Verify production authorization metadata
+        run: node scripts/verify-production-authorization.mjs
+      - name: Reconcile the explicitly reviewed Nguyen Linh withdrawal
+        run: node scripts/reconcile-nguyen-linh.mjs
+      - name: Confirm main has not moved before deployment
+        run: node scripts/verify-release-revision.mjs
+      - name: Validate Cloudflare Secret
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::error::CLOUDFLARE_API_TOKEN is not set in GitHub Secrets."
+            exit 1
+          fi
+          if [ -z "$CLOUDFLARE_ACCOUNT_ID" ] && ! grep -Eq '"account_id"[[:space:]]*:[[:space:]]*"[^"]+"' wrangler.jsonc; then
+            echo "::error::Configure CLOUDFLARE_ACCOUNT_ID or account_id in wrangler.jsonc."
+            exit 1
+          fi
+
+      - name: Deploy to Cloudflare Workers
+        id: deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! deploy_output="$(npx wrangler deploy 2>&1)"; then
+            printf '%s\n' "$deploy_output"
+            echo "::error::Cloudflare deployment failed. Review the Wrangler output above."
+            exit 1
+          fi
+          printf '%s\n' "$deploy_output"
+          detected_url="$(printf '%s\n' "$deploy_output" | grep -Eo 'https://[^[:space:]]+\.workers\.dev' | tail -n 1 || true)"
+          deployment_url="${PRODUCTION_URL:-$detected_url}"
+          if [ -z "$deployment_url" ]; then
+            echo "::error::Could not detect deployment URL. Configure optional PRODUCTION_URL in GitHub Actions Variables."
+            exit 1
+          fi
+          echo "url=$deployment_url" >> "$GITHUB_OUTPUT"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PRODUCTION_URL: ${{ vars.PRODUCTION_URL }}
+
+      - name: Verify production deployment
+        run: node scripts/verify-deployment.mjs "${{ steps.deploy.outputs.url }}"
+
+      - name: Remove plaintext exports from the runner
+        if: always()
+        run: rm -rf -- "$GITHUB_WORKSPACE/backup/recovery" "$GITHUB_WORKSPACE/backup/recovery.tar.gz"
