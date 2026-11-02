@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Html5QrcodeScanner, Html5QrcodeSupportedFormats } from 'html5-qrcode';
+// Use the package's modern ESM build to avoid duplicated ES5 inheritance helpers.
+import { Html5QrcodeScanner, Html5QrcodeSupportedFormats } from 'html5-qrcode/es2015/index.js';
 import { Camera, X } from 'lucide-react';
 
 /**
