@@ -19,7 +19,8 @@ configureOperationalReporting(createRemoteReporter({
 }
 startPerformanceMonitoring()
 const stopErrorMonitoring = startErrorMonitoring()
-if (import.meta.hot) import.meta.hot.dispose(stopErrorMonitoring)
+const hotContext = import.meta.hot
+if (hotContext) hotContext.dispose(stopErrorMonitoring)
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
