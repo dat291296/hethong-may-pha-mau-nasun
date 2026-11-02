@@ -1,3 +1,4 @@
+import { createRefreshScheduler } from '../../../shared/data-access/refreshScheduler.js';
 import { getOfflineOwner } from '../../../shared/sync/offlineDb.js';
 import {submitFieldCommand} from '../../fieldwork/lib/fieldCommandClient.js';
 import {recordOperationalError} from '../../../shared/diagnostics/operationalDiagnostics.js';
@@ -8,6 +9,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase, isSupabaseConfigured, safeQuery } from '../../../shared/data-access/supabase.js';
 import { INITIAL_REPAIR_TICKETS } from '../../../shared/data/mockData.js';
 import { cacheOfflineData, getCachedOfflineData, enqueueOfflineAction, getOfflineQueue } from '../../../shared/sync/offlineSync.js';
+import { createRepairState } from '../lib/repairState.js';
 
 function normalizeProductCategory(category, machineModel = '') {
   const raw = String(category || '').trim();
@@ -28,75 +30,103 @@ export function filterRepairTicketsById(tickets, idToRemove) {
 }
 
 export function useRepairs() {
-  const [repairTickets, setRepairTickets] = useState(INITIAL_REPAIR_TICKETS);
+  const [repairTickets, publishRepairTickets] = useState(INITIAL_REPAIR_TICKETS);
   const [loading, setLoading] = useState(false);
   const [loadError,setLoadError]=useState('');
-  const fetchVersion=useRef(0);
-
-  const persistRepairTickets = useCallback((nextTickets) => {
-    setRepairTickets(nextTickets);
-    return cacheOfflineData('repair_tickets', nextTickets);
-  }, []);
+  const fetchVersion = useRef(0);
+  const stateRef = useRef(null);
+  if (!stateRef.current) stateRef.current = createRepairState({
+    initialRows: INITIAL_REPAIR_TICKETS,
+    owner: getOfflineOwner,
+    publish: publishRepairTickets,
+    persist: rows => cacheOfflineData('repair_tickets', rows),
+  });
+  const repairState = stateRef.current;
+  const persistRepairTickets = useCallback(async (updater, owner) => {
+    try {
+      await repairState.update(updater, owner);
+    } catch (error) {
+      recordOperationalError('runtime', error);
+      if (owner === getOfflineOwner()) setLoadError('Thao tác đã được tiếp nhận nhưng chưa lưu được bản xem offline. Giữ bản nháp, không tạo lại phiếu; kiểm tra dung lượng thiết bị rồi thử tải lại.');
+      throw error;
+    }
+  }, [repairState]);
+  const withRepairWrite = useCallback(async action => {
+    const write = repairState.beginWrite();
+    try { return await action(write.owner); }
+    finally { write.finish(); }
+  }, [repairState]);
 
   // Hydrate cache from IndexedDB on mount
   useEffect(() => {
+    const token = repairState.captureRead();
+    let disposed = false;
     async function loadCached() {
       if (navigator.onLine) return;
-      const cached = await getCachedOfflineData('repair_tickets', null);
-      if (cached && Array.isArray(cached) && cached.length > 0) {
-        setRepairTickets(cached);
-      }
+      try {
+        const cached = await getCachedOfflineData('repair_tickets', null);
+        if (!disposed && Array.isArray(cached)) await repairState.acceptRead(token, cached, false);
+      } catch (error) { recordOperationalError('runtime', error); }
     }
     loadCached();
-  }, []);
+    return () => { disposed = true; };
+  }, [repairState]);
 
   const fetchRepairs = useCallback(async () => {
-    const requestOwner = getOfflineOwner();
     if (!isSupabaseConfigured) return;
-    const version=++fetchVersion.current;
+    const version = ++fetchVersion.current;
+    const token = repairState.captureRead();
+    const requestOwner = token.owner;
     setLoading(true);setLoadError('');
     try {
+      await repairState.flush();
+      if (!repairState.canCommit(token)) return false;
+      if (!navigator.onLine) {
+        const cached = await getCachedOfflineData('repair_tickets', null);
+        return Array.isArray(cached) ? await repairState.acceptRead(token, cached, false) : false;
+      }
       const pendingQueue = await getOfflineQueue();
       if (pendingQueue.some(item => ['ADD_REPAIR','EDIT_REPAIR','DELETE_REPAIR'].includes(item.action)||(item.action==='FIELD_OPERATION'&&item.payload?.kind?.startsWith('REPAIR')))) {
         const cached=await getCachedOfflineData('repair_tickets',null);
-        if(version===fetchVersion.current&&requestOwner===getOfflineOwner()&&Array.isArray(cached))setRepairTickets(cached);
-        if(version===fetchVersion.current)setLoadError('Có thay đổi đang chờ đồng bộ. Giữ dữ liệu trên thiết bị; kiểm tra hàng chờ trước khi tải bản server.');
-        return;
+        if (Array.isArray(cached)) await repairState.acceptRead(token, cached, false);
+        if(version===fetchVersion.current&&requestOwner===getOfflineOwner())setLoadError('Có thay đổi đang chờ đồng bộ. Giữ dữ liệu trên thiết bị; kiểm tra hàng chờ trước khi tải bản server.');
+        return false;
       }
-      const {data,error}=await fetchAllRows(sb=>sb.from('repair_tickets').select('*',{count:'exact'}).order('date',{ascending:false}).order('id'),safeQuery,'fetchRepairs',{key:'id'});
-      if(version!==fetchVersion.current || requestOwner !== getOfflineOwner())return false;
+      const {data,error}=await fetchAllRows(sb=>sb.from('repair_tickets').select('id,ticket_code,date,technician,npp_id,npp_name,product_category,machine_model,serial_number,error_description,error_category,action_direction,replacement_condition,processing_status,customer_return_status,notes,photos,asset_code,field_visit_status,service_checklist,materials_used,before_photos,after_photos,npp_confirmation,sla_due_at,completed_at,assigned_user_id,assignment_due_date,record_version,last_updated_at,last_updated_by',{count:'exact'}).order('date',{ascending:false}).order('id'),safeQuery,'fetchRepairs',{key:'id'});
+      if(!repairState.canCommit(token))return false;
       if(error)throw error;
       if(!Array.isArray(data))throw Error('INCOMPLETE_REPAIR_RESPONSE');
-      return await persistRepairTickets(data.map(mapDbToRepair));
+      return await repairState.acceptRead(token, data.map(mapDbToRepair));
     } catch(error) {
       recordOperationalError('runtime',error);
-      if(version===fetchVersion.current && requestOwner === getOfflineOwner()){
+      if(repairState.canCommit(token)){
         setLoadError('Chưa tải được phiếu từ server. Dữ liệu đã có được giữ nguyên; kiểm tra kết nối và thử lại.');
         try {
           const cached=await getCachedOfflineData('repair_tickets',null);
-          if(version===fetchVersion.current&&Array.isArray(cached))setRepairTickets(cached);
+          if(Array.isArray(cached))await repairState.acceptRead(token,cached,false);
         } catch(cacheError) {recordOperationalError('runtime',cacheError);}
       }
+      else if(requestOwner===getOfflineOwner() && error.code === 'REPAIR_CACHE_WRITE_FAILED')setLoadError('Chưa lưu được bản xem offline. Dữ liệu đang có được giữ nguyên; kiểm tra dung lượng thiết bị rồi thử tải lại.');
       return false;
-    } finally {if(version===fetchVersion.current)setLoading(false);}
-  },[persistRepairTickets]);
+    } finally {if(version===fetchVersion.current&&requestOwner===getOfflineOwner())setLoading(false);}
+  },[repairState]);
 
   useEffect(() => {
     fetchRepairs();
   }, [fetchRepairs]);
 
-  // Realtime subscription
+  // Coalesce bursts and keep at most one realtime refresh in flight.
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) return;
-    const channel = supabase
-      .channel('repair-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'repair_tickets' }, () => fetchRepairs())
+    const scheduler = createRefreshScheduler(fetchRepairs);
+    const channel = supabase.channel('repair_tickets-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'repair_tickets' }, scheduler.schedule)
       .subscribe();
-    return () => supabase.removeChannel(channel);
+    return () => { scheduler.dispose(); supabase.removeChannel(channel); };
   }, [fetchRepairs]);
 
-  const addTicket = useCallback(async (ticketData) => {
-    const tempId = ticketData.id || `TICK-TEMP-${Date.now()}`;
+  const addTicket = useCallback(async (ticketData) => withRepairWrite(async owner => {
+    const tempId = ticketData.id || crypto.randomUUID();
     const localTicket = { ...ticketData, id: tempId };
     const dbPayload = { ...mapRepairToDb(localTicket), id: tempId };
 
@@ -104,16 +134,14 @@ export function useRepairs() {
       const payload=Object.fromEntries(Object.entries(dbPayload).filter(([key,value])=>value!==undefined&&!['assigned_user_id','assignment_due_date'].includes(key)));
       const result=await submitFieldCommand({kind:'REPAIR_CREATE',entityId:tempId,payload});
       const saved={...localTicket,recordVersion:result.receipt?.version||0,syncPending:result.queued};
-      setRepairTickets(previous => [saved, ...previous.filter(item => item.id !== saved.id)]);
-      await cacheOfflineData('repair_tickets',[saved,...repairTickets.filter(item=>item.id!==saved.id)]);
-      if(!result.queued)await fetchRepairs();
+      await persistRepairTickets(previous => [saved, ...previous.filter(item => item.id !== saved.id)], owner);
       return saved;
     }
-    setRepairTickets(previous => [localTicket, ...previous]);
+    await repairState.update(previous => [localTicket, ...previous], owner, false);
     return localTicket;
-  }, [fetchRepairs,repairTickets]);
+  }), [withRepairWrite, persistRepairTickets, repairState]);
 
-  const editTicket = useCallback(async (id, updates) => {
+  const editTicket = useCallback(async (id, updates) => withRepairWrite(async owner => {
     const dbUpdates = {};
     const fieldMap = {
       ticketCode: 'ticket_code',
@@ -172,16 +200,15 @@ export function useRepairs() {
       if (!Number.isSafeInteger(updates.recordVersion)) throw new Error('Thiếu phiên bản phiếu. Mở lại phiếu trước khi sửa.');
       const payload={id,...Object.fromEntries(Object.entries(dbUpdates).filter(([key,value])=>value!==undefined&&!['assigned_user_id','assignment_due_date'].includes(key)))};
       const result=await submitFieldCommand({kind:'REPAIR_EDIT',entityId:id,expected:updates.recordVersion,payload});
-      const saved={...repairTickets.find(ticket=>ticket.id===id),...updates,recordVersion:result.receipt?.version||updates.recordVersion,syncPending:result.queued};
-      setRepairTickets(previous => previous.map(ticket => ticket.id === id ? saved : ticket));
-      cacheOfflineData('repair_tickets', repairTickets.map(ticket => ticket.id === id ? saved : ticket));
+      const saved={...repairState.read().find(ticket=>ticket.id===id),...updates,recordVersion:result.receipt?.version||updates.recordVersion,syncPending:result.queued};
+      await persistRepairTickets(previous => previous.map(ticket => ticket.id === id ? saved : ticket), owner);
       return saved;
     }
-    setRepairTickets(previous => previous.map(ticket => ticket.id === id ? { ...ticket, ...updates, recordVersion: (ticket.recordVersion || 0) + 1 } : ticket));
+    await repairState.update(previous => previous.map(ticket => ticket.id === id ? { ...ticket, ...updates, recordVersion: (ticket.recordVersion || 0) + 1 } : ticket), owner, false);
     return updates;
-  }, [fetchRepairs, repairTickets]);
+  }), [withRepairWrite, persistRepairTickets, repairState]);
 
-  const deleteTicket = useCallback(async (id) => {
+  const deleteTicket = useCallback(async (id) => withRepairWrite(async owner => {
     if (!id) throw new Error('Thiếu mã phiếu cần xóa.');
     let result = { queued: false };
     if (isSupabaseConfigured) {
@@ -194,15 +221,13 @@ export function useRepairs() {
         queue: () => enqueueOfflineAction('DELETE_REPAIR', { id }),
       });
     }
-    setRepairTickets(previous => {
-      const updated = filterRepairTicketsById(previous, id);
-      cacheOfflineData('repair_tickets', updated);
-      return updated;
-    });
+    if (isSupabaseConfigured) await persistRepairTickets(previous => filterRepairTicketsById(previous, id), owner);
+    else await repairState.update(previous => filterRepairTicketsById(previous, id), owner, false);
     return result;
-  }, []);
+  }), [withRepairWrite, persistRepairTickets, repairState]);
 
   const importTickets = useCallback(async (items) => {
+    const result = await withRepairWrite(async owner => {
     const dbItems = items.map(mapRepairToDb).filter(item => item.id && item.ticket_code);
     if (dbItems.length !== items.length) throw new Error('Every imported repair ticket must include an ID and ticket code');
 
@@ -210,18 +235,23 @@ export function useRepairs() {
       write: rows => safeQuery(sb => sb.from('repair_tickets').upsert(rows, {onConflict:'id'}).select('id'), 'importRepairTickets'),
       queue: item => enqueueOfflineAction('ADD_REPAIR', item),
     });
-    setRepairTickets(prev => {
+    const mergeTickets = prev => {
       const merged = new Map(prev.map(item => [item.id,item]));
       dbItems.map(mapDbToRepair).forEach(item => merged.set(item.id,item));
-      const updated = Array.from(merged.values()); cacheOfflineData('repair_tickets',updated); return updated;
+      return Array.from(merged.values());
+    };
+    if (isSupabaseConfigured) await persistRepairTickets(mergeTickets, owner);
+    else await repairState.update(mergeTickets, owner, false);
+    return result;
     });
+    // Imports return identities only; fetch the server-assigned record versions
+    // after releasing the write barrier so later edits use the real revision.
     if (isSupabaseConfigured && !result.queued) await fetchRepairs();
     return result;
-  }, [fetchRepairs]);
+  }, [withRepairWrite, persistRepairTickets, repairState, fetchRepairs]);
 
   return {
     repairTickets,
-    setRepairTickets,
     loading,
     loadError,
     addTicket,

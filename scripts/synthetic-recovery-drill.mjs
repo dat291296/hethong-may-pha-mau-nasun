@@ -211,12 +211,15 @@ try {
   assert.equal(after, before, 'Restored data and policy metadata must match');
   assert.equal(sql("SELECT has_table_privilege('authenticated','public.distributors','SELECT');").trim(), 't');
   assert.equal(sql("SELECT has_schema_privilege('authenticated','nasun_internal','USAGE');").trim(), 'f');
-  console.log(JSON.stringify({ passed: true, environment: 'disposable-local-Supabase-on-public-standard-runner',
+  const evidence = { passed: true, environment: 'disposable-local-Supabase-on-public-standard-runner',
     productionDataUsed: false, hostedRestoreVerified: false, fullNasunMigrationChainVerified: false,
     fullNasunStagingSchemaSnapshotVerified: Boolean(schemaArchive), restoredTableCount: sourceTables.length,
     database: true, authIdentityAndPasswordLogin: true, privateStorageBytesAndDenials: true,
     regionalRls: true, grantsAndPolicies: true, encryptionRoundtrip: true,
-    elapsedSeconds: Math.ceil((Date.now() - started) / 1000), revision: process.env.GITHUB_SHA }));
+    elapsedSeconds: Math.ceil((Date.now() - started) / 1000), revision: process.env.GITHUB_SHA };
+  await mkdir(resolve('output'), { recursive: true });
+  await writeFile(resolve('output/synthetic-recovery-runtime.json'), JSON.stringify(evidence), { mode: 0o600, flag: 'wx' });
+  console.log(JSON.stringify(evidence));
 } finally {
   stop();
 }

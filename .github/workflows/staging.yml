@@ -65,6 +65,9 @@ jobs:
       - name: Build staging application
         run: npm run build
         env:
+          VITE_SENTRY_DSN: ${{ vars.SENTRY_DSN }}
+          VITE_REMOTE_REPORTING_ENABLED: ${{ vars.REMOTE_REPORTING_ENABLED || 'false' }}
+          VITE_APP_ENV: staging
           VITE_SUPABASE_URL: ${{ vars.STAGING_SUPABASE_URL || secrets.STAGING_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ vars.STAGING_SUPABASE_ANON_KEY || secrets.STAGING_SUPABASE_ANON_KEY }}
 

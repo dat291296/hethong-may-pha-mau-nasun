@@ -1,4 +1,5 @@
 const MESSAGES = Object.freeze({
+  'REPAIR_CACHE_WRITE_FAILED':'Thao tác đã được tiếp nhận nhưng chưa lưu được bản xem offline. Giữ bản nháp, không tạo lại phiếu; kiểm tra dung lượng thiết bị rồi thử tải lại.',
   'OFFLINE_DOCUMENT_FULL':'Hàng chờ đã đạt giới hạn dung lượng hoặc số thao tác. Giữ nháp đang mở; đồng bộ hoặc đối chiếu các mục cũ trước khi lưu thêm.',
   'FIELD_PENDING_EDIT':'Phiếu hoặc bộ máy này còn thay đổi đang chờ xác nhận. Đồng bộ và đối chiếu trước khi sửa tiếp.',
   'AUDIT_IMMUTABLE':'Nhật ký chỉ đọc. Yêu cầu sửa/xóa cũ được giữ để đối chiếu và không gửi lên server.',
@@ -18,7 +19,7 @@ const MESSAGES = Object.freeze({
   '23505': 'Mã dữ liệu đã tồn tại. Kiểm tra lại trước khi lưu.',
   '23503': 'Dữ liệu đang được liên kết. Tải lại thông tin trước khi thao tác.',
   '22P02': 'Dữ liệu không đúng định dạng. Kiểm tra lại trước khi lưu.',
-  'QUERY_TIMEOUT': 'Yêu cầu quá thời gian. Kiểm tra kết nối và thử lại.',
+  'QUERY_TIMEOUT': 'Chưa xác định được kết quả yêu cầu. Kiểm tra hàng chờ và dữ liệu đã lưu trước khi tạo lại.',
   'PGRST202': 'Hệ thống chưa sẵn sàng cho thao tác này. Liên hệ quản trị viên.',
 });
 export function userErrorMessage(error, fallback = 'Chưa thực hiện được thao tác. Nội dung đang nhập được giữ; kiểm tra lại và thử lại.') {

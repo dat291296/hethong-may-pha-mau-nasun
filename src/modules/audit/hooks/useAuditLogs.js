@@ -1,3 +1,4 @@
+import { createRefreshScheduler } from '../../../shared/data-access/refreshScheduler.js';
 import { getOfflineOwner } from '../../../shared/sync/offlineDb.js';
 import { fetchAllRows } from '../../../shared/data-access/paginatedQuery.js';
 import { useState, useEffect, useCallback } from 'react';
@@ -72,7 +73,7 @@ export function useAuditLogs() {
     if (!isSupabaseConfigured) return;
     setLoading(true);
     const { data, error } = await fetchAllRows(
-      sb => sb.from('audit_logs').select('*', { count: 'exact' }).order('timestamp', { ascending: false }).order('id'),
+      sb => sb.from('audit_logs').select('id,type,timestamp,set_code,npp_id,npp_name,serial_list,technician,reason,notes,severity', { count: 'exact' }).order('timestamp', { ascending: false }).order('id'),
       safeQuery, 'fetchAuditLogs', { key: 'id' }
     );
     if (requestOwner !== getOfflineOwner()) return false;
@@ -97,14 +98,14 @@ export function useAuditLogs() {
     fetchAuditLogs();
   }, [fetchAuditLogs]);
 
-  // Realtime subscription
+  // Coalesce bursts and keep at most one realtime refresh in flight.
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) return;
-    const channel = supabase
-      .channel('audit-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'audit_logs' }, () => fetchAuditLogs())
+    const scheduler = createRefreshScheduler(fetchAuditLogs);
+    const channel = supabase.channel('audit_logs-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'audit_logs' }, scheduler.schedule)
       .subscribe();
-    return () => supabase.removeChannel(channel);
+    return () => { scheduler.dispose(); supabase.removeChannel(channel); };
   }, [fetchAuditLogs]);
 
   const addAuditLog = useCallback(async (logData) => {

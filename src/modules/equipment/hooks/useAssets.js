@@ -314,6 +314,7 @@ export function useAssets() {
   }, [withAssetWrite, updateRows, deviceConfigs]);
 
   // ── Generic edit device ────────────────────────────────────────────────────
+  // Full editor: retain the revision captured when the form opened.
   const editDeviceDetails = useCallback(async (category, id, updates, revision) => {
     const cfg = deviceConfigs[category];
     const targetTable = cfg ? cfg.table : category;
@@ -357,6 +358,7 @@ export function useAssets() {
     }
   }, [fetchAssets, withAssetWrite, updateRows, deviceConfigs]);
 
+  // Compatibility adapter; full interactive edits use editDeviceDetails above.
   const editDevice = useCallback(async (category, id, updates) => {
     const cfg = deviceConfigs[category];
     const targetTable = cfg ? cfg.table : category;
@@ -794,8 +796,6 @@ function mapSystemSetToDb(obj) {
   if ('printerId' in obj || 'printer_id' in obj) dbObj.printer_id = obj.printerId ?? obj.printer_id ?? null;
   if ('printerSerial' in obj || 'printer_serial' in obj) dbObj.printer_serial = obj.printerSerial ?? obj.printer_serial ?? '';
 
-  if ('tintingSoftware' in obj || 'tinting_software' in obj) dbObj.tinting_software = obj.tintingSoftware ?? obj.tinting_software ?? '';
-  if ('softwareVersion' in obj || 'software_version' in obj) dbObj.software_version = obj.softwareVersion ?? obj.software_version ?? '';
 
   if ('installDate' in obj || 'installedDate' in obj || 'install_date' in obj) dbObj.install_date = obj.installDate ?? obj.installedDate ?? obj.install_date ?? null;
   if ('lastMaintenanceDate' in obj || 'last_maintenance_date' in obj) dbObj.last_maintenance_date = obj.lastMaintenanceDate ?? obj.last_maintenance_date ?? null;

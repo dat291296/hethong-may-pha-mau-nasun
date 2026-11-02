@@ -1,0 +1,38 @@
+name: Isolated business UI regression
+on:
+  pull_request:
+    paths: ['src/**', 'scripts/verify-ui-completion.mjs', '.github/workflows/ui-regression.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: synthetic-ui-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  rls-gate:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    uses: ./.github/workflows/rls-integration.yml
+    secrets: inherit
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Install isolated browser runtime
+        run: npx --yes --package @playwright/cli@0.1.22 playwright-cli install-browser chrome --with-deps
+      - name: Exercise real components with synthetic data and no connected backend
+        run: node scripts/verify-ui-completion.mjs
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: synthetic-ui-${{ github.run_id }}
+          path: |
+            output/completion-ui/evidence.json
+            output/completion-ui/*.png
+          if-no-files-found: error

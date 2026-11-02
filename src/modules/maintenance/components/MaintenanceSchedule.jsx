@@ -1,3 +1,4 @@
+import { DataLoadingState, EmptyState } from '../../../shared/components/DataState.jsx';
 import { userErrorMessage } from '../../../shared/security/userError.js';
 import WorkspaceFilterBar from '../../../shared/components/WorkspaceFilterBar.jsx';
 import { matchesSearch, matchesDateRange, uniqueOptions, REGIONS, canEditRegion } from '../../../shared/workspace/workspaceFilters.js';
@@ -39,7 +40,7 @@ function isDateInYear(value, year) {
   return !Number.isNaN(date.getTime()) && date.getFullYear() === year;
 }
 
-export default function MaintenanceSchedule({ onReturnToProfile, globalSearch = '', initialFilter = 'ALL', systemSets, onCompleteMaintenance, onUpdateSystemSet, onDeleteSystemSet }) {
+export default function MaintenanceSchedule({ loading = false, onReturnToProfile, globalSearch = '', initialFilter = 'ALL', systemSets, onCompleteMaintenance, onUpdateSystemSet, onDeleteSystemSet }) {
   const { user } = useAuth();
   useWorkspaceScroll('maintenance');
   const [filter, setFilter] = useWorkspaceState('maintenance:state', initialFilter); // ALL | DUE_SOON | OVERDUE | OK
@@ -237,6 +238,8 @@ export default function MaintenanceSchedule({ onReturnToProfile, globalSearch = 
   return (
     <div className="workspace-screen maintenanceschedule-screen" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       
+      {loading && systemSets.length === 0 && <DataLoadingState label="Đang tải lịch bảo trì…" />}
+      {!loading && sortedSets.length === 0 && <EmptyState title="Chưa có bộ máy phù hợp" description="Kiểm tra miền đang xem hoặc bỏ bộ lọc để tìm bộ máy cần bảo trì." onAction={() => { setSearchTerm(''); setFilter('ALL'); setRegionWorkFilter('ALL'); setProvinceFilter('ALL'); setOwnerFilter('ALL'); setDateFrom(''); setDateTo(''); }} />}
       {/* Header Info Panel */}
       <div className="glass-panel" style={{ padding: '20px', background: 'linear-gradient(135deg, rgba(30,41,59,1) 0%, rgba(15,23,42,1) 100%)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
