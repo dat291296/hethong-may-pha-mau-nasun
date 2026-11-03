@@ -72,6 +72,35 @@ self.addEventListener('activate', event => {
   })());
 });
 
+self.addEventListener('sync', event => {
+  if (event.tag !== 'nasun-offline-sync') return;
+  event.waitUntil((async () => {
+    const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const client of clients) client.postMessage({ type: 'NASUN_BACKGROUND_SYNC_REQUEST' });
+    // Queue replay stays inside the authenticated page so existing session, ownership, and RLS checks remain active.
+  })());
+});
+
+self.addEventListener('push', event => {
+  let payload = {};
+  try { payload = event.data ? event.data.json() : {}; } catch { payload = {}; }
+  const title = String(payload.title || 'NASUN').slice(0, 80);
+  const body = String(payload.body || 'Có cập nhật cần bạn kiểm tra.').slice(0, 180);
+  const tag = String(payload.tag || 'nasun-update').replace(/[^a-z0-9_-]/gi, '').slice(0, 64);
+  const target = typeof payload.url === 'string' && payload.url.startsWith('/') && !payload.url.startsWith('//') ? payload.url : '/';
+  event.waitUntil(self.registration.showNotification(title, { body, tag, icon: '/nasun_logo.png', badge: '/nasun_logo.png', data: { url: target } }));
+});
+
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  const target = new URL(event.notification.data?.url || '/', self.location.origin).href;
+  event.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async clients => {
+    const client = clients.find(windowClient => windowClient.url.startsWith(self.location.origin));
+    if (client) { await client.navigate(target); return client.focus(); }
+    return self.clients.openWindow(target);
+  }));
+});
+
 async function networkWithTimeout(request, timeoutMs = 4000) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);

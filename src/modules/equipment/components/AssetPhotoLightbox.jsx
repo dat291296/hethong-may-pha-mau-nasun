@@ -1,6 +1,7 @@
 import React from 'react';
 import SafePortal from '../../../shared/components/SafePortal.jsx';
 import { ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react';
+import LazyImage from '../../../shared/components/LazyImage.jsx';
 
 export default function AssetPhotoLightbox({ selectedPhotoViewer, setSelectedPhotoViewer }) {
   return (<>{/* FULLSCREEN PHOTO VIEWER / LIGHTBOX MODAL */}
@@ -197,7 +198,7 @@ export default function AssetPhotoLightbox({ selectedPhotoViewer, setSelectedPho
                         flexShrink: 0
                       }}
                     >
-                      <img src={pUrl} alt={`Thumbnail ${pIdx + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      <LazyImage src={pUrl} alt={`Thumbnail ${pIdx + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     </div>
                   ))}
                 </div>

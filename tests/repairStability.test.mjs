@@ -149,6 +149,7 @@ async function hookFixture(overrides = {}) {
     getCachedOfflineData: async () => view.cached,
     enqueueOfflineAction: async () => {},
     getOfflineQueue: async () => [],
+    triggerHaptic: () => {},
     navigator: { get onLine() { return view.online; } },
     crypto: globalThis.crypto,
     ...overrides,

@@ -12,5 +12,10 @@
   "display": "standalone",
   "theme_color": "#0f172a",
   "background_color": "#0f172a",
-  "orientation": "portrait"
+  "orientation": "portrait",
+  "shortcuts": [
+    { "name": "Quét QR thiết bị", "short_name": "Quét QR", "description": "Tra cứu thiết bị bằng serial", "url": "/?shortcut=scan", "icons": [{ "src": "/nasun_logo.png", "sizes": "192x192" }] },
+    { "name": "Tạo phiếu sửa chữa", "short_name": "Phiếu sửa chữa", "description": "Mở danh sách phiếu sửa chữa", "url": "/?shortcut=repair", "icons": [{ "src": "/nasun_logo.png", "sizes": "192x192" }] },
+    { "name": "Báo cáo nhanh", "short_name": "Báo cáo", "description": "Mở tổng quan báo cáo", "url": "/?shortcut=report", "icons": [{ "src": "/nasun_logo.png", "sizes": "192x192" }] }
+  ]
 }

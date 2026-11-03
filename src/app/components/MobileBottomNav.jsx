@@ -1,18 +1,14 @@
 import React from 'react';
-import { 
-  LayoutDashboard, 
-  BookOpen,
-  Cpu, 
-  Wrench,
-  Menu
-} from 'lucide-react';
+import { Cpu, Wrench, CalendarClock, Building2, UserCircle } from 'lucide-react';
+import { triggerHaptic } from '../../shared/platform/haptics.js';
 
-export default function MobileBottomNav({ activeTab, setActiveTab, maintenanceCount, pendingRepairCount, onOpenMobileSidebar }) {
+export default function MobileBottomNav({ activeTab, setActiveTab, maintenanceCount, pendingRepairCount }) {
   const mainItems = [
-    { id: 'dashboard', label: 'Tổng Quan', icon: LayoutDashboard },
-    { id: 'assets',    label: 'Bộ Máy',    icon: Cpu },
-    { id: 'repairs',   label: 'Sửa Chữa',  icon: Wrench, badge: pendingRepairCount },
-    { id: 'techHandbook', label: 'Sổ Tay', icon: BookOpen },
+    { id: 'assets', label: 'Thiết Bị', icon: Cpu },
+    { id: 'repairs', label: 'Sửa Chữa', icon: Wrench, badge: pendingRepairCount },
+    { id: 'maintenance', label: 'Bảo Trì', icon: CalendarClock, badge: maintenanceCount },
+    { id: 'npp', label: 'NPP', icon: Building2 },
+    { id: 'profile', label: 'Tài Khoản', icon: UserCircle },
   ];
 
   return (
@@ -106,7 +102,9 @@ export default function MobileBottomNav({ activeTab, setActiveTab, maintenanceCo
             <button
               key={item.id}
               className={`mnav-btn${isActive ? ' is-active' : ''}`}
-              onClick={() => setActiveTab(item.id)}
+              aria-current={isActive ? 'page' : undefined}
+              aria-label={item.label}
+              onClick={() => { triggerHaptic('light'); setActiveTab(item.id); }}
             >
               <div className="mnav-icon-wrap">
                 <Icon
@@ -129,15 +127,6 @@ export default function MobileBottomNav({ activeTab, setActiveTab, maintenanceCo
           );
         })}
 
-        <button className="mnav-btn" onClick={onOpenMobileSidebar}>
-          <div className="mnav-icon-wrap">
-            <Menu size={20} color="var(--text-muted)" />
-          </div>
-          <span className="mnav-dot" style={{ opacity: 0, pointerEvents: 'none' }} />
-          <span className="mnav-label" style={{ color: 'var(--text-muted)' }}>
-            Danh Mục
-          </span>
-        </button>
       </nav>
     </>
   );

@@ -10,6 +10,7 @@ import { supabase, isSupabaseConfigured, safeQuery } from '../../../shared/data-
 import { INITIAL_REPAIR_TICKETS } from '../../../shared/data/mockData.js';
 import { cacheOfflineData, getCachedOfflineData, enqueueOfflineAction, getOfflineQueue } from '../../../shared/sync/offlineSync.js';
 import { createRepairState } from '../lib/repairState.js';
+import { triggerHaptic } from '../../../shared/platform/haptics.js';
 
 function normalizeProductCategory(category, machineModel = '') {
   const raw = String(category || '').trim();
@@ -33,6 +34,7 @@ export function useRepairs() {
   const [repairTickets, publishRepairTickets] = useState(INITIAL_REPAIR_TICKETS);
   const [loading, setLoading] = useState(false);
   const [loadError,setLoadError]=useState('');
+  const [cacheHydrated,setCacheHydrated]=useState(false);
   const fetchVersion = useRef(0);
   const stateRef = useRef(null);
   if (!stateRef.current) stateRef.current = createRepairState({
@@ -62,11 +64,11 @@ export function useRepairs() {
     const token = repairState.captureRead();
     let disposed = false;
     async function loadCached() {
-      if (navigator.onLine) return;
       try {
         const cached = await getCachedOfflineData('repair_tickets', null);
         if (!disposed && Array.isArray(cached)) await repairState.acceptRead(token, cached, false);
       } catch (error) { recordOperationalError('runtime', error); }
+      finally { if (!disposed) setCacheHydrated(true); }
     }
     loadCached();
     return () => { disposed = true; };
@@ -112,8 +114,8 @@ export function useRepairs() {
   },[repairState]);
 
   useEffect(() => {
-    fetchRepairs();
-  }, [fetchRepairs]);
+    if (cacheHydrated) void fetchRepairs();
+  }, [cacheHydrated, fetchRepairs]);
 
   // Coalesce bursts and keep at most one realtime refresh in flight.
   useEffect(() => {
@@ -135,9 +137,11 @@ export function useRepairs() {
       const result=await submitFieldCommand({kind:'REPAIR_CREATE',entityId:tempId,payload});
       const saved={...localTicket,recordVersion:result.receipt?.version||0,syncPending:result.queued};
       await persistRepairTickets(previous => [saved, ...previous.filter(item => item.id !== saved.id)], owner);
+      triggerHaptic('medium');
       return saved;
     }
     await repairState.update(previous => [localTicket, ...previous], owner, false);
+    triggerHaptic('medium');
     return localTicket;
   }), [withRepairWrite, persistRepairTickets, repairState]);
 
@@ -202,9 +206,11 @@ export function useRepairs() {
       const result=await submitFieldCommand({kind:'REPAIR_EDIT',entityId:id,expected:updates.recordVersion,payload});
       const saved={...repairState.read().find(ticket=>ticket.id===id),...updates,recordVersion:result.receipt?.version||updates.recordVersion,syncPending:result.queued};
       await persistRepairTickets(previous => previous.map(ticket => ticket.id === id ? saved : ticket), owner);
+      triggerHaptic('medium');
       return saved;
     }
     await repairState.update(previous => previous.map(ticket => ticket.id === id ? { ...ticket, ...updates, recordVersion: (ticket.recordVersion || 0) + 1 } : ticket), owner, false);
+    triggerHaptic('medium');
     return updates;
   }), [withRepairWrite, persistRepairTickets, repairState]);
 
@@ -223,6 +229,7 @@ export function useRepairs() {
     }
     if (isSupabaseConfigured) await persistRepairTickets(previous => filterRepairTicketsById(previous, id), owner);
     else await repairState.update(previous => filterRepairTicketsById(previous, id), owner, false);
+    triggerHaptic('medium');
     return result;
   }), [withRepairWrite, persistRepairTickets, repairState]);
 

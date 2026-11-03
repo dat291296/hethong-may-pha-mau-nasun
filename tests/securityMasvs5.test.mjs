@@ -12,6 +12,7 @@ import {
 const profileUrl = new URL('../security/masvs/profile.json', import.meta.url);
 const permissionsUrl = new URL('../security/masvs/platform-permissions.json', import.meta.url);
 const qrUrl = new URL('../src/shared/components/QrScannerModal.jsx', import.meta.url);
+const qrHookUrl = new URL('../src/shared/hooks/useQrScanner.js', import.meta.url);
 const gpsUrl = new URL('../src/shared/utils/gpsHelper.js', import.meta.url);
 const routesUrl = new URL('../src/modules/fieldwork/components/FieldRouteMap.jsx', import.meta.url);
 const compressorUrl = new URL('../src/shared/utils/imageCompressor.js', import.meta.url);
@@ -50,12 +51,17 @@ test('sensitive clipboard requires secure context and an approved purpose', asyn
 });
 
 test('camera is started by an explicit action and cleaned up on close', async () => {
-  const source = await readFile(qrUrl, 'utf8');
-  assert.match(source, /cameraStarted/);
-  assert.match(source, /Cho phép mở camera/);
-  assert.match(source, /if \(!cameraStarted\) return undefined/);
-  assert.match(source, /scannerRef\.current\.clear\(\)/);
-  assert.match(source, /rememberLastUsedCamera: false/);
+  const [source, hook] = await Promise.all([
+    readFile(qrUrl, 'utf8'),
+    readFile(qrHookUrl, 'utf8'),
+  ]);
+  assert.match(source, /onClick=\{start\}/);
+  assert.match(source, /Bật camera để quét/);
+  assert.match(source, /Nhập serial thủ công/);
+  assert.match(hook, /window\.isSecureContext/);
+  assert.match(hook, /await scanner\.start\(\)/);
+  assert.match(hook, /controlsRef\.current\?\.destroy\(\)/);
+  assert.match(hook, /preferredCamera: 'environment'/);
 });
 
 test('geolocation is no longer requested on route page mount or silently downgraded to IP', async () => {

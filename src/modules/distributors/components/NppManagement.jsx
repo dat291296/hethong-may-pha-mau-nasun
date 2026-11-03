@@ -10,7 +10,7 @@ import WorkspaceFilterBar from '../../../shared/components/WorkspaceFilterBar.js
 import { matchesSearch, matchesDateRange, uniqueOptions } from '../../../shared/workspace/workspaceFilters.js';
 import { useWorkspaceState, useWorkspaceScroll } from '../../../shared/hooks/useWorkspaceState.js';
 import React, { useState, useEffect } from 'react';
-import { Phone, MapPin, Cpu, Edit3, Trash2, Camera, ExternalLink, Eye, X, Image as ImageIcon, Layers } from 'lucide-react';
+import { Phone, MapPin, Cpu, Edit3, Trash2, Camera, ExternalLink, Eye, X, Image as ImageIcon, Layers, UserPlus } from 'lucide-react';
 
 import { compressImage } from '../../../shared/utils/imageCompressor.js';
 import { useAuth } from '../../../shared/context/AuthContext.jsx';
@@ -19,6 +19,7 @@ import GpsPermissionModal from '../../../shared/components/GpsPermissionModal.js
 import SafePortal from '../../../shared/components/SafePortal.jsx';
 import { useModalScrollLock } from '../../../shared/hooks/useModalScrollLock.js';
 import { exportExcel } from '../../../shared/utils/excelExport.js';
+import FloatingActionButton from '../../../shared/components/FloatingActionButton.jsx';
 
 export default function NppManagement({ globalSearch = '', loading = false, loadError = '', onReload, coverageFilter = 'ALL', onCoverageFilterChange = () => {}, npps, systemSets, onAddNpp, onEditNpp, onDeleteNpp, onOpenImportModal }) {
   const { user } = useAuth();
@@ -754,6 +755,8 @@ export default function NppManagement({ globalSearch = '', loading = false, load
       )}
 
       {/* GPS Permission Guidance Modal */}
+      <FloatingActionButton icon={UserPlus} label="Thêm nhà phân phối" onClick={handleOpenAdd} />
+
       <GpsPermissionModal 
         isOpen={showGpsPermissionModal}
         onClose={() => setShowGpsPermissionModal(false)}

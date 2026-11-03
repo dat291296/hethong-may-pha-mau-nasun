@@ -39,7 +39,7 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
       window.dispatchEvent(new CustomEvent('nasun-field-notice',{detail:'Ứng dụng đã có phiên bản mới. Lưu bản nháp, đóng các tab rồi mở lại khi thuận tiện.'}));
     });
 
-    navigator.serviceWorker.register('/sw.js?v=7.0', { updateViaCache: 'none' })
+    navigator.serviceWorker.register('/sw.js?v=8.0', { updateViaCache: 'none' })
       .then(reg => {
         const notify=()=>window.dispatchEvent(new Event('nasun-app-update-ready'));
         if(reg.waiting)notify();

@@ -26,12 +26,14 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.9",
+    "@use-gesture/react": "^10.3.1",
     "exceljs": "^4.4.0",
-    "html5-qrcode": "^2.3.8",
     "lucide-react": "^1.27.0",
+    "qr-scanner": "^1.4.2",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-is": "^19.2.8",
+    "react-window": "^1.8.11",
     "recharts": "^3.10.1"
   },
   "devDependencies": {

@@ -15,6 +15,25 @@ import {replayFieldCommand} from '../../modules/fieldwork/lib/fieldCommandClient
 let activeSyncPromise = null;
 const deviceIdPools = new Map();
 const syncChannel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('nasun-sync-v2') : null;
+const SYNC_HISTORY_KEY = 'sync_history:v1';
+
+async function appendSyncHistory(entry) {
+  try {
+    const owner = getOfflineOwner();
+    const history = await getCache(SYNC_HISTORY_KEY, []);
+    if (owner !== getOfflineOwner()) return false;
+    const next = [{ at: Date.now(), ...entry }, ...(Array.isArray(history) ? history : [])].slice(0, 200);
+    return await setCache(SYNC_HISTORY_KEY, next);
+  } catch {
+    console.warn('[OfflineSync] Could not persist sync history.');
+    return false;
+  }
+}
+
+export async function getSyncHistory() {
+  const history = await getCache(SYNC_HISTORY_KEY, []);
+  return Array.isArray(history) ? history : [];
+}
 
 function emitQueueUpdated(broadcast = true) {
   window.dispatchEvent(new Event('offline-queue-updated'));
@@ -785,6 +804,7 @@ async function processOfflineQueue(onStatusChange, assertLease = () => {}) {
       // second pass links it after ASSEMBLE_SET actions have completed.
       if (!deferredDeviceLinks.some(link => link.queueItem.id === item.id)) {
         await dequeueOfflineAction(item.id);
+        await appendSyncHistory({ result: 'success', action: item.action });
         successCount++;
         if (onStatusChange) onStatusChange('syncing', queue.length - successCount);
       }
@@ -793,6 +813,7 @@ async function processOfflineQueue(onStatusChange, assertLease = () => {}) {
       if (getOfflineOwner() !== ownerId) return false;
       console.error(`[OfflineSync] Failed to sync action ${item.id}:`, err);
       await saveQueueState(item, classifySyncError(err), err);
+      await appendSyncHistory({ result: 'failure', action: item.action, errorCode: String(err?.code || 'SYNC_OPERATION_FAILED').slice(0, 80) });
       syncErrors.push(describeQueueError(item, err));
       if (onStatusChange) onStatusChange('syncing', queue.length - successCount, userErrorMessage(err));
     }
@@ -852,6 +873,7 @@ async function processOfflineQueue(onStatusChange, assertLease = () => {}) {
       console.info(`[OfflineSync] Relinked ${link.table}.${link.id} from ${link.set_code} to ${resolvedSetCode}.`);
     }
     await dequeueOfflineAction(link.queueItem.id);
+    await appendSyncHistory({ result: 'success', action: link.queueItem.action });
     successCount++;
   }
 

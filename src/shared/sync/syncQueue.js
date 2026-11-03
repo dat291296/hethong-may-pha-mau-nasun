@@ -57,7 +57,8 @@ export function classifySyncError(error) {
 }
 
 export function getRetryDelay(attempts) {
-  return Math.min(MAX_RETRY_DELAY_MS, 2000 * (2 ** Math.min(Number(attempts || 0), 8)));
+  const attempt = Math.max(1, Number(attempts || 1));
+  return Math.min(MAX_RETRY_DELAY_MS, 5000 * (3 ** Math.min(attempt - 1, 8)));
 }
 
 export function resolveFailureState(item, error, now = Date.now()) {

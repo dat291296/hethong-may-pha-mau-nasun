@@ -6,6 +6,7 @@ import {
   ArrowLeftRight, 
   CalendarClock, 
   FileText,
+  FileClock,
   Wrench,
   X,
   UserCheck,
@@ -55,6 +56,7 @@ export default function Sidebar({ activeTab, setActiveTab, maintenanceCount, pen
       icon: FileText,
       items: [
         { id: 'auditLogs', label: 'Nhật Ký Tác Nghiệp', icon: FileText },
+        { id: 'syncLog', label: 'Lịch Sử Đồng Bộ', icon: FileClock },
         ...(role === 'admin' ? [{ id: 'users', label: 'Quản Lý Tài Khoản', icon: UserCheck }] : [])
       ]
     }

@@ -23,6 +23,7 @@ import {
 } from 'recharts';
 import { formatDateVN } from '../../../shared/utils/dateUtils.js';
 import { getSystemSetMissingFields } from '../../equipment/utils/systemSetValidation.js';
+import FloatingActionButton from '../../../shared/components/FloatingActionButton.jsx';
 
 const MAINTENANCE_REGIONS = ['Miền Bắc', 'Miền Trung', 'Miền Nam'];
 
@@ -228,6 +229,7 @@ export default function MaintenanceSchedule({ loading = false, onReturnToProfile
 
   // Sort strictly in natural ascending order from 1 to N, top to bottom
   const sortedSets = [...filteredSets].sort((a, b) => naturalSortCode(a, b, 'setCode'));
+  const nextMaintenanceSet = sortedSets.find(set => ['OVERDUE', 'DUE_SOON'].includes(set.statusType) && canEditRegion(user, set.region)) || sortedSets.find(set => canEditRegion(user, set.region));
 
   const totalPages = Math.ceil(sortedSets.length / pageSize) || 1;
   const paginatedSets = sortedSets.slice(
@@ -557,6 +559,8 @@ export default function MaintenanceSchedule({ loading = false, onReturnToProfile
       </div>
 
       {selectedSet && <MaintenanceChecklist machine={selectedSet} onSave={onCompleteMaintenance} onReturnToProfile={onReturnToProfile} onClose={() => {setSelectedSet(null);onReturnToProfile?.();}} />}
+
+      <FloatingActionButton icon={Wrench} label="Xác nhận bảo trì" onClick={() => nextMaintenanceSet && setSelectedSet(nextMaintenanceSet)} disabled={!nextMaintenanceSet} />
 
       {/* EDIT MAINTENANCE MODAL */}
       {editingMaint && (
