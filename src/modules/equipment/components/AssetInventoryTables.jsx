@@ -1,9 +1,27 @@
 import { EmptyState } from '../../../shared/components/DataState.jsx';
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Edit3, Trash2, Camera, Image as ImageIcon, Eye } from 'lucide-react';
 import { getSystemSetMissingFields } from '../utils/systemSetValidation.js';
+import LazyImage from '../../../shared/components/LazyImage.jsx';
+import { useSwipeAction } from '../../../shared/hooks/useSwipeAction.js';
 
-export default function AssetInventoryTables({ onResetFilters, activeSubTab, computers, dispensers, filteredSets, getAssignedInfo, getPaginatedList, getSetPhotos, handleDeleteDevice, handleDeleteSet, handleOpenEditDevice, handleOpenEditSet, incompleteSystemSets, looseInventoryGroups, mixers, printers, renderDeviceFilterBar, renderIssuedSerial, renderPaginationBar, setSelectedPhotoViewer, setSelectedSetDetails, sortedComputers, sortedDispensers, sortedMixers, sortedPrinters, stockBundleSummary, stockSets }) {
+function SwipeableAssetCard({ children, onSwipeRight, onSwipeLeft, disabled }) {
+  const bind = useSwipeAction({ onSwipeRight, onSwipeLeft, disabled });
+  return <div {...bind()} className="mobile-card swipeable-card">{children}</div>;
+}
+
+export default function AssetInventoryTables({ onResetFilters, activeSubTab, computers, dispensers, filteredSets, getAssignedInfo, getPaginatedList, getSetPhotos, handleDeleteDevice, handleDeleteSet, handleOpenEditDevice, handleOpenEditSet, incompleteSystemSets, looseInventoryGroups, mixers, printers, renderDeviceFilterBar, renderIssuedSerial, renderPaginationBar, setSelectedPhotoViewer, setSelectedSetDetails, sortedComputers, sortedDispensers, sortedMixers, sortedPrinters, stockBundleSummary, stockSets, hasNextPage = false, loadNextPage, onRequestRepair, canCreateRepair = false }) {
+  const infiniteSentinelRef = useRef(null);
+  useEffect(() => {
+    const sentinel = infiniteSentinelRef.current;
+    const root = sentinel?.closest('.nasun-workspace');
+    if (!sentinel || !root || !hasNextPage || !('IntersectionObserver' in window) || window.innerWidth > 768) return undefined;
+    const observer = new IntersectionObserver(entries => {
+      if (entries.some(entry => entry.isIntersecting)) loadNextPage?.();
+    }, { root, rootMargin: '0px 0px 20% 0px', threshold: 0 });
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [activeSubTab, hasNextPage, loadNextPage]);
   const count = ({ comboSets: filteredSets, dispensers: sortedDispensers, mixers: sortedMixers, computers: sortedComputers, printers: sortedPrinters }[activeSubTab] || []).length;
   return (<>{count === 0 && <EmptyState title="Chưa có thiết bị phù hợp" description="Bỏ bộ lọc hoặc chọn Thêm thiết bị để ghi nhận máy trong kho." onAction={onResetFilters} />}{/* VIEW 1: COMBO SETS MANAGEMENT */}
       {activeSubTab === 'comboSets' && (
@@ -111,11 +129,10 @@ export default function AssetInventoryTables({ onResetFilters, activeSubTab, com
                                   }}
                                   title="Bấm để phóng to xem đầy đủ ảnh"
                                 >
-                                  <img
+                                  <LazyImage
                                     src={imgUrl}
                                     alt={`Ảnh ${set.setCode}`}
                                     style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                    loading="lazy"
                                   />
                                 </div>
                               ))}
@@ -242,7 +259,7 @@ export default function AssetInventoryTables({ onResetFilters, activeSubTab, com
               const photos = getSetPhotos(set);
 
               return (
-                <div className="mobile-card" key={set.id || set.setCode}>
+                <SwipeableAssetCard key={set.id || set.setCode} onSwipeRight={() => setSelectedSetDetails(set)} onSwipeLeft={() => canCreateRepair && onRequestRepair?.(set, 'equipment')} disabled={!canCreateRepair}>
                   <div className="mobile-card-header">
                     <div>
                       <span className="mobile-card-title" style={{ color: 'var(--accent-cyan)' }}>{set.setCode}</span>
@@ -317,7 +334,7 @@ export default function AssetInventoryTables({ onResetFilters, activeSubTab, com
                         </div>
                         <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
                           {photos.map((url, idx) => (
-                            <img
+                            <LazyImage
                               key={idx}
                               src={url}
                               alt={`Ảnh hiện trường ${idx + 1}`}
@@ -336,6 +353,7 @@ export default function AssetInventoryTables({ onResetFilters, activeSubTab, com
                                 flexShrink: 0,
                                 cursor: 'pointer'
                               }}
+                              fit="cover"
                             />
                           ))}
                         </div>
@@ -357,7 +375,7 @@ export default function AssetInventoryTables({ onResetFilters, activeSubTab, com
                       <span>Xóa</span>
                     </button>
                   </div>
-                </div>
+                </SwipeableAssetCard>
               );
             })}
           </div>
@@ -887,4 +905,6 @@ export default function AssetInventoryTables({ onResetFilters, activeSubTab, com
         </div>
       )}
 
+      <div ref={infiniteSentinelRef} className="asset-infinite-sentinel" aria-hidden="true" />
+      {hasNextPage && <div className="asset-load-more-fallback"><button type="button" className="btn btn-secondary" onClick={loadNextPage}>Tải thêm thiết bị</button></div>}
       </>);}

@@ -11,6 +11,9 @@ import FieldSyncStatus from '../modules/fieldwork/components/FieldSyncStatus.jsx
 import WorkflowModal from '../modules/workflows/components/WorkflowModal';
 import HandoverPrintModal from '../modules/workflows/components/HandoverPrintModal';
 import MobileBottomNav from './components/MobileBottomNav';
+import PwaInstallPrompt from '../shared/components/PwaInstallPrompt.jsx';
+import NotificationPermissionPrompt from '../shared/components/NotificationPermissionPrompt.jsx';
+import OfflinePage from '../shared/components/OfflinePage.jsx';
 import LoginModal from '../shared/components/LoginModal';
 import { useSensitiveActionGate } from '../shared/components/SensitiveActionGate.jsx';
 import { useAuth } from '../shared/context/AuthContext';
@@ -40,6 +43,8 @@ const ExcelImportModal = lazy(() => import('../modules/imports/components/ExcelI
 const UserManagement = lazy(() => import('../modules/users/components/UserManagement'));
 const TechHandbook = lazy(() => import('../modules/handbook/components/TechHandbook'));
 const FieldRouteMap = lazy(() => import('../modules/fieldwork/components/FieldRouteMap'));
+const ProfileScreen = lazy(() => import('../modules/users/components/ProfileScreen.jsx'));
+const SyncLogScreen = lazy(() => import('../modules/fieldwork/components/SyncLogScreen.jsx'));
 
 function AssetLoadingSkeleton() {
   return (
@@ -53,6 +58,21 @@ function AssetLoadingSkeleton() {
       </div>
     </section>
   );
+}
+
+function ModuleLoadingSkeleton({ type }) {
+  if (type === 'assets') return <AssetLoadingSkeleton />;
+  const labels = { dashboard: 'tổng quan', npp: 'nhà phân phối', repairs: 'phiếu sửa chữa', maintenance: 'lịch bảo trì' };
+  const metricCount = type === 'dashboard' ? 4 : type === 'maintenance' ? 3 : 0;
+  const rowCount = type === 'repairs' ? 3 : type === 'maintenance' ? 5 : type === 'npp' ? 4 : 0;
+  return <section className={`module-loading-skeleton ${type}`} role="status" aria-live="polite" aria-busy="true" aria-label={`Đang tải ${labels[type] || 'dữ liệu'}`}>
+    <div className="skeleton module-skeleton-heading" />
+    {type === 'dashboard' && <div className="module-skeleton-metrics">{Array.from({ length: metricCount }, (_, index) => <div className="glass-panel module-skeleton-metric" key={index}><div className="skeleton" /><div className="skeleton" /></div>)}</div>}
+    {type === 'npp' && <div className="module-skeleton-npp-grid">{Array.from({ length: rowCount }, (_, index) => <div className="glass-panel module-skeleton-npp" key={index}><div className="skeleton" /><div className="skeleton" /><div className="skeleton" /></div>)}</div>}
+    {type === 'repairs' && <><div className="skeleton module-skeleton-filter" />{Array.from({ length: rowCount }, (_, index) => <div className="glass-panel module-skeleton-repair" key={index}><div className="skeleton" /><div className="skeleton" /><div className="skeleton" /></div>)}</>}
+    {type === 'maintenance' && <><div className="module-skeleton-metrics">{Array.from({ length: metricCount }, (_, index) => <div className="glass-panel module-skeleton-metric" key={index}><div className="skeleton" /><div className="skeleton" /></div>)}</div><div className="glass-panel module-skeleton-table">{Array.from({ length: rowCount }, (_, index) => <div className="skeleton" key={index} />)}</div></>}
+    {type === 'dashboard' && <div className="module-skeleton-charts"><div className="glass-panel module-skeleton-chart"><div className="skeleton" /></div><div className="glass-panel module-skeleton-chart"><div className="skeleton" /></div></div>}
+  </section>;
 }
 
 function normalizeWarehouseRegion(region) {
@@ -79,7 +99,12 @@ function AppWorkspace() {
     await requireAuthentication();
     return deleteSystemSet(setCode);
   };
+  const [startupShortcut, setStartupShortcut] = useState(() => new URLSearchParams(window.location.search).get('shortcut') || '');
   const [activeTab, setActiveTab] = useState(() => {
+    const shortcut = new URLSearchParams(window.location.search).get('shortcut');
+    if (shortcut === 'scan') return 'assets';
+    if (shortcut === 'repair') return 'repairs';
+    if (shortcut === 'report') return 'dashboard';
     try {
       const savedTab = window.localStorage.getItem('nasun_active_tab');
       if (savedTab === 'technicianWork') return 'dashboard';
@@ -88,6 +113,13 @@ function AppWorkspace() {
       return 'dashboard';
     }
   });
+
+  useEffect(() => {
+    if (!startupShortcut) return;
+    const url = new URL(window.location.href);
+    url.searchParams.delete('shortcut');
+    window.history.replaceState({}, document.title, `${url.pathname}${url.search}${url.hash}`);
+  }, [startupShortcut]);
   const [globalSearch, setGlobalSearch] = useState('');
   const [qcUsers, setQcUsers] = useState([]);
   const [regionalSelection, setRegionalSelection] = useState(null);
@@ -829,21 +861,21 @@ function AppWorkspace() {
         />
 
         {/* Dynamic View Content */}
-        <FieldSyncStatus dataLoading={assetsLoading || nppsLoading || repairsLoading} dataError={[assetsLoadError, nppsLoadError, repairsLoadError].filter(Boolean).join(' ')} />
+        <FieldSyncStatus dataLoading={assetsLoading || nppsLoading || repairsLoading} dataError={[assetsLoadError, nppsLoadError, repairsLoadError].filter(Boolean).join(' ')} onOpenOfflinePage={() => setActiveTab('offline')} />
         {(nppsLoadError || assetsLoadError) && <div className="alert alert-warning" role="alert" style={{ margin: '12px 28px 0' }}>
           <div>{[nppsLoadError, assetsLoadError].filter(Boolean).join(' ')}</div>
           <button type="button" className="btn btn-secondary btn-sm" disabled={nppsLoading || assetsLoading} onClick={() => Promise.allSettled([refetchNpps(), refetchAssets()])}>Tải lại dữ liệu NPP và bộ máy</button>
         </div>}
         <main key={activeTab} className="page-transition nasun-workspace" data-page={activeTab} style={{ flex: 1, padding: '28px', overflowY: 'auto' }}>
-          {!['users', 'techHandbook'].includes(activeTab) && <RegionalWorkspaceBar key={regionalIdentity} user={user} region={workspaceRegion} onChange={setWorkspaceRegion} counts={regionCounts} compact={activeTab === 'npp'} extra={activeTab === 'npp' ? <label className="coverage-inline">Ghép bộ<select aria-label="Lọc NPP theo tình trạng ghép bộ" className="form-select" value={nppCoverageFilter} onChange={event => setNppCoverageFilter(event.target.value)}><option value="ALL">Tất cả NPP</option><option value="ASSIGNED">Đã ghép bộ</option><option value="UNASSIGNED">Chưa ghép bộ</option></select></label> : null} />}
-          <WorkspaceRegionContext.Provider value={workspaceRegion}><Suspense key={`${regionalIdentity}:${workspaceRegion}`} fallback={<div className="glass-panel" style={{ padding: '28px', color: 'var(--text-muted)' }}>Đang tải màn hình...</div>}>
+          {!['users', 'techHandbook', 'profile', 'syncLog', 'offline'].includes(activeTab) && <RegionalWorkspaceBar key={regionalIdentity} user={user} region={workspaceRegion} onChange={setWorkspaceRegion} counts={regionCounts} compact={activeTab === 'npp'} extra={activeTab === 'npp' ? <label className="coverage-inline">Ghép bộ<select aria-label="Lọc NPP theo tình trạng ghép bộ" className="form-select" value={nppCoverageFilter} onChange={event => setNppCoverageFilter(event.target.value)}><option value="ALL">Tất cả NPP</option><option value="ASSIGNED">Đã ghép bộ</option><option value="UNASSIGNED">Chưa ghép bộ</option></select></label> : null} />}
+          <WorkspaceRegionContext.Provider value={workspaceRegion}><Suspense key={`${regionalIdentity}:${workspaceRegion}`} fallback={<ModuleLoadingSkeleton type={activeTab} />}>
           {machineProfileReturn && ['repairs', 'maintenance'].includes(activeTab) && (
             <div className="glass-panel" style={{ padding: 12, marginBottom: 16 }}>
               <button className="btn btn-secondary" onClick={() => navigateWorkspace('assets', machineProfileReturn.search, machineProfileReturn.filter)}>← Quay lại hồ sơ máy {machineProfileReturn.machine.setCode}</button>
             </div>
           )}
 
-          {activeTab === 'dashboard' && ((!assetSummaryReady || nppsLoading && !npps.length || repairsLoading && !repairTickets.length) ? <AssetLoadingSkeleton /> : (
+          {activeTab === 'dashboard' && ((!assetSummaryReady || nppsLoading && !npps.length || repairsLoading && !repairTickets.length) ? <ModuleLoadingSkeleton type="dashboard" /> : (
             <Dashboard
               replacementEvents={replacementHistory.events}
               replacementHistoryError={replacementHistory.error}
@@ -864,7 +896,7 @@ function AppWorkspace() {
             />
           ))}
 
-          {activeTab === 'npp' && (!assetDetailsReady ? <AssetLoadingSkeleton /> : (
+          {activeTab === 'npp' && (!assetDetailsReady ? <ModuleLoadingSkeleton type="npp" /> : (
             <NppManagement
               loading={nppsLoading}
               loadError={nppsLoadError}
@@ -881,7 +913,7 @@ function AppWorkspace() {
             />
           ))}
 
-          {activeTab === 'assets' && (!assetDetailsReady ? <AssetLoadingSkeleton /> : (
+          {activeTab === 'assets' && (!assetDetailsReady ? <ModuleLoadingSkeleton type="assets" /> : (
             <AssetManagement
               catalog={{ systemSets, npps, dispensers, mixers, computers, printers }}
               globalSearch={globalSearch}
@@ -901,6 +933,7 @@ function AppWorkspace() {
               onAssembleSet={handleAssembleSet}
               onAddStockDevice={handleAddStockDevice}
               onReplaceEquipment={handleReplaceEquipment}
+              onReload={refetchAssets}
               replacementEvents={replacementHistory.events}
               replacementHistoryError={replacementHistory.error}
               onEditDevice={handleEditDevice}
@@ -908,10 +941,16 @@ function AppWorkspace() {
               onOpenImportModal={openImportModal}
               onEditSet={handleUpdateRegionalSet}
               onDeleteSet={handleSensitiveSetDeletion}
+              openScannerOnMount={startupShortcut === 'scan'}
+              onScannerOpened={() => setStartupShortcut('')}
             />
           ))}
 
-          {activeTab === 'repairs' && (!assetSummaryReady ? <AssetLoadingSkeleton /> : (
+          {activeTab === 'profile' && <ProfileScreen onOpenSyncLog={() => setActiveTab('syncLog')} onOpenNotificationSettings={() => { if ('Notification' in window && Notification.permission === 'default') void Notification.requestPermission(); }} />}
+          {activeTab === 'syncLog' && <SyncLogScreen onBack={() => setActiveTab('profile')} />}
+          {activeTab === 'offline' && <OfflinePage systemSets={regionalData.systemSets} repairTickets={regionalData.repairTickets} npps={regionalData.npps} onNavigate={setActiveTab} />}
+
+          {activeTab === 'repairs' && (!assetSummaryReady ? <ModuleLoadingSkeleton type="repairs" /> : (
             <RepairWorkspaceBoundary><DeviceRepairProcessing
               loading={repairsLoading}
               loadError={repairsLoadError}
@@ -1003,7 +1042,7 @@ function AppWorkspace() {
             </div>
           )}
 
-          {activeTab === 'maintenance' && (!assetSummaryReady ? <AssetLoadingSkeleton /> : (
+          {activeTab === 'maintenance' && (!assetSummaryReady ? <ModuleLoadingSkeleton type="maintenance" /> : (
             <MaintenanceSchedule
               loading={assetsLoading}
               globalSearch={globalSearch}
@@ -1046,6 +1085,8 @@ function AppWorkspace() {
         pendingRepairCount={scopedPendingRepairCount}
         onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
       />
+      <PwaInstallPrompt />
+      <NotificationPermissionPrompt />
 
       {/* Workflow Execution Modal */}
       {workflowMode && (!assetDetailsReady ? <div className="modal-overlay"><div className="modal-content"><AssetLoadingSkeleton /><p role="alert">{assetsLoadError}</p><button className="btn btn-secondary" onClick={() => setWorkflowMode(null)}>Đóng</button><button className="btn btn-primary" disabled={assetsLoading} onClick={() => void ensureAssetDetails()}>Tải lại</button></div></div> : (

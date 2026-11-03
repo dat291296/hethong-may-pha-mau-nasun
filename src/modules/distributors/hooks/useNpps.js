@@ -18,18 +18,7 @@ export function useNpps() {
   const [loading, setLoading] = useState(false);
   const [error, setError]   = useState(null);
   const fetchVersion = useRef(0);
-
-  // Hydrate cache from IndexedDB on mount
-  useEffect(() => {
-    async function loadCached() {
-      if (navigator.onLine) return;
-      const cached = await getCachedOfflineData('npps', null);
-      if (cached && cached.length > 0) {
-        persistNpps(cached, setNpps);
-      }
-    }
-    loadCached();
-  }, []);
+  const cacheHydrated = useRef(false);
 
   // ── Fetch all NPPs ─────────────────────────────────────────────────────────
   const fetchNpps = useCallback(async () => {
@@ -44,7 +33,7 @@ export function useNpps() {
       }
       return;
     }
-    setLoading(true);
+    setLoading(!cacheHydrated.current);
     setError(null);
     try {
       const pendingQueue = await getOfflineQueue();
@@ -88,7 +77,26 @@ export function useNpps() {
     }
   }, []);
 
-  useEffect(() => { fetchNpps(); }, [fetchNpps]);
+  // Hydrate local data first, then refresh it in the background.
+  useEffect(() => {
+    let disposed = false;
+    async function loadCached() {
+      const owner = getOfflineOwner();
+      try {
+        const cached = await getCachedOfflineData('npps', null);
+        if (!disposed && owner === getOfflineOwner() && Array.isArray(cached)) setNpps(cached);
+      } catch (cacheError) {
+        recordOperationalError('runtime', cacheError);
+      } finally {
+        if (!disposed) {
+          cacheHydrated.current = true;
+          void fetchNpps();
+        }
+      }
+    }
+    void loadCached();
+    return () => { disposed = true; };
+  }, [fetchNpps]);
 
   // ── Realtime subscription ─────────────────────────────────────────────────
   useEffect(() => {

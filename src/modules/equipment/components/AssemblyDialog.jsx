@@ -4,6 +4,7 @@ import DraftNotice from '../../../shared/components/DraftNotice.jsx';
 import React from 'react';
 import SafePortal from '../../../shared/components/SafePortal.jsx';
 import { PlusCircle, Camera } from 'lucide-react';
+import LazyImage from '../../../shared/components/LazyImage.jsx';
 
 export default function AssemblyDialog({ assembling, assemblyDraft, assemblyError, closeAssembly, computers, dispensers, existingNppSets, handleAssembleSubmit, handleOpenAddDevice, handleRemoveNewSetPhoto, handleUploadNewSetPhotos, isMissingSerial, mixers, naturalSortCode, newSetData, nppSearchTerm, npps, printers, qcUsers, setNewSetData, setNppSearchTerm, setSelectedPhotoViewer, setShowAssembleModal, showAssembleModal }) {
   return (<>{/* Assemble Combo Modal */}
@@ -247,7 +248,7 @@ export default function AssemblyDialog({ assembling, assemblyDraft, assemblyErro
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(75px, 1fr))', gap: '8px', marginTop: '6px' }}>
                               {newSetData.installationPhotos.map((url, idx) => (
                                 <div key={idx} style={{ position: 'relative', width: '100%', height: '65px', borderRadius: '6px', overflow: 'hidden', border: '1px solid var(--border-color)' }}>
-                                  <img
+                                  <LazyImage
                                     src={url}
                                     alt={`Ảnh ${idx + 1}`}
                                     style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'pointer' }}

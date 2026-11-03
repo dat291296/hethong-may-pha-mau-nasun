@@ -3,6 +3,7 @@ import DraftNotice from '../../../shared/components/DraftNotice.jsx';
 import React from 'react';
 import SafePortal from '../../../shared/components/SafePortal.jsx';
 import { PlusCircle, Camera } from 'lucide-react';
+import LazyImage from '../../../shared/components/LazyImage.jsx';
 
 export default function SystemSetEditDialog({ closeSetEditor, editNppSearchTerm, editSetFormData, editingSet, handleEditSetSubmit, handleRemoveEditSetPhoto, handleUploadEditSetPhotos, isSavingDevice, npps, qcUsers, selectedSetDetails, setDraft, setEditNppSearchTerm, setEditSetFormData, setSaving, setSelectedPhotoViewer }) {
   return (<>{/* EDIT SYSTEM SET MODAL */}
@@ -184,7 +185,7 @@ export default function SystemSetEditDialog({ closeSetEditor, editNppSearchTerm,
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(85px, 1fr))', gap: '8px', marginTop: '6px' }}>
                         {editSetFormData.installationPhotos.map((url, idx) => (
                           <div key={idx} style={{ position: 'relative', width: '100%', height: '75px', borderRadius: '6px', overflow: 'hidden', border: '1px solid var(--border-color)' }}>
-                            <img
+                            <LazyImage
                               src={url}
                               alt={`Ảnh ${idx + 1}`}
                               style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'pointer' }}

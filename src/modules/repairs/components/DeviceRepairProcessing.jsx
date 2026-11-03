@@ -62,6 +62,7 @@ import { useModalScrollLock } from '../../../shared/hooks/useModalScrollLock.js'
 import { exportExcel } from '../../../shared/utils/excelExport.js';
 import { useFormDraft } from '../../../shared/hooks/useFormDraft';
 import { useWorkspaceState, useWorkspaceScroll } from '../../../shared/hooks/useWorkspaceState';
+import FloatingActionButton from '../../../shared/components/FloatingActionButton.jsx';
 
 export default function DeviceRepairProcessing({ globalSearch = '', initialFilter = 'ALL',
   repairTickets = [],
@@ -876,6 +877,8 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
       <RepairEditorDialog PRODUCT_CATEGORIES={PRODUCT_CATEGORIES} addErrorPhotos={addErrorPhotos} closeForm={closeForm} currentAssignedSet={currentAssignedSet} draft={draft} editingTicket={editingTicket} errorPhotoInput={errorPhotoInput} filteredNpps={filteredNpps} formData={formData} handleCategoryChange={handleCategoryChange} handleSelectNpp={handleSelectNpp} handleSubmit={handleSubmit} nppSearchTerm={nppSearchTerm} npps={npps} onReturnToProfile={onReturnToProfile} photoBusy={photoBusy} qcUsers={qcUsers} saveError={saveError} saving={saving} setFormData={setFormData} setNppSearchTerm={setNppSearchTerm} setSaveError={setSaveError} showModal={showModal} user={user} />
 
       <RepairDetailDialog EMPTY_SERVICE_CHECKLIST={EMPTY_SERVICE_CHECKLIST} qcUsers={qcUsers} selectedTicket={selectedTicket} setSelectedTicket={setSelectedTicket} />
+
+      <FloatingActionButton icon={Wrench} label="Tạo phiếu sửa chữa" onClick={handleOpenAdd} />
 
           </div>
   );

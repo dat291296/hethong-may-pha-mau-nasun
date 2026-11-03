@@ -6,6 +6,7 @@ import { MachineProfileSummary, MachineProfileHistory } from './MachineProfileSu
 import React from 'react';
 import SafePortal from '../../../shared/components/SafePortal.jsx';
 import { Camera, ZoomIn, Upload } from 'lucide-react';
+import LazyImage from '../../../shared/components/LazyImage.jsx';
 
 export default function MachineProfileDialog({ can, computers, dispensers, editingDevice, editingSet, getSetPhotos, handleOpenEditDevice, handleOpenEditSet, machineProfile, mixers, onReplaceEquipment, onRequestMaintenance, onRequestRepair, printers, profileTab, replacement, replacementEvents, replacementHistoryError, selectedSetDetails, setProfileTab, setReplacement, setSelectedPhotoViewer, setSelectedSetDetails, systemSets, user }) {
   return (<>{/* COMBO SET DETAIL & FULL PHOTO GALLERY MODAL */}
@@ -94,11 +95,10 @@ export default function MachineProfileDialog({ can, computers, dispensers, editi
                           }}
                           title="Bấm để phóng to xem đầy đủ ảnh"
                         >
-                          <img
+                          <LazyImage
                             src={url}
                             alt={`Ảnh hiện trường ${idx + 1}`}
                             style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                            loading="lazy"
                           />
                           <div style={{
                             position: 'absolute',

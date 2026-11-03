@@ -18,19 +18,24 @@ import { resolveMachine, resolveMachineCode } from '../lib/machineWorkspace';
 import { resolveMachineProfile, sameMachine } from '../lib/machineProfile.js';
 import { recordOperationalError } from '../../../shared/diagnostics/operationalDiagnostics.js';
 import { useFormDraft } from '../../../shared/hooks/useFormDraft.js';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { useAuth } from '../../../shared/context/AuthContext.jsx';
 import { supabase, isSupabaseConfigured } from '../../../shared/data-access/supabase.js';
 import { generateNextSetCode } from '../hooks/useAssets.js';
 import { Cpu, Flame, Monitor, Printer, PlusCircle, Layers, FileSpreadsheet } from 'lucide-react';
 import { compressImage } from '../../../shared/utils/imageCompressor.js';
-import QrScannerModal from '../../../shared/components/QrScannerModal';
+import DeviceLookupDialog from './DeviceLookupDialog.jsx';
+import FloatingActionButton from '../../../shared/components/FloatingActionButton.jsx';
 import { useModalScrollLock } from '../../../shared/hooks/useModalScrollLock.js';
 import { exportExcel } from '../../../shared/utils/excelExport.js';
 import { getSystemSetMissingFields } from '../utils/systemSetValidation.js';
 import { useWorkspaceState, useWorkspaceScroll } from '../../../shared/hooks/useWorkspaceState';
+import { usePullToRefresh } from '../../../shared/hooks/usePullToRefresh.js';
 
-export default function AssetManagement({ onReplaceEquipment,replacementEvents=[],replacementHistoryError='', initialProfile, onProfileRestored, globalSearch = '', initialFilter = 'ALL', repairTickets = [], auditLogs = [], onRequestRepair, onRequestMaintenance,
+const QrScannerModal = lazy(() => import('../../../shared/components/QrScannerModal.jsx'));
+
+export default function AssetManagement({ onReplaceEquipment,replacementEvents=[],replacementHistoryError='', initialProfile, onProfileRestored, globalSearch = '', initialFilter = 'ALL', repairTickets = [], auditLogs = [], onRequestRepair, onRequestMaintenance, onReload,
+  openScannerOnMount = false, onScannerOpened,
   systemSets,
   catalog,
   npps = [],
@@ -47,6 +52,7 @@ export default function AssetManagement({ onReplaceEquipment,replacementEvents=[
   onDeleteSet
 }) {
   const { user, can } = useAuth();
+  const { pullDistance, refreshing, onTouchStart, onTouchMove, onTouchEnd } = usePullToRefresh(onReload, { disabled: !onReload });
   const fullCatalog = catalog || { systemSets, npps, dispensers, mixers, computers, printers };
   const exportCurrentInventory = () => {
     const config = {
@@ -136,9 +142,23 @@ export default function AssetManagement({ onReplaceEquipment,replacementEvents=[
   }, [globalSearch, targetSetFound, setModelFilter, setStatusFilter]);
   const [currentPage, setCurrentPage] = useWorkspaceState('assets:page', 1);
   const [pageSize, setPageSize] = useState(10);
+  const [isMobileViewport, setIsMobileViewport] = useState(() => window.matchMedia('(max-width: 768px)').matches);
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 768px)');
+    const update = () => setIsMobileViewport(media.matches);
+    media.addEventListener?.('change', update);
+    return () => media.removeEventListener?.('change', update);
+  }, []);
   const [showAssembleModal, setShowAssembleModal] = useState(false);
   const [showScanSerialModal, setShowScanSerialModal] = useState(false);
   const [scanTargetField, setScanTargetField] = useState('add');
+  useEffect(() => {
+    if (!openScannerOnMount) return;
+    setScanError('');
+    setScanTargetField('profile');
+    setShowScanSerialModal(true);
+    onScannerOpened?.();
+  }, [openScannerOnMount, onScannerOpened]);
   const [nppSearchTerm, setNppSearchTerm] = useState('');
   const [editNppSearchTerm, setEditNppSearchTerm] = useState('');
 
@@ -176,6 +196,7 @@ export default function AssetManagement({ onReplaceEquipment,replacementEvents=[
 
   // Set Details & Full Photo Gallery Modal State
   const [selectedSetDetails, setSelectedSetDetails] = useState(null);
+  const [selectedDeviceLookup, setSelectedDeviceLookup] = useState(null);
   const [replacement,setReplacement]=useState(null);
   const openedSearch = React.useRef('');
   const [profileTab, setProfileTab] = useState('equipment');
@@ -202,14 +223,51 @@ export default function AssetManagement({ onReplaceEquipment,replacementEvents=[
     if (machine) { openedSearch.current = globalSearch; setSelectedSetDetails(machine); }
   }, [globalSearch, systemSets]);
 
-  const openScannedMachine = value => {
-    const code = String(value || '').trim();
+  const openScannedCode = value => {
+    const code = String(value || '').replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 160);
+    if (!code) {
+      setScanError('Mã quét không hợp lệ. Hãy quét lại hoặc nhập serial thủ công.');
+      return false;
+    }
     setScanInput(code);
-    const machine = resolveMachineCode(systemSets, code);
-    if (!machine) { setScanError('Không tìm thấy bộ máy duy nhất. Hãy quét hoặc nhập đúng mã bộ máy.'); return; }
+
+    const normalizedCode = code.toLocaleLowerCase('vi');
+    const deviceGroups = [
+      ['dispenser', dispensers], ['mixer', mixers], ['computer', computers], ['printer', printers],
+    ];
+    const deviceMatches = deviceGroups.flatMap(([category, devices]) => (devices || [])
+      .filter(device => String(device.serial || '').trim().toLocaleLowerCase('vi') === normalizedCode)
+      .map(device => ({ category, device })));
+
+    if (deviceMatches.length > 1) {
+      setScanError('Serial này trùng trên nhiều thiết bị. Hãy đối chiếu mã quản lý trước khi mở hồ sơ.');
+      return false;
+    }
+    if (deviceMatches.length === 1) {
+      const match = deviceMatches[0];
+      const categoryIdKey = `${match.category}Id`;
+      const categorySerialKey = `${match.category}Serial`;
+      const assignedCandidates = systemSets.filter(machine =>
+        (match.device.setCode && machine.setCode === match.device.setCode)
+        || machine[categoryIdKey] === match.device.id
+        || String(machine[categorySerialKey] || '').trim().toLocaleLowerCase('vi') === normalizedCode);
+      const assignedSet = assignedCandidates.length === 1 ? assignedCandidates[0] : null;
+      setSelectedSetDetails(null);
+      setSelectedDeviceLookup({ ...match, assignedSet });
+      setScanError('');
+      return true;
+    }
+
+    const machine = resolveMachine(systemSets, code) || resolveMachineCode(systemSets, code);
+    if (!machine) {
+      setScanError('Không tìm thấy thiết bị hoặc bộ máy khớp với mã này. Hãy kiểm tra serial và thử lại.');
+      return false;
+    }
+    setSelectedDeviceLookup(null);
     setScanInput(machine.setCode);
     setScanError('');
     setSelectedSetDetails(machine);
+    return true;
   };
 
   // Device Edit Modal state
@@ -222,7 +280,7 @@ export default function AssetManagement({ onReplaceEquipment,replacementEvents=[
   const [addDeviceCategory, setAddDeviceCategory] = useState('dispenser');
 
   // Auto scroll lock & reset position when any modal opens
-  useModalScrollLock(showAssembleModal || !!editingSet || !!editingDevice || showAddDeviceModal || !!selectedPhotoViewer || !!selectedSetDetails || !!replacement);
+  useModalScrollLock(showAssembleModal || !!editingSet || !!editingDevice || showAddDeviceModal || !!selectedPhotoViewer || !!selectedSetDetails || !!selectedDeviceLookup || !!replacement);
 
   // Keyboard navigation for Lightbox Photo Viewer
   useEffect(() => {
@@ -650,6 +708,11 @@ export default function AssetManagement({ onReplaceEquipment,replacementEvents=[
   const sortedMixers = React.useMemo(() => filterAssetDevices(mixers, searchTerm, statusFilter, deviceSort), [mixers, searchTerm, statusFilter, deviceSort]);
   const sortedComputers = React.useMemo(() => filterAssetDevices(computers, searchTerm, statusFilter, deviceSort), [computers, searchTerm, statusFilter, deviceSort]);
   const sortedPrinters = React.useMemo(() => filterAssetDevices(printers, searchTerm, statusFilter, deviceSort), [printers, searchTerm, statusFilter, deviceSort]);
+  const activeListCount = ({ comboSets: filteredSets.length, dispensers: sortedDispensers.length, mixers: sortedMixers.length, computers: sortedComputers.length, printers: sortedPrinters.length })[activeSubTab] || 0;
+  const hasNextPage = currentPage * pageSize < activeListCount;
+  const loadNextPage = React.useCallback(() => {
+    if (window.matchMedia('(max-width: 768px)').matches) setCurrentPage(page => page * pageSize < activeListCount ? page + 1 : page);
+  }, [activeListCount, pageSize, setCurrentPage]);
 
   const renderDeviceFilterBar = (categoryName, totalCount, isComputer = false) => {
     const rows = categoryName === 'Máy Chiết' ? sortedDispensers : categoryName === 'Máy Lắc' ? sortedMixers : isComputer ? sortedComputers : sortedPrinters;
@@ -658,7 +721,7 @@ export default function AssetManagement({ onReplaceEquipment,replacementEvents=[
 
   const getPaginatedList = (list) => {
     const window = pageWindow(list.length, currentPage, pageSize);
-    return list.slice(window.start, window.end);
+    return list.slice(isMobileViewport ? 0 : window.start, window.end);
   };
 
   const renderPaginationBar = (totalCount) => {
@@ -761,7 +824,10 @@ export default function AssetManagement({ onReplaceEquipment,replacementEvents=[
   }, [stockPrinters]);
 
   return (
-    <div className="workspace-screen assetmanagement-screen" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+    <div className="workspace-screen assetmanagement-screen" onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      <div className="pull-refresh-indicator" aria-live="polite" style={{ height: `${Math.min(pullDistance, 72)}px`, opacity: refreshing || pullDistance > 12 ? 1 : 0 }}>
+        <span className={refreshing ? 'is-refreshing' : ''}>{refreshing ? 'Đang làm mới…' : pullDistance >= 72 ? 'Thả để làm mới' : 'Kéo xuống để làm mới'}</span>
+      </div>
       
 
       {activeSubTab === 'comboSets' && <WorkspaceFilterBar search={searchTerm} onSearch={setSearchTerm} placeholder="Tìm mã bộ, NPP, seri…" count={filteredSets.length} fields={[{key:'province',label:'Tỉnh / thành',value:provinceFilter,onChange:setProvinceFilter,options:uniqueOptions([...systemSets.map(item=>item.province),...npps.map(item=>item.province)])},{key:'owner',label:'Kỹ thuật viên',value:ownerFilter,onChange:setOwnerFilter,options:uniqueOptions(systemSets.map(item=>item.technician))},{key:'model',label:'Máy chiết',value:modelFilter,onChange:setModelFilter,options:uniqueOptions(systemSets.map(item=>item.dispenserModel))},{key:'status',label:'Trạng thái bộ máy',value:statusFilter,onChange:setStatusFilter,options:[{value:'DA_LAP_DAT',label:'Đã lắp đặt'},{value:'TRONG_KHO',label:'Trong kho'},{value:'DA_THU_HOI',label:'Đã thu hồi'},{value:'BAO_THUONG_BAO_TRI',label:'Đang bảo trì'}]},{key:'from',label:'Ngày lắp đặt · từ',type:'date',defaultValue:'',value:dateFrom,onChange:setDateFrom},{key:'to',label:'Ngày lắp đặt · đến',type:'date',defaultValue:'',value:dateTo,onChange:setDateTo}]} quick={[{value:'ALL',label:'Tất cả'},{value:'STOCK',label:'Trong kho'},{value:'PENDING',label:'Chờ sửa'},{value:'RETURN',label:'Chờ trả'},{value:'OVERDUE',label:'Quá hạn'}]} quickValue={quickFilter} onQuick={setQuickFilter} onReset={() => { setSearchTerm(''); setModelFilter('ALL'); setStatusFilter('ALL'); setQuickFilter('ALL'); setProvinceFilter('ALL'); setOwnerFilter('ALL'); setDateFrom(''); setDateTo(''); }}/>}
@@ -920,65 +986,80 @@ export default function AssetManagement({ onReplaceEquipment,replacementEvents=[
       </div>
       
       <div className="filter-scan-actions"><button className="btn btn-secondary" aria-expanded={showManualScan} onClick={()=>setShowManualScan(value=>!value)}>Nhập mã bộ máy</button></div>
-      {showManualScan && <form className="machine-serial-form" onSubmit={event => { event.preventDefault(); openScannedMachine(scanInput); }}><label>Mã bộ máy<input className="form-input" required maxLength={160} value={scanInput} onChange={event => { setScanInput(event.target.value); setScanError(''); }} placeholder="Nhập hoặc quét mã bộ máy" /></label><button type="button" className="btn btn-secondary" onClick={()=>{setScanTargetField('profile');setShowScanSerialModal(true);}}>Quét mã bộ máy</button><button type="submit" className="btn btn-primary">Mở hồ sơ</button></form>}
-      {/* Sub-Tab Navigation Header */}
-      <div className="glass-panel" style={{ padding: '12px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+      {showManualScan && <form className="machine-serial-form" onSubmit={event => { event.preventDefault(); openScannedCode(scanInput); }}><label>Mã bộ máy<input className="form-input" required maxLength={160} value={scanInput} onChange={event => { setScanInput(event.target.value); setScanError(''); }} placeholder="Nhập hoặc quét mã bộ máy" /></label><button type="button" className="btn btn-secondary" onClick={()=>{setScanError('');setScanTargetField('profile');setShowScanSerialModal(true);}}>Quét mã bộ máy</button><button type="submit" className="btn btn-primary">Mở hồ sơ</button></form>}
+      {/* Compact inventory navigation and actions */}
+      <section className="glass-panel asset-inventory-toolbar" aria-label="Điều hướng và thao tác kho thiết bị">
+        <nav className="asset-inventory-tabs" aria-label="Danh mục thiết bị">
           <button 
-            className={`btn ${activeSubTab === 'comboSets' ? 'btn-primary' : 'btn-secondary'} btn-sm`}
+            type="button"
+            className={`btn ${activeSubTab === 'comboSets' ? 'btn-primary' : 'btn-secondary'} btn-sm asset-inventory-tab`}
+            aria-pressed={activeSubTab === 'comboSets'}
+            title="Bộ máy pha màu"
             onClick={() => setActiveSubTab('comboSets')}
           >
             <Layers size={16} />
-            <span>Bộ Máy Pha Màu ({stockBundleSummary.totalReadySets})</span>
+            <span>Bộ máy ({stockBundleSummary.totalReadySets})</span>
           </button>
 
           <button 
-            className={`btn ${activeSubTab === 'dispensers' ? 'btn-primary' : 'btn-secondary'} btn-sm`}
+            type="button"
+            className={`btn ${activeSubTab === 'dispensers' ? 'btn-primary' : 'btn-secondary'} btn-sm asset-inventory-tab`}
+            aria-pressed={activeSubTab === 'dispensers'}
+            title="Kho máy chiết"
             onClick={() => setActiveSubTab('dispensers')}
           >
             <Flame size={16} />
-            <span>Kho Máy Chiết ({dispensers.length})</span>
+            <span>Máy chiết ({dispensers.length})</span>
           </button>
 
           <button 
-            className={`btn ${activeSubTab === 'mixers' ? 'btn-primary' : 'btn-secondary'} btn-sm`}
+            type="button"
+            className={`btn ${activeSubTab === 'mixers' ? 'btn-primary' : 'btn-secondary'} btn-sm asset-inventory-tab`}
+            aria-pressed={activeSubTab === 'mixers'}
+            title="Kho máy lắc"
             onClick={() => setActiveSubTab('mixers')}
           >
             <Cpu size={16} />
-            <span>Kho Máy Lắc ({mixers.length})</span>
+            <span>Máy lắc ({mixers.length})</span>
           </button>
 
           <button 
-            className={`btn ${activeSubTab === 'computers' ? 'btn-primary' : 'btn-secondary'} btn-sm`}
+            type="button"
+            className={`btn ${activeSubTab === 'computers' ? 'btn-primary' : 'btn-secondary'} btn-sm asset-inventory-tab`}
+            aria-pressed={activeSubTab === 'computers'}
+            title="Kho máy tính"
             onClick={() => setActiveSubTab('computers')}
           >
             <Monitor size={16} />
-            <span>Kho Máy Tính ({computers.length})</span>
+            <span>Máy tính ({computers.length})</span>
           </button>
 
           <button 
-            className={`btn ${activeSubTab === 'printers' ? 'btn-primary' : 'btn-secondary'} btn-sm`}
+            type="button"
+            className={`btn ${activeSubTab === 'printers' ? 'btn-primary' : 'btn-secondary'} btn-sm asset-inventory-tab`}
+            aria-pressed={activeSubTab === 'printers'}
+            title="Kho máy in QL700"
             onClick={() => setActiveSubTab('printers')}
           >
             <Printer size={16} />
-            <span>Kho Máy In QL700 ({printers.length})</span>
+            <span>Máy in QL700 ({printers.length})</span>
           </button>
-        </div>
+        </nav>
 
-        <div style={{ display: 'flex', gap: '10px' }}>
+        <div className="asset-inventory-actions">
           {activeSubTab !== 'comboSets' && (
             <>
-              <button className="btn btn-secondary btn-sm" onClick={exportCurrentInventory}><FileSpreadsheet size={16} /><span>📤 Xuất Excel</span></button>
-              <button className="btn btn-secondary btn-sm" style={{ borderColor: 'rgba(16,185,129,0.4)', color: 'var(--accent-emerald)' }}
+              <button type="button" className="btn btn-secondary btn-sm" onClick={exportCurrentInventory}><FileSpreadsheet size={16} /><span>Xuất Excel</span></button>
+              <button type="button" className="btn btn-secondary btn-sm asset-import-action"
                 onClick={() => {
                   const typeMap = { dispensers: 'dispenser', mixers: 'mixer', computers: 'computer', printers: 'printer' };
                   onOpenImportModal(typeMap[activeSubTab] || 'dispenser');
                 }}
               >
                 <FileSpreadsheet size={16} />
-                <span>📥 Import Từ Excel</span>
+                <span>Nhập Excel</span>
               </button>
-              <button className="btn btn-secondary btn-sm" onClick={() => handleOpenAddDevice(activeSubTab.slice(0, -1))}>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleOpenAddDevice(activeSubTab.slice(0, -1))}>
                 <PlusCircle size={16} />
                 <span>Thêm Thiết Bị Lẻ Vào Kho</span>
               </button>
@@ -986,12 +1067,12 @@ export default function AssetManagement({ onReplaceEquipment,replacementEvents=[
           )}
 
           {activeSubTab === 'comboSets' && (
-            <><button className="btn btn-secondary btn-sm" onClick={exportCurrentInventory}><FileSpreadsheet size={16} /><span>📤 Xuất Bộ Máy</span></button><button className="btn btn-secondary btn-sm" style={{ borderColor: 'rgba(16,185,129,0.4)', color: 'var(--accent-emerald)' }} onClick={() => onOpenImportModal('systemSet')}><FileSpreadsheet size={16} /><span>📥 Nhập Bộ Máy</span></button><button className="btn btn-primary" onClick={handleOpenAssembleModal}><PlusCircle size={18} /><span>+ Ghép Bộ Thiết Bị Mới (Combo)</span></button></>
+            <><button type="button" className="btn btn-secondary btn-sm" onClick={exportCurrentInventory}><FileSpreadsheet size={16} /><span>Xuất bộ máy</span></button><button type="button" className="btn btn-secondary btn-sm asset-import-action" onClick={() => onOpenImportModal('systemSet')}><FileSpreadsheet size={16} /><span>Nhập bộ máy</span></button><button type="button" className="btn btn-primary btn-sm asset-primary-action" onClick={handleOpenAssembleModal}><PlusCircle size={16} /><span>Ghép bộ mới</span></button></>
           )}
         </div>
-      </div>
+      </section>
 
-      <AssetInventoryTables onResetFilters={() => { setSearchTerm(''); setStatusFilter('ALL'); setModelFilter('ALL'); setQuickFilter('ALL'); setProvinceFilter('ALL'); setOwnerFilter('ALL'); setDateFrom(''); setDateTo(''); }} activeSubTab={activeSubTab} computers={computers} dispensers={dispensers} filteredSets={filteredSets} getAssignedInfo={getAssignedInfo} getPaginatedList={getPaginatedList} getSetPhotos={getSetPhotos} handleDeleteDevice={handleDeleteDevice} handleDeleteSet={handleDeleteSet} handleOpenEditDevice={handleOpenEditDevice} handleOpenEditSet={handleOpenEditSet} incompleteSystemSets={incompleteSystemSets} looseInventoryGroups={looseInventoryGroups} mixers={mixers} printers={printers} renderDeviceFilterBar={renderDeviceFilterBar} renderIssuedSerial={renderIssuedSerial} renderPaginationBar={renderPaginationBar} setSelectedPhotoViewer={setSelectedPhotoViewer} setSelectedSetDetails={setSelectedSetDetails} sortedComputers={sortedComputers} sortedDispensers={sortedDispensers} sortedMixers={sortedMixers} sortedPrinters={sortedPrinters} stockBundleSummary={stockBundleSummary} stockSets={stockSets} />
+      <AssetInventoryTables onResetFilters={() => { setSearchTerm(''); setStatusFilter('ALL'); setModelFilter('ALL'); setQuickFilter('ALL'); setProvinceFilter('ALL'); setOwnerFilter('ALL'); setDateFrom(''); setDateTo(''); }} activeSubTab={activeSubTab} computers={computers} dispensers={dispensers} filteredSets={filteredSets} getAssignedInfo={getAssignedInfo} getPaginatedList={getPaginatedList} getSetPhotos={getSetPhotos} handleDeleteDevice={handleDeleteDevice} handleDeleteSet={handleDeleteSet} handleOpenEditDevice={handleOpenEditDevice} handleOpenEditSet={handleOpenEditSet} incompleteSystemSets={incompleteSystemSets} looseInventoryGroups={looseInventoryGroups} mixers={mixers} printers={printers} renderDeviceFilterBar={renderDeviceFilterBar} renderIssuedSerial={renderIssuedSerial} renderPaginationBar={renderPaginationBar} setSelectedPhotoViewer={setSelectedPhotoViewer} setSelectedSetDetails={setSelectedSetDetails} sortedComputers={sortedComputers} sortedDispensers={sortedDispensers} sortedMixers={sortedMixers} sortedPrinters={sortedPrinters} stockBundleSummary={stockBundleSummary} stockSets={stockSets} hasNextPage={hasNextPage} loadNextPage={loadNextPage} onRequestRepair={onRequestRepair} canCreateRepair={can('repair:create')} />
 
       <StockDeviceDialog addDeviceCategory={addDeviceCategory} addFormData={addFormData} closeStockEditor={closeStockEditor} handleAddDeviceSubmit={handleAddDeviceSubmit} isSavingDevice={isSavingDevice} modelOptions={modelOptions} setAddFormData={setAddFormData} setScanTargetField={setScanTargetField} setShowScanSerialModal={setShowScanSerialModal} showAddDeviceModal={showAddDeviceModal} stockDraft={stockDraft} />
 
@@ -1005,21 +1086,27 @@ export default function AssetManagement({ onReplaceEquipment,replacementEvents=[
 
       <MachineProfileDialog can={can} computers={computers} dispensers={dispensers} editingDevice={editingDevice} editingSet={editingSet} getSetPhotos={getSetPhotos} handleOpenEditDevice={handleOpenEditDevice} handleOpenEditSet={handleOpenEditSet} machineProfile={machineProfile} mixers={mixers} onReplaceEquipment={onReplaceEquipment} onRequestMaintenance={onRequestMaintenance} onRequestRepair={onRequestRepair} printers={printers} profileTab={profileTab} replacement={replacement} replacementEvents={replacementEvents} replacementHistoryError={replacementHistoryError} selectedSetDetails={selectedSetDetails} setProfileTab={setProfileTab} setReplacement={setReplacement} setSelectedPhotoViewer={setSelectedPhotoViewer} setSelectedSetDetails={setSelectedSetDetails} systemSets={systemSets} user={user} />
 
+      {selectedDeviceLookup && <DeviceLookupDialog category={selectedDeviceLookup.category} device={selectedDeviceLookup.device} assignedSet={selectedDeviceLookup.assignedSet} onClose={() => setSelectedDeviceLookup(null)} onOpenMachine={machine => { setSelectedDeviceLookup(null); setProfileTab('equipment'); setSelectedSetDetails(machine); }} />}
+
       {/* QR & BARCODE CAMERA SCANNER MODAL */}
       {showScanSerialModal && (
-        <QrScannerModal
-          title={scanTargetField === 'profile' ? 'Quét mã bộ máy' : undefined}
+        <Suspense fallback={<div className="modal-overlay" role="status">Đang tải máy quét…</div>}><QrScannerModal
+          title={scanTargetField === 'profile' ? 'Quét serial thiết bị / mã bộ máy' : undefined}
+          errorMessage={scanTargetField === 'profile' ? scanError : ''}
           onScanSuccess={(scannedText) => {
-            if (scanTargetField === 'profile') { openScannedMachine(scannedText); } else if (scanTargetField === 'add') {
+            let accepted = true;
+            if (scanTargetField === 'profile') { accepted = openScannedCode(scannedText); } else if (scanTargetField === 'add') {
               setAddFormData(prev => ({ ...prev, serial: scannedText }));
             } else if (scanTargetField === 'edit') {
               setEditFormData(prev => ({ ...prev, serial: scannedText }));
             }
-            setShowScanSerialModal(false);
+            if (accepted) setShowScanSerialModal(false);
           }}
           onClose={() => setShowScanSerialModal(false)}
-        />
+        /></Suspense>
       )}
+
+      {can('asset:create') && <FloatingActionButton icon={PlusCircle} label={activeSubTab === 'comboSets' ? 'Ghép bộ máy' : 'Thêm thiết bị'} onClick={() => activeSubTab === 'comboSets' ? handleOpenAssembleModal() : handleOpenAddDevice(activeSubTab.slice(0, -1))} />}
 
     </div>
   );

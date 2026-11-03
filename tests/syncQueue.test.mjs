@@ -46,7 +46,10 @@ test('separates retryable network failures from invalid data', () => {
 });
 
 test('caps exponential retry delays', () => {
-  assert.equal(getRetryDelay(1), 4000);
+  assert.equal(getRetryDelay(1), 5000);
+  assert.equal(getRetryDelay(2), 15000);
+  assert.equal(getRetryDelay(3), 45000);
+  assert.equal(getRetryDelay(4), 135000);
   assert.equal(getRetryDelay(99), 5 * 60 * 1000);
 });
 

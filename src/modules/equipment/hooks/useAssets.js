@@ -123,7 +123,6 @@ export function useAssets() {
   useEffect(() => {
     async function loadCached() {
       try {
-        if (navigator.onLine && !(await getOfflineQueue()).some(isPendingAssetAction)) return;
         const setters = { dispensers: setDispensers, mixers: setMixers, computers: setComputers, printers: setPrinters, system_sets: setSystemSets };
         for (const table of ASSET_TABLES) {
           const full = await getCachedOfflineData(table, null);
@@ -135,9 +134,9 @@ export function useAssets() {
             if (details) fullTablesRef.current.add(table);
           }
         }
-        setSummaryReady(ASSET_TABLES.every(table => readyTablesRef.current.has(table)));
+        setSummaryReady(!isSupabaseConfigured || ASSET_TABLES.every(table => readyTablesRef.current.has(table)));
         const complete = ASSET_TABLES.every(table => fullTablesRef.current.has(table));
-        setDetailsReady(complete);
+        setDetailsReady(!isSupabaseConfigured || complete);
         if (complete) detailsRequestedRef.current = true;
       } catch (error) {
         recordOperationalError('runtime', error);
