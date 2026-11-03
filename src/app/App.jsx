@@ -4,6 +4,7 @@ import { WorkspaceRegionContext } from '../shared/hooks/useWorkspaceState.js';
 import RegionalWorkspaceBar from './components/RegionalWorkspaceBar.jsx';
 import { defaultWorkspaceRegion, resolveWorkspaceRegion, scopeWorkspace } from '../shared/workspace/regionalWorkspace.js';
 import { assertAdditionalSetConfirmed } from '../modules/equipment/lib/assemblyGuard.js';
+import { isStabilizerMissing, STABILIZER_NPP } from '../modules/equipment/lib/stabilizer.js';
 import React, { useState, useEffect, useMemo, lazy, Suspense } from 'react';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
@@ -185,7 +186,7 @@ function AppWorkspace() {
   }, [user]);
 
   // Main State via Supabase hooks
-  const { npps, setNpps, addNpp, editNpp, deleteNpp, importNpps, loading: nppsLoading, error: nppsLoadError, refetch: refetchNpps } = useNpps();
+  const { npps, setNpps, addNpp, editNpp, deleteNpp, importNpps, fetchNppPhotos, loading: nppsLoading, error: nppsLoadError, refetch: refetchNpps } = useNpps();
   const {
     dispensers, setDispensers, mixers, setMixers, computers, setComputers, printers, setPrinters, systemSets, setSystemSets,
     addStockDevice, editDevice, editDeviceDetails, deleteDevice, deleteSystemSet, assembleSet, replaceEquipment, updateSystemSet, importDevices, importSystemSets, detailsReady: assetDetailsReady, summaryReady: assetSummaryReady, ensureDetails: ensureAssetDetails, loading: assetsLoading, loadError: assetsLoadError, refetch: refetchAssets
@@ -322,7 +323,7 @@ function AppWorkspace() {
   });
 
   const unstabilizedAlerts = systemSets.filter(s => {
-    return s.status === 'DA_LAP_DAT' && (s.stabilizer?.includes('Chưa') || s.stabilizer?.includes('Không'));
+    return s.status === 'DA_LAP_DAT' && isStabilizerMissing(s.stabilizer);
   });
 
 
@@ -565,7 +566,7 @@ function AppWorkspace() {
       printer_id: prn?.id || null,
       printer_serial: prn?.serial || '',
       printer_model: prn?.model || 'QL700',
-      stabilizer: pc?.stabilizer?.hasStabilizer ? pc.stabilizer.brand || 'Có ổn áp' : 'Chưa có ổn áp',
+      stabilizer: newCombo.stabilizer || STABILIZER_NPP,
       status: newCombo.status || (newCombo.nppId ? 'DA_LAP_DAT' : 'TRONG_KHO'),
       install_date: newCombo.nppId ? (newCombo.installDate || new Date().toLocaleDateString('en-CA')) : null,
       last_maintenance_date: null,
@@ -909,6 +910,7 @@ function AppWorkspace() {
               onAddNpp={handleAddNpp}
               onEditNpp={handleEditNpp}
               onDeleteNpp={handleDeleteNpp}
+              onLoadNppPhotos={fetchNppPhotos}
               onOpenImportModal={() => openImportModal('npp')}
             />
           ))}

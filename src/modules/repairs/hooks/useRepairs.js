@@ -94,7 +94,7 @@ export function useRepairs() {
         if(version===fetchVersion.current&&requestOwner===getOfflineOwner())setLoadError('Có thay đổi đang chờ đồng bộ. Giữ dữ liệu trên thiết bị; kiểm tra hàng chờ trước khi tải bản server.');
         return false;
       }
-      const {data,error}=await fetchAllRows(sb=>sb.from('repair_tickets').select('id,ticket_code,date,technician,npp_id,npp_name,product_category,machine_model,serial_number,error_description,error_category,action_direction,replacement_condition,processing_status,customer_return_status,notes,photos,asset_code,field_visit_status,service_checklist,materials_used,before_photos,after_photos,npp_confirmation,sla_due_at,completed_at,assigned_user_id,assignment_due_date,record_version,last_updated_at,last_updated_by',{count:'exact'}).order('date',{ascending:false}).order('id'),safeQuery,'fetchRepairs',{key:'id'});
+      const {data,error}=await fetchAllRows(sb=>sb.from('repair_tickets').select('id,ticket_code,date,technician,npp_id,npp_name,product_category,machine_model,serial_number,error_description,error_category,action_direction,replacement_condition,processing_status,customer_return_status,notes,photos,asset_code,field_visit_status,service_checklist,materials_used,before_photos,after_photos,npp_confirmation,sla_due_at,completed_at,assigned_user_id,assignment_due_date,record_version,last_updated_at,last_updated_by').order('date',{ascending:false}).order('id'),safeQuery,'fetchRepairs',{key:'id'});
       if(!repairState.canCommit(token))return false;
       if(error)throw error;
       if(!Array.isArray(data))throw Error('INCOMPLETE_REPAIR_RESPONSE');

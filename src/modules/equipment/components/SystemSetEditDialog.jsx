@@ -17,7 +17,7 @@ export default function SystemSetEditDialog({ closeSetEditor, editNppSearchTerm,
               </div>
               <form onSubmit={handleEditSetSubmit} aria-busy={setSaving}>
                 <div className="modal-body" ref={el => { if (el) el.scrollTop = 0; }}><DraftNotice draft={setDraft} />
-                  <div className="responsive-form-grid">{[['computerSerial','Seri máy tính'],['tintingSoftware','Phần mềm pha màu'],['softwareVersion','Phiên bản phần mềm']].map(([key,label]) => <label key={key}>{label}<input className="form-input" maxLength={120} value={editSetFormData[key] || ''} onChange={event => setEditSetFormData(previous => ({ ...previous, [key]: event.target.value.trimStart() }))} /></label>)}</div>
+                  <div className="responsive-form-grid">{[['tintingSoftware','Phần mềm pha màu'],['softwareVersion','Phiên bản phần mềm']].map(([key,label]) => <label key={key}>{label}<input className="form-input" maxLength={120} value={editSetFormData[key] || ''} onChange={event => setEditSetFormData(previous => ({ ...previous, [key]: event.target.value.trimStart() }))} /></label>)}</div>
 
                   {/* PRIMARY EDIT FIELDS - TOP OF FORM */}
                   <div className="responsive-form-grid" style={{ marginBottom: '12px' }}>
@@ -110,13 +110,14 @@ export default function SystemSetEditDialog({ closeSetEditor, editNppSearchTerm,
                   <div className="responsive-form-grid">
                     <div className="form-group">
                       <label className="form-label">🔌 Ghi Nhận Ổn Áp</label>
-                      <input
-                        type="text"
-                        className="form-input"
-                        placeholder="Lioa 2000VA..."
+                      <select
+                        className="form-select"
                         value={editSetFormData.stabilizer}
                         onChange={e => setEditSetFormData({ ...editSetFormData, stabilizer: e.target.value })}
-                      />
+                      >
+                        <option value="NPP tự trang bị ổn áp">NPP tự trang bị ổn áp</option>
+                        <option value="Chưa có ổn áp">Chưa có ổn áp</option>
+                      </select>
                     </div>
 
                     <div className="form-group">

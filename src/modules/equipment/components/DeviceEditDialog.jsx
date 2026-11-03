@@ -20,7 +20,7 @@ export default function DeviceEditDialog({ closeDeviceEditor, deviceDraft, editF
 
                   {/* ROW 1: SERIAL NUMBER & MODEL - TOP OF FORM */}
                   <div className="responsive-form-grid">
-                    {editingDevice && (
+                    {editingDevice?.category !== 'computer' && (
                       <div className="form-group">
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
                           <label className="form-label" style={{ marginBottom: 0 }}>

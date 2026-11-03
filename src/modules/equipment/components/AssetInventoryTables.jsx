@@ -2,6 +2,7 @@ import { EmptyState } from '../../../shared/components/DataState.jsx';
 import React, { useEffect, useRef } from 'react';
 import { Edit3, Trash2, Camera, Image as ImageIcon, Eye } from 'lucide-react';
 import { getSystemSetMissingFields } from '../utils/systemSetValidation.js';
+import { isStabilizerMissing, STABILIZER_MISSING, STABILIZER_NPP } from '../lib/stabilizer.js';
 import LazyImage from '../../../shared/components/LazyImage.jsx';
 import { useSwipeAction } from '../../../shared/hooks/useSwipeAction.js';
 
@@ -85,7 +86,7 @@ export default function AssetInventoryTables({ onResetFilters, activeSubTab, com
 
                   const prnObj = (printers || []).find(p => (set.printerId && p.id === set.printerId) || (set.printerSerial && p.serial === set.printerSerial));
                   const printerModelText = prnObj?.model || set.printerModel || 'QL700';
-                  const printerSerialText = set.printerSerial || prnObj?.serial || 'N/A';
+                  const printerSerialText = set.printerSerial || prnObj?.serial || 'Chưa có seri';
                   const photos = getSetPhotos(set);
                   const isDirect = (set.installationPhotos && set.installationPhotos.length > 0) || (set.installation_photos && set.installation_photos.length > 0);
 
@@ -201,10 +202,10 @@ export default function AssetInventoryTables({ onResetFilters, activeSubTab, com
                         <div style={{ fontSize: '0.775rem', color: 'var(--accent-cyan)', marginTop: '2px' }}>💼 KD: {set.salesperson || 'Chưa gán NVKD'}</div>
                       </td>
                       <td>
-                        {set.stabilizer?.includes('Chưa') || set.stabilizer?.includes('Không') ? (
-                          <span className="badge badge-warning">⚠️ {set.stabilizer}</span>
+                        {isStabilizerMissing(set.stabilizer) ? (
+                          <span className="badge badge-warning">⚠️ {STABILIZER_MISSING}</span>
                         ) : (
-                          <span className="badge badge-success">✓ {set.stabilizer}</span>
+                          <span className="badge badge-success">✓ {STABILIZER_NPP}</span>
                         )}
                       </td>
                       <td>
@@ -255,7 +256,7 @@ export default function AssetInventoryTables({ onResetFilters, activeSubTab, com
 
               const prnObj = (printers || []).find(p => (set.printerId && p.id === set.printerId) || (set.printerSerial && p.serial === set.printerSerial));
               const printerModelText = prnObj?.model || set.printerModel || 'QL700';
-              const printerSerialText = set.printerSerial || prnObj?.serial || 'N/A';
+              const printerSerialText = set.printerSerial || prnObj?.serial || 'Chưa có seri';
               const photos = getSetPhotos(set);
 
               return (
@@ -304,7 +305,7 @@ export default function AssetInventoryTables({ onResetFilters, activeSubTab, com
                     </div>
                     <div className="mobile-card-row">
                       <span className="mobile-card-label">Ổn Áp:</span>
-                      <span className="mobile-card-value">{set.stabilizer}</span>
+                      <span className="mobile-card-value">{isStabilizerMissing(set.stabilizer) ? <span className="badge badge-warning">⚠️ {STABILIZER_MISSING}</span> : <span className="badge badge-success">✓ {STABILIZER_NPP}</span>}</span>
                     </div>
                     <div className="mobile-card-row">
                       <span className="mobile-card-label">Dữ liệu cần bổ sung:</span>

@@ -26,7 +26,7 @@ export function useTintingLogs() {
     if (!isSupabaseConfigured) return;
     setLoading(true);
     const { data, error } = await fetchAllRows(
-      sb => sb.from('tinting_logs').select('*', { count: 'exact' }).order('timestamp', { ascending: false }).order('id'),
+      sb => sb.from('tinting_logs').select('*').order('timestamp', { ascending: false }).order('id'),
       safeQuery, 'fetchLogs', { key: 'id' }
     );
     if (requestOwner !== getOfflineOwner()) return false;

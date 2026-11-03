@@ -176,7 +176,7 @@ export function useAssets() {
         ['system_sets', mapDbToSystemSet, setSystemSets, 'set_code'],
       ].filter(([table]) => tables.includes(table));
       const sources = await Promise.all(definitions.map(async ([table, mapper, setter, key]) => [
-        await fetchAllRows(sb => sb.from(table).select(assetColumns(table, details), { count: 'exact' }).order(key), safeQuery, `fetchAssets:${table}`, { key }),
+        await fetchAllRows(sb => sb.from(table).select(assetColumns(table, details)).order(key), safeQuery, `fetchAssets:${table}`, { key }),
         table, mapper, setter,
       ]));
       if (requestOwner !== getOfflineOwner() || !readBarrierRef.current.canCommit(readEpoch)) return false;

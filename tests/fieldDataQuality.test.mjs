@@ -20,8 +20,9 @@ test('data warnings identify individual missing fields and respect existing mach
  assert.ok(missingDeviceFields({model:'M',serial:'—',status:'Mới'},'mixer').includes('Số seri'));
 });
 
-test('machine profile warnings include software, serial and responsible technician without requiring freeform notes',()=>{
+test('machine profile warnings include software and responsible technician without requiring serial or freeform notes for computers',()=>{
  const fields=missingSystemSetFields({setCode:'M1',status:'TRONG_KHO'});
- for(const field of ['Phần mềm pha màu','Seri máy tính','Kỹ thuật viên phụ trách'])assert.ok(fields.includes(field));
+ for(const field of ['Phần mềm pha màu','Kỹ thuật viên phụ trách'])assert.ok(fields.includes(field));
+ assert.ok(!fields.includes('Seri máy tính'));
  assert.ok(!fields.includes('Ghi chú'));
 });

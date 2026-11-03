@@ -73,7 +73,7 @@ export function useAuditLogs() {
     if (!isSupabaseConfigured) return;
     setLoading(true);
     const { data, error } = await fetchAllRows(
-      sb => sb.from('audit_logs').select('id,type,timestamp,set_code,npp_id,npp_name,serial_list,technician,reason,notes,severity', { count: 'exact' }).order('timestamp', { ascending: false }).order('id'),
+      sb => sb.from('audit_logs').select('id,type,timestamp,set_code,npp_id,npp_name,serial_list,technician,reason,notes,severity').order('timestamp', { ascending: false }).order('id'),
       safeQuery, 'fetchAuditLogs', { key: 'id' }
     );
     if (requestOwner !== getOfflineOwner()) return false;
