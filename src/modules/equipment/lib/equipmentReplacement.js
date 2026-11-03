@@ -30,7 +30,7 @@ export async function saveEquipmentReplacement(runQuery,payload){
 }
 
 export async function readReplacementEvents(runQuery){
- const result=await fetchAllRows(client=>client.from('equipment_replacement_events').select('*',{count:'exact'}).order('changed_at',{ascending:false}).order('operation_id'),runQuery,'equipmentReplacementEvents',{key:'operation_id'});
+ const result=await fetchAllRows(client=>client.from('equipment_replacement_events').select('*').order('changed_at',{ascending:false}).order('operation_id'),runQuery,'equipmentReplacementEvents',{key:'operation_id'});
  if(result.error)throw result.error;
  return result.data;
 }

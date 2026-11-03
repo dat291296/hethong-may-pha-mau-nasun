@@ -19,6 +19,8 @@ export function useNpps() {
   const [error, setError]   = useState(null);
   const fetchVersion = useRef(0);
   const cacheHydrated = useRef(false);
+  const nppsRef = useRef(npps);
+  nppsRef.current = npps;
 
   // ── Fetch all NPPs ─────────────────────────────────────────────────────────
   const fetchNpps = useCallback(async () => {
@@ -47,15 +49,16 @@ export function useNpps() {
           : 'NPP đang có thay đổi chờ đồng bộ nhưng chưa có bản lưu trên thiết bị. Không tải đè dữ liệu; kiểm tra hàng chờ đồng bộ.');
         return false;
       }
-      const columns = 'id,npp_code,updated_at,name,phone,contact_person,salesperson,brand,region,province,address,location_coordinates,google_maps_url,status,created_at,photos';
+      const columns = 'id,npp_code,updated_at,name,phone,contact_person,salesperson,brand,region,province,address,location_coordinates,google_maps_url,status,created_at';
       const { data, error: fetchError } = await fetchAllRows(
-        sb => sb.from('distributors').select(columns, { count: 'exact' }).order('created_at', { ascending: false }).order('id'),
+        sb => sb.from('distributors').select(columns).order('created_at', { ascending: false }).order('id'),
         safeQuery, 'fetchNpps', { key: 'id' }
       );
       if (version !== fetchVersion.current || requestOwner !== getOfflineOwner()) return false;
       if (fetchError) throw fetchError;
       if (!Array.isArray(data)) throw Object.assign(new Error('INCOMPLETE_NPP_RESPONSE'), { code: 'INCOMPLETE_QUERY' });
-      const mapped = data.map(mapDbToNpp);
+      const previousById = new Map(nppsRef.current.map(npp => [npp.id, npp]));
+      const mapped = data.map(row => ({ ...mapDbToNpp(row), photos: previousById.get(row.id)?.photos || [] }));
       const cacheSaved = await persistNpps(mapped, setNpps);
       if (version === fetchVersion.current && requestOwner === getOfflineOwner()) {
         setError(cacheSaved ? null : 'Đã tải NPP nhưng chưa lưu được bản ngoại tuyến trên thiết bị.');
@@ -197,7 +200,22 @@ export function useNpps() {
     if (isSupabaseConfigured && !result.queued) await fetchNpps();
     return result;
   }, [fetchNpps]);
-  return { npps, setNpps, loading, error, addNpp, editNpp, deleteNpp, importNpps, refetch: fetchNpps };
+  const fetchNppPhotos = useCallback(async id => {
+    const owner = getOfflineOwner();
+    const cachedPhotos = nppsRef.current.find(npp => npp.id === id)?.photos;
+    if (!isSupabaseConfigured) return cachedPhotos || [];
+    const { data, error: photoError } = await safeQuery(sb => sb.from('distributors').select('id,photos').eq('id', id).maybeSingle(), 'fetchNppPhotos');
+    if (owner !== getOfflineOwner()) throw new Error('SESSION_CHANGED');
+    if (photoError || !data) throw photoError || new Error('NPP_NOT_FOUND');
+    const photos = Array.isArray(data.photos) ? data.photos : [];
+    const updated = nppsRef.current.map(npp => npp.id === id ? { ...npp, photos } : npp);
+    nppsRef.current = updated;
+    setNpps(updated);
+    await persistNpps(updated, setNpps);
+    return photos;
+  }, []);
+
+  return { npps, setNpps, loading, error, addNpp, editNpp, deleteNpp, importNpps, fetchNppPhotos, refetch: fetchNpps };
 }
 
 function persistNpps(nextNpps, setNpps, shouldSetState = true) {

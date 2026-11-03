@@ -21,7 +21,7 @@ import { useModalScrollLock } from '../../../shared/hooks/useModalScrollLock.js'
 import { exportExcel } from '../../../shared/utils/excelExport.js';
 import FloatingActionButton from '../../../shared/components/FloatingActionButton.jsx';
 
-export default function NppManagement({ globalSearch = '', loading = false, loadError = '', onReload, coverageFilter = 'ALL', onCoverageFilterChange = () => {}, npps, systemSets, onAddNpp, onEditNpp, onDeleteNpp, onOpenImportModal }) {
+export default function NppManagement({ globalSearch = '', loading = false, loadError = '', onReload, coverageFilter = 'ALL', onCoverageFilterChange = () => {}, npps, systemSets, onAddNpp, onEditNpp, onDeleteNpp, onLoadNppPhotos, onOpenImportModal }) {
   const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useWorkspaceState('npps:search', '');
   useEffect(() => { if (globalSearch) setSearchTerm(globalSearch); }, [globalSearch, setSearchTerm]);
@@ -114,10 +114,15 @@ export default function NppManagement({ globalSearch = '', loading = false, load
     setShowAddModal(true);
   };
 
-  const handleOpenEdit = (npp) => {
+  const handleOpenEdit = async (npp) => {
     if (!isRegionAllowed(npp.region)) {
       alert(`Bạn không có quyền chỉnh sửa NPP ở khu vực ${npp.region}!`);
       return;
+    }
+    let photos = npp.photos || [];
+    if (onLoadNppPhotos) {
+      try { photos = await onLoadNppPhotos(npp.id); }
+      catch { alert('Chưa tải được ảnh NPP. Không mở biểu mẫu để tránh ghi đè mất ảnh hiện có.'); return; }
     }
     setSaveNotice('');
     setEditingNpp(npp);
@@ -134,8 +139,19 @@ export default function NppManagement({ globalSearch = '', loading = false, load
       contactPerson: npp.contactPerson || '',
       salesperson: npp.salesperson || '',
       status: npp.status || 'Đang hợp tác',
-      photos: npp.photos || []
+      photos
     });
+  };
+
+  const handleOpenDetails = async npp => {
+    setSelectedNpp(npp);
+    if (!onLoadNppPhotos) return;
+    try {
+      const photos = await onLoadNppPhotos(npp.id);
+      setSelectedNpp(current => current?.id === npp.id ? { ...current, photos } : current);
+    } catch {
+      alert('Chưa tải được thư viện ảnh NPP. Thông tin NPP vẫn được giữ nguyên.');
+    }
   };
 
   const handlePhotoUpload = async (e) => {
@@ -436,7 +452,7 @@ export default function NppManagement({ globalSearch = '', loading = false, load
                   <span style={{ color: 'var(--text-muted)' }}>Bộ Máy Cấp Phát</span>
                 </div>
 
-                <button className="btn btn-secondary btn-sm" onClick={() => setSelectedNpp(npp)}>
+                <button className="btn btn-secondary btn-sm" onClick={() => handleOpenDetails(npp)}>
                   <Eye size={14} />
                   <span>Chi Tiết Máy & Ảnh</span>
                 </button>

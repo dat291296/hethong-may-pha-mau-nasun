@@ -19,7 +19,7 @@ export default function AssemblyDialog({ assembling, assemblyDraft, assemblyErro
               <form onSubmit={handleAssembleSubmit}>
                 <div className="modal-body" ref={el => { if (el) el.scrollTop = 0; }}><DraftNotice draft={assemblyDraft}/>
                   <div style={{ padding: '12px', background: 'rgba(56, 189, 248, 0.1)', border: '1px solid var(--accent-blue)', borderRadius: '8px', marginBottom: '16px', fontSize: '0.825rem' }}>
-                    💡 Quy chuẩn 1 Bộ Máy Pha Màu bao gồm: 1 Máy Chiết + 1 Máy Lắc + 1 Máy Tính + 1 Máy In QL700. (Ổn áp sẽ ghi nhận thêm khi lắp đặt tại NPP).
+                    💡 Bộ máy mặc định ghi nhận “NPP tự trang bị ổn áp” khi lắp đặt. Nếu thực tế chưa có ổn áp, cập nhật thành “Chưa có ổn áp” trong phần chỉnh sửa để hiện cảnh báo.
                   </div>
 
                   {assemblyError && <p className="resource-error" role="alert">{assemblyError}</p>}

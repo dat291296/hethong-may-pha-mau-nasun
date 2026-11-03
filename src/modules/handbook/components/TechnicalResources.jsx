@@ -27,7 +27,7 @@ export default function TechnicalResources({ machineModel = '', modelOptions = [
     setDocuments([]);setError('');setLoading(false);
     if (!supabase || !user?.id) return;
     setLoading(true);
-    fetchAllRows(sb=>sb.from('technical_documents').select(fields,{count:'exact'}).order('id'),safeQuery,'technicalDocuments').then(({ data, error: fetchError }) => {
+    fetchAllRows(sb=>sb.from('technical_documents').select(fields).order('id'),safeQuery,'technicalDocuments').then(({ data, error: fetchError }) => {
       if (cancelled) return;
       if (fetchError) {
         setError(resourceError(fetchError));

@@ -34,7 +34,7 @@ export function useLockedMonths() {
     setLoading(true);
     setError(null);
     const { data, error: err } = await fetchAllRows(
-      sb => sb.from('locked_months').select('*', { count: 'exact' }).order('month_key', { ascending: false }),
+      sb => sb.from('locked_months').select('*').order('month_key', { ascending: false }),
       safeQuery, 'fetchLockedMonths', { key: 'month_key' }
     );
     if (requestOwner !== getOfflineOwner()) return false;

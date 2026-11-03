@@ -44,14 +44,24 @@ test('supports system set keys without renaming or filtering historical records'
 });
 
 
-test('default page retrieves 1000 rows in one roundtrip', async () => {
-  const records = Array.from({ length: 1000 }, (_, id) => ({ id }));
+test('default page retrieves 200 rows in one roundtrip', async () => {
+  const records = Array.from({ length: 200 }, (_, id) => ({ id }));
   let calls = 0;
   const result = await fetchAllRows(query, async build => {
     calls++;
-    assert.deepEqual(build(), { from: 0, to: 999 });
+    assert.deepEqual(build(), { from: 0, to: 199 });
     return { data: records, count: records.length };
   }, 'default-page');
   assert.equal(calls, 1);
   assert.deepEqual(result.data, records);
+});
+
+test('paginates without exact count until an empty page confirms completion', async () => {
+  const records = Array.from({ length: 437 }, (_, id) => ({ id: `uncounted-${id}` }));
+  const result = await fetchAllRows(query, async build => {
+    const { from, to } = build();
+    return { data: records.slice(from, Math.min(to + 1, from + 73)) };
+  }, 'uncounted');
+  assert.deepEqual(result.data, records);
+  assert.equal(result.error, null);
 });

@@ -10,6 +10,7 @@ import MachineProfileDialog from './MachineProfileDialog.jsx';
 import { userErrorMessage } from '../../../shared/security/userError.js';
 import { assignedSetsForNpp, assertAdditionalSetConfirmed } from '../lib/assemblyGuard.js';
 import { isUnknownSerial } from '../lib/deviceSerial.js';
+import { STABILIZER_NPP, normalizeStabilizerChoice } from '../lib/stabilizer.js';
 import { summarizeInventory, nextWarehouseId, inventoryLinkIssues } from '../lib/inventorySummary.js';
 import { prepareDeviceEdit, requireUniqueDeviceSerial } from '../lib/deviceEdit.js';
 import WorkspaceFilterBar from '../../../shared/components/WorkspaceFilterBar.jsx';
@@ -394,7 +395,8 @@ export default function AssetManagement({ onReplaceEquipment,replacementEvents=[
     province: '',
     salesperson: '',
     technician: user?.name || user?.full_name || '',
-    installationPhotos: []
+    installationPhotos: [],
+    stabilizer: STABILIZER_NPP
   });
 
   const isMissingSerial = device => isUnknownSerial(device?.serial);
@@ -435,7 +437,8 @@ export default function AssetManagement({ onReplaceEquipment,replacementEvents=[
       province: '',
       salesperson: '',
       technician: defaultTech,
-      installationPhotos: []
+      installationPhotos: [],
+      stabilizer: STABILIZER_NPP
     });
     setShowAssembleModal(true);
   };
@@ -461,13 +464,13 @@ export default function AssetManagement({ onReplaceEquipment,replacementEvents=[
     }
     assemblingRef.current=true;setAssembling(true);
     try {
-    await onAssembleSet(newSetData);
+    await onAssembleSet({ ...newSetData, stabilizer: normalizeStabilizerChoice(newSetData.stabilizer || STABILIZER_NPP) });
     await assemblyDraft.clear();
     setShowAssembleModal(false);
     setNewSetData({
       dispenserId: '', mixerId: '', computerId: '', printerId: '',
       nppId: '', nppName: '', region: '', province: '', salesperson: '',
-      technician: '', installationPhotos: []
+      technician: '', installationPhotos: [], stabilizer: STABILIZER_NPP
     });
     } catch(error){alert(userErrorMessage(error) || 'Không ráp được bộ máy. Bản nháp được giữ nguyên.');}
     finally {assemblingRef.current=false;setAssembling(false);}
@@ -562,7 +565,7 @@ export default function AssetManagement({ onReplaceEquipment,replacementEvents=[
       await deviceDraft.clear().catch(() => recordOperationalError('draft',{code:'DRAFT_WRITE_FAILED'}));
       const conflictingSet = finalData.setCode && systemSets.find(set => set.setCode === finalData.setCode && set[`${editingDevice.category}Id`] && set[`${editingDevice.category}Id`] !== finalData.id);
       if (conflictingSet) alert('Đã lưu thiết bị. Liên kết cũ với bộ máy chưa khớp; hãy đối chiếu hồ sơ NPP. Thiết bị đang gán chính thức không bị thay thế.');
-      alert(finalData.serial ? '✅ Đã lưu thông tin chỉnh sửa thành công!' : 'Đã lưu thiết bị. ⚠️ Chưa có serial; cần kỹ thuật viên phụ trách khu vực bổ sung trong hồ sơ máy.');
+      alert(editingDevice.category === 'computer' || finalData.serial ? '✅ Đã lưu thông tin chỉnh sửa thành công!' : 'Đã lưu thiết bị. ⚠️ Chưa có serial; cần kỹ thuật viên phụ trách khu vực bổ sung trong hồ sơ máy.');
       setEditingDevice(null);
     } catch (err) {
       recordOperationalError('device',err);
@@ -638,7 +641,7 @@ export default function AssetManagement({ onReplaceEquipment,replacementEvents=[
       region: set.region || '',
       province: set.province || '',
       status: set.status || 'TRONG_KHO',
-      stabilizer: set.stabilizer || 'Không dùng ổn áp',
+      stabilizer: normalizeStabilizerChoice(set.stabilizer),
       technician: set.technician || ((user && ['admin', 'manager', 'technician', 'qc'].includes(user.role)) ? (user.name || user.full_name) : (qcUsers[0]?.name || '')),
       salesperson: set.salesperson || targetNpp?.salesperson || '',
       notes: set.notes || '',
@@ -663,7 +666,7 @@ export default function AssetManagement({ onReplaceEquipment,replacementEvents=[
     if (!editingSet || setSavingRef.current || setDraft.existing) return;
     setSavingRef.current=true;setSetSaving(true);
     try {
-      const result=await onEditSet(editingSet.setCode, editSetFormData);
+      const result=await onEditSet(editingSet.setCode, { ...editSetFormData, stabilizer: normalizeStabilizerChoice(editSetFormData.stabilizer) });
       await setDraft.clear().catch(()=>console.warn('[SystemSet] Draft cleanup failed'));
       alert(result?.queued?'Đã lưu trên thiết bị, chờ đồng bộ.':'Đã lưu thông tin bộ máy.');
       setEditingSet(null);
