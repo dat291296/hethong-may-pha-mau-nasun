@@ -6,7 +6,7 @@ import { summarizeDashboard } from '../src/modules/dashboard/lib/dashboardSummar
 import { regionalMachineCounts } from '../src/modules/fieldwork/lib/teamWorkspace.js';
 
 test('Dashboard aggregation preserves regional fallback, warehouse and model semantics', () => {
-  const npps = [{ id: 'N1', region: 'Miền Bắc' }];
+  const npps = [{ id: 'N1', region: 'Miền Bắc', status: 'Đang hợp tác' }];
   const sets = [
     { nppId: 'N1', status: 'DA_LAP_DAT', dispenserModel: '__proto__', nextMaintenanceDue: '2026-10-01' },
     { region: 'Kho Tổng', status: 'TRONG_KHO', dispenserModel: '__proto__' },

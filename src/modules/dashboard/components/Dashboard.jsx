@@ -3,7 +3,7 @@ import SystemHealthPanel from './SystemHealthPanel.jsx';
 import {matchesSearch} from '../../../shared/workspace/workspaceFilters.js';
 import { WorkspaceRegionContext } from '../../../shared/hooks/useWorkspaceState.js';
 import { nppCoverage } from '../../distributors/lib/nppCoverage.js';
-import { summarizeDashboard } from '../lib/dashboardSummary.js';
+import { countOperationalDevices, summarizeDashboard } from '../lib/dashboardSummary.js';
 import { summarizeInventory } from '../../equipment/lib/inventorySummary.js';
 import { findAssignedDevice } from '../../equipment/lib/deviceEdit.js';
 import React, { useState, useMemo, useContext, useEffect } from 'react';
@@ -66,12 +66,15 @@ export default function Dashboard({
 }) {
   // Stat calculations
   const inventory = useMemo(() => summarizeInventory({ systemSets, dispensers, mixers, computers, printers }), [systemSets, dispensers, mixers, computers, printers]);
-  const coverage = useMemo(() => nppCoverage(npps, systemSets), [npps, systemSets]);
-  const totalSetsCount = inventory.totalSets;
+  const activeNpps = useMemo(() => npps.filter(npp => npp.status === 'Đang hợp tác'), [npps]);
+  const coverage = useMemo(() => nppCoverage(activeNpps, systemSets), [activeNpps, systemSets]);
   const today = new Date().toLocaleDateString('en-CA');
   const stats = useMemo(() => summarizeDashboard(systemSets, npps, today), [systemSets, npps, today]);
+  const totalSetsCount = stats.dashboardSetCount + inventory.completeFromLooseDevices;
   const installedSetsCount = stats.installed;
-  const stockSetsCount = inventory.totalReadySets;
+  const stockSetsCount = stats.stock + inventory.completeFromLooseDevices;
+  const operationalDispenserCount = useMemo(() => countOperationalDevices(dispensers, systemSets, npps), [dispensers, systemSets, npps]);
+  const operationalMixerCount = useMemo(() => countOperationalDevices(mixers, systemSets, npps), [mixers, systemSets, npps]);
 
   // Repair & replacement statistics
   const totalRepairsCount = useMemo(() => 
@@ -320,12 +323,11 @@ export default function Dashboard({
             </div>
           </div>
           <div style={{ fontSize: '2rem', fontWeight: '800', color: 'var(--text-main)', lineHeight: 1.1 }}>
-            {npps.length} <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)', fontWeight: 'normal' }}>Đại lý</span>
+            {activeNpps.length} <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)', fontWeight: 'normal' }}>NPP đang hợp tác</span>
           </div>
           <div style={{ marginTop: '12px', display: 'flex', gap: '8px', fontSize: '0.75rem', flexWrap: 'wrap' }}>
             <span className="badge badge-info">{coverage.assigned.length} NPP đã ghép bộ</span><span className="badge badge-warning">{coverage.unassigned.length} NPP chưa ghép</span>
-            <span className="badge badge-success">● {npps.filter(n => n.status === 'Đang hợp tác').length} Hợp tác</span>
-            <span className="badge badge-neutral">● {npps.filter(n => n.status === 'Đã ngưng hợp tác').length} Ngưng</span>
+            <span className="badge badge-success">● Chỉ tính NPP đang hợp tác</span>
           </div>
         </div>
 
@@ -338,11 +340,11 @@ export default function Dashboard({
             </div>
           </div>
           <div style={{ fontSize: '2rem', fontWeight: '800', color: 'var(--text-main)', lineHeight: 1.1 }}>
-            {dispensers.length + mixers.length} <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)', fontWeight: 'normal' }}>Thiết bị</span>
+            {operationalDispenserCount + operationalMixerCount} <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)', fontWeight: 'normal' }}>Máy đang chạy tốt</span>
           </div>
           <div style={{ marginTop: '12px', display: 'flex', gap: '8px', fontSize: '0.75rem', flexWrap: 'wrap' }}>
-            <span className="badge badge-purple">{dispensers.length} Máy Chiết</span>
-            <span className="badge badge-info">{mixers.length} Máy Lắc</span>
+            <span className="badge badge-purple">{operationalDispenserCount} Máy Chiết</span>
+            <span className="badge badge-info">{operationalMixerCount} Máy Lắc</span>
           </div>
         </div>
 

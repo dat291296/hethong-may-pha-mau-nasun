@@ -18,10 +18,14 @@ export function summarizeInventory({ systemSets = [], ...devices }) {
 export function nextWarehouseId(category, devices = []) {
   const prefix = { dispenser: 'DISP', mixer: 'MIXE', computer: 'COMP', printer: 'PRIN' }[category];
   if (!prefix) throw new Error('Unknown device category');
-  // Legacy imports used another category prefix. Keep existing IDs intact.
+  const legacyPrefixes = { dispenser: ['DISP'], mixer: ['MIXE', 'MIX'], computer: ['COMP', 'PC'], printer: ['PRIN', 'PRN'] }[category];
+  const acceptedPrefixes = new Set(legacyPrefixes.map(value => value.toUpperCase()));
   const highest = devices.reduce((max, device) => {
-    const match = String(device.id || '').trim().match(/^(?:(?:DISP|MIXE|COMP|PRIN|PC|MIX|PRN)-)?(\d+)$/i);
-    const number = match ? Number(match[1]) : 0;
+    const id = String(device.id || '').trim().toUpperCase();
+    const match = id.match(/^([A-Z]+)-(\d+)$/);
+    const number = match
+      ? (acceptedPrefixes.has(match[1]) ? Number(match[2]) : 0)
+      : (/^\d+$/.test(id) ? Number(id) : 0);
     return Number.isSafeInteger(number) ? Math.max(max, number) : max;
   }, 0);
   if (!Number.isSafeInteger(highest + 1)) throw new Error('Device numbering limit reached');
