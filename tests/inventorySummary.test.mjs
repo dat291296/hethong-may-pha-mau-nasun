@@ -26,8 +26,12 @@ test('explicit set references and either assignment marker exclude equipment fro
   assert.equal(inventory.totalReadySets, 0);
 });
 
-test('new category code respects legacy prefixes, short numeric IDs and sequences above 999', () => {
-  assert.equal(nextWarehouseId('computer', [{ id: 'COMP-061' }, { id: 'MIXE-076' }, { id: 'COMP-03' }]), 'COMP-077');
+test('new category code uses only that category sequence and preserves its legacy prefixes', () => {
+  assert.equal(nextWarehouseId('computer', [{ id: 'COMP-061' }, { id: 'MIXE-076' }, { id: 'COMP-03' }]), 'COMP-062');
+  assert.equal(nextWarehouseId('computer', [{ id: 'PC-076' }, { id: 'PRIN-999' }]), 'COMP-077');
+  assert.equal(nextWarehouseId('dispenser', [{ id: 'DISP-061' }, { id: 'MIXE-076' }]), 'DISP-062');
+  assert.equal(nextWarehouseId('mixer', [{ id: 'MIX-076' }, { id: 'COMP-999' }]), 'MIXE-077');
+  assert.equal(nextWarehouseId('printer', [{ id: 'PRIN-061' }, { id: 'COMP-999' }]), 'PRIN-062');
   assert.equal(nextWarehouseId('computer', [{ id: '1000' }, { id: 'unrelated-99999' }]), 'COMP-1001');
   assert.equal(nextWarehouseId('computer', [{ id: 'PC-007' }]), 'COMP-008');
   assert.equal(nextWarehouseId('printer'), 'PRIN-001');
