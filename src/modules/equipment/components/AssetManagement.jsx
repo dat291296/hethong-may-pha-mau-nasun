@@ -1,12 +1,6 @@
 import { pageWindow } from '../../../shared/data-access/pageWindow.js';
 import { filterAssetSets, filterAssetDevices, indexRepairStatuses } from '../lib/assetFilters.js';
 import AssetInventoryTables from './AssetInventoryTables.jsx';
-import StockDeviceDialog from './StockDeviceDialog.jsx';
-import DeviceEditDialog from './DeviceEditDialog.jsx';
-import AssemblyDialog from './AssemblyDialog.jsx';
-import SystemSetEditDialog from './SystemSetEditDialog.jsx';
-import AssetPhotoLightbox from './AssetPhotoLightbox.jsx';
-import MachineProfileDialog from './MachineProfileDialog.jsx';
 import { userErrorMessage } from '../../../shared/security/userError.js';
 import { assignedSetsForNpp, assertAdditionalSetConfirmed } from '../lib/assemblyGuard.js';
 import { isUnknownSerial } from '../lib/deviceSerial.js';
@@ -25,7 +19,6 @@ import { supabase, isSupabaseConfigured } from '../../../shared/data-access/supa
 import { generateNextSetCode } from '../hooks/useAssets.js';
 import { Cpu, Flame, Monitor, Printer, PlusCircle, Layers, FileSpreadsheet } from 'lucide-react';
 import { compressImage } from '../../../shared/utils/imageCompressor.js';
-import DeviceLookupDialog from './DeviceLookupDialog.jsx';
 import FloatingActionButton from '../../../shared/components/FloatingActionButton.jsx';
 import { useModalScrollLock } from '../../../shared/hooks/useModalScrollLock.js';
 import { exportExcel } from '../../../shared/utils/excelExport.js';
@@ -34,6 +27,13 @@ import { useWorkspaceState, useWorkspaceScroll } from '../../../shared/hooks/use
 import { usePullToRefresh } from '../../../shared/hooks/usePullToRefresh.js';
 
 const QrScannerModal = lazy(() => import('../../../shared/components/QrScannerModal.jsx'));
+const StockDeviceDialog = lazy(() => import('./StockDeviceDialog.jsx'));
+const DeviceEditDialog = lazy(() => import('./DeviceEditDialog.jsx'));
+const AssemblyDialog = lazy(() => import('./AssemblyDialog.jsx'));
+const SystemSetEditDialog = lazy(() => import('./SystemSetEditDialog.jsx'));
+const AssetPhotoLightbox = lazy(() => import('./AssetPhotoLightbox.jsx'));
+const MachineProfileDialog = lazy(() => import('./MachineProfileDialog.jsx'));
+const DeviceLookupDialog = lazy(() => import('./DeviceLookupDialog.jsx'));
 
 export default function AssetManagement({ onReplaceEquipment,replacementEvents=[],replacementHistoryError='', initialProfile, onProfileRestored, globalSearch = '', initialFilter = 'ALL', repairTickets = [], auditLogs = [], onRequestRepair, onRequestMaintenance, onReload,
   openScannerOnMount = false, onScannerOpened,
@@ -1077,19 +1077,15 @@ export default function AssetManagement({ onReplaceEquipment,replacementEvents=[
 
       <AssetInventoryTables onResetFilters={() => { setSearchTerm(''); setStatusFilter('ALL'); setModelFilter('ALL'); setQuickFilter('ALL'); setProvinceFilter('ALL'); setOwnerFilter('ALL'); setDateFrom(''); setDateTo(''); }} activeSubTab={activeSubTab} computers={computers} dispensers={dispensers} filteredSets={filteredSets} getAssignedInfo={getAssignedInfo} getPaginatedList={getPaginatedList} getSetPhotos={getSetPhotos} handleDeleteDevice={handleDeleteDevice} handleDeleteSet={handleDeleteSet} handleOpenEditDevice={handleOpenEditDevice} handleOpenEditSet={handleOpenEditSet} incompleteSystemSets={incompleteSystemSets} looseInventoryGroups={looseInventoryGroups} mixers={mixers} printers={printers} renderDeviceFilterBar={renderDeviceFilterBar} renderIssuedSerial={renderIssuedSerial} renderPaginationBar={renderPaginationBar} setSelectedPhotoViewer={setSelectedPhotoViewer} setSelectedSetDetails={setSelectedSetDetails} sortedComputers={sortedComputers} sortedDispensers={sortedDispensers} sortedMixers={sortedMixers} sortedPrinters={sortedPrinters} stockBundleSummary={stockBundleSummary} stockSets={stockSets} hasNextPage={hasNextPage} loadNextPage={loadNextPage} onRequestRepair={onRequestRepair} canCreateRepair={can('repair:create')} />
 
-      <StockDeviceDialog addDeviceCategory={addDeviceCategory} addFormData={addFormData} closeStockEditor={closeStockEditor} handleAddDeviceSubmit={handleAddDeviceSubmit} isSavingDevice={isSavingDevice} modelOptions={modelOptions} setAddFormData={setAddFormData} setScanTargetField={setScanTargetField} setShowScanSerialModal={setShowScanSerialModal} showAddDeviceModal={showAddDeviceModal} stockDraft={stockDraft} />
-
-      <DeviceEditDialog closeDeviceEditor={closeDeviceEditor} deviceDraft={deviceDraft} editFormData={editFormData} editingDevice={editingDevice} handleEditSubmit={handleEditSubmit} isSavingDevice={isSavingDevice} modelOptions={modelOptions} selectedSetDetails={selectedSetDetails} setEditFormData={setEditFormData} setScanTargetField={setScanTargetField} setShowScanSerialModal={setShowScanSerialModal} systemSets={systemSets} />
-
-      <AssemblyDialog assembling={assembling} assemblyDraft={assemblyDraft} assemblyError={assemblyError} closeAssembly={closeAssembly} computers={computers} dispensers={dispensers} existingNppSets={existingNppSets} handleAssembleSubmit={handleAssembleSubmit} handleOpenAddDevice={handleOpenAddDevice} handleRemoveNewSetPhoto={handleRemoveNewSetPhoto} handleUploadNewSetPhotos={handleUploadNewSetPhotos} isMissingSerial={isMissingSerial} mixers={mixers} naturalSortCode={naturalSortCode} newSetData={newSetData} nppSearchTerm={nppSearchTerm} npps={npps} printers={printers} qcUsers={qcUsers} setNewSetData={setNewSetData} setNppSearchTerm={setNppSearchTerm} setSelectedPhotoViewer={setSelectedPhotoViewer} setShowAssembleModal={setShowAssembleModal} showAssembleModal={showAssembleModal} />
-
-      <SystemSetEditDialog closeSetEditor={closeSetEditor} editNppSearchTerm={editNppSearchTerm} editSetFormData={editSetFormData} editingSet={editingSet} handleEditSetSubmit={handleEditSetSubmit} handleRemoveEditSetPhoto={handleRemoveEditSetPhoto} handleUploadEditSetPhotos={handleUploadEditSetPhotos} isSavingDevice={isSavingDevice} npps={npps} qcUsers={qcUsers} selectedSetDetails={selectedSetDetails} setDraft={setDraft} setEditNppSearchTerm={setEditNppSearchTerm} setEditSetFormData={setEditSetFormData} setSaving={setSaving} setSelectedPhotoViewer={setSelectedPhotoViewer} />
-
-      <AssetPhotoLightbox selectedPhotoViewer={selectedPhotoViewer} setSelectedPhotoViewer={setSelectedPhotoViewer} />
-
-      <MachineProfileDialog can={can} computers={computers} dispensers={dispensers} editingDevice={editingDevice} editingSet={editingSet} getSetPhotos={getSetPhotos} handleOpenEditDevice={handleOpenEditDevice} handleOpenEditSet={handleOpenEditSet} machineProfile={machineProfile} mixers={mixers} onReplaceEquipment={onReplaceEquipment} onRequestMaintenance={onRequestMaintenance} onRequestRepair={onRequestRepair} printers={printers} profileTab={profileTab} replacement={replacement} replacementEvents={replacementEvents} replacementHistoryError={replacementHistoryError} selectedSetDetails={selectedSetDetails} setProfileTab={setProfileTab} setReplacement={setReplacement} setSelectedPhotoViewer={setSelectedPhotoViewer} setSelectedSetDetails={setSelectedSetDetails} systemSets={systemSets} user={user} />
-
-      {selectedDeviceLookup && <DeviceLookupDialog category={selectedDeviceLookup.category} device={selectedDeviceLookup.device} assignedSet={selectedDeviceLookup.assignedSet} onClose={() => setSelectedDeviceLookup(null)} onOpenMachine={machine => { setSelectedDeviceLookup(null); setProfileTab('equipment'); setSelectedSetDetails(machine); }} />}
+      <Suspense fallback={null}>
+        {showAddDeviceModal && <StockDeviceDialog addDeviceCategory={addDeviceCategory} addFormData={addFormData} closeStockEditor={closeStockEditor} handleAddDeviceSubmit={handleAddDeviceSubmit} isSavingDevice={isSavingDevice} modelOptions={modelOptions} setAddFormData={setAddFormData} setScanTargetField={setScanTargetField} setShowScanSerialModal={setShowScanSerialModal} showAddDeviceModal={showAddDeviceModal} stockDraft={stockDraft} />}
+        {editingDevice && <DeviceEditDialog closeDeviceEditor={closeDeviceEditor} deviceDraft={deviceDraft} editFormData={editFormData} editingDevice={editingDevice} handleEditSubmit={handleEditSubmit} isSavingDevice={isSavingDevice} modelOptions={modelOptions} selectedSetDetails={selectedSetDetails} setEditFormData={setEditFormData} setScanTargetField={setScanTargetField} setShowScanSerialModal={setShowScanSerialModal} systemSets={systemSets} />}
+        {showAssembleModal && <AssemblyDialog assembling={assembling} assemblyDraft={assemblyDraft} assemblyError={assemblyError} closeAssembly={closeAssembly} computers={computers} dispensers={dispensers} existingNppSets={existingNppSets} handleAssembleSubmit={handleAssembleSubmit} handleOpenAddDevice={handleOpenAddDevice} handleRemoveNewSetPhoto={handleRemoveNewSetPhoto} handleUploadNewSetPhotos={handleUploadNewSetPhotos} isMissingSerial={isMissingSerial} mixers={mixers} naturalSortCode={naturalSortCode} newSetData={newSetData} nppSearchTerm={nppSearchTerm} npps={npps} printers={printers} qcUsers={qcUsers} setNewSetData={setNewSetData} setNppSearchTerm={setNppSearchTerm} setSelectedPhotoViewer={setSelectedPhotoViewer} setShowAssembleModal={setShowAssembleModal} showAssembleModal={showAssembleModal} />}
+        {editingSet && <SystemSetEditDialog closeSetEditor={closeSetEditor} editNppSearchTerm={editNppSearchTerm} editSetFormData={editSetFormData} editingSet={editingSet} handleEditSetSubmit={handleEditSetSubmit} handleRemoveEditSetPhoto={handleRemoveEditSetPhoto} handleUploadEditSetPhotos={handleUploadEditSetPhotos} isSavingDevice={isSavingDevice} npps={npps} qcUsers={qcUsers} selectedSetDetails={selectedSetDetails} setDraft={setDraft} setEditNppSearchTerm={setEditNppSearchTerm} setEditSetFormData={setEditSetFormData} setSaving={setSaving} setSelectedPhotoViewer={setSelectedPhotoViewer} />}
+        {selectedPhotoViewer && <AssetPhotoLightbox selectedPhotoViewer={selectedPhotoViewer} setSelectedPhotoViewer={setSelectedPhotoViewer} />}
+        {selectedSetDetails && !editingDevice && !editingSet && !replacement && <MachineProfileDialog can={can} computers={computers} dispensers={dispensers} editingDevice={editingDevice} editingSet={editingSet} getSetPhotos={getSetPhotos} handleOpenEditDevice={handleOpenEditDevice} handleOpenEditSet={handleOpenEditSet} machineProfile={machineProfile} mixers={mixers} onReplaceEquipment={onReplaceEquipment} onRequestMaintenance={onRequestMaintenance} onRequestRepair={onRequestRepair} printers={printers} profileTab={profileTab} replacement={replacement} replacementEvents={replacementEvents} replacementHistoryError={replacementHistoryError} selectedSetDetails={selectedSetDetails} setProfileTab={setProfileTab} setReplacement={setReplacement} setSelectedPhotoViewer={setSelectedPhotoViewer} setSelectedSetDetails={setSelectedSetDetails} systemSets={systemSets} user={user} />}
+        {selectedDeviceLookup && <DeviceLookupDialog category={selectedDeviceLookup.category} device={selectedDeviceLookup.device} assignedSet={selectedDeviceLookup.assignedSet} onClose={() => setSelectedDeviceLookup(null)} onOpenMachine={machine => { setSelectedDeviceLookup(null); setProfileTab('equipment'); setSelectedSetDetails(machine); }} />}
+      </Suspense>
 
       {/* QR & BARCODE CAMERA SCANNER MODAL */}
       {showScanSerialModal && (
