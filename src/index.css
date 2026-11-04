@@ -2001,3 +2001,18 @@ main.page-transition .nppmanagement-screen .npp-card-withdrawn { border-top-colo
 .asset-import-action{border-color:rgba(16,185,129,.4)!important;color:var(--accent-emerald)!important}
 .asset-primary-action{padding-inline:14px!important}
 @media(max-width:640px){.asset-inventory-toolbar{padding:8px;gap:5px}.asset-inventory-tabs,.asset-inventory-actions{margin-inline:-2px;padding-inline:2px}.asset-inventory-actions{padding-top:6px}.asset-inventory-tab,.asset-inventory-actions>.btn{min-height:44px;padding:8px 10px;font-size:.78rem}.asset-inventory-toolbar .btn svg{width:15px;height:15px;flex:0 0 auto}}
+.nasun-confirm-dialog {
+  width: min(92vw, 520px);
+  max-height: min(80vh, 720px);
+  padding: 24px;
+  color: var(--text-main, #f8fafc);
+  background: var(--bg-card, #111827);
+  border: 1px solid var(--border-color, rgba(148, 163, 184, 0.28));
+  border-radius: 16px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.48);
+}
+.nasun-confirm-dialog::backdrop { background: rgba(2, 6, 23, 0.72); backdrop-filter: blur(4px); }
+.nasun-confirm-dialog h2 { margin: 0 0 12px; font-size: 1.15rem; }
+.nasun-confirm-dialog p { margin: 0; color: var(--text-muted, #cbd5e1); line-height: 1.65; white-space: pre-line; overflow-wrap: anywhere; }
+.nasun-confirm-dialog__actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; }
+.nasun-confirm-dialog__actions .btn { min-height: 44px; }

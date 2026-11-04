@@ -1,4 +1,6 @@
 import { getOfflineOwner } from '../../../shared/sync/offlineDb.js';
+import { createRefreshScheduler } from '../../../shared/data-access/refreshScheduler.js';
+import { recordDataLoadMetric } from '../../../shared/diagnostics/performanceMetrics.js';
 import { updateWithRevision } from '../../../shared/data-access/guardedWrite.js';
 import { fetchAllRows } from '../../../shared/data-access/paginatedQuery.js';
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -15,7 +17,7 @@ import { userErrorMessage } from '../../../shared/security/userError.js';
  */
 export function useNpps() {
   const [npps, setNpps] = useState(isSupabaseConfigured ? [] : INITIAL_NPPS);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(isSupabaseConfigured);
   const [error, setError]   = useState(null);
   const fetchVersion = useRef(0);
   const cacheHydrated = useRef(false);
@@ -24,6 +26,7 @@ export function useNpps() {
 
   // ── Fetch all NPPs ─────────────────────────────────────────────────────────
   const fetchNpps = useCallback(async () => {
+    const startedAt = performance.now();
     const requestOwner = getOfflineOwner();
     const version = ++fetchVersion.current;
     if (!isSupabaseConfigured) {
@@ -35,7 +38,6 @@ export function useNpps() {
       }
       return;
     }
-    setLoading(!cacheHydrated.current);
     setError(null);
     try {
       const pendingQueue = await getOfflineQueue();
@@ -77,6 +79,7 @@ export function useNpps() {
       return false;
     } finally {
       if (version === fetchVersion.current) setLoading(false);
+      recordDataLoadMetric(performance.now() - startedAt, 'NPP_DATA_LOAD');
     }
   }, []);
 
@@ -87,7 +90,10 @@ export function useNpps() {
       const owner = getOfflineOwner();
       try {
         const cached = await getCachedOfflineData('npps', null);
-        if (!disposed && owner === getOfflineOwner() && Array.isArray(cached)) setNpps(cached);
+        if (!disposed && owner === getOfflineOwner() && Array.isArray(cached)) {
+          setNpps(cached);
+          setLoading(false);
+        }
       } catch (cacheError) {
         recordOperationalError('runtime', cacheError);
       } finally {
@@ -104,13 +110,19 @@ export function useNpps() {
   // ── Realtime subscription ─────────────────────────────────────────────────
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) return;
+    const scheduler = createRefreshScheduler(fetchNpps, {
+      onError: error => recordOperationalError('runtime', error),
+    });
     const channel = supabase
       .channel('distributors-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'distributors' },
-        () => fetchNpps()
+        scheduler.schedule
       )
       .subscribe();
-    return () => supabase.removeChannel(channel);
+    return () => {
+      scheduler.dispose();
+      supabase.removeChannel(channel);
+    };
   }, [fetchNpps]);
 
   // ── CRUD Operations ────────────────────────────────────────────────────────

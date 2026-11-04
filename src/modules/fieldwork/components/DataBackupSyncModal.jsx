@@ -25,6 +25,7 @@ import { useAuth } from '../../../shared/context/AuthContext.jsx';
 import { ROLES } from '../../../shared/security/rbac.js';
 import { PERMISSION_PURPOSES, writeSensitiveClipboard } from '../../../shared/security/permissionPolicy.js';
 import { useSensitiveActionGate } from '../../../shared/components/SensitiveActionGate.jsx';
+import { confirmAction } from '../../../shared/utils/confirmDialog.js';
 
 /**
  * DataBackupSyncModal - Export/Import local device data & trigger cloud sync
@@ -165,8 +166,9 @@ export default function DataBackupSyncModal({
       const integrityMessage = result.integrityVerified
         ? 'Tệp đã vượt qua kiểm tra toàn vẹn SHA-256.'
         : 'Đây là tệp sao lưu phiên bản cũ, không có mã kiểm tra toàn vẹn.';
-      const confirmed = window.confirm(
-        `${integrityMessage}\nTổng cộng ${result.totalRecords} bản ghi sẽ được hợp nhất. Dữ liệu trùng mã có thể được cập nhật. Tiếp tục?`
+      const confirmed = await confirmAction(
+        `${integrityMessage}\nTổng cộng ${result.totalRecords} bản ghi sẽ được hợp nhất. Dữ liệu trùng mã có thể được cập nhật. Tiếp tục?`,
+        { title: 'Xác nhận nhập bản sao lưu', confirmLabel: 'Hợp nhất dữ liệu' }
       );
       if (!confirmed) return;
 

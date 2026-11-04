@@ -4,6 +4,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useAuth } from '../../../shared/context/AuthContext';
 import { useWorkspaceState } from '../../../shared/hooks/useWorkspaceState';
 import { matchesSearch } from '../../../shared/workspace/workspaceFilters.js';
+import { confirmAction } from '../../../shared/utils/confirmDialog.js';
 import {
   Navigation,
   MapPin,
@@ -343,10 +344,11 @@ export default function FieldRouteMap({
     }
 
     if (requiresConfirmation) {
-      const proceed = confirm(
+      const proceed = await confirmAction(
         `⚠️ CẢNH BÁO GPS GEOFENCING\n\n` +
           `${distanceMsg}\n\n` +
-          `Bạn có muốn ghi nhận check-in thực tế ở chế độ DEV (Bỏ qua định vị)?`
+          `Bạn có muốn ghi nhận check-in thực tế ở chế độ DEV (Bỏ qua định vị)?`,
+        { title: 'Xác nhận bỏ qua giới hạn GPS', confirmLabel: 'Ghi nhận check-in' }
       );
       if (!proceed) return;
     }

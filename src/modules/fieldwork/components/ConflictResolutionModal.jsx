@@ -5,6 +5,15 @@ import { addToQueue, getOfflineOwner, setCache } from '../../../shared/sync/offl
 import { dequeueOfflineAction } from '../../../shared/sync/offlineSync.js';
 
 const TABLES = { distributors: 'distributors', dispenser: 'dispensers', dispensers: 'dispensers', mixer: 'mixers', mixers: 'mixers', computer: 'computers', computers: 'computers', printer: 'printers', printers: 'printers', system_sets: 'system_sets', repair_tickets: 'repair_tickets' };
+const SNAPSHOT_COLUMNS = Object.freeze({
+  distributors: 'id,npp_code,updated_at,created_at,name,phone,contact_person,salesperson,brand,region,province,address,location_coordinates,google_maps_url,status,photos',
+  dispensers: 'id,serial,status,is_assigned,set_code,model,created_at,updated_at',
+  mixers: 'id,serial,status,is_assigned,set_code,model,type,created_at,updated_at',
+  computers: 'id,serial,status,is_assigned,set_code,type,os,specs,network,stabilizer,tinting_software,software_version,created_at,updated_at',
+  printers: 'id,serial,status,is_assigned,set_code,model,connection,created_at,updated_at',
+  system_sets: 'set_code,npp_id,npp_name,region,province,status,dispenser_id,dispenser_model,dispenser_serial,mixer_id,mixer_model,mixer_serial,computer_id,computer_type,computer_serial,printer_id,printer_serial,tinting_software,software_version,agent_status,install_date,last_maintenance_date,next_maintenance_due,technician,salesperson,stabilizer,notes,installation_photos,created_at,updated_at',
+  repair_tickets: 'id,ticket_code,date,technician,npp_id,npp_name,product_category,machine_model,serial_number,error_description,error_category,action_direction,replacement_condition,processing_status,customer_return_status,notes,photos,asset_code,field_visit_status,service_checklist,materials_used,before_photos,after_photos,npp_confirmation,sla_due_at,completed_at,assigned_user_id,assignment_due_date,record_version,last_updated_at,last_updated_by,created_at,updated_at',
+});
 const LABELS = { npp_code: 'Mã NPP', name: 'Tên', phone: 'Điện thoại', contact_person: 'Người liên hệ', region: 'Khu vực', province: 'Tỉnh / thành', serial: 'Serial', model: 'Model', status: 'Trạng thái', set_code: 'Mã bộ máy', notes: 'Ghi chú', processing_status: 'Trạng thái phiếu', error_description: 'Mô tả lỗi', assigned_user_id: 'Người được giao', assignment_due_date: 'Hạn xử lý' };
 const RESOLVABLE_ACTIONS = new Set(['EDIT_NPP', 'EDIT_DEVICE', 'LINK_DEVICE', 'UPDATE_SYSTEM_SET', 'EDIT_REPAIR']);
 
@@ -40,8 +49,10 @@ export default function ConflictResolutionModal({ item, onClose }) {
       }
       if (!table || !rowId || !supabase) { setMessage('Không thể xác định bản ghi máy chủ của thao tác này.'); setLoading(false); return; }
       const entityType = item?.entityType === 'device' ? table : (item?.entityType || item?.category || table);
+      const snapshotColumns = SNAPSHOT_COLUMNS[table];
+      if (!snapshotColumns) { setMessage('Loại dữ liệu này chưa được phép đọc để đối chiếu. Hàng chờ được giữ nguyên.'); setLoading(false); return; }
       const [result, versionResult] = await Promise.all([
-        safeQuery(client => client.from(table).select('*').eq(idColumn, rowId).maybeSingle(), 'loadSyncConflictSnapshot'),
+        safeQuery(client => client.from(table).select(snapshotColumns).eq(idColumn, rowId).maybeSingle(), 'loadSyncConflictSnapshot'),
         safeQuery(client => client.rpc('read_sync_entity_version', { p_entity_type: entityType, p_entity_id: String(rowId) }), 'readSyncConflictVersion'),
       ]);
       if (disposed || owner !== getOfflineOwner()) return;

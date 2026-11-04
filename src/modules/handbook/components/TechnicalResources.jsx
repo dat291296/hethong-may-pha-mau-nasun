@@ -6,6 +6,7 @@ import { FileText, ExternalLink, Upload, Trash2 } from 'lucide-react';
 import { useAuth } from '../../../shared/context/AuthContext';
 import { supabase, safeQuery } from '../../../shared/data-access/supabase';
 import { DOCUMENT_BUCKET, resourceError, validateDocumentFile, validateDocumentUrl } from '../lib/technicalResources';
+import { confirmAction } from '../../../shared/utils/confirmDialog.js';
 import './technicalResources.css';
 const fields = 'id,title,category,machine_model,url,storage_path,file_name,file_size,created_at';
 export default function TechnicalResources({ machineModel = '', modelOptions = [] }) {
@@ -85,7 +86,7 @@ export default function TechnicalResources({ machineModel = '', modelOptions = [
     } catch (err) { tab?.close(); setError(resourceError(err)); }
   }
   async function remove(document) {
-    if (role !== 'admin' || busy || !window.confirm(`Xóa "${document.title}" khỏi thư viện?`)) return;
+    if (role !== 'admin' || busy || !await confirmAction(`Xóa "${document.title}" khỏi thư viện?`, { title: 'Xác nhận xóa tài liệu', confirmLabel: 'Xóa tài liệu', danger: true })) return;
     setBusy(true); setError('');
     try {
       await requireAuthentication();

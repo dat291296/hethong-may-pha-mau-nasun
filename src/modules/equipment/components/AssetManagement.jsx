@@ -25,6 +25,7 @@ import { exportExcel } from '../../../shared/utils/excelExport.js';
 import { getSystemSetMissingFields } from '../utils/systemSetValidation.js';
 import { useWorkspaceState, useWorkspaceScroll } from '../../../shared/hooks/useWorkspaceState';
 import { usePullToRefresh } from '../../../shared/hooks/usePullToRefresh.js';
+import { confirmAction } from '../../../shared/utils/confirmDialog.js';
 
 const QrScannerModal = lazy(() => import('../../../shared/components/QrScannerModal.jsx'));
 const StockDeviceDialog = lazy(() => import('./StockDeviceDialog.jsx'));
@@ -459,7 +460,7 @@ export default function AssetManagement({ onReplaceEquipment,replacementEvents=[
       { label: 'Máy in', device: printers.find(item => item.id === newSetData.printerId) }
     ];
     const missingSerialDevices = selectedDevices.filter(item => isMissingSerial(item.device));
-    if (missingSerialDevices.length > 0 && !window.confirm(`⚠️ CẢNH BÁO SERI\n\n${missingSerialDevices.map(item => `• ${item.label}`).join('\n')} chưa có số seri. Khi ghép xong, thiết bị sẽ được đánh dấu nổi bật trong danh mục đã cấp phát.\n\nBạn vẫn muốn ghép bộ máy?`)) {
+    if (missingSerialDevices.length > 0 && !await confirmAction(`⚠️ CẢNH BÁO SERI\n\n${missingSerialDevices.map(item => `• ${item.label}`).join('\n')} chưa có số seri. Khi ghép xong, thiết bị sẽ được đánh dấu nổi bật trong danh mục đã cấp phát.\n\nBạn vẫn muốn ghép bộ máy?`, { title: 'Cảnh báo trước khi ghép bộ' })) {
       return;
     }
     assemblingRef.current=true;setAssembling(true);
@@ -576,7 +577,7 @@ export default function AssetManagement({ onReplaceEquipment,replacementEvents=[
     }
   };
 
-  const handleDeleteDevice = (category, item) => {
+  const handleDeleteDevice = async (category, item) => {
     const categoryNameMap = {
       dispenser: 'Máy chiết',
       mixer: 'Máy lắc',
@@ -588,11 +589,11 @@ export default function AssetManagement({ onReplaceEquipment,replacementEvents=[
     const nppText = assignedSet?.nppName ? ` (Đã gán cho NPP: ${assignedSet.nppName})` : '';
 
     if (item.isAssigned || item.setCode) {
-      if (window.confirm(`⚠️ [CẢNH BÁO ADMIN]\n${catLabel} [${item.id || item.model}] đang được gán trong bộ máy [${item.setCode}]${nppText}.\n\nBạn có chắc chắn muốn XÓA THIẾT BỊ NÀY khỏi hệ thống không?\n(Hệ thống sẽ tự động gỡ/giải phóng thiết bị khỏi bộ máy ${item.setCode}).`)) {
+      if (await confirmAction(`⚠️ ${catLabel} [${item.id || item.model}] đang được gán trong bộ máy [${item.setCode}]${nppText}.\n\nBạn có chắc chắn muốn xóa thiết bị này khỏi hệ thống không?\nHệ thống sẽ gỡ thiết bị khỏi bộ máy ${item.setCode}.`, { title: 'Xác nhận xóa thiết bị', confirmLabel: 'Xóa thiết bị', danger: true })) {
         onDeleteDevice(category, item.id, item.setCode);
       }
     } else {
-      if (window.confirm(`Bạn có chắc chắn muốn xóa ${catLabel} [${item.id || item.model}] khỏi kho?`)) {
+      if (await confirmAction(`Bạn có chắc chắn muốn xóa ${catLabel} [${item.id || item.model}] khỏi kho?`, { title: 'Xác nhận xóa thiết bị', confirmLabel: 'Xóa thiết bị', danger: true })) {
         onDeleteDevice(category, item.id, null);
       }
     }
@@ -677,7 +678,7 @@ export default function AssetManagement({ onReplaceEquipment,replacementEvents=[
   };
 
   const handleDeleteSet = async (setCode) => {
-    if (window.confirm(`Bạn có chắc chắn muốn xóa bộ máy [${setCode}] không? Các thiết bị liên kết sẽ tự động được giải phóng và đưa lại về kho lẻ.`)) {
+    if (await confirmAction(`Bạn có chắc chắn muốn xóa bộ máy [${setCode}] không? Các thiết bị liên kết sẽ tự động được giải phóng và đưa lại về kho lẻ.`, { title: 'Xác nhận xóa bộ máy', confirmLabel: 'Xóa bộ máy', danger: true })) {
       try {
         await onDeleteSet(setCode);
       } catch (err) {

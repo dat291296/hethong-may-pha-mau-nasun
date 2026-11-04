@@ -18,6 +18,7 @@ import { formatDateVN, getTodayIsoDate } from '../../../shared/utils/dateUtils.j
 import { Wrench, Eye, Edit3, Trash2, Clock, RefreshCw, PackageCheck, BarChart2 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts';
 import { sanitizeFormData, validateSerial } from '../../../shared/security/sanitize.js';
+import { confirmAction } from '../../../shared/utils/confirmDialog.js';
 
 export const MACHINE_MODELS = [
   'AI88',
@@ -509,7 +510,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
       alert('Bạn không có quyền xóa phiếu sửa chữa ở khu vực này!');
       return;
     }
-    if (confirm(`Bạn có chắc chắn muốn xóa Phiếu xử lý máy [${ticket.ticketCode}]?`)) {
+    if (await confirmAction(`Bạn có chắc chắn muốn xóa Phiếu xử lý máy [${ticket.ticketCode}]?`, { title: 'Xác nhận xóa phiếu sửa chữa', confirmLabel: 'Xóa phiếu', danger: true })) {
       try { await onDeleteTicket(ticket.id); } catch { alert('Không xóa được phiếu. Dữ liệu được giữ nguyên; kiểm tra quyền và kết nối rồi thử lại.'); }
     }
   };

@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 
 import { useAuth } from '../../shared/context/AuthContext.jsx';
+import { confirmAction } from '../../shared/utils/confirmDialog.js';
 
 export default function Sidebar({ activeTab, setActiveTab, maintenanceCount, pendingRepairCount, isOpen, onClose }) {
   const { role, signOut } = useAuth();
@@ -351,8 +352,8 @@ export default function Sidebar({ activeTab, setActiveTab, maintenanceCount, pen
       {/* Logout button */}
       <div style={{ padding: '0 12px 12px 12px' }}>
         <button
-          onClick={() => {
-            if (window.confirm('Bạn có chắc chắn muốn đăng xuất khỏi hệ thống?')) {
+          onClick={async () => {
+            if (await confirmAction('Bạn có chắc chắn muốn đăng xuất khỏi hệ thống?', { confirmLabel: 'Đăng xuất' })) {
               signOut();
               if (onClose) onClose();
             }

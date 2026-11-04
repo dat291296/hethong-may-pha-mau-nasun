@@ -26,7 +26,7 @@ test('full backup import and export are admin-only and require confirmation', as
   const modal = await readFile(modalUrl, 'utf8');
   assert.match(modal, /role === ROLES\.ADMIN/);
   assert.match(modal, /parseAndValidateBackup\(importJsonText\)/);
-  assert.match(modal, /window\.confirm/);
+  assert.match(modal, /confirmAction\(/);
   assert.match(modal, /integrityVerified/);
 });
 
