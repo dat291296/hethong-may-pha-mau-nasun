@@ -4,6 +4,12 @@ SET LOCAL statement_timeout='30s';
 DO $$
 DECLARE machine public.system_sets; item record; count_free integer;
 BEGIN
+  -- A completed one-time reconciliation must not undo later equipment assignments.
+  IF EXISTS(SELECT 1 FROM public.audit_logs
+    WHERE id='AUDIT-RECONCILE-SET-2026-104-20261102'
+      AND type='ĐỐI SOÁT THU HỒI' AND set_code='SET-2026-104' AND npp_id='NPP-MT-004') THEN
+    RETURN;
+  END IF;
   SELECT * INTO STRICT machine FROM public.system_sets WHERE set_code='SET-2026-104' FOR UPDATE;
   IF machine.npp_id IS NOT NULL OR NOT EXISTS(SELECT 1 FROM public.audit_logs WHERE set_code=machine.set_code AND type='THU HỒI' AND npp_id='NPP-MT-004' AND npp_name='Nguyên Linh') THEN
     RAISE EXCEPTION 'RECONCILIATION_WITHDRAWAL_EVIDENCE_REQUIRED';
