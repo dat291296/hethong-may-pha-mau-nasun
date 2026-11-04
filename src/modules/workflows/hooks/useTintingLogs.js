@@ -26,7 +26,9 @@ export function useTintingLogs() {
     if (!isSupabaseConfigured) return;
     setLoading(true);
     const { data, error } = await fetchAllRows(
-      sb => sb.from('tinting_logs').select('*').order('timestamp', { ascending: false }).order('id'),
+      sb => sb.from('tinting_logs')
+        .select('id,timestamp,npp_id,npp_name,set_code,dispenser_serial,color_code,product_line,base,container_size,quantity,total_volume_liters,pigment_used_ml,operator,status')
+        .order('timestamp', { ascending: false }).order('id'),
       safeQuery, 'fetchLogs', { key: 'id' }
     );
     if (requestOwner !== getOfflineOwner()) return false;

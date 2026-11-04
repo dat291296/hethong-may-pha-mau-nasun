@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import QrScanner from 'qr-scanner';
 
 const MAX_SCAN_LENGTH = 160;
 const DUPLICATE_WINDOW_MS = 800;
@@ -94,6 +93,7 @@ export function useQrScanner({ onScanSuccess }) {
     startingRef.current = true;
     setIsScanning(true);
     try {
+      const { default: QrScanner } = await import('qr-scanner');
       const scanner = new QrScanner(videoRef.current, result => handleDecodedValue(result?.data || result), {
         preferredCamera: 'environment', maxScansPerSecond: 8, highlightScanRegion: true, returnDetailedScanResult: true,
       });

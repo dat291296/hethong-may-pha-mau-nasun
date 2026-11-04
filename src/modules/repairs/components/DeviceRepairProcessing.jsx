@@ -6,6 +6,7 @@ import { userErrorMessage } from '../../../shared/security/userError.js';
 import { repairListPage, repairStringList, hasMalformedRepairLists, uniqueAssignedMachine } from '../lib/repairList.js';
 import { validateDocumentFile } from '../../handbook/lib/technicalResources.js';
 import { compressImage } from '../../../shared/utils/imageCompressor.js';
+import { mapWithConcurrency } from '../../../shared/utils/mapWithConcurrency.js';
 import { validateRepairReturn } from '../lib/repairLifecycle.js';
 import { repairMissingFields } from '../lib/repairCompleteness.js';
 import { getOwnedCacheEntries } from '../../../shared/sync/offlineDb.js';
@@ -91,7 +92,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
     const files=Array.from(event.target.files||[]);event.target.value='';setSaveError('');setPhotoBusy(true);
     try {
       if(files.length+repairStringList(formData.photos).length>6)throw new Error('Tối đa 6 ảnh lỗi cho mỗi phiếu.');
-      const images=[];for(const file of files){if(!file.type.startsWith('image/'))throw new Error('Chỉ nhận ảnh JPG, PNG hoặc WebP.');await validateDocumentFile(file);images.push(await compressImage(file));}
+      const images=await mapWithConcurrency(files,2,async file=>{if(!file.type.startsWith('image/'))throw new Error('Chỉ nhận ảnh JPG, PNG hoặc WebP.');await validateDocumentFile(file);return compressImage(file);});
       setFormData(previous=>({...previous,photos:[...(previous.photos||[]),...images]}));
     }catch(error){setSaveError(userErrorMessage(error));}finally{setPhotoBusy(false);}
   }

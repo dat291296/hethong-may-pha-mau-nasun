@@ -1,5 +1,5 @@
 import { EmptyState } from '../../../shared/components/DataState.jsx';
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { Edit3, Trash2, Camera, Image as ImageIcon, Eye } from 'lucide-react';
 import { getSystemSetMissingFields } from '../utils/systemSetValidation.js';
 import { isStabilizerMissing, STABILIZER_MISSING, STABILIZER_NPP } from '../lib/stabilizer.js';
@@ -12,6 +12,15 @@ function SwipeableAssetCard({ children, onSwipeRight, onSwipeLeft, disabled }) {
 }
 
 export default function AssetInventoryTables({ onResetFilters, activeSubTab, computers, dispensers, filteredSets, getAssignedInfo, getPaginatedList, getSetPhotos, handleDeleteDevice, handleDeleteSet, handleOpenEditDevice, handleOpenEditSet, incompleteSystemSets, looseInventoryGroups, mixers, printers, renderDeviceFilterBar, renderIssuedSerial, renderPaginationBar, setSelectedPhotoViewer, setSelectedSetDetails, sortedComputers, sortedDispensers, sortedMixers, sortedPrinters, stockBundleSummary, stockSets, hasNextPage = false, loadNextPage, onRequestRepair, canCreateRepair = false }) {
+  const computerById = useMemo(() => new Map((computers || []).map(computer => [computer.id, computer])), [computers]);
+  const printerById = useMemo(() => new Map((printers || []).map(printer => [printer.id, printer])), [printers]);
+  const printerBySerial = useMemo(() => {
+    const index = new Map();
+    for (const printer of printers || []) {
+      if (printer.serial && !index.has(printer.serial)) index.set(printer.serial, printer);
+    }
+    return index;
+  }, [printers]);
   const infiniteSentinelRef = useRef(null);
   useEffect(() => {
     const sentinel = infiniteSentinelRef.current;
@@ -81,10 +90,11 @@ export default function AssetInventoryTables({ onResetFilters, activeSubTab, com
                   const missingDispenserInfo = missingFields.filter(field => field.toLowerCase().includes('máy chiết'));
                   const missingMixerInfo = missingFields.filter(field => field.toLowerCase().includes('máy lắc'));
                   const missingPrinterInfo = missingFields.filter(field => field.toLowerCase().includes('máy in'));
-                  const pcObj = (computers || []).find(c => set.computerId && c.id === set.computerId);
+                  const pcObj = set.computerId ? computerById.get(set.computerId) : undefined;
                   const pcSpecsText = pcObj?.specs || set.pcSpecs || (set.pcType ? `${set.pcType} (${set.pcOs || ''})` : set.computerType || 'Chưa có cấu hình');
 
-                  const prnObj = (printers || []).find(p => (set.printerId && p.id === set.printerId) || (set.printerSerial && p.serial === set.printerSerial));
+                  const prnObj = (set.printerId ? printerById.get(set.printerId) : undefined)
+                    || (set.printerSerial ? printerBySerial.get(set.printerSerial) : undefined);
                   const printerModelText = prnObj?.model || set.printerModel || 'QL700';
                   const printerSerialText = set.printerSerial || prnObj?.serial || 'Chưa có seri';
                   const photos = getSetPhotos(set);

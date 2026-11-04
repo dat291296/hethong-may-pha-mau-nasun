@@ -6,6 +6,7 @@ import DraftNotice from '../../../shared/components/DraftNotice';
 import SafePortal from '../../../shared/components/SafePortal';
 import { maintenanceNotes, maintenanceSteps } from '../../equipment/lib/machineWorkspace';
 import { compressImage } from '../../../shared/utils/imageCompressor';
+import { mapWithConcurrency } from '../../../shared/utils/mapWithConcurrency.js';
 import { validateDocumentFile } from '../../handbook/lib/technicalResources';
 import {validateMaintenanceChecklist} from '../../fieldwork/lib/fieldCommands.js';
 
@@ -36,8 +37,10 @@ export default function MaintenanceChecklist({ onReturnToProfile, machine, onSav
     setError(''); setBusy(true);
     try {
       if (files.length > 3) throw new Error('Tối đa 3 ảnh cho mỗi giai đoạn.');
-      const images = [];
-      for (const file of files) { await validateDocumentFile(file); images.push(await compressImage(file)); }
+      const images = await mapWithConcurrency(files, 2, async file => {
+        await validateDocumentFile(file);
+        return compressImage(file);
+      });
       setPhotos(previous => ({ ...previous, [phase]: images }));
     } catch (err) { setError(userErrorMessage(err)); } finally { setBusy(false); }
   }

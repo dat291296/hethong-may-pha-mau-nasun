@@ -5,6 +5,7 @@ import DraftNotice from '../../../shared/components/DraftNotice.jsx';
 import { validateDocumentFile } from '../../handbook/lib/technicalResources.js';
 import { ArrowLeftRight, CheckCircle2, AlertTriangle, ShieldCheck, Printer, Calendar, Camera, X, Search } from 'lucide-react';
 import { compressImage } from '../../../shared/utils/imageCompressor.js';
+import { mapWithConcurrency } from '../../../shared/utils/mapWithConcurrency.js';
 import { useAuth } from '../../../shared/context/AuthContext.jsx';
 import { useModalScrollLock } from '../../../shared/hooks/useModalScrollLock.js';
 
@@ -76,16 +77,20 @@ export default function WorkflowModal({
   const handlePhotoUpload = async (e) => {
     const files = Array.from(e.target.files);
     if (files.length + photos.length > 6) { setSaveError('Tối đa 6 ảnh cho một nghiệp vụ.'); return; }
-    for (const file of files) {
+    const outcomes = await mapWithConcurrency(files, 2, async file => {
       try {
         const checked = await validateDocumentFile(file);
         if (!checked.mime.startsWith('image/')) throw new Error('Chỉ nhận tệp ảnh.');
-        const compressedBase64 = await compressImage(file);
-        setPhotos(prev => [...prev, compressedBase64]);
+        return { image: await compressImage(file), file };
       } catch (err) {
-        console.error('Error compressing image:', err);
-        alert(`Không thể thêm ảnh ${file.name}: ${userErrorMessage(err)}`);
+        return { error: err, file };
       }
+    });
+    const images = outcomes.filter(outcome => outcome.image).map(outcome => outcome.image);
+    if (images.length) setPhotos(previous => [...previous, ...images]);
+    for (const { error, file } of outcomes.filter(outcome => outcome.error)) {
+      console.error('Error compressing image:', error);
+      alert(`Không thể thêm ảnh ${file.name}: ${userErrorMessage(error)}`);
     }
   };
 

@@ -30,7 +30,7 @@ export async function saveEquipmentReplacement(runQuery,payload){
 }
 
 export async function readReplacementEvents(runQuery){
- const result=await fetchAllRows(client=>client.from('equipment_replacement_events').select('*').order('changed_at',{ascending:false}).order('operation_id'),runQuery,'equipmentReplacementEvents',{key:'operation_id'});
+ const result=await fetchAllRows(client=>client.from('equipment_replacement_events').select('operation_id,set_code,npp_id,region,category,action,old_device_id,new_device_id,old_condition,reason,changed_at').order('changed_at',{ascending:false}).order('operation_id'),runQuery,'equipmentReplacementEvents',{key:'operation_id'});
  if(result.error)throw result.error;
  return result.data;
 }

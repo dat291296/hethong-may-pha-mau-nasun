@@ -32,10 +32,11 @@ const manifest = { schemaVersion: 1, revision, buildFingerprint, algorithm: 'SHA
 await writeFile(path.join(distDir, 'build-manifest.json'), JSON.stringify(manifest, null, 2), 'utf8');
 assetHashes['/build-manifest.json'] = await sha256File('/build-manifest.json');
 files = Array.from(new Set(['/index.html', '/', ...files, '/build-manifest.json']));
+const coreFiles = files.filter(file => !/\/assets\/(?:exceljs\.min|qr-scanner(?:\.min|-worker\.min))[^/]*\.js$/i.test(file));
 const cacheName = `nasun-offline-${buildFingerprint}`;
 
 const serviceWorker = `const CACHE_NAME = ${JSON.stringify(cacheName)};
-const CORE_FILES = ${JSON.stringify(files, null, 2)};
+const CORE_FILES = ${JSON.stringify(coreFiles, null, 2)};
 const ASSET_HASHES = ${JSON.stringify(assetHashes, null, 2)};
 
 async function sha256Hex(buffer) {
@@ -157,4 +158,4 @@ self.addEventListener('fetch', event => {
 `;
 
 await writeFile(path.join(distDir, 'sw.js'), serviceWorker, 'utf8');
-console.log(`[offline] Generated ${cacheName} with ${files.length} integrity-checked files.`);
+console.log(`[offline] Generated ${cacheName} with ${coreFiles.length} integrity-checked core files.`);
