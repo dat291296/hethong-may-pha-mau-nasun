@@ -80,7 +80,7 @@ export function getPerformanceSnapshot() {
   return Object.fromEntries(metrics);
 }
 
-export function recordDataLoadMetric(duration) {
+export function recordDataLoadMetric(duration, name = 'DATA_LOAD') {
   if (!Number.isFinite(duration) || duration < 0 || typeof window === 'undefined') return;
-  publish('DATA_LOAD', duration);
+  publish(name, duration);
 }

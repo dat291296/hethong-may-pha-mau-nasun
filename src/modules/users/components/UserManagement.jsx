@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase, isSupabaseConfigured } from '../../../shared/data-access/supabase.js';
 import { useAuth } from '../../../shared/context/AuthContext.jsx';
 import { authorizeAccountManagement, confirmAccountUpdate } from '../../../shared/security/accountManagement.js';
+import { confirmAction } from '../../../shared/utils/confirmDialog.js';
 import { UserCheck, ShieldAlert, Trash2, Key, RefreshCw, Award, Lock, Unlock, Calendar, ExternalLink } from 'lucide-react';
 
 const keycloakAccountUrl = import.meta.env.VITE_KEYCLOAK_ACCOUNT_URL;
@@ -48,7 +49,7 @@ export default function UserManagement({
   };
 
   const handleUnlockClick = async (monthKey) => {
-    if (!window.confirm(`Bạn có chắc chắn muốn mở khóa sổ cho tháng ${monthKey}?`)) {
+    if (!await confirmAction(`Bạn có chắc chắn muốn mở khóa sổ cho tháng ${monthKey}?`, { title: 'Xác nhận mở khóa sổ', confirmLabel: 'Mở khóa' })) {
       return;
     }
     setLockSuccess('');
@@ -214,7 +215,7 @@ export default function UserManagement({
     const confirmation = nextActive
       ? 'Bạn có chắc chắn muốn kích hoạt lại tài khoản này?'
       : 'Bạn có chắc chắn muốn khóa tài khoản này? Dữ liệu liên quan vẫn được giữ nguyên.';
-    if (!window.confirm(confirmation)) {
+    if (!await confirmAction(confirmation, { title: nextActive ? 'Kích hoạt tài khoản' : 'Khóa tài khoản', confirmLabel: nextActive ? 'Kích hoạt' : 'Khóa', danger: !nextActive })) {
       return;
     }
 

@@ -1,4 +1,5 @@
 import RepairWorkspaceBoundary from '../modules/repairs/components/RepairWorkspaceBoundary.jsx';
+import ErrorBoundary from '../shared/components/ErrorBoundary.jsx';
 import {useReplacementEvents} from '../modules/equipment/hooks/useReplacementEvents.js';
 import { WorkspaceRegionContext } from '../shared/hooks/useWorkspaceState.js';
 import RegionalWorkspaceBar from './components/RegionalWorkspaceBar.jsx';
@@ -189,7 +190,7 @@ function AppWorkspace() {
   const { npps, setNpps, addNpp, editNpp, deleteNpp, importNpps, fetchNppPhotos, loading: nppsLoading, error: nppsLoadError, refetch: refetchNpps } = useNpps();
   const {
     dispensers, setDispensers, mixers, setMixers, computers, setComputers, printers, setPrinters, systemSets, setSystemSets,
-    addStockDevice, editDevice, editDeviceDetails, deleteDevice, deleteSystemSet, assembleSet, replaceEquipment, updateSystemSet, importDevices, importSystemSets, detailsReady: assetDetailsReady, summaryReady: assetSummaryReady, ensureDetails: ensureAssetDetails, loading: assetsLoading, loadError: assetsLoadError, refetch: refetchAssets
+    addStockDevice, editDevice, editDeviceDetails, deleteDevice, deleteSystemSet, assembleSet, replaceEquipment, updateSystemSet, importDevices, importSystemSets, detailsReady: assetDetailsReady, summaryReady: assetSummaryReady, systemSetsReady, ensureDetails: ensureAssetDetails, loading: assetsLoading, loadError: assetsLoadError, refetch: refetchAssets
   } = useAssets();
   const replacementHistory=useReplacementEvents();
   const handleReplaceEquipment=async payload=>{
@@ -869,7 +870,7 @@ function AppWorkspace() {
         </div>}
         <main key={activeTab} className="page-transition nasun-workspace" data-page={activeTab} style={{ flex: 1, padding: '28px', overflowY: 'auto' }}>
           {!['users', 'techHandbook', 'profile', 'syncLog', 'offline'].includes(activeTab) && <RegionalWorkspaceBar key={regionalIdentity} user={user} region={workspaceRegion} onChange={setWorkspaceRegion} counts={regionCounts} compact={activeTab === 'npp'} extra={activeTab === 'npp' ? <label className="coverage-inline">Ghép bộ<select aria-label="Lọc NPP theo tình trạng ghép bộ" className="form-select" value={nppCoverageFilter} onChange={event => setNppCoverageFilter(event.target.value)}><option value="ALL">Tất cả NPP</option><option value="ASSIGNED">Đã ghép bộ</option><option value="UNASSIGNED">Chưa ghép bộ</option></select></label> : null} />}
-          <WorkspaceRegionContext.Provider value={workspaceRegion}><Suspense key={`${regionalIdentity}:${workspaceRegion}`} fallback={<ModuleLoadingSkeleton type={activeTab} />}>
+          <WorkspaceRegionContext.Provider value={workspaceRegion}><ErrorBoundary key={`${regionalIdentity}:${workspaceRegion}:${activeTab}`} fallback={({ reset }) => <section role="alert" className="glass-panel" style={{ margin: '28px auto', maxWidth: 720, padding: 24 }}><h2>Không tải được màn hình này</h2><p>Phần dữ liệu đã lưu trên thiết bị vẫn được giữ nguyên. Thử tải lại module hoặc chuyển sang màn hình khác.</p><button type="button" className="btn btn-primary" onClick={reset}>Thử lại</button></section>}><Suspense key={`${regionalIdentity}:${workspaceRegion}`} fallback={<ModuleLoadingSkeleton type={activeTab} />}>
           {machineProfileReturn && ['repairs', 'maintenance'].includes(activeTab) && (
             <div className="glass-panel" style={{ padding: 12, marginBottom: 16 }}>
               <button className="btn btn-secondary" onClick={() => navigateWorkspace('assets', machineProfileReturn.search, machineProfileReturn.filter)}>← Quay lại hồ sơ máy {machineProfileReturn.machine.setCode}</button>
@@ -897,7 +898,7 @@ function AppWorkspace() {
             />
           ))}
 
-          {activeTab === 'npp' && (!assetDetailsReady ? <ModuleLoadingSkeleton type="npp" /> : (
+          {activeTab === 'npp' && (
             <NppManagement
               loading={nppsLoading}
               loadError={nppsLoadError}
@@ -907,13 +908,14 @@ function AppWorkspace() {
               globalSearch={globalSearch}
               npps={regionalData.npps}
               systemSets={regionalData.systemSets}
+              systemSetsReady={systemSetsReady}
               onAddNpp={handleAddNpp}
               onEditNpp={handleEditNpp}
               onDeleteNpp={handleDeleteNpp}
               onLoadNppPhotos={fetchNppPhotos}
               onOpenImportModal={() => openImportModal('npp')}
             />
-          ))}
+          )}
 
           {activeTab === 'assets' && (!assetDetailsReady ? <ModuleLoadingSkeleton type="assets" /> : (
             <AssetManagement
@@ -1074,7 +1076,7 @@ function AppWorkspace() {
             />
           )}
 
-          </Suspense></WorkspaceRegionContext.Provider>
+          </Suspense></ErrorBoundary></WorkspaceRegionContext.Provider>
 
         </main>
       </div>

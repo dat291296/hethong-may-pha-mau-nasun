@@ -20,8 +20,9 @@ import SafePortal from '../../../shared/components/SafePortal.jsx';
 import { useModalScrollLock } from '../../../shared/hooks/useModalScrollLock.js';
 import { exportExcel } from '../../../shared/utils/excelExport.js';
 import FloatingActionButton from '../../../shared/components/FloatingActionButton.jsx';
+import { confirmAction } from '../../../shared/utils/confirmDialog.js';
 
-export default function NppManagement({ globalSearch = '', loading = false, loadError = '', onReload, coverageFilter = 'ALL', onCoverageFilterChange = () => {}, npps, systemSets, onAddNpp, onEditNpp, onDeleteNpp, onLoadNppPhotos, onOpenImportModal }) {
+export default function NppManagement({ globalSearch = '', loading = false, loadError = '', onReload, coverageFilter = 'ALL', onCoverageFilterChange = () => {}, npps, systemSets, systemSetsReady = true, onAddNpp, onEditNpp, onDeleteNpp, onLoadNppPhotos, onOpenImportModal }) {
   const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useWorkspaceState('npps:search', '');
   useEffect(() => { if (globalSearch) setSearchTerm(globalSearch); }, [globalSearch, setSearchTerm]);
@@ -75,12 +76,12 @@ export default function NppManagement({ globalSearch = '', loading = false, load
 
   const filteredNpps = React.useMemo(() => npps.filter(npp => {
     const found = matchesSearch(searchTerm, [npp.name,npp.code,npp.id,npp.phone,npp.address,npp.salesperson,npp.province,npp.region,npp.contactPerson]);
-    const owners = systemSets.filter(machine => machine.nppId === npp.id).map(machine => machine.technician);
-    const matchesExtra = (provinceFilter === 'ALL' || npp.province === provinceFilter) && (ownerFilter === 'ALL' || owners.includes(ownerFilter)) && matchesDateRange(npp.createdAt,dateFrom,dateTo);
+    const owners = systemSetsReady ? systemSets.filter(machine => machine.nppId === npp.id).map(machine => machine.technician) : [];
+    const matchesExtra = (provinceFilter === 'ALL' || npp.province === provinceFilter) && (!systemSetsReady || ownerFilter === 'ALL' || owners.includes(ownerFilter)) && matchesDateRange(npp.createdAt,dateFrom,dateTo);
     const matchesStatus = statusFilter === 'ALL' || npp.status === statusFilter;
     const matchesBrand = brandFilter === 'ALL' || (npp.brand || 'Nasun') === brandFilter;
-    return found && matchesExtra && matchesStatus && matchesBrand && (coverageFilter === 'ALL' || (coverageFilter === 'ASSIGNED' ? coverage.assigned : coverage.unassigned).some(item => item.id === npp.id));
-  }), [npps, systemSets, searchTerm, provinceFilter, ownerFilter, dateFrom, dateTo, statusFilter, brandFilter, coverageFilter, coverage]);
+    return found && matchesExtra && matchesStatus && matchesBrand && (!systemSetsReady || coverageFilter === 'ALL' || (coverageFilter === 'ASSIGNED' ? coverage.assigned : coverage.unassigned).some(item => item.id === npp.id));
+  }), [npps, systemSets, systemSetsReady, searchTerm, provinceFilter, ownerFilter, dateFrom, dateTo, statusFilter, brandFilter, coverageFilter, coverage]);
 
   const nppPage = pageWindow(filteredNpps.length, currentPage, pageSize);
 
@@ -311,7 +312,7 @@ export default function NppManagement({ globalSearch = '', loading = false, load
       alert(`Bạn không có quyền xóa NPP ở khu vực ${npp.region}!`);
       return;
     }
-    if (confirm(`Bạn có chắc chắn muốn xóa Nhà Phân Phối "${npp.name}" (${npp.id}) khỏi hệ thống?`)) {
+    if (await confirmAction(`Bạn có chắc chắn muốn xóa Nhà Phân Phối "${npp.name}" (${npp.id}) khỏi hệ thống?`, { title: 'Xác nhận xóa NPP', confirmLabel: 'Xóa NPP', danger: true })) {
       try {
         const result = await onDeleteNpp(npp.id);
         if (result) setSaveNotice(result.queued ? 'Đã lưu yêu cầu xóa NPP, đang chờ đồng bộ.' : 'Đã xóa NPP trên hệ thống.');
@@ -323,6 +324,7 @@ export default function NppManagement({ globalSearch = '', loading = false, load
 
   return (
     <div className="workspace-screen nppmanagement-screen" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      {!systemSetsReady && <p role="status" className="resource-muted">Danh sách NPP đã tải; thông tin bộ máy liên kết đang được đồng bộ.</p>}
       {loading && npps.length === 0 && <DataLoadingState label="Đang tải danh sách NPP…" />}
       {loadError && <div role="alert" className="resource-error">{loadError}<button className="btn btn-secondary" disabled={loading} onClick={onReload}>Thử tải lại</button></div>}
       {!loading && !loadError && filteredNpps.length === 0 && <EmptyState title="Chưa có NPP phù hợp" description="Bỏ bộ lọc hoặc chọn Thêm NPP để tạo nhà phân phối trong miền được phân công." onAction={() => { setSearchTerm(''); setStatusFilter('ALL'); setBrandFilter('ALL'); setProvinceFilter('ALL'); setOwnerFilter('ALL'); setDateFrom(''); setDateTo(''); onCoverageFilterChange('ALL'); }} />}
@@ -330,14 +332,14 @@ export default function NppManagement({ globalSearch = '', loading = false, load
       
       <WorkspaceFilterBar search={searchTerm} onSearch={setSearchTerm} placeholder="Tìm mã, tên NPP, điện thoại…" count={filteredNpps.length} fields={[{key:'province',label:'Tỉnh / thành',value:provinceFilter,onChange:setProvinceFilter,options:uniqueOptions(npps.map(item=>item.province))},{key:'owner',label:'Kỹ thuật viên phụ trách bộ máy',value:ownerFilter,onChange:setOwnerFilter,options:uniqueOptions(systemSets.map(item=>item.technician))},{key:'brand',label:'Hãng',value:brandFilter,onChange:setBrandFilter,options:uniqueOptions(['Nasun','Natos'])},{key:'status',label:'Trạng thái',value:statusFilter,onChange:setStatusFilter,options:uniqueOptions(['Đang hợp tác','Đã ngưng hợp tác'])},{key:'from',label:'Ngày tạo NPP · từ',type:'date',defaultValue:'',value:dateFrom,onChange:setDateFrom},{key:'to',label:'Ngày tạo NPP · đến',type:'date',defaultValue:'',value:dateTo,onChange:setDateTo}]} onReset={() => { onCoverageFilterChange('ALL'); setSearchTerm(''); setStatusFilter('ALL'); setBrandFilter('ALL'); setProvinceFilter('ALL'); setOwnerFilter('ALL'); setDateFrom(''); setDateTo(''); }} actions={<><details className="filter-more-actions"><summary>Thao tác khác</summary><div><button className="btn btn-secondary" onClick={onOpenImportModal}>Nhập Excel</button><button className="btn btn-secondary" onClick={exportNpps}>Xuất Excel</button></div></details><button className="btn btn-primary" onClick={handleOpenAdd}>Thêm NPP</button></>}/>
 
-      <p className="npp-coverage-summary">{coverage.assigned.length} NPP đã ghép · {coverage.unassigned.length} NPP chưa ghép</p>
+      <p className="npp-coverage-summary">{systemSetsReady ? `${coverage.assigned.length} NPP đã ghép · ${coverage.unassigned.length} NPP chưa ghép` : 'Đang tải thống kê bộ máy liên kết…'}</p>
       {/* NPP Cards Grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}>
         {filteredNpps
           .slice(nppPage.start, nppPage.end)
           .map((npp) => {
-          const linkedSets = systemSets.filter(s => s.nppId === npp.id);
-          const assignedSets = assignedNppSets(npp, systemSets);
+          const linkedSets = systemSetsReady ? systemSets.filter(s => s.nppId === npp.id) : [];
+          const assignedSets = systemSetsReady ? assignedNppSets(npp, systemSets) : [];
           const isWithdrawn = linkedSets.length > 0 && linkedSets.every(set => set.status === 'DA_THU_HOI');
           const isInactive = String(npp.status || '').toLowerCase().includes('ngưng') || isWithdrawn;
           return (
@@ -448,11 +450,11 @@ export default function NppManagement({ globalSearch = '', loading = false, load
               <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem' }}>
                   <Cpu size={16} color="var(--accent-blue)" />
-                  <span style={{ fontWeight: '700' }}>{assignedSets.length}</span>
+                  <span style={{ fontWeight: '700' }}>{systemSetsReady ? assignedSets.length : '—'}</span>
                   <span style={{ color: 'var(--text-muted)' }}>Bộ Máy Cấp Phát</span>
                 </div>
 
-                <button className="btn btn-secondary btn-sm" onClick={() => handleOpenDetails(npp)}>
+                <button className="btn btn-secondary btn-sm" disabled={!systemSetsReady} onClick={() => handleOpenDetails(npp)}>
                   <Eye size={14} />
                   <span>Chi Tiết Máy & Ảnh</span>
                 </button>

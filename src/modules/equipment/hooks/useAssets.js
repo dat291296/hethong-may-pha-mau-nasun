@@ -77,6 +77,7 @@ export function useAssets() {
   const [cacheHydrated, setCacheHydrated] = useState(false);
   const [detailsReady, setDetailsReady] = useState(!isSupabaseConfigured);
   const [summaryReady, setSummaryReady] = useState(!isSupabaseConfigured);
+  const [systemSetsReady, setSystemSetsReady] = useState(!isSupabaseConfigured);
   const detailsRequestedRef = useRef(false);
   const fullTablesRef = useRef(new Set());
   const loadErrorsRef = useRef(new Map());
@@ -135,6 +136,7 @@ export function useAssets() {
           }
         }
         setSummaryReady(!isSupabaseConfigured || ASSET_TABLES.every(table => readyTablesRef.current.has(table)));
+        setSystemSetsReady(!isSupabaseConfigured || readyTablesRef.current.has('system_sets'));
         const complete = ASSET_TABLES.every(table => fullTablesRef.current.has(table));
         setDetailsReady(!isSupabaseConfigured || complete);
         if (complete) detailsRequestedRef.current = true;
@@ -210,6 +212,7 @@ export function useAssets() {
       }
 
       setSummaryReady(ASSET_TABLES.every(table => readyTablesRef.current.has(table)));
+      setSystemSetsReady(readyTablesRef.current.has('system_sets'));
       setDetailsReady(ASSET_TABLES.every(table => fullTablesRef.current.has(table)));
       const saved = (await Promise.all(cacheWrites)).every(Boolean);
       const failed = sources.filter(([result]) => result.error || !Array.isArray(result.data));
@@ -577,7 +580,7 @@ export function useAssets() {
     assembleSet,
     replaceEquipment,
     updateSystemSet,
-    detailsReady, summaryReady, ensureDetails,
+    detailsReady, summaryReady, systemSetsReady, ensureDetails,
     refetch: fetchAssets,
   };
 }

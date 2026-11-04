@@ -6,6 +6,7 @@ import { useAuth } from '../../../shared/context/AuthContext.jsx';
 import { useWorkspaceState, useWorkspaceScroll } from '../../../shared/hooks/useWorkspaceState.js';
 import { resolveMachine } from '../../equipment/lib/machineWorkspace';
 import MaintenanceChecklist from './MaintenanceChecklist';
+import { confirmAction } from '../../../shared/utils/confirmDialog.js';
 import React, { useState, useMemo, useEffect } from 'react';
 import { CalendarClock, CheckCircle2, AlertTriangle, ShieldAlert, Wrench, Search, Edit3, Trash2, BarChart2, PieChart as PieChartIcon } from 'lucide-react';
 import { 
@@ -85,7 +86,7 @@ export default function MaintenanceSchedule({ loading = false, onReturnToProfile
   };
 
   const handleDeleteMaint = async (setCode) => {
-    if (window.confirm(`Bạn có chắc chắn muốn xóa lịch bảo trì của bộ máy [${setCode}] không? Ngày bảo trì gần nhất và hạn tiếp theo sẽ được đặt về trống.`)) {
+    if (await confirmAction(`Bạn có chắc chắn muốn xóa lịch bảo trì của bộ máy [${setCode}] không? Ngày bảo trì gần nhất và hạn tiếp theo sẽ được đặt về trống.`, { title: 'Xác nhận xóa lịch bảo trì', confirmLabel: 'Xóa lịch', danger: true })) {
       try { await onUpdateSystemSet(setCode, {
         lastMaintenanceDate: null,
         nextMaintenanceDue: null

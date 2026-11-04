@@ -25,6 +25,7 @@ import {
   RotateCcw
 } from 'lucide-react';
 import SafePortal from '../../../shared/components/SafePortal';
+import { confirmAction } from '../../../shared/utils/confirmDialog.js';
 import TechnicalResources from './TechnicalResources';
 import { cacheOfflineData, getCachedOfflineData } from '../../../shared/sync/offlineSync.js';
 
@@ -148,14 +149,14 @@ export default function TechHandbook({ globalSearch = '', onSelectErrorForRepair
     setShowErrorModal(true);
   };
 
-  const handleDeleteError = (err) => {
-    if (window.confirm(`Bạn có chắc muốn xóa mã lỗi [${err.code}] ${err.title}?`)) {
+  const handleDeleteError = async (err) => {
+    if (await confirmAction(`Bạn có chắc muốn xóa mã lỗi [${err.code}] ${err.title}?`, { title: 'Xác nhận xóa mã lỗi', confirmLabel: 'Xóa mã lỗi', danger: true })) {
       setErrorCodes(prev => prev.filter(e => e.id !== err.id));
     }
   };
 
-  const handleResetDefaultErrors = () => {
-    if (window.confirm('Khôi phục danh sách mã lỗi về mặc định ban đầu?')) {
+  const handleResetDefaultErrors = async () => {
+    if (await confirmAction('Khôi phục danh sách mã lỗi về mặc định ban đầu?', { title: 'Khôi phục dữ liệu mặc định', confirmLabel: 'Khôi phục', danger: true })) {
       setErrorCodes(ERROR_CODES_DATA);
     }
   };

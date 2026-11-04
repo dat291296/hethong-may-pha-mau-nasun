@@ -47,6 +47,11 @@ export default class ErrorBoundary extends React.Component {
 
   render() {
     if (this.state.hasError) {
+      if (this.props.fallback) {
+        return typeof this.props.fallback === 'function'
+          ? this.props.fallback({ error: this.state.error, reset: () => this.setState({ hasError: false, error: null }) })
+          : this.props.fallback;
+      }
       return (
         <div style={{
           display: 'flex',
