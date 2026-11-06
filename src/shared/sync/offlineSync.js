@@ -156,6 +156,7 @@ function sortQueueByDependency(queue) {
     ADD_REPAIR: 70,
     EDIT_REPAIR: 80,
     ADD_AUDIT_LOG: 90,
+    ADD_QR_AUDIT: 91,
     UPDATE_AUDIT_LOG: 100,
     DELETE_AUDIT_LOG: 110,
     DELETE_REPAIR: 120,
@@ -904,10 +905,15 @@ const ATOMIC_SYNC_ACTIONS = new Set([
   'ADD_DEVICE', 'EDIT_DEVICE', 'DELETE_DEVICE', 'LINK_DEVICE',
   'ASSEMBLE_SET', 'UPDATE_SYSTEM_SET', 'DELETE_SYSTEM_SET',
   'ADD_REPAIR', 'EDIT_REPAIR', 'DELETE_REPAIR',
-  'ADD_AUDIT_LOG', 'UPDATE_AUDIT_LOG', 'DELETE_AUDIT_LOG'
+  'ADD_AUDIT_LOG', 'ADD_QR_AUDIT', 'UPDATE_AUDIT_LOG', 'DELETE_AUDIT_LOG'
 ]);
 
 async function executeAtomicSyncMutation(item, assertOwner = () => {}) {
+  if (item.action === 'ADD_QR_AUDIT') {
+    const { error } = await supabase.rpc('record_qr_audit', item.payload || {});
+    assertOwner();
+    return { handled: true, error, deferredLink: null };
+  }
   if(item.action==='ASSEMBLE_SET') {
     const payload=normalizeSystemSetPayload(item.payload,true);
     if(!['dispenser_id','mixer_id','computer_id','printer_id'].every(key=>payload[key])) return {handled:true,error:{code:'PERSISTENCE_DENIED',message:'Bản ráp bộ cũ thiếu mã bốn thiết bị. Giữ hàng đợi để đối chiếu.'},deferredLink:null};

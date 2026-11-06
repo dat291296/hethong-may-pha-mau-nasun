@@ -1,4 +1,3 @@
-import { createRefreshScheduler } from '../../../shared/data-access/refreshScheduler.js';
 import { getOfflineOwner } from '../../../shared/sync/offlineDb.js';
 import {submitFieldCommand} from '../../fieldwork/lib/fieldCommandClient.js';
 import {recordOperationalError} from '../../../shared/diagnostics/operationalDiagnostics.js';
@@ -6,7 +5,7 @@ import {normalizeCalendarDate,normalizeOptionalTimestamp} from '../../../shared/
 import { persistMutation, persistBatchMutation } from '../../../shared/data-access/durableMutation.js';
 import { fetchAllRows } from '../../../shared/data-access/paginatedQuery.js';
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { supabase, isSupabaseConfigured, safeQuery } from '../../../shared/data-access/supabase.js';
+import { isSupabaseConfigured, safeQuery } from '../../../shared/data-access/supabase.js';
 import { INITIAL_REPAIR_TICKETS } from '../../../shared/data/mockData.js';
 import { cacheOfflineData, getCachedOfflineData, enqueueOfflineAction, getOfflineQueue } from '../../../shared/sync/offlineSync.js';
 import { createRepairState } from '../lib/repairState.js';
@@ -30,7 +29,7 @@ export function filterRepairTicketsById(tickets, idToRemove) {
   return tickets.filter(ticket => String(ticket.id) !== String(idToRemove));
 }
 
-export function useRepairs() {
+export function useRepairs({ enabled = true } = {}) {
   const [repairTickets, publishRepairTickets] = useState(INITIAL_REPAIR_TICKETS);
   const [loading, setLoading] = useState(false);
   const [loadError,setLoadError]=useState('');
@@ -114,18 +113,8 @@ export function useRepairs() {
   },[repairState]);
 
   useEffect(() => {
-    if (cacheHydrated) void fetchRepairs();
-  }, [cacheHydrated, fetchRepairs]);
-
-  // Coalesce bursts and keep at most one realtime refresh in flight.
-  useEffect(() => {
-    if (!isSupabaseConfigured || !supabase) return;
-    const scheduler = createRefreshScheduler(fetchRepairs);
-    const channel = supabase.channel('repair_tickets-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'repair_tickets' }, scheduler.schedule)
-      .subscribe();
-    return () => { scheduler.dispose(); supabase.removeChannel(channel); };
-  }, [fetchRepairs]);
+    if (cacheHydrated && enabled) void fetchRepairs();
+  }, [cacheHydrated, enabled, fetchRepairs]);
 
   const addTicket = useCallback(async (ticketData) => withRepairWrite(async owner => {
     const tempId = ticketData.id || crypto.randomUUID();

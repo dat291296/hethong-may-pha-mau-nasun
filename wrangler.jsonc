@@ -3,6 +3,7 @@
   "name": "kythuat",
   "main": "src/worker.js",
   "account_id": "21ff310b4d7bd6a53a9b2f66d219c08e",
+  "vars": { "VITE_APP_PUBLIC_URL": "https://kythuat.nasun.workers.dev" },
   "compatibility_date": "2024-09-23",
   "observability": {
     "enabled": true

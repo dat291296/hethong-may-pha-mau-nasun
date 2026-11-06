@@ -5,7 +5,7 @@ import { supabase, isSupabaseConfigured, safeQuery } from '../../../shared/data-
 import { INITIAL_TINTING_LOGS } from '../../../shared/data/mockData.js';
 import { cacheOfflineData, getCachedOfflineData } from '../../../shared/sync/offlineSync.js';
 
-export function useTintingLogs() {
+export function useTintingLogs({ enabled = true } = {}) {
   const [tintingLogs, setTintingLogs] = useState(INITIAL_TINTING_LOGS);
   const [loading, setLoading] = useState(false);
 
@@ -46,18 +46,8 @@ export function useTintingLogs() {
   }, []);
 
   useEffect(() => {
-    fetchLogs();
-  }, [fetchLogs]);
-
-  // Realtime subscription
-  useEffect(() => {
-    if (!isSupabaseConfigured || !supabase) return;
-    const channel = supabase
-      .channel('tinting-log-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tinting_logs' }, () => fetchLogs())
-      .subscribe();
-    return () => supabase.removeChannel(channel);
-  }, [fetchLogs]);
+    if (enabled) fetchLogs();
+  }, [enabled, fetchLogs]);
 
   const addLog = useCallback(async (logData) => {
     const tempId = logData.id || `LOG-TEMP-${Date.now()}`;

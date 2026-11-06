@@ -89,7 +89,6 @@ export function useAssets() {
     const promise = new Promise(done => { resolve = done; });
     hydrationRef.current = { promise, resolve };
   }
-  const realtimeTimerRef = useRef(null);
 
   const deviceConfigs = useMemo(() => {
     const definitions = [
@@ -267,29 +266,6 @@ export function useAssets() {
       cancelled = true;
       if (idleHandle !== undefined) window.cancelIdleCallback(idleHandle);
       window.clearTimeout(timer);
-    };
-  }, [cacheHydrated, fetchAssets]);
-
-  // ── Realtime subscriptions for all asset tables ───────────────────────────
-  useEffect(() => {
-    if (!cacheHydrated || !isSupabaseConfigured || !supabase) return;
-    const changedTables = new Set();
-    const scheduleRefresh = table => {
-      changedTables.add(table);
-      window.clearTimeout(realtimeTimerRef.current);
-      realtimeTimerRef.current = window.setTimeout(() => {
-        const tables = [...changedTables];
-        changedTables.clear();
-        void fetchAssets(tables);
-      }, 500);
-    };
-    const tables = ['dispensers', 'mixers', 'computers', 'printers', 'system_sets'];
-    const channel = supabase.channel('asset-changes');
-    tables.forEach(table => channel.on('postgres_changes', { event: '*', schema: 'public', table }, () => scheduleRefresh(table)));
-    channel.subscribe();
-    return () => {
-      window.clearTimeout(realtimeTimerRef.current);
-      supabase.removeChannel(channel);
     };
   }, [cacheHydrated, fetchAssets]);
 

@@ -6,7 +6,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Bell, Search, PlusCircle, AlertTriangle, ShieldAlert, CheckCircle2, UserCheck, Wifi, WifiOff, RefreshCw, Menu, Database, MoreHorizontal } from 'lucide-react';
 import RoleSelector from '../../shared/components/RoleSelector.jsx';
 import { useAuth } from '../../shared/context/AuthContext.jsx';
-import { ROLE_LABELS, ROLE_COLORS } from '../../shared/security/rbac.js';
+import { ROLE_LABELS, ROLE_COLORS, hasPermission } from '../../shared/security/rbac.js';
 import { getOfflineQueue, syncOfflineQueue } from '../../shared/sync/offlineSync.js';
 import DataBackupSyncModal from '../../modules/fieldwork/components/DataBackupSyncModal.jsx';
 
@@ -16,6 +16,7 @@ export default function Header({
   setGlobalSearch, 
   onNavigate,
   onOpenNewInstallation,
+  onOpenQrScan,
   maintenanceAlerts: allMaintenanceAlerts = [],
   unstabilizedAlerts: allUnstabilizedAlerts = [],
   onOpenMobileSidebar,
@@ -262,6 +263,7 @@ export default function Header({
           <PlusCircle size={16} />
           <span>Lắp Đặt Cho NPP</span>
         </button>
+        {hasPermission(role, 'qr:scan') && <button type="button" className="btn btn-secondary btn-sm header-action-btn" onClick={onOpenQrScan} style={{ minHeight: 44 }}><Search size={16}/><span>Quét QR</span></button>}
 
         {/* Data Backup & Sync Button */}
         <button 

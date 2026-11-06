@@ -5,7 +5,7 @@ import { userErrorMessage } from '../../../shared/security/userError.js';
 import { missingNppFields } from '../../equipment/lib/dataCompleteness.js';
 import { isSupabaseConfigured } from '../../../shared/data-access/supabase.js';
 import { nextNppCode, validateNppCode } from '../lib/nppCodes.js';
-import { nppCoverage, assignedNppSets } from '../lib/nppCoverage.js';
+import { nppCoverage } from '../lib/nppCoverage.js';
 import WorkspaceFilterBar from '../../../shared/components/WorkspaceFilterBar.jsx';
 import { matchesSearch, matchesDateRange, uniqueOptions } from '../../../shared/workspace/workspaceFilters.js';
 import { useWorkspaceState, useWorkspaceScroll } from '../../../shared/hooks/useWorkspaceState.js';
@@ -22,16 +22,40 @@ import { exportExcel } from '../../../shared/utils/excelExport.js';
 import FloatingActionButton from '../../../shared/components/FloatingActionButton.jsx';
 import { confirmAction } from '../../../shared/utils/confirmDialog.js';
 
-export default function NppManagement({ globalSearch = '', loading = false, loadError = '', onReload, coverageFilter = 'ALL', onCoverageFilterChange = () => {}, npps, systemSets, systemSetsReady = true, onAddNpp, onEditNpp, onDeleteNpp, onLoadNppPhotos, onOpenImportModal }) {
-  const { user } = useAuth();
+export default function NppManagement({ globalSearch = '', loading = false, loadError = '', onReload, coverageFilter = 'ALL', onCoverageFilterChange = () => {}, npps, systemSets, devices = [], systemSetsReady = true, replacementEvents = [], onAddNpp, onEditNpp, onDeleteNpp, onLoadNppPhotos, onOpenImportModal, onOpenQrScan, onOpenQrPrint, onReissueQrToken, onOpenMachineProfile, onRequestWorkProgress, qrLookupTarget }) {
+  const { user, can } = useAuth();
   const [searchTerm, setSearchTerm] = useWorkspaceState('npps:search', '');
   useEffect(() => { if (globalSearch) setSearchTerm(globalSearch); }, [globalSearch, setSearchTerm]);
   useWorkspaceScroll('npps');
   const [customCode, setCustomCode] = useState(false);
   const coverage = React.useMemo(() => nppCoverage(npps, systemSets), [npps, systemSets]);
+  const coverageAssignedIds = React.useMemo(() => new Set(coverage.assigned.map(item => String(item.id))), [coverage.assigned]);
   const [statusFilter, setStatusFilter] = useWorkspaceState('npps:status', 'ALL');
   const [brandFilter, setBrandFilter] = useWorkspaceState('npps:brand', 'ALL');
   const [selectedNpp, setSelectedNpp] = useState(null);
+  const [reissueBusy, setReissueBusy] = useState(false);
+  const [reissueMessage, setReissueMessage] = useState('');
+  const setsByNppId = React.useMemo(() => {
+    const index = new Map();
+    for (const item of systemSets || []) {
+      const key = String(item.nppId ?? item.npp_id ?? '');
+      if (!key) continue;
+      if (!index.has(key)) index.set(key, []);
+      index.get(key).push(item);
+    }
+    return index;
+  }, [systemSets]);
+  const devicesBySerial = React.useMemo(() => {
+    const index = new Map();
+    for (const device of devices || []) {
+      const key = String(device.serial || '').trim().toLocaleLowerCase('vi');
+      if (!key) continue;
+      if (!index.has(key)) index.set(key, []);
+      index.get(key).push(device);
+    }
+    return index;
+  }, [devices]);
+  const selectedNppSets = selectedNpp ? setsByNppId.get(String(selectedNpp.id)) || [] : [];
   
   // Pagination State
   const [currentPage, setCurrentPage] = useWorkspaceState('npps:page', 1);
@@ -76,12 +100,13 @@ export default function NppManagement({ globalSearch = '', loading = false, load
 
   const filteredNpps = React.useMemo(() => npps.filter(npp => {
     const found = matchesSearch(searchTerm, [npp.name,npp.code,npp.id,npp.phone,npp.address,npp.salesperson,npp.province,npp.region,npp.contactPerson]);
-    const owners = systemSetsReady ? systemSets.filter(machine => machine.nppId === npp.id).map(machine => machine.technician) : [];
+    const owners = systemSetsReady ? (setsByNppId.get(String(npp.id)) || []).map(machine => machine.technician) : [];
     const matchesExtra = (provinceFilter === 'ALL' || npp.province === provinceFilter) && (!systemSetsReady || ownerFilter === 'ALL' || owners.includes(ownerFilter)) && matchesDateRange(npp.createdAt,dateFrom,dateTo);
     const matchesStatus = statusFilter === 'ALL' || npp.status === statusFilter;
     const matchesBrand = brandFilter === 'ALL' || (npp.brand || 'Nasun') === brandFilter;
-    return found && matchesExtra && matchesStatus && matchesBrand && (!systemSetsReady || coverageFilter === 'ALL' || (coverageFilter === 'ASSIGNED' ? coverage.assigned : coverage.unassigned).some(item => item.id === npp.id));
-  }), [npps, systemSets, systemSetsReady, searchTerm, provinceFilter, ownerFilter, dateFrom, dateTo, statusFilter, brandFilter, coverageFilter, coverage]);
+    const isAssigned = coverageAssignedIds.has(String(npp.id));
+    return found && matchesExtra && matchesStatus && matchesBrand && (!systemSetsReady || coverageFilter === 'ALL' || (coverageFilter === 'ASSIGNED' ? isAssigned : !isAssigned));
+  }), [npps, setsByNppId, systemSetsReady, searchTerm, provinceFilter, ownerFilter, dateFrom, dateTo, statusFilter, brandFilter, coverageFilter, coverageAssignedIds]);
 
   const nppPage = pageWindow(filteredNpps.length, currentPage, pageSize);
 
@@ -154,6 +179,14 @@ export default function NppManagement({ globalSearch = '', loading = false, load
       alert('Chưa tải được thư viện ảnh NPP. Thông tin NPP vẫn được giữ nguyên.');
     }
   };
+  const openedQrScanId = React.useRef('');
+  useEffect(() => {
+    if (!qrLookupTarget?.scanId || openedQrScanId.current === qrLookupTarget.scanId) return;
+    const match = npps.find(item => String(item.id) === String(qrLookupTarget.nppId));
+    if (!match) return;
+    openedQrScanId.current = qrLookupTarget.scanId;
+    setSelectedNpp(match);
+  }, [qrLookupTarget?.scanId, qrLookupTarget?.nppId, npps]);
 
   const handlePhotoUpload = async (e) => {
     const files = Array.from(e.target.files);
@@ -329,6 +362,7 @@ export default function NppManagement({ globalSearch = '', loading = false, load
       {loadError && <div role="alert" className="resource-error">{loadError}<button className="btn btn-secondary" disabled={loading} onClick={onReload}>Thử tải lại</button></div>}
       {!loading && !loadError && filteredNpps.length === 0 && <EmptyState title="Chưa có NPP phù hợp" description="Bỏ bộ lọc hoặc chọn Thêm NPP để tạo nhà phân phối trong miền được phân công." onAction={() => { setSearchTerm(''); setStatusFilter('ALL'); setBrandFilter('ALL'); setProvinceFilter('ALL'); setOwnerFilter('ALL'); setDateFrom(''); setDateTo(''); onCoverageFilterChange('ALL'); }} />}
       {saveNotice && <div role="status" className="glass-panel" style={{ padding: '12px' }}>{saveNotice}</div>}
+      <div className="npp-qr-toolbar">{can('qr:scan') && <button type="button" className="btn btn-secondary" style={{ minHeight: 48 }} onClick={onOpenQrScan}><Camera size={17}/> Quét QR</button>}{can('qr:print') && <button type="button" className="btn btn-secondary" style={{ minHeight: 48 }} onClick={() => onOpenQrPrint?.(filteredNpps)}>In tem QR A8</button>}{qrLookupTarget && <span role="status">Đang xem kết quả quét · bộ máy {qrLookupTarget.highlightedSetCode || 'chưa chọn'}</span>}</div>
       
       <WorkspaceFilterBar search={searchTerm} onSearch={setSearchTerm} placeholder="Tìm mã, tên NPP, điện thoại…" count={filteredNpps.length} fields={[{key:'province',label:'Tỉnh / thành',value:provinceFilter,onChange:setProvinceFilter,options:uniqueOptions(npps.map(item=>item.province))},{key:'owner',label:'Kỹ thuật viên phụ trách bộ máy',value:ownerFilter,onChange:setOwnerFilter,options:uniqueOptions(systemSets.map(item=>item.technician))},{key:'brand',label:'Hãng',value:brandFilter,onChange:setBrandFilter,options:uniqueOptions(['Nasun','Natos'])},{key:'status',label:'Trạng thái',value:statusFilter,onChange:setStatusFilter,options:uniqueOptions(['Đang hợp tác','Đã ngưng hợp tác'])},{key:'from',label:'Ngày tạo NPP · từ',type:'date',defaultValue:'',value:dateFrom,onChange:setDateFrom},{key:'to',label:'Ngày tạo NPP · đến',type:'date',defaultValue:'',value:dateTo,onChange:setDateTo}]} onReset={() => { onCoverageFilterChange('ALL'); setSearchTerm(''); setStatusFilter('ALL'); setBrandFilter('ALL'); setProvinceFilter('ALL'); setOwnerFilter('ALL'); setDateFrom(''); setDateTo(''); }} actions={<><details className="filter-more-actions"><summary>Thao tác khác</summary><div><button className="btn btn-secondary" onClick={onOpenImportModal}>Nhập Excel</button><button className="btn btn-secondary" onClick={exportNpps}>Xuất Excel</button></div></details><button className="btn btn-primary" onClick={handleOpenAdd}>Thêm NPP</button></>}/>
 
@@ -338,8 +372,8 @@ export default function NppManagement({ globalSearch = '', loading = false, load
         {filteredNpps
           .slice(nppPage.start, nppPage.end)
           .map((npp) => {
-          const linkedSets = systemSetsReady ? systemSets.filter(s => s.nppId === npp.id) : [];
-          const assignedSets = systemSetsReady ? assignedNppSets(npp, systemSets) : [];
+          const linkedSets = systemSetsReady ? setsByNppId.get(String(npp.id)) || [] : [];
+          const assignedSets = systemSetsReady ? linkedSets.filter(set => !['DA_THU_HOI', 'TRONG_KHO'].includes(set.status)) : [];
           const isWithdrawn = linkedSets.length > 0 && linkedSets.every(set => set.status === 'DA_THU_HOI');
           const isInactive = String(npp.status || '').toLowerCase().includes('ngưng') || isWithdrawn;
           return (
@@ -715,31 +749,35 @@ export default function NppManagement({ globalSearch = '', loading = false, load
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px', background: 'var(--bg-main)', padding: '16px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
                   <div><strong>Hãng:</strong> <span className="badge badge-purple" style={{ fontSize: '0.8rem' }}>{selectedNpp.brand || 'Nasun'}</span></div>
                   <div><strong>Khu Vực:</strong> {selectedNpp.region} ({selectedNpp.province})</div>
-                  <div style={{ gridColumn: 'span 2' }}><strong>SĐT Liên Hệ:</strong> {selectedNpp.phone} ({selectedNpp.contactPerson || 'Đại diện'})</div>
+                  <div style={{ gridColumn: 'span 2' }}><strong>SĐT Liên Hệ:</strong> <a href={`tel:${String(selectedNpp.phone || '').replace(/[^+\d]/g, '')}`}>{selectedNpp.phone}</a> ({selectedNpp.contactPerson || 'Đại diện'})</div>
                   {selectedNpp.salesperson && (
                     <div style={{ gridColumn: 'span 2' }}>
                       <strong>💼 Nhân Viên KD Phụ Trách:</strong> 
                       <span style={{ color: 'var(--accent-emerald)', fontWeight: '600' }}>{selectedNpp.salesperson}</span>
                     </div>
                   )}
-                  <div style={{ gridColumn: 'span 2' }}><strong>Địa Chỉ:</strong> {selectedNpp.address}</div>
+                  <div style={{ gridColumn: 'span 2' }}><strong>Địa Chỉ:</strong> {selectedNpp.address} {selectedNpp.googleMapsUrl && <a href={selectedNpp.googleMapsUrl} target="_blank" rel="noreferrer">Chỉ đường</a>}</div>
                 </div>
 
                 {/* Display Associated Color Machine Sets */}
                 <div style={{ marginBottom: '24px' }}>
                   <h4 style={{ fontSize: '1rem', fontWeight: '800', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Layers size={18} style={{ color: 'var(--accent-blue)' }} />
-                    Bộ Máy Pha Màu Liên Kết / Lịch Sử ({(systemSets || []).filter(s => s && (String(s.nppId) === String(selectedNpp.id) || String(s.npp_id) === String(selectedNpp.id))).length} bộ)
+                    Bộ Máy Pha Màu Liên Kết / Lịch Sử ({selectedNppSets.length} bộ)
                   </h4>
-                  {(systemSets || []).filter(s => s && (String(s.nppId) === String(selectedNpp.id) || String(s.npp_id) === String(selectedNpp.id))).length === 0 ? (
+                  {selectedNppSets.length === 0 ? (
                     <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>Chưa có bộ máy pha màu nào được gán cho NPP này.</p>
                   ) : (
                     <div style={{ display: 'grid', gap: '10px' }}>
-                      {(systemSets || []).filter(s => s && (String(s.nppId) === String(selectedNpp.id) || String(s.npp_id) === String(selectedNpp.id))).map(set => (
-                        <div key={set.setCode || set.id} style={{ padding: '12px', background: 'var(--bg-main)', border: '1px solid var(--border-color)', borderRadius: '8px', fontSize: '0.85rem' }}>
+                      {selectedNppSets.map(set => (
+                        <div key={set.setCode || set.id} style={{ padding: '12px', background: 'var(--bg-main)', border: set.setCode === qrLookupTarget?.highlightedSetCode ? '2px solid var(--accent-cyan)' : '1px solid var(--border-color)', borderRadius: '8px', fontSize: '0.85rem' }}>
                           <div style={{ fontWeight: '700', color: 'var(--accent-cyan)' }}>Mã bộ: {set.setCode || set.id}</div>
+                          <div>{[['Máy chiết', set.dispenserModel, set.dispenserSerial], ['Máy lắc', set.mixerModel, set.mixerSerial], ['Máy tính', set.computerType, set.computerSerial || set.pcSerial], ['Máy in', set.printerModel, set.printerSerial]].map(([label, model, serial]) => { const device = devicesBySerial.get(String(serial || '').toLocaleLowerCase('vi'))?.[0]; return <span key={label} style={{ display: 'block' }}>{label}: {model || '—'} · {serial || 'Chưa gán'} · {device?.status || 'Chưa có trạng thái thiết bị'}</span>; })}</div>
+                          <div>Trạng thái: {set.status || '—'} · Ngày lắp: {set.installDate || '—'}</div>
                           <div>Kỹ thuật viên: {set.technician || 'Chưa phân công'}</div>
                           <div>Ghi chú: {set.notes || 'Không có'}</div>
+                          {(replacementEvents || []).filter(event => event.setCode === set.setCode).length > 0 && <div><strong>Lịch sử thay thế:</strong> {(replacementEvents || []).filter(event => event.setCode === set.setCode).map(event => `${event.changedAt || '—'} ${event.action || ''}: ${event.oldDeviceId || '—'} → ${event.newDeviceId || '—'}`).join(' · ')}</div>}
+                          {set.setCode && <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}><button type="button" className="btn btn-secondary btn-sm" onClick={() => onOpenMachineProfile?.(set)}>Mở hồ sơ bộ máy</button><button type="button" className="btn btn-primary btn-sm" onClick={() => onRequestWorkProgress?.(selectedNpp, set)}>Cập nhật tiến độ công việc</button></div>}
                         </div>
                       ))}
                     </div>
@@ -765,6 +803,14 @@ export default function NppManagement({ globalSearch = '', loading = false, load
 
               </div>
               <div className="modal-footer">
+                {can('qr:print') && <button type="button" className="btn btn-secondary" disabled={reissueBusy} onClick={async () => {
+                  if (!await confirmAction(`Cấp lại mã QR cho ${selectedNpp.code || selectedNpp.id}? Mã cũ sẽ hết hiệu lực ngay.`, { title: 'Cấp lại mã QR', confirmLabel: 'Cấp lại mã' })) return;
+                  setReissueBusy(true); setReissueMessage('');
+                  try { const token = await onReissueQrToken?.(selectedNpp.id); setSelectedNpp(current => current ? { ...current, qrToken: token } : current); setReissueMessage('Đã cấp lại mã QR. Mã cũ không còn hiệu lực.'); }
+                  catch { setReissueMessage('Chưa cấp lại được mã QR. Kiểm tra quyền và kết nối.'); }
+                  finally { setReissueBusy(false); }
+                }}>{reissueBusy ? 'Đang cấp lại…' : 'Cấp lại mã QR'}</button>}
+                {reissueMessage && <span role="status">{reissueMessage}</span>}
                 <button className="btn btn-secondary" onClick={() => setSelectedNpp(null)}>Đóng</button>
               </div>
             </div>

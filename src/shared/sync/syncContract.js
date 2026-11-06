@@ -5,7 +5,7 @@ const ENTITY_BY_ACTION = Object.freeze({
   ADD_DEVICE: 'device', EDIT_DEVICE: 'device', DELETE_DEVICE: 'device', LINK_DEVICE: 'device',
   ASSEMBLE_SET: 'system_sets', UPDATE_SYSTEM_SET: 'system_sets', DELETE_SYSTEM_SET: 'system_sets',
   ADD_REPAIR: 'repair_tickets', EDIT_REPAIR: 'repair_tickets', DELETE_REPAIR: 'repair_tickets',
-  ADD_AUDIT_LOG: 'audit_logs', UPDATE_AUDIT_LOG: 'audit_logs', DELETE_AUDIT_LOG: 'audit_logs',
+  ADD_AUDIT_LOG: 'audit_logs', ADD_QR_AUDIT: 'audit_logs', UPDATE_AUDIT_LOG: 'audit_logs', DELETE_AUDIT_LOG: 'audit_logs',
   EXECUTE_WORKFLOW: 'workflow'
 });
 
