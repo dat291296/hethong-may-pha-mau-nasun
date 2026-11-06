@@ -22,7 +22,7 @@ import { exportExcel } from '../../../shared/utils/excelExport.js';
 import FloatingActionButton from '../../../shared/components/FloatingActionButton.jsx';
 import { confirmAction } from '../../../shared/utils/confirmDialog.js';
 
-export default function NppManagement({ globalSearch = '', loading = false, loadError = '', onReload, coverageFilter = 'ALL', onCoverageFilterChange = () => {}, npps, systemSets, devices = [], systemSetsReady = true, replacementEvents = [], onAddNpp, onEditNpp, onDeleteNpp, onLoadNppPhotos, onOpenImportModal, onOpenQrScan, onOpenQrPrint, onReissueQrToken, onOpenMachineProfile, onRequestWorkProgress, qrLookupTarget }) {
+export default function NppManagement({ globalSearch = '', loading = false, loadError = '', onReload, coverageFilter = 'ALL', onCoverageFilterChange = () => {}, npps, systemSets, devices = [], systemSetsReady = true, replacementEvents = [], onAddNpp, onEditNpp, onDeleteNpp, onLoadNppPhotos, onOpenImportModal, onOpenQrScan, onReissueQrToken, onOpenMachineProfile, onRequestWorkProgress, qrLookupTarget }) {
   const { user, can } = useAuth();
   const [searchTerm, setSearchTerm] = useWorkspaceState('npps:search', '');
   useEffect(() => { if (globalSearch) setSearchTerm(globalSearch); }, [globalSearch, setSearchTerm]);
@@ -362,7 +362,7 @@ export default function NppManagement({ globalSearch = '', loading = false, load
       {loadError && <div role="alert" className="resource-error">{loadError}<button className="btn btn-secondary" disabled={loading} onClick={onReload}>Thử tải lại</button></div>}
       {!loading && !loadError && filteredNpps.length === 0 && <EmptyState title="Chưa có NPP phù hợp" description="Bỏ bộ lọc hoặc chọn Thêm NPP để tạo nhà phân phối trong miền được phân công." onAction={() => { setSearchTerm(''); setStatusFilter('ALL'); setBrandFilter('ALL'); setProvinceFilter('ALL'); setOwnerFilter('ALL'); setDateFrom(''); setDateTo(''); onCoverageFilterChange('ALL'); }} />}
       {saveNotice && <div role="status" className="glass-panel" style={{ padding: '12px' }}>{saveNotice}</div>}
-      <div className="npp-qr-toolbar">{can('qr:scan') && <button type="button" className="btn btn-secondary" style={{ minHeight: 48 }} onClick={onOpenQrScan}><Camera size={17}/> Quét QR</button>}{can('qr:print') && <button type="button" className="btn btn-secondary" style={{ minHeight: 48 }} onClick={() => onOpenQrPrint?.(filteredNpps)}>In tem QR A8</button>}{qrLookupTarget && <span role="status">Đang xem kết quả quét · bộ máy {qrLookupTarget.highlightedSetCode || 'chưa chọn'}</span>}</div>
+      <div className="npp-qr-toolbar">{can('qr:scan') && <button type="button" className="btn btn-secondary" style={{ minHeight: 48 }} onClick={onOpenQrScan}><Camera size={17}/> Quét QR</button>}{qrLookupTarget && <span role="status">Đang xem kết quả quét · bộ máy {qrLookupTarget.highlightedSetCode || 'chưa chọn'}</span>}</div>
       
       <WorkspaceFilterBar search={searchTerm} onSearch={setSearchTerm} placeholder="Tìm mã, tên NPP, điện thoại…" count={filteredNpps.length} fields={[{key:'province',label:'Tỉnh / thành',value:provinceFilter,onChange:setProvinceFilter,options:uniqueOptions(npps.map(item=>item.province))},{key:'owner',label:'Kỹ thuật viên phụ trách bộ máy',value:ownerFilter,onChange:setOwnerFilter,options:uniqueOptions(systemSets.map(item=>item.technician))},{key:'brand',label:'Hãng',value:brandFilter,onChange:setBrandFilter,options:uniqueOptions(['Nasun','Natos'])},{key:'status',label:'Trạng thái',value:statusFilter,onChange:setStatusFilter,options:uniqueOptions(['Đang hợp tác','Đã ngưng hợp tác'])},{key:'from',label:'Ngày tạo NPP · từ',type:'date',defaultValue:'',value:dateFrom,onChange:setDateFrom},{key:'to',label:'Ngày tạo NPP · đến',type:'date',defaultValue:'',value:dateTo,onChange:setDateTo}]} onReset={() => { onCoverageFilterChange('ALL'); setSearchTerm(''); setStatusFilter('ALL'); setBrandFilter('ALL'); setProvinceFilter('ALL'); setOwnerFilter('ALL'); setDateFrom(''); setDateTo(''); }} actions={<><details className="filter-more-actions"><summary>Thao tác khác</summary><div><button className="btn btn-secondary" onClick={onOpenImportModal}>Nhập Excel</button><button className="btn btn-secondary" onClick={exportNpps}>Xuất Excel</button></div></details><button className="btn btn-primary" onClick={handleOpenAdd}>Thêm NPP</button></>}/>
 
@@ -803,7 +803,7 @@ export default function NppManagement({ globalSearch = '', loading = false, load
 
               </div>
               <div className="modal-footer">
-                {can('qr:print') && <button type="button" className="btn btn-secondary" disabled={reissueBusy} onClick={async () => {
+                {can('qr:reissue') && <button type="button" className="btn btn-secondary" disabled={reissueBusy} onClick={async () => {
                   if (!await confirmAction(`Cấp lại mã QR cho ${selectedNpp.code || selectedNpp.id}? Mã cũ sẽ hết hiệu lực ngay.`, { title: 'Cấp lại mã QR', confirmLabel: 'Cấp lại mã' })) return;
                   setReissueBusy(true); setReissueMessage('');
                   try { const token = await onReissueQrToken?.(selectedNpp.id); setSelectedNpp(current => current ? { ...current, qrToken: token } : current); setReissueMessage('Đã cấp lại mã QR. Mã cũ không còn hiệu lực.'); }

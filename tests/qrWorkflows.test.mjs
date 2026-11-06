@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { parseScannedPayload, isValidQrToken, buildNppQrPayload, generateQrToken } from '../src/modules/distributors/lib/qrPayload.js';
 import { resolveScannedCode } from '../src/modules/distributors/lib/resolveScannedCode.js';
-import { splitIntoBatches, paginateLabels, countLabelSheets, fitLabelName, validatePrintableNpp } from '../src/modules/distributors/lib/qrPrint.js';
 import { hasPermission, ROLES } from '../src/shared/security/rbac.js';
 import { requireOfflineReplayPermission } from '../src/shared/security/offlineReplayPolicy.js';
 
@@ -37,20 +36,9 @@ test('NPP, set and device scans resolve through local records', () => {
   assert.ok(resolveScannedCode('X'.repeat(200), context).error);
 });
 
-test('A8 print planning handles pages, skip slots, batches and names', () => {
-  assert.equal(paginateLabels(Array.from({ length: 11 }, (_, i) => i)).length, 2);
-  assert.equal(paginateLabels([1, 2], { skip: 3 })[0].length, 5);
-  assert.equal(countLabelSheets(11, 1, 0), 2);
-  assert.equal(countLabelSheets(2, 2, 3), 1);
-  assert.deepEqual(splitIntoBatches(Array.from({ length: 101 }, (_, i) => i)).map(batch => batch.length), [50, 50, 1]);
-  assert.ok(fitLabelName('Tên NPP có dấu tiếng Việt').lines[0].includes('tiếng Việt'));
-  assert.ok(fitLabelName('N'.repeat(80)).lines.length <= 2);
-  assert.equal(validatePrintableNpp({ ...npp, qrToken: '' }), 'Chưa có mã QR được cấp');
-});
-
 test('QR permissions matrix protects scanning and printing', () => {
   const expected = {
-    admin: [true, true], manager: [true, true], technician: [true, false], qc: [false, false], viewer: [false, false],
+    admin: [true, false], manager: [true, false], technician: [true, false], qc: [false, false], viewer: [false, false],
   };
   for (const role of Object.values(ROLES)) {
     assert.deepEqual([hasPermission(role, 'qr:scan'), hasPermission(role, 'qr:print')], expected[role]);
