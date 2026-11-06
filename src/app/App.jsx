@@ -51,7 +51,6 @@ const FieldRouteMap = lazy(() => import('../modules/fieldwork/components/FieldRo
 const ProfileScreen = lazy(() => import('../modules/users/components/ProfileScreen.jsx'));
 const SyncLogScreen = lazy(() => import('../modules/fieldwork/components/SyncLogScreen.jsx'));
 const QrScannerModal = lazy(() => import('../shared/components/QrScannerModal.jsx'));
-const QrPrintDialog = lazy(() => import('../modules/distributors/components/QrPrintDialog.jsx'));
 
 function AssetLoadingSkeleton() {
   return (
@@ -129,8 +128,6 @@ function AppWorkspace() {
   }, [startupShortcut]);
   const [globalSearch, setGlobalSearch] = useState('');
   const [showQrScanner, setShowQrScanner] = useState(false);
-  const [showQrPrint, setShowQrPrint] = useState(false);
-  const [qrPrintNpps, setQrPrintNpps] = useState(null);
   const [qrLookupTarget, setQrLookupTarget] = useState(null);
   const [qrScanError, setQrScanError] = useState('');
   const [qcUsers, setQcUsers] = useState([]);
@@ -999,7 +996,6 @@ function AppWorkspace() {
               onLoadNppPhotos={fetchNppPhotos}
               onOpenImportModal={() => openImportModal('npp')}
               onOpenQrScan={() => { setQrScanError(''); setShowQrScanner(true); }}
-              onOpenQrPrint={rows => { setQrPrintNpps(rows); setShowQrPrint(true); }}
               onReissueQrToken={reissueQrToken}
               replacementEvents={replacementHistory.events}
               onOpenMachineProfile={machine => { rememberMachineProfile(machine, 'equipment'); navigateWorkspace('assets', machine.setCode); }}
@@ -1196,7 +1192,6 @@ function AppWorkspace() {
       <PwaInstallPrompt />
       <NotificationPermissionPrompt />
       {showQrScanner && hasPermission(user?.role, 'qr:scan') && <Suspense fallback={<div role="status" className="modal-overlay"><div className="modal-content">Đang mở trình quét…</div></div>}><QrScannerModal title="Quét QR tra cứu NPP / bộ máy" errorMessage={qrScanError} onScanSuccess={handleQrLookup} onClose={() => setShowQrScanner(false)} /></Suspense>}
-      {showQrPrint && hasPermission(user?.role, 'qr:print') && <Suspense fallback={<div role="status" className="modal-overlay"><div className="modal-content">Đang mở công cụ in tem…</div></div>}><QrPrintDialog npps={qrPrintNpps ?? regionalData.npps} systemSets={regionalData.systemSets} auditLogs={regionalData.auditLogs} onClose={() => setShowQrPrint(false)} onAuditPrint={({ npps: codes, count, paper }) => recordQrAudit({ p_action: 'print', p_npp_codes: codes, p_count: count, p_paper: paper })} /></Suspense>}
 
       {/* Workflow Execution Modal */}
       {workflowMode && (!assetDetailsReady ? <div className="modal-overlay"><div className="modal-content"><AssetLoadingSkeleton /><p role="alert">{assetsLoadError}</p><button className="btn btn-secondary" onClick={() => setWorkflowMode(null)}>Đóng</button><button className="btn btn-primary" disabled={assetsLoading} onClick={() => void ensureAssetDetails()}>Tải lại</button></div></div> : (

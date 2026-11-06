@@ -34,7 +34,7 @@ export const REGIONAL_ROLES = Object.freeze([
 // Maps action → minimum required role(s)
 export const PERMISSIONS = Object.freeze({
   'qr:scan':              [ROLES.ADMIN, ROLES.MANAGER, ROLES.TECHNICIAN],
-  'qr:print':             [ROLES.ADMIN, ROLES.MANAGER],
+  'qr:reissue':             [ROLES.ADMIN, ROLES.MANAGER],
   // NPP Management
   'npp:read':              ALL_ROLES,
   'npp:create':            OPERATIONAL_ROLES,
