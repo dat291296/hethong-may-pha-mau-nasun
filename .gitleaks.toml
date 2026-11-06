@@ -18,6 +18,7 @@ keywords = ["NASUN_PRIVATE_TOKEN", "NASUN_AGENT_SECRET"]
 tags = ["nasun", "api", "secret"]
 
 [allowlist]
+regexTarget = "secret"
 description = "Public examples and Supabase publishable browser keys"
 paths = [
   '''(^|/)\.env\.example$''',
