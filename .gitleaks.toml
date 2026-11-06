@@ -24,6 +24,7 @@ paths = [
   '''(^|/)tests?/'''
 ]
 regexes = [
+  '''^0123456789ABCDEFGHJKMNPQRSTVWXYZ$''',
   '''sb_publishable_[A-Za-z0-9_-]+''',
   '''your[_-]?(key|token|secret|password)''',
   '''(?i)placeholder'''
