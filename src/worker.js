@@ -17,6 +17,13 @@ export default {
     }
     const response = await env.ASSETS.fetch(request);
     const pathname = url.pathname;
+    if (pathname.startsWith('/n/')) {
+      const protectedHeaders = new Headers(response.headers);
+      protectedHeaders.set('Cache-Control', 'no-store');
+      protectedHeaders.set('X-Robots-Tag', 'noindex, nofollow');
+      protectedHeaders.set('Referrer-Policy', 'no-referrer');
+      return new Response(response.body, { status: response.status, statusText: response.statusText, headers: protectedHeaders });
+    }
     if (pathname.startsWith('/assets/') && /text\/html/i.test(response.headers.get('content-type') || '')) {
       return new Response('Asset not found', { status: 404, headers: {
         'Content-Type': 'text/plain; charset=utf-8',

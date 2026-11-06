@@ -1,5 +1,4 @@
 import { getOfflineOwner } from '../../../shared/sync/offlineDb.js';
-import { createRefreshScheduler } from '../../../shared/data-access/refreshScheduler.js';
 import { recordDataLoadMetric } from '../../../shared/diagnostics/performanceMetrics.js';
 import { updateWithRevision } from '../../../shared/data-access/guardedWrite.js';
 import { fetchAllRows } from '../../../shared/data-access/paginatedQuery.js';
@@ -10,13 +9,14 @@ import { INITIAL_NPPS } from '../../../shared/data/mockData.js';
 import { cacheOfflineData, getCachedOfflineData, enqueueOfflineAction, getOfflineQueue } from '../../../shared/sync/offlineSync.js';
 import { recordOperationalError } from '../../../shared/diagnostics/operationalDiagnostics.js';
 import { userErrorMessage } from '../../../shared/security/userError.js';
+import { generateQrToken } from '../lib/qrPayload.js';
 
 /**
  * useNpps – NPP (Nhà Phân Phối) data hook.
  * Uses Supabase when configured, falls back to mock data locally, with offline caching & queuing.
  */
 export function useNpps() {
-  const [npps, setNpps] = useState(isSupabaseConfigured ? [] : INITIAL_NPPS);
+  const [npps, setNpps] = useState(() => isSupabaseConfigured ? [] : INITIAL_NPPS.map(item => ({ ...item, qrToken: item.qrToken || generateQrToken() })));
   const [loading, setLoading] = useState(isSupabaseConfigured);
   const [error, setError]   = useState(null);
   const fetchVersion = useRef(0);
@@ -51,7 +51,7 @@ export function useNpps() {
           : 'NPP đang có thay đổi chờ đồng bộ nhưng chưa có bản lưu trên thiết bị. Không tải đè dữ liệu; kiểm tra hàng chờ đồng bộ.');
         return false;
       }
-      const columns = 'id,npp_code,updated_at,name,phone,contact_person,salesperson,brand,region,province,address,location_coordinates,google_maps_url,status,created_at';
+      const columns = 'id,npp_code,qr_token,updated_at,name,phone,contact_person,salesperson,brand,region,province,address,location_coordinates,google_maps_url,status,created_at';
       const { data, error: fetchError } = await fetchAllRows(
         sb => sb.from('distributors').select(columns).order('created_at', { ascending: false }).order('id'),
         safeQuery, 'fetchNpps', { key: 'id' }
@@ -107,29 +107,11 @@ export function useNpps() {
     return () => { disposed = true; };
   }, [fetchNpps]);
 
-  // ── Realtime subscription ─────────────────────────────────────────────────
-  useEffect(() => {
-    if (!isSupabaseConfigured || !supabase) return;
-    const scheduler = createRefreshScheduler(fetchNpps, {
-      onError: error => recordOperationalError('runtime', error),
-    });
-    const channel = supabase
-      .channel('distributors-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'distributors' },
-        scheduler.schedule
-      )
-      .subscribe();
-    return () => {
-      scheduler.dispose();
-      supabase.removeChannel(channel);
-    };
-  }, [fetchNpps]);
-
   // ── CRUD Operations ────────────────────────────────────────────────────────
   const addNpp = useCallback(async (nppData) => {
     const tempId = nppData.id || `NPP-TEMP-${Date.now()}`;
-    const localNpp = { ...nppData, code: nppData.code || nppData.previewCode || null, id: tempId, createdAt: new Date().toISOString().split('T')[0] };
-    const mapped = { ...mapNppToDb(localNpp), npp_code: nppData.code || null, id: tempId };
+    const localNpp = { ...nppData, qrToken: nppData.qrToken || generateQrToken(), code: nppData.code || nppData.previewCode || null, id: tempId, createdAt: new Date().toISOString().split('T')[0] };
+    const mapped = { ...mapNppToDb(localNpp), npp_code: nppData.code || null, qr_token: localNpp.qrToken, id: tempId };
 
     const result = !isSupabaseConfigured ? { queued: false } : await persistMutation({
       online: isSupabaseConfigured && navigator.onLine,
@@ -196,8 +178,33 @@ export function useNpps() {
     });
     return result;
   }, []);
+  const reissueQrToken = useCallback(async id => {
+    if (!isSupabaseConfigured) {
+      const token = generateQrToken();
+      setNpps(previous => {
+        const updated = previous.map(item => item.id === id ? { ...item, qrToken: token } : item);
+        persistNpps(updated, setNpps, false);
+        return updated;
+      });
+      return token;
+    }
+    if (!navigator.onLine) throw new Error('Cần kết nối mạng để cấp lại mã QR.');
+    const { data, error: tokenError } = await supabase.rpc('reissue_distributor_qr_token', { p_distributor_id: id });
+    if (tokenError) throw tokenError;
+    if (typeof data !== 'string' || !/^[0-9A-HJKMNP-TV-Z]{10}$/.test(data)) throw new Error('Máy chủ trả về mã QR không hợp lệ.');
+    setNpps(previous => {
+      const updated = previous.map(item => item.id === id ? { ...item, qrToken: data } : item);
+      persistNpps(updated, setNpps, false);
+      return updated;
+    });
+    await fetchNpps();
+    return data;
+  }, [fetchNpps]);
   const importNpps = useCallback(async (newNpps) => {
-    const mapped = newNpps.map(npp => ({ ...mapNppToDb(npp), id: npp.id || `NPP-${crypto.randomUUID()}` }));
+    const mapped = newNpps.map(npp => {
+      const existing = nppsRef.current.find(item => item.id === npp.id || (npp.code && item.code === npp.code));
+      return { ...mapNppToDb(npp), qr_token: npp.qrToken || existing?.qrToken || generateQrToken(), id: npp.id || `NPP-${crypto.randomUUID()}` };
+    });
     const result = !isSupabaseConfigured ? {queued:false} : await persistBatchMutation({items:mapped,
       online:navigator.onLine,
       write:rows=>safeQuery(sb=>sb.from('distributors').upsert(rows,{onConflict:'id'}).select('id'),'importNpps'),
@@ -205,7 +212,7 @@ export function useNpps() {
     });
     setNpps(prev => {
       const importedIds = new Set(mapped.map(item => item.id));
-      const updated = [...newNpps.map((item, index) => ({ ...item, id: mapped[index].id })), ...prev.filter(item => !importedIds.has(item.id))];
+      const updated = [...newNpps.map((item, index) => ({ ...item, id: mapped[index].id, qrToken: mapped[index].qr_token })), ...prev.filter(item => !importedIds.has(item.id))];
       persistNpps(updated, setNpps, false);
       return updated;
     });
@@ -227,7 +234,7 @@ export function useNpps() {
     return photos;
   }, []);
 
-  return { npps, setNpps, loading, error, addNpp, editNpp, deleteNpp, importNpps, fetchNppPhotos, refetch: fetchNpps };
+  return { npps, setNpps, loading, error, addNpp, editNpp, deleteNpp, importNpps, fetchNppPhotos, reissueQrToken, refetch: fetchNpps };
 }
 
 function persistNpps(nextNpps, setNpps, shouldSetState = true) {
@@ -241,6 +248,7 @@ function mapDbToNpp(row) {
     id:                   row.id,
     code:                 row.npp_code || row.id,
     storedCode:           row.npp_code || null,
+    qrToken:              row.qr_token || null,
     dbRevision:           row.updated_at || null,
     name:                 row.name,
     phone:                row.phone,

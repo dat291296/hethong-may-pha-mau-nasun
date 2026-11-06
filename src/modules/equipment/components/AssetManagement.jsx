@@ -156,11 +156,12 @@ export default function AssetManagement({ onReplaceEquipment,replacementEvents=[
   const [scanTargetField, setScanTargetField] = useState('add');
   useEffect(() => {
     if (!openScannerOnMount) return;
+    if (!can('qr:scan')) { setScanError('Tài khoản không có quyền tra cứu mã QR.'); onScannerOpened?.(); return; }
     setScanError('');
     setScanTargetField('profile');
     setShowScanSerialModal(true);
     onScannerOpened?.();
-  }, [openScannerOnMount, onScannerOpened]);
+  }, [openScannerOnMount, onScannerOpened, can]);
   const [nppSearchTerm, setNppSearchTerm] = useState('');
   const [editNppSearchTerm, setEditNppSearchTerm] = useState('');
 
@@ -216,6 +217,17 @@ export default function AssetManagement({ onReplaceEquipment,replacementEvents=[
   const [scanError, setScanError] = useState('');
   const [scanInput, setScanInput] = useState('');
   const [showManualScan, setShowManualScan] = useState(false);
+  const deviceSerialIndex = React.useMemo(() => {
+    const index = new Map();
+    const groups = [['dispenser', dispensers], ['mixer', mixers], ['computer', computers], ['printer', printers]];
+    for (const [category, devices] of groups) for (const device of devices || []) {
+      const serial = String(device.serial || '').trim().toLocaleLowerCase('vi');
+      if (!serial) continue;
+      if (!index.has(serial)) index.set(serial, []);
+      index.get(serial).push({ category, device });
+    }
+    return index;
+  }, [dispensers, mixers, computers, printers]);
   const initialQuickFilter = React.useRef(quickFilter);
   useEffect(() => { if (initialQuickFilter.current === quickFilter) return; initialQuickFilter.current = quickFilter; setCurrentPage(1); }, [quickFilter, setCurrentPage]);
   useEffect(() => {
@@ -226,6 +238,7 @@ export default function AssetManagement({ onReplaceEquipment,replacementEvents=[
   }, [globalSearch, systemSets]);
 
   const openScannedCode = value => {
+    if (!can('qr:scan')) { setScanError('Tài khoản không có quyền tra cứu mã QR.'); return false; }
     const code = String(value || '').replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 160);
     if (!code) {
       setScanError('Mã quét không hợp lệ. Hãy quét lại hoặc nhập serial thủ công.');
@@ -234,12 +247,7 @@ export default function AssetManagement({ onReplaceEquipment,replacementEvents=[
     setScanInput(code);
 
     const normalizedCode = code.toLocaleLowerCase('vi');
-    const deviceGroups = [
-      ['dispenser', dispensers], ['mixer', mixers], ['computer', computers], ['printer', printers],
-    ];
-    const deviceMatches = deviceGroups.flatMap(([category, devices]) => (devices || [])
-      .filter(device => String(device.serial || '').trim().toLocaleLowerCase('vi') === normalizedCode)
-      .map(device => ({ category, device })));
+    const deviceMatches = deviceSerialIndex.get(normalizedCode) || [];
 
     if (deviceMatches.length > 1) {
       setScanError('Serial này trùng trên nhiều thiết bị. Hãy đối chiếu mã quản lý trước khi mở hồ sơ.');
@@ -989,8 +997,8 @@ export default function AssetManagement({ onReplaceEquipment,replacementEvents=[
         </div>
       </div>
       
-      <div className="filter-scan-actions"><button className="btn btn-secondary" aria-expanded={showManualScan} onClick={()=>setShowManualScan(value=>!value)}>Nhập mã bộ máy</button></div>
-      {showManualScan && <form className="machine-serial-form" onSubmit={event => { event.preventDefault(); openScannedCode(scanInput); }}><label>Mã bộ máy<input className="form-input" required maxLength={160} value={scanInput} onChange={event => { setScanInput(event.target.value); setScanError(''); }} placeholder="Nhập hoặc quét mã bộ máy" /></label><button type="button" className="btn btn-secondary" onClick={()=>{setScanError('');setScanTargetField('profile');setShowScanSerialModal(true);}}>Quét mã bộ máy</button><button type="submit" className="btn btn-primary">Mở hồ sơ</button></form>}
+      {can('qr:scan') && <><div className="filter-scan-actions"><button className="btn btn-secondary" aria-expanded={showManualScan} onClick={()=>setShowManualScan(value=>!value)}>Nhập mã bộ máy</button></div>
+      {showManualScan && <form className="machine-serial-form" onSubmit={event => { event.preventDefault(); openScannedCode(scanInput); }}><label>Mã bộ máy<input className="form-input" required maxLength={160} value={scanInput} onChange={event => { setScanInput(event.target.value); setScanError(''); }} placeholder="Nhập hoặc quét mã bộ máy" /></label><button type="button" className="btn btn-secondary" onClick={()=>{setScanError('');setScanTargetField('profile');setShowScanSerialModal(true);}}>Quét mã bộ máy</button><button type="submit" className="btn btn-primary">Mở hồ sơ</button></form>}</>}
       {/* Compact inventory navigation and actions */}
       <section className="glass-panel asset-inventory-toolbar" aria-label="Điều hướng và thao tác kho thiết bị">
         <nav className="asset-inventory-tabs" aria-label="Danh mục thiết bị">

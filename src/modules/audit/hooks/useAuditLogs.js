@@ -1,4 +1,3 @@
-import { createRefreshScheduler } from '../../../shared/data-access/refreshScheduler.js';
 import { getOfflineOwner } from '../../../shared/sync/offlineDb.js';
 import { fetchAllRows } from '../../../shared/data-access/paginatedQuery.js';
 import { useState, useEffect, useCallback } from 'react';
@@ -48,7 +47,7 @@ function persistAuditLogs(logs) {
   cacheOfflineData('audit_logs', logs);
 }
 
-export function useAuditLogs() {
+export function useAuditLogs({ enabled = true } = {}) {
   const [auditLogs, setAuditLogs] = useState(getInitialAuditLogs);
   const [loading, setLoading] = useState(false);
 
@@ -95,18 +94,8 @@ export function useAuditLogs() {
   }, []);
 
   useEffect(() => {
-    fetchAuditLogs();
-  }, [fetchAuditLogs]);
-
-  // Coalesce bursts and keep at most one realtime refresh in flight.
-  useEffect(() => {
-    if (!isSupabaseConfigured || !supabase) return;
-    const scheduler = createRefreshScheduler(fetchAuditLogs);
-    const channel = supabase.channel('audit_logs-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'audit_logs' }, scheduler.schedule)
-      .subscribe();
-    return () => { scheduler.dispose(); supabase.removeChannel(channel); };
-  }, [fetchAuditLogs]);
+    if (enabled) fetchAuditLogs();
+  }, [enabled, fetchAuditLogs]);
 
   const addAuditLog = useCallback(async (logData) => {
     const timestamp = logData.timestamp || new Date().toISOString().replace('T', ' ').substring(0, 16);

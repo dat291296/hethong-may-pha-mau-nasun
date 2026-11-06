@@ -1,8 +1,12 @@
 import React from 'react';
 import { Cpu, Wrench, CalendarClock, Building2, UserCircle } from 'lucide-react';
 import { triggerHaptic } from '../../shared/platform/haptics.js';
+import { Camera } from 'lucide-react';
+import { useAuth } from '../../shared/context/AuthContext.jsx';
+import { hasPermission } from '../../shared/security/rbac.js';
 
-export default function MobileBottomNav({ activeTab, setActiveTab, maintenanceCount, pendingRepairCount }) {
+export default function MobileBottomNav({ activeTab, setActiveTab, maintenanceCount, pendingRepairCount, onOpenQrScan }) {
+  const { role } = useAuth();
   const mainItems = [
     { id: 'assets', label: 'Thiết Bị', icon: Cpu },
     { id: 'repairs', label: 'Sửa Chữa', icon: Wrench, badge: pendingRepairCount },
@@ -126,6 +130,7 @@ export default function MobileBottomNav({ activeTab, setActiveTab, maintenanceCo
             </button>
           );
         })}
+        {hasPermission(role, 'qr:scan') && <button type="button" className="mnav-btn" aria-label="Quét QR tra cứu NPP" onClick={() => { triggerHaptic('light'); onOpenQrScan?.(); }} style={{ minHeight: 48 }}><span className="mnav-icon-wrap"><Camera size={20}/></span><span className="mnav-label">Quét QR</span></button>}
 
       </nav>
     </>

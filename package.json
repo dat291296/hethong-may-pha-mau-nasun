@@ -30,6 +30,7 @@
     "exceljs": "^4.4.0",
     "lucide-react": "^1.27.0",
     "qr-scanner": "^1.4.2",
+    "qrcode": "^1.5.4",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-is": "^19.2.8",

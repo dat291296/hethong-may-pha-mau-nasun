@@ -6,7 +6,7 @@ import RegionalWorkspaceBar from './components/RegionalWorkspaceBar.jsx';
 import { defaultWorkspaceRegion, resolveWorkspaceRegion, scopeWorkspace } from '../shared/workspace/regionalWorkspace.js';
 import { assertAdditionalSetConfirmed } from '../modules/equipment/lib/assemblyGuard.js';
 import { isStabilizerMissing, STABILIZER_NPP } from '../modules/equipment/lib/stabilizer.js';
-import React, { useState, useEffect, useMemo, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import FieldSyncStatus from '../modules/fieldwork/components/FieldSyncStatus.jsx';
@@ -21,12 +21,15 @@ import { useSensitiveActionGate } from '../shared/components/SensitiveActionGate
 import { useAuth } from '../shared/context/AuthContext';
 import { requireRegionEdit } from '../shared/workspace/workspaceFilters.js';
 import { supabase, isSupabaseConfigured } from '../shared/data-access/supabase';
-import { cacheOfflineData } from '../shared/sync/offlineSync.js';
+import { cacheOfflineData, enqueueOfflineAction } from '../shared/sync/offlineSync.js';
 import { executeWorkflowTransaction } from '../modules/workflows/lib/workflowTransactions.js';
 import {submitFieldCommand} from '../modules/fieldwork/lib/fieldCommandClient.js';
 import { acknowledgeChangeFeedCursor, retryChangeFeedCursor, startChangeFeed } from '../shared/sync/changeFeed.js';
 import { refreshBeforeCheckpoint } from '../shared/sync/syncCheckpoint.js';
 import { startPrivateRealtimeSync } from '../shared/sync/realtimeSync.js';
+import { parseScannedPayload } from '../modules/distributors/lib/qrPayload.js';
+import { resolveScannedCode } from '../modules/distributors/lib/resolveScannedCode.js';
+import { hasPermission } from '../shared/security/rbac.js';
 
 import { useNpps } from '../modules/distributors/hooks/useNpps.js';
 import { useAssets, generateNextSetCode } from '../modules/equipment/hooks/useAssets.js';
@@ -47,6 +50,8 @@ const TechHandbook = lazy(() => import('../modules/handbook/components/TechHandb
 const FieldRouteMap = lazy(() => import('../modules/fieldwork/components/FieldRouteMap'));
 const ProfileScreen = lazy(() => import('../modules/users/components/ProfileScreen.jsx'));
 const SyncLogScreen = lazy(() => import('../modules/fieldwork/components/SyncLogScreen.jsx'));
+const QrScannerModal = lazy(() => import('../shared/components/QrScannerModal.jsx'));
+const QrPrintDialog = lazy(() => import('../modules/distributors/components/QrPrintDialog.jsx'));
 
 function AssetLoadingSkeleton() {
   return (
@@ -123,6 +128,11 @@ function AppWorkspace() {
     window.history.replaceState({}, document.title, `${url.pathname}${url.search}${url.hash}`);
   }, [startupShortcut]);
   const [globalSearch, setGlobalSearch] = useState('');
+  const [showQrScanner, setShowQrScanner] = useState(false);
+  const [showQrPrint, setShowQrPrint] = useState(false);
+  const [qrPrintNpps, setQrPrintNpps] = useState(null);
+  const [qrLookupTarget, setQrLookupTarget] = useState(null);
+  const [qrScanError, setQrScanError] = useState('');
   const [qcUsers, setQcUsers] = useState([]);
   const [regionalSelection, setRegionalSelection] = useState(null);
   const [nppCoverageFilter, setNppCoverageFilter] = useState('ALL');
@@ -187,9 +197,9 @@ function AppWorkspace() {
   }, [user]);
 
   // Main State via Supabase hooks
-  const { npps, setNpps, addNpp, editNpp, deleteNpp, importNpps, fetchNppPhotos, loading: nppsLoading, error: nppsLoadError, refetch: refetchNpps } = useNpps();
+  const { npps, setNpps, addNpp, editNpp, deleteNpp, importNpps, fetchNppPhotos, reissueQrToken, loading: nppsLoading, error: nppsLoadError, refetch: refetchNpps } = useNpps();
   const {
-    dispensers, setDispensers, mixers, setMixers, computers, setComputers, printers, setPrinters, systemSets, setSystemSets,
+    dispensers, setDispensers, mixers, setMixers, computers, printers, setPrinters, systemSets, setSystemSets,
     addStockDevice, editDevice, editDeviceDetails, deleteDevice, deleteSystemSet, assembleSet, replaceEquipment, updateSystemSet, importDevices, importSystemSets, detailsReady: assetDetailsReady, summaryReady: assetSummaryReady, systemSetsReady, ensureDetails: ensureAssetDetails, loading: assetsLoading, loadError: assetsLoadError, refetch: refetchAssets
   } = useAssets();
   const replacementHistory=useReplacementEvents();
@@ -202,10 +212,73 @@ function AppWorkspace() {
     return result;
   };
 
-  const { repairTickets, addTicket, editTicket, deleteTicket, importTickets, loading: repairsLoading, loadError: repairsLoadError, refetch: refetchRepairs } = useRepairs();
-  const { auditLogs, addAuditLog, importAuditLogs, refetch: refetchAuditLogs } = useAuditLogs();
+  const { repairTickets, addTicket, editTicket, deleteTicket, importTickets, loading: repairsLoading, loadError: repairsLoadError, refetch: refetchRepairs } = useRepairs({ enabled: ['dashboard', 'repairs'].includes(activeTab) });
+  const { auditLogs, setAuditLogs, addAuditLog, importAuditLogs, refetch: refetchAuditLogs } = useAuditLogs({ enabled: ['auditLogs', 'dashboard'].includes(activeTab) });
   const { lockedMonths, lockMonth, unlockMonth, isDateLocked, loading: lockLoading, error: lockError, refetch: refetchLockedMonths } = useLockedMonths();
-  const { tintingLogs, importLogs, refetch: refetchTintingLogs } = useTintingLogs();
+  const { tintingLogs, importLogs, refetch: refetchTintingLogs } = useTintingLogs({ enabled: activeTab === 'workflows' });
+
+  const recordQrAudit = useCallback(async payload => {
+    const type = payload.p_action === 'print' ? 'IN TEM QR' : payload.p_result === 'denied' ? 'TRA CỨU QR BỊ TỪ CHỐI' : 'TRA CỨU QR';
+    const localLog = { id: `AUDIT-QR-${crypto.randomUUID()}`, type, timestamp: new Date().toISOString().replace('T', ' ').slice(0, 16), nppId: payload.p_npp_code || '—', nppName: payload.p_action === 'print' ? `Đã in ${payload.p_count} tem QR` : '', severity: payload.p_result === 'denied' ? 'WARNING' : 'INFO', notes: payload.p_action === 'print' ? `Khổ ${String(payload.p_paper).toUpperCase()}; số tem ${payload.p_count}; NPP: ${(payload.p_npp_codes || []).join(', ')}` : `Loại mã: ${payload.p_code_kind}; kết quả: ${payload.p_result}` };
+    const request = { ...payload, p_event_id: localLog.id };
+    setAuditLogs(previous => {
+      const next = [localLog, ...previous];
+      void cacheOfflineData('audit_logs', next);
+      return next;
+    });
+    if (!isSupabaseConfigured) return localLog;
+    if (!navigator.onLine) {
+      await enqueueOfflineAction('ADD_QR_AUDIT', request);
+      return { ...localLog, queued: true };
+    }
+    const { error } = await supabase.rpc('record_qr_audit', request);
+    if (error) {
+      await enqueueOfflineAction('ADD_QR_AUDIT', request);
+      console.warn('[QR] Audit event queued for retry.', error.code || error.message);
+      return { ...localLog, queued: true };
+    }
+    return localLog;
+  }, [setAuditLogs]);
+
+  const handleQrLookup = useCallback(async rawValue => {
+    if (!hasPermission(user?.role, 'qr:scan')) { setQrScanError('Tài khoản không có quyền tra cứu QR.'); return false; }
+    if (!npps.length || !systemSetsReady || !assetDetailsReady) { setQrScanError('Dữ liệu đang đồng bộ. Chờ hoàn tất rồi quét lại.'); return false; }
+    let parsed;
+    try { parsed = parseScannedPayload(rawValue); }
+    catch (error) { setQrScanError(error.message); void recordQrAudit({ p_action: 'scan', p_code_kind: 'device', p_result: 'not_found' }); return false; }
+    const devices = [...dispensers, ...mixers, ...computers, ...printers].map(item => ({ ...item, serial: item.serial || item.serialNumber, setCode: item.setCode }));
+    const result = resolveScannedCode(parsed, { npps, systemSets, devices });
+    const allowedRegion = user?.role === 'admin' || (['manager', 'technician'].includes(user?.role) && user?.managedRegion === result.npp?.region);
+    if (result.npp && !allowedRegion) {
+      setQrScanError('Bạn không có quyền truy cập NPP ngoài khu vực được phân công.');
+      void recordQrAudit({ p_action: 'scan', p_npp_code: result.npp.code || result.npp.id, p_code_kind: parsed.kind, p_result: 'denied' });
+      return false;
+    }
+    if (!result.npp) {
+      setQrScanError(result.error || 'Không tìm thấy NPP trong dữ liệu đã đồng bộ.');
+      void recordQrAudit({ p_action: 'scan', p_code_kind: parsed.kind, p_result: 'not_found' });
+      return false;
+    }
+    setQrScanError('');
+    setShowQrScanner(false);
+    setQrLookupTarget({ scanId: crypto.randomUUID(), nppId: result.npp.id, highlightedSetCode: result.highlightedSetCode });
+    setActiveTab('npp');
+    void recordQrAudit({ p_action: 'scan', p_npp_code: result.npp.code || result.npp.id, p_code_kind: parsed.kind, p_result: 'found' });
+    return true;
+  }, [user?.role, user?.managedRegion, npps, systemSets, systemSetsReady, assetDetailsReady, dispensers, mixers, computers, printers, recordQrAudit]);
+
+  const routeQrToken = /^\/n\/([0-9A-HJKMNP-TV-Z]{10})\/?$/.exec(window.location.pathname)?.[1] || '';
+  useEffect(() => {
+    if (!user?.id || !routeQrToken) return;
+    if (!hasPermission(user.role, 'qr:scan')) {
+      setQrScanError('Tài khoản không có quyền xem thông tin qua mã QR.');
+      window.history.replaceState({}, document.title, '/');
+      return;
+    }
+    if (!npps.length || !systemSetsReady) return;
+    if (!assetDetailsReady) { void ensureAssetDetails(); return; }
+    void handleQrLookup(routeQrToken).then(success => { if (success) window.history.replaceState({}, document.title, '/'); });
+  }, [user?.id, user?.role, routeQrToken, assetDetailsReady, npps.length, systemSetsReady, ensureAssetDetails, handleQrLookup]);
 
   useEffect(() => {
     if (!user?.id || !isSupabaseConfigured) return undefined;
@@ -243,34 +316,42 @@ function AppWorkspace() {
     return () => window.removeEventListener('nasun-cloud-changes', handleCloudChanges);
   }, [refetchNpps, refetchAssets, refetchRepairs, refetchAuditLogs, refetchTintingLogs, refetchLockedMonths]);
 
+  const lastFocusRefreshRef = React.useRef(new Map());
   useEffect(() => {
     let refreshTimer = null;
-    const refreshAllData = () => {
+    const refreshActiveData = () => {
       if (!navigator.onLine || document.visibilityState !== 'visible') return;
       window.clearTimeout(refreshTimer);
       refreshTimer = window.setTimeout(() => {
-        Promise.allSettled([
-          refetchNpps(),
-          refetchAssets(),
-          refetchRepairs(),
-          refetchAuditLogs(),
-          refetchTintingLogs()
-        ]);
+        const now = Date.now();
+        const last = lastFocusRefreshRef.current.get(activeTab) || 0;
+        if (now - last < 30_000) return;
+        lastFocusRefreshRef.current.set(activeTab, now);
+        const tasks = [];
+        if (['dashboard', 'npp'].includes(activeTab)) {
+          tasks.push(refetchNpps(), refetchAssets(['system_sets']));
+        } else if (['assets', 'maintenance', 'workflows'].includes(activeTab)) {
+          tasks.push(refetchAssets());
+        }
+        if (['dashboard', 'repairs'].includes(activeTab)) tasks.push(refetchRepairs());
+        if (activeTab === 'auditLogs') tasks.push(refetchAuditLogs());
+        if (activeTab === 'workflows') tasks.push(refetchTintingLogs());
+        if (activeTab === 'users') tasks.push(refetchLockedMonths());
+        Promise.allSettled(tasks);
       }, 200);
     };
-
-    window.addEventListener('focus', refreshAllData);
-    window.addEventListener('online', refreshAllData);
-    window.addEventListener('nasun-sync-completed', refreshAllData);
-    document.addEventListener('visibilitychange', refreshAllData);
+    window.addEventListener('focus', refreshActiveData);
+    window.addEventListener('online', refreshActiveData);
+    window.addEventListener('nasun-sync-completed', refreshActiveData);
+    document.addEventListener('visibilitychange', refreshActiveData);
     return () => {
       window.clearTimeout(refreshTimer);
-      window.removeEventListener('focus', refreshAllData);
-      window.removeEventListener('online', refreshAllData);
-      window.removeEventListener('nasun-sync-completed', refreshAllData);
-      document.removeEventListener('visibilitychange', refreshAllData);
+      window.removeEventListener('focus', refreshActiveData);
+      window.removeEventListener('online', refreshActiveData);
+      window.removeEventListener('nasun-sync-completed', refreshActiveData);
+      document.removeEventListener('visibilitychange', refreshActiveData);
     };
-  }, [refetchNpps, refetchAssets, refetchRepairs, refetchAuditLogs, refetchTintingLogs]);
+  }, [activeTab, refetchNpps, refetchAssets, refetchRepairs, refetchAuditLogs, refetchTintingLogs, refetchLockedMonths]);
 
   // Excel Import Modal state
   const [showImportModal, setShowImportModal] = useState(false);
@@ -847,6 +928,7 @@ function AppWorkspace() {
           globalSearch={globalSearch}
           setGlobalSearch={setGlobalSearch}
           onOpenNewInstallation={() => setWorkflowMode('INSTALL')}
+          onOpenQrScan={() => { setQrScanError(''); setShowQrScanner(true); }}
           maintenanceAlerts={scopedMaintenanceAlerts}
           unstabilizedAlerts={scopedUnstabilizedAlerts}
           onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
@@ -864,6 +946,7 @@ function AppWorkspace() {
 
         {/* Dynamic View Content */}
         <FieldSyncStatus dataLoading={assetsLoading || nppsLoading || repairsLoading} dataError={[assetsLoadError, nppsLoadError, repairsLoadError].filter(Boolean).join(' ')} onOpenOfflinePage={() => setActiveTab('offline')} />
+        {qrScanError && !showQrScanner && <div className="alert alert-warning" role="alert" style={{ margin: '12px 28px 0' }}><span>{qrScanError}</span><button type="button" className="btn btn-secondary btn-sm" onClick={() => setQrScanError('')}>Đóng</button></div>}
         {(nppsLoadError || assetsLoadError) && <div className="alert alert-warning" role="alert" style={{ margin: '12px 28px 0' }}>
           <div>{[nppsLoadError, assetsLoadError].filter(Boolean).join(' ')}</div>
           <button type="button" className="btn btn-secondary btn-sm" disabled={nppsLoading || assetsLoading} onClick={() => Promise.allSettled([refetchNpps(), refetchAssets()])}>Tải lại dữ liệu NPP và bộ máy</button>
@@ -908,12 +991,32 @@ function AppWorkspace() {
               globalSearch={globalSearch}
               npps={regionalData.npps}
               systemSets={regionalData.systemSets}
+              devices={[...regionalData.dispensers, ...regionalData.mixers, ...regionalData.computers, ...regionalData.printers]}
               systemSetsReady={systemSetsReady}
               onAddNpp={handleAddNpp}
               onEditNpp={handleEditNpp}
               onDeleteNpp={handleDeleteNpp}
               onLoadNppPhotos={fetchNppPhotos}
               onOpenImportModal={() => openImportModal('npp')}
+              onOpenQrScan={() => { setQrScanError(''); setShowQrScanner(true); }}
+              onOpenQrPrint={rows => { setQrPrintNpps(rows); setShowQrPrint(true); }}
+              onReissueQrToken={reissueQrToken}
+              replacementEvents={replacementHistory.events}
+              onOpenMachineProfile={machine => { rememberMachineProfile(machine, 'equipment'); navigateWorkspace('assets', machine.setCode); }}
+              onRequestWorkProgress={(npp, machine) => {
+                const device = machine?.dispenserSerial || machine?.mixerSerial || machine?.computerSerial || machine?.pcSerial || machine?.printerSerial || '';
+                const existingTicket = repairTickets.find(ticket => String(ticket.nppId) === String(npp.id) && (ticket.serialNumber === device || ticket.assetCode === machine?.dispenserId));
+                if (existingTicket) {
+                  setPrefilledRepairData(null);
+                  setGlobalSearch(existingTicket.ticketCode || existingTicket.id);
+                  setActiveTab('repairs');
+                  return;
+                }
+                setPrefilledRepairData({ nppId: npp.id, nppName: npp.name, assetCode: machine?.dispenserId || '', machineModel: machine?.dispenserModel || machine?.mixerModel || machine?.computerType || '', serialNumber: device, productCategory: device === machine?.dispenserSerial ? 'Máy chiết' : device === machine?.mixerSerial ? 'Máy lắc' : device === machine?.printerSerial ? 'Máy in' : 'Máy tính' });
+                setGlobalSearch(machine?.setCode || '');
+                setActiveTab('repairs');
+              }}
+              qrLookupTarget={qrLookupTarget}
             />
           )}
 
@@ -1087,10 +1190,13 @@ function AppWorkspace() {
         setActiveTab={navigateMain}
         maintenanceCount={scopedMaintenanceAlerts.length}
         pendingRepairCount={scopedPendingRepairCount}
+        onOpenQrScan={() => { setQrScanError(''); setShowQrScanner(true); }}
         onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
       />
       <PwaInstallPrompt />
       <NotificationPermissionPrompt />
+      {showQrScanner && hasPermission(user?.role, 'qr:scan') && <Suspense fallback={<div role="status" className="modal-overlay"><div className="modal-content">Đang mở trình quét…</div></div>}><QrScannerModal title="Quét QR tra cứu NPP / bộ máy" errorMessage={qrScanError} onScanSuccess={handleQrLookup} onClose={() => setShowQrScanner(false)} /></Suspense>}
+      {showQrPrint && hasPermission(user?.role, 'qr:print') && <Suspense fallback={<div role="status" className="modal-overlay"><div className="modal-content">Đang mở công cụ in tem…</div></div>}><QrPrintDialog npps={qrPrintNpps ?? regionalData.npps} systemSets={regionalData.systemSets} auditLogs={regionalData.auditLogs} onClose={() => setShowQrPrint(false)} onAuditPrint={({ npps: codes, count, paper }) => recordQrAudit({ p_action: 'print', p_npp_codes: codes, p_count: count, p_paper: paper })} /></Suspense>}
 
       {/* Workflow Execution Modal */}
       {workflowMode && (!assetDetailsReady ? <div className="modal-overlay"><div className="modal-content"><AssetLoadingSkeleton /><p role="alert">{assetsLoadError}</p><button className="btn btn-secondary" onClick={() => setWorkflowMode(null)}>Đóng</button><button className="btn btn-primary" disabled={assetsLoading} onClick={() => void ensureAssetDetails()}>Tải lại</button></div></div> : (
