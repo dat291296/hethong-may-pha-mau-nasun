@@ -76,3 +76,18 @@ export function normalizeOptionalTimestamp(value, label = 'Thời gian') {
   if (Number.isFinite(parsed.getTime())) return parsed.toISOString();
   throw Object.assign(new Error(`${label} không hợp lệ. Chọn lại thời gian trước khi lưu.`), {code:'INVALID_DATE'});
 }
+
+// Business calendar dates are evaluated in Vietnam regardless of device timezone.
+export function getVietnamDate(now = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now);
+  const value = type => parts.find(part => part.type === type).value;
+  return `${value('year')}-${value('month')}-${value('day')}`;
+}
+
+export function calendarDaysUntil(value, today = getVietnamDate()) {
+  try {
+    const date = normalizeCalendarDate(value);
+    if (!date) return null;
+    return Math.round((Date.parse(date + 'T00:00:00Z') - Date.parse(normalizeCalendarDate(today) + 'T00:00:00Z')) / 86400000);
+  } catch { return null; }
+}

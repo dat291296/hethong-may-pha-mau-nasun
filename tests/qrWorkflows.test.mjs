@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { parseScannedPayload, isValidQrToken, buildNppQrPayload, generateQrToken } from '../src/modules/distributors/lib/qrPayload.js';
+import { parseScannedPayload, isValidQrToken, generateQrToken } from '../src/modules/distributors/lib/qrPayload.js';
 import { resolveScannedCode } from '../src/modules/distributors/lib/resolveScannedCode.js';
 import { hasPermission, ROLES } from '../src/shared/security/rbac.js';
 import { requireOfflineReplayPermission } from '../src/shared/security/offlineReplayPolicy.js';
@@ -15,13 +15,12 @@ test('QR token shape and host validation', () => {
   assert.equal(isValidQrToken('K7M2QX9P4'), false);
   for (const character of ['I', 'L', 'O', 'U']) assert.equal(isValidQrToken(`K7M2QX9P4${character}`), false);
   const appUrl = 'https://kythuat.nasun.workers.dev';
-  assert.deepEqual(parseScannedPayload(`${appUrl}/n/K7M2QX9P4D`, appUrl), { kind: 'token', value: 'K7M2QX9P4D' });
+  assert.deepEqual(parseScannedPayload(`${appUrl}/n/K7M2QX9P4D`, appUrl), { kind: 'token', value: 'K7M2QX9P4D', explicitToken: true });
   assert.throws(() => parseScannedPayload('https://evil.example/n/K7M2QX9P4D', appUrl));
   assert.throws(() => parseScannedPayload(`${appUrl}/n/K7M2QX9P4D?x=1`, appUrl));
   assert.throws(() => parseScannedPayload(''));
   assert.throws(() => parseScannedPayload('X'.repeat(200)));
   assert.throws(() => parseScannedPayload('NPP-MB-00\u00011'));
-  assert.equal(buildNppQrPayload('K7M2QX9P4D', appUrl), 'https://kythuat.nasun.workers.dev/n/K7M2QX9P4D');
 });
 
 test('NPP, set and device scans resolve through local records', () => {
@@ -36,7 +35,7 @@ test('NPP, set and device scans resolve through local records', () => {
   assert.ok(resolveScannedCode('X'.repeat(200), context).error);
 });
 
-test('QR permissions matrix protects scanning and printing', () => {
+test('QR permissions preserve scanning and reject retired print audit replay', () => {
   const expected = {
     admin: [true, false], manager: [true, false], technician: [true, false], qc: [false, false], viewer: [false, false],
   };

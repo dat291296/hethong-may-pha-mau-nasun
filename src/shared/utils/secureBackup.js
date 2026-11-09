@@ -86,6 +86,7 @@ async function sha256(value) {
 }
 
 export async function createSecureBackup(sourceData) {
+  if (sourceData.repairTickets?.some(ticket => ticket.detailsLoaded === false)) throw new Error('Chưa tải đủ chi tiết phiếu để sao lưu.');
   const serializableData = JSON.parse(JSON.stringify(sourceData));
   const { data, totalRecords } = validateCollections(serializableData);
   const checksum = await sha256(stableStringify(data));

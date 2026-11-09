@@ -14,7 +14,16 @@ export function resolveScannedCode(rawValue, { npps = [], systemSets = [], devic
   let device = null;
   let highlightedSetCode = null;
 
-  if (parsed.kind === 'token') npp = npps.find(item => item.qrToken === parsed.value || item.qr_token === parsed.value) || null;
+  if (parsed.kind === 'token') {
+    const tokens = npps.filter(item => item.qrToken === parsed.value || item.qr_token === parsed.value);
+    const hasSerial = devices.some(item => deviceSerials(item).some(serial => serial.toUpperCase() === parsed.value.toUpperCase()))
+      || systemSets.some(item => setSerials(item).some(serial => serial.toUpperCase() === parsed.value.toUpperCase()));
+    if (tokens.length > 1 || (!parsed.explicitToken && tokens.length && hasSerial)) {
+      return { error: 'Mã trùng giữa nhiều hồ sơ. Quét đường dẫn QR đầy đủ hoặc mở thiết bị để đối chiếu.', type: parsed.kind, npp: null, sets: [], device: null };
+    }
+    npp = tokens[0] || null;
+    if (!npp && !parsed.explicitToken && hasSerial) parsed = { kind: 'device', value: parsed.value };
+  }
   if (parsed.kind === 'npp') npp = npps.find(item => String(item.code || item.storedCode || item.id).toUpperCase() === parsed.value) || null;
   if (parsed.kind === 'set') {
     sets = systemSets.filter(item => String(item.setCode || item.set_code).toUpperCase() === parsed.value.toUpperCase());

@@ -40,6 +40,7 @@ export default function DataBackupSyncModal({
   printers = [],
   systemSets = [],
   repairTickets = [],
+  onLoadBackupRepairs,
   auditLogs = [],
   tintingLogs = [],
   onImportData
@@ -93,9 +94,9 @@ export default function DataBackupSyncModal({
   if (!isOpen) return null;
 
   // Prepare full data package
-  const getBackupData = () => ({
+  const getBackupData = async () => ({
     npps, dispensers, mixers, computers, printers, systemSets,
-    repairTickets, auditLogs, tintingLogs,
+    repairTickets: onLoadBackupRepairs ? await onLoadBackupRepairs() : repairTickets, auditLogs, tintingLogs,
   });
 
   // Export JSON file download
@@ -103,7 +104,7 @@ export default function DataBackupSyncModal({
     if (!canManageBackups) return alert('Chỉ Admin được phép xuất toàn bộ dữ liệu.');
     try {
       await requireAuthentication();
-      const dataPkg = await createSecureBackup(getBackupData());
+      const dataPkg = await createSecureBackup(await getBackupData());
       const jsonStr = JSON.stringify(dataPkg, null, 2);
       const blob = new Blob([jsonStr], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
@@ -125,7 +126,7 @@ export default function DataBackupSyncModal({
     if (!canManageBackups) return alert('Chỉ Admin được phép sao chép toàn bộ dữ liệu.');
     try {
       await requireAuthentication();
-      const dataPkg = await createSecureBackup(getBackupData());
+      const dataPkg = await createSecureBackup(await getBackupData());
       await writeSensitiveClipboard(JSON.stringify(dataPkg), PERMISSION_PURPOSES.BACKUP_CLIPBOARD);
       setCopied(true);
       setTimeout(() => setCopied(false), 2500);

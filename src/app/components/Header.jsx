@@ -30,6 +30,7 @@ export default function Header({
   auditLogs = [],
   tintingLogs = [],
   onImportData,
+  onLoadBackupRepairs,
   assetDetailsReady = true,
   onEnsureAssetDetails
 }) {
@@ -416,6 +417,7 @@ export default function Header({
           auditLogs={auditLogs}
           tintingLogs={tintingLogs}
           onImportData={onImportData}
+          onLoadBackupRepairs={onLoadBackupRepairs}
         />
 
       </div>

@@ -1,3 +1,4 @@
+import { normalizeImportIdentity, findDuplicateImportRows } from '../lib/importIdentity.js';
 import { userErrorMessage } from '../../../shared/security/userError.js';
 import React, { useState, useCallback, useRef } from 'react';
 import {
@@ -210,8 +211,10 @@ export default function ExcelImportModal({
           ...existingComputers.map(c => c.serial?.toLowerCase()),
           ...existingPrinters.map(p => p.serial?.toLowerCase()),
         ]);
-        const existingNppNames = new Set(existingNpps.map(n => n.name?.trim().toLowerCase()));
+        const existingNppNames = new Set(existingNpps.map(n => normalizeImportIdentity(n.name)));
 
+        const identityKey = importType === 'npp' ? 'name' : ['dispenser', 'mixer', 'computer', 'printer'].includes(importType) ? 'serial' : null;
+        const duplicateRows = findDuplicateImportRows(dataRows, keys.indexOf(identityKey), value => normalizeImportIdentity(sanitizeText(sanitizeForSheet(String(value || '').trim()), 250)));
         const valid = [];
         const errors = [];
 
@@ -224,6 +227,8 @@ export default function ExcelImportModal({
           });
 
           const issues = [];
+          const repeatedLines = duplicateRows.get(normalizeImportIdentity(obj[identityKey]));
+          if (repeatedLines) issues.push(`Trùng ${identityKey === 'name' ? 'tên NPP' : 'serial'} trong file tại dòng ${repeatedLines.join(', ')}. Đối chiếu trước khi nhập.`);
 
           // Validate required fields
           config.columns.forEach(col => {
@@ -259,7 +264,7 @@ export default function ExcelImportModal({
             }
           }
           if (importType === 'npp' && obj.name) {
-            if (existingNppNames.has(obj.name.toLowerCase())) {
+            if (existingNppNames.has(normalizeImportIdentity(obj.name))) {
               issues.push(`NPP "${obj.name}" đã tồn tại trong hệ thống`);
             }
           }
@@ -338,6 +343,7 @@ export default function ExcelImportModal({
       const newNpps = rowsToImport.map((row, i) => ({
         id: `NPP-IMPORT-${importBatchId.current}-${i}`,
         name: row.name,
+        brand: row.brand,
         phone: row.phone,
         contactPerson: row.contactPerson || '',
         region: row.region,
