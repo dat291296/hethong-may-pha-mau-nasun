@@ -75,6 +75,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
   loading=false,
   loadError='',
   onReload,
+  onLoadTicket,
   onAddTicket,
   onEditTicket,
   onDeleteTicket,
@@ -122,11 +123,28 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
   const [editingTicket, setEditingTicket] = useState(null);
   const [selectedTicket, setSelectedTicket] = useState(null);
   const openedSearch = React.useRef('');
+  const detailRequest = React.useRef(0);
+  useEffect(() => () => { detailRequest.current++; }, []);
+  const loadTicket = async ticket => {
+    if (onLoadTicket) return onLoadTicket(ticket.id);
+    if (ticket.detailsLoaded === false) throw new Error('Chưa tải đủ chi tiết phiếu. Kết nối mạng và thử lại.');
+    return ticket;
+  };
+  const openDetail = async ticket => {
+    const request = ++detailRequest.current;
+    setSaveError(''); setSaveNotice('Đang tải chi tiết phiếu…');
+    try {
+      const fullTicket = await loadTicket(ticket);
+      if (request === detailRequest.current) { setSelectedTicket(fullTicket); setSaveNotice(''); }
+    } catch (error) {
+      if (request === detailRequest.current) { setSaveNotice(''); setSaveError(userErrorMessage(error)); }
+    }
+  };
   React.useEffect(() => {
     if (!globalSearch) { openedSearch.current = ''; return; }
     if (openedSearch.current === globalSearch) return;
     const ticket = repairTickets.find(item => item.ticketCode === globalSearch);
-    if (ticket) { openedSearch.current = globalSearch; setSelectedTicket(ticket); }
+    if (ticket) { openedSearch.current = globalSearch; void openDetail(ticket); }
   }, [globalSearch, repairTickets]);
 
   useModalScrollLock(showModal || !!editingTicket || !!selectedTicket);
@@ -329,7 +347,16 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
     ], 'Phieu_Sua_Chua', 'PhieuSuaChua');
   };
 
-  const handleOpenEdit = (ticket) => {
+  const handleOpenEdit = async (ticket) => {
+    const request = ++detailRequest.current;
+    setSaveError(''); setSaveNotice('Đang tải phiếu để sửa…');
+    try { ticket = await loadTicket(ticket); }
+    catch (error) {
+      if (request === detailRequest.current) { setSaveNotice(''); setSaveError(userErrorMessage(error)); }
+      return;
+    }
+    if (request !== detailRequest.current) return;
+    setSaveNotice('');
     if (isDateLocked(ticket.date)) {
       alert(`Thao tác bị khóa: Phiếu thuộc tháng ${ticket.date.substring(0, 7)} đã chốt sổ kế toán!`);
       return;
@@ -711,7 +738,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
                     </td>
                     <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent-blue)' }}>{ticket.serialNumber}</td>
                     <td style={{ maxWidth: '220px', fontSize: '0.825rem' }}>
-                      <div style={{ color: 'var(--text-main)', fontWeight: '500' }}>{ticket.errorCategory && <strong>Linh kiện lỗi: {ticket.errorCategory} · </strong>}{ticket.errorDescription}</div><div className="repair-inline-photos">{repairStringList(ticket.photos).slice(0,3).map((url,index)=><button type="button" key={index} onClick={()=>setSelectedTicket(ticket)} aria-label={`Xem ảnh lỗi ${index+1}`}><img loading="lazy" src={url} alt={ticket.errorCategory||'Ảnh lỗi thiết bị'}/></button>)}</div>{repairMissingFields(ticket).length > 0 && <p className="repair-missing-fields">⚠ Cần bổ sung: {repairMissingFields(ticket).join(' · ')}</p>}
+                      <div style={{ color: 'var(--text-main)', fontWeight: '500' }}>{ticket.errorCategory && <strong>Linh kiện lỗi: {ticket.errorCategory} · </strong>}{ticket.errorDescription}</div><div className="repair-inline-photos">{repairStringList(ticket.photos).slice(0,3).map((url,index)=><button type="button" key={index} onClick={()=>void openDetail(ticket)} aria-label={`Xem ảnh lỗi ${index+1}`}><img loading="lazy" src={url} alt={ticket.errorCategory||'Ảnh lỗi thiết bị'}/></button>)}</div>{repairMissingFields(ticket).length > 0 && <p className="repair-missing-fields">⚠ Cần bổ sung: {repairMissingFields(ticket).join(' · ')}</p>}
                       {ticket.errorCategory && (
                         <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>[{ticket.errorCategory}]</span>
                       )}
@@ -742,7 +769,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
                     </td>
                     <td>
                       <div style={{ display: 'flex', gap: '6px' }}>
-                        <button className="btn btn-secondary btn-sm" style={{ padding: '4px 8px' }} title="Xem chi tiết" onClick={() => setSelectedTicket(ticket)}>
+                        <button className="btn btn-secondary btn-sm" style={{ padding: '4px 8px' }} title="Xem chi tiết" onClick={() => void openDetail(ticket)}>
                           <Eye size={14} color="var(--accent-cyan)" />
                         </button>
                         <button
@@ -816,7 +843,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
                   </div>}
                   <div className="mobile-card-row">
                     <span className="mobile-card-label">Lỗi:</span>
-                    <span className="mobile-card-value">{ticket.errorCategory && <strong>Linh kiện lỗi: {ticket.errorCategory} · </strong>}{ticket.errorDescription}<span className="repair-inline-photos">{repairStringList(ticket.photos).slice(0,3).map((url,index)=><button type="button" key={index} onClick={()=>setSelectedTicket(ticket)} aria-label={`Xem ảnh lỗi ${index+1}`}><img loading="lazy" src={url} alt={ticket.errorCategory||'Ảnh lỗi thiết bị'}/></button>)}</span></span>{repairMissingFields(ticket).length > 0 && <p className="repair-missing-fields">⚠ Cần bổ sung: {repairMissingFields(ticket).join(' · ')}</p>}
+                    <span className="mobile-card-value">{ticket.errorCategory && <strong>Linh kiện lỗi: {ticket.errorCategory} · </strong>}{ticket.errorDescription}<span className="repair-inline-photos">{repairStringList(ticket.photos).slice(0,3).map((url,index)=><button type="button" key={index} onClick={()=>void openDetail(ticket)} aria-label={`Xem ảnh lỗi ${index+1}`}><img loading="lazy" src={url} alt={ticket.errorCategory||'Ảnh lỗi thiết bị'}/></button>)}</span></span>{repairMissingFields(ticket).length > 0 && <p className="repair-missing-fields">⚠ Cần bổ sung: {repairMissingFields(ticket).join(' · ')}</p>}
                   </div>
                   <div className="mobile-card-row">
                     <span className="mobile-card-label">Kỹ thuật viên:</span>
@@ -838,7 +865,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
                   </div>
                 </div>
                 <div className="mobile-card-actions">
-                  <button className="btn btn-secondary btn-sm" onClick={() => setSelectedTicket(ticket)}>
+                  <button className="btn btn-secondary btn-sm" onClick={() => void openDetail(ticket)}>
                     <Eye size={14} color="var(--accent-cyan)" />
                     <span>Xem</span>
                   </button>

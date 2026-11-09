@@ -1,3 +1,5 @@
+import { useVietnamDate } from '../shared/hooks/useVietnamDate.js';
+import { calendarDaysUntil } from '../shared/utils/dateUtils.js';
 import RepairWorkspaceBoundary from '../modules/repairs/components/RepairWorkspaceBoundary.jsx';
 import ErrorBoundary from '../shared/components/ErrorBoundary.jsx';
 import {useReplacementEvents} from '../modules/equipment/hooks/useReplacementEvents.js';
@@ -209,14 +211,14 @@ function AppWorkspace() {
     return result;
   };
 
-  const { repairTickets, addTicket, editTicket, deleteTicket, importTickets, loading: repairsLoading, loadError: repairsLoadError, refetch: refetchRepairs } = useRepairs({ enabled: ['dashboard', 'repairs'].includes(activeTab) });
+  const { repairTickets, fetchTicketDetails, fetchBackupTickets, addTicket, editTicket, deleteTicket, importTickets, loading: repairsLoading, loadError: repairsLoadError, refetch: refetchRepairs } = useRepairs({ enabled: ['dashboard', 'repairs'].includes(activeTab) });
   const { auditLogs, setAuditLogs, addAuditLog, importAuditLogs, refetch: refetchAuditLogs } = useAuditLogs({ enabled: ['auditLogs', 'dashboard'].includes(activeTab) });
   const { lockedMonths, lockMonth, unlockMonth, isDateLocked, loading: lockLoading, error: lockError, refetch: refetchLockedMonths } = useLockedMonths();
   const { tintingLogs, importLogs, refetch: refetchTintingLogs } = useTintingLogs({ enabled: activeTab === 'workflows' });
 
   const recordQrAudit = useCallback(async payload => {
-    const type = payload.p_action === 'print' ? 'IN TEM QR' : payload.p_result === 'denied' ? 'TRA CỨU QR BỊ TỪ CHỐI' : 'TRA CỨU QR';
-    const localLog = { id: `AUDIT-QR-${crypto.randomUUID()}`, type, timestamp: new Date().toISOString().replace('T', ' ').slice(0, 16), nppId: payload.p_npp_code || '—', nppName: payload.p_action === 'print' ? `Đã in ${payload.p_count} tem QR` : '', severity: payload.p_result === 'denied' ? 'WARNING' : 'INFO', notes: payload.p_action === 'print' ? `Khổ ${String(payload.p_paper).toUpperCase()}; số tem ${payload.p_count}; NPP: ${(payload.p_npp_codes || []).join(', ')}` : `Loại mã: ${payload.p_code_kind}; kết quả: ${payload.p_result}` };
+    const type = payload.p_result === 'denied' ? 'TRA CỨU QR BỊ TỪ CHỐI' : 'TRA CỨU QR';
+    const localLog = { id: `AUDIT-QR-${crypto.randomUUID()}`, type, timestamp: new Date().toISOString().replace('T', ' ').slice(0, 16), nppId: payload.p_npp_code || '—', nppName: '', severity: payload.p_result === 'denied' ? 'WARNING' : 'INFO', notes: `Loại mã: ${payload.p_code_kind}; kết quả: ${payload.p_result}` };
     const request = { ...payload, p_event_id: localLog.id };
     setAuditLogs(previous => {
       const next = [localLog, ...previous];
@@ -248,19 +250,19 @@ function AppWorkspace() {
     const allowedRegion = user?.role === 'admin' || (['manager', 'technician'].includes(user?.role) && user?.managedRegion === result.npp?.region);
     if (result.npp && !allowedRegion) {
       setQrScanError('Bạn không có quyền truy cập NPP ngoài khu vực được phân công.');
-      void recordQrAudit({ p_action: 'scan', p_npp_code: result.npp.code || result.npp.id, p_code_kind: parsed.kind, p_result: 'denied' });
+      void recordQrAudit({ p_action: 'scan', p_npp_code: result.npp.code || result.npp.id, p_code_kind: result.type || parsed.kind, p_result: 'denied' });
       return false;
     }
     if (!result.npp) {
       setQrScanError(result.error || 'Không tìm thấy NPP trong dữ liệu đã đồng bộ.');
-      void recordQrAudit({ p_action: 'scan', p_code_kind: parsed.kind, p_result: 'not_found' });
+      void recordQrAudit({ p_action: 'scan', p_code_kind: result.type || parsed.kind, p_result: 'not_found' });
       return false;
     }
     setQrScanError('');
     setShowQrScanner(false);
     setQrLookupTarget({ scanId: crypto.randomUUID(), nppId: result.npp.id, highlightedSetCode: result.highlightedSetCode });
     setActiveTab('npp');
-    void recordQrAudit({ p_action: 'scan', p_npp_code: result.npp.code || result.npp.id, p_code_kind: parsed.kind, p_result: 'found' });
+    void recordQrAudit({ p_action: 'scan', p_npp_code: result.npp.code || result.npp.id, p_code_kind: result.type || parsed.kind, p_result: 'found' });
     return true;
   }, [user?.role, user?.managedRegion, npps, systemSets, systemSetsReady, assetDetailsReady, dispensers, mixers, computers, printers, recordQrAudit]);
 
@@ -274,7 +276,7 @@ function AppWorkspace() {
     }
     if (!npps.length || !systemSetsReady) return;
     if (!assetDetailsReady) { void ensureAssetDetails(); return; }
-    void handleQrLookup(routeQrToken).then(success => { if (success) window.history.replaceState({}, document.title, '/'); });
+    void handleQrLookup(window.location.origin + window.location.pathname).then(success => { if (success) window.history.replaceState({}, document.title, '/'); });
   }, [user?.id, user?.role, routeQrToken, assetDetailsReady, npps.length, systemSetsReady, ensureAssetDetails, handleQrLookup]);
 
   useEffect(() => {
@@ -393,12 +395,11 @@ function AppWorkspace() {
   };
 
   // Calculate alerts
-  const today = new Date();
+  const today = useVietnamDate();
   const maintenanceAlerts = systemSets.filter(s => {
     if (!s.nextMaintenanceDue || s.status !== 'DA_LAP_DAT') return false;
-    const dueDate = new Date(s.nextMaintenanceDue);
-    const diffDays = Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24));
-    return diffDays <= 30; // Due within 1 month (30 days rule)
+    const diffDays = calendarDaysUntil(s.nextMaintenanceDue, today);
+    return diffDays !== null && diffDays <= 30; // Due within 1 month (30 days rule)
   });
 
   const unstabilizedAlerts = systemSets.filter(s => {
@@ -921,6 +922,7 @@ function AppWorkspace() {
           activeTab={activeTab}
           assetDetailsReady={assetDetailsReady}
           onEnsureAssetDetails={ensureAssetDetails}
+          onLoadBackupRepairs={fetchBackupTickets}
           onNavigate={setActiveTab}
           globalSearch={globalSearch}
           setGlobalSearch={setGlobalSearch}
@@ -1059,6 +1061,7 @@ function AppWorkspace() {
               loadError={repairsLoadError}
               onReload={refetchRepairs}
               ticketCatalog={repairTickets}
+              onLoadTicket={fetchTicketDetails}
               globalSearch={globalSearch}
               initialFilter={workspaceFilter}
               repairTickets={regionalData.repairTickets}

@@ -1,3 +1,4 @@
+import { useVietnamDate } from '../../../shared/hooks/useVietnamDate.js';
 import { DataLoadingState, EmptyState } from '../../../shared/components/DataState.jsx';
 import { userErrorMessage } from '../../../shared/security/userError.js';
 import WorkspaceFilterBar from '../../../shared/components/WorkspaceFilterBar.jsx';
@@ -22,7 +23,7 @@ import {
   Pie, 
   Legend 
 } from 'recharts';
-import { formatDateVN } from '../../../shared/utils/dateUtils.js';
+import { formatDateVN, calendarDaysUntil } from '../../../shared/utils/dateUtils.js';
 import { getSystemSetMissingFields } from '../../equipment/utils/systemSetValidation.js';
 import FloatingActionButton from '../../../shared/components/FloatingActionButton.jsx';
 
@@ -100,8 +101,8 @@ export default function MaintenanceSchedule({ loading = false, onReturnToProfile
     return valA.localeCompare(valB, undefined, { numeric: true, sensitivity: 'base' });
   };
 
-  const today = new Date();
-  const currentYear = today.getFullYear();
+  const today = useVietnamDate();
+  const currentYear = Number(today.slice(0, 4));
 
   const annualRegionPlan = useMemo(() => {
     const eligibleSets = systemSets.filter(set =>
@@ -144,12 +145,10 @@ export default function MaintenanceSchedule({ loading = false, onReturnToProfile
   const processedSets = useMemo(() => {
     return systemSets.map(set => {
       const missingFields = getSystemSetMissingFields(set);
-      if (!set.nextMaintenanceDue) {
+      const diffDays = calendarDaysUntil(set.nextMaintenanceDue, today);
+      if (diffDays === null) {
         return { ...set, dueDays: 999, statusType: 'NO_DATE', missingFields };
       }
-      const dueDate = new Date(set.nextMaintenanceDue);
-      const diffTime = dueDate - today;
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
       let statusType = 'OK';
       if (diffDays < 0) {
@@ -160,7 +159,7 @@ export default function MaintenanceSchedule({ loading = false, onReturnToProfile
 
       return { ...set, dueDays: diffDays, statusType, missingFields };
     });
-  }, [systemSets]);
+  }, [systemSets, today]);
 
   // Monthly stats for 12 months chart
   const monthlyStats = useMemo(() => {
@@ -316,7 +315,7 @@ export default function MaintenanceSchedule({ loading = false, onReturnToProfile
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '310px', overflowY: 'auto' }}>
             {pendingAnnualWork.length === 0 ? <div style={{ padding: '14px', color: '#34d399', textAlign: 'center' }}>✓ Đã hoàn thành bảo trì trong năm cho khu vực đang chọn.</div> : pendingAnnualWork.map(set => {
               const dueDate = set.nextMaintenanceDue ? new Date(set.nextMaintenanceDue) : null;
-              const isOverdue = dueDate && !Number.isNaN(dueDate.getTime()) && dueDate < today;
+              const remainingDays = calendarDaysUntil(set.nextMaintenanceDue, today); const isOverdue = remainingDays !== null && remainingDays < 0;
               return (
                 <div key={`${set.normalizedRegion}-${set.setCode}`} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px', alignItems: 'center', padding: '9px 10px', borderRadius: '7px', background: isOverdue ? 'rgba(244,63,94,0.09)' : 'rgba(15,23,42,0.50)', fontSize: '0.76rem' }}>
                   <strong style={{ color: isOverdue ? '#fb7185' : 'var(--accent-cyan)' }}>{set.normalizedRegion}</strong>

@@ -1,3 +1,4 @@
+import { REPAIR_SUMMARY_COLUMNS, REPAIR_DETAIL_COLUMNS, mergeRepairSummary, requireRepairDetails } from '../lib/repairQuery.js';
 import { getOfflineOwner } from '../../../shared/sync/offlineDb.js';
 import {submitFieldCommand} from '../../fieldwork/lib/fieldCommandClient.js';
 import {recordOperationalError} from '../../../shared/diagnostics/operationalDiagnostics.js';
@@ -73,7 +74,7 @@ export function useRepairs({ enabled = true } = {}) {
     return () => { disposed = true; };
   }, [repairState]);
 
-  const fetchRepairs = useCallback(async () => {
+  const fetchRepairs = useCallback(async ({ details = false } = {}) => {
     if (!isSupabaseConfigured) return;
     const version = ++fetchVersion.current;
     const token = repairState.captureRead();
@@ -93,11 +94,15 @@ export function useRepairs({ enabled = true } = {}) {
         if(version===fetchVersion.current&&requestOwner===getOfflineOwner())setLoadError('Có thay đổi đang chờ đồng bộ. Giữ dữ liệu trên thiết bị; kiểm tra hàng chờ trước khi tải bản server.');
         return false;
       }
-      const {data,error}=await fetchAllRows(sb=>sb.from('repair_tickets').select('id,ticket_code,date,technician,npp_id,npp_name,product_category,machine_model,serial_number,error_description,error_category,action_direction,replacement_condition,processing_status,customer_return_status,notes,photos,asset_code,field_visit_status,service_checklist,materials_used,before_photos,after_photos,npp_confirmation,sla_due_at,completed_at,assigned_user_id,assignment_due_date,record_version,last_updated_at,last_updated_by').order('date',{ascending:false}).order('id'),safeQuery,'fetchRepairs',{key:'id'});
+      const {data,error}=await fetchAllRows(sb=>sb.from('repair_tickets').select(details ? REPAIR_DETAIL_COLUMNS : REPAIR_SUMMARY_COLUMNS).order('date',{ascending:false}).order('id'),safeQuery,'fetchRepairs',{key:'id'});
       if(!repairState.canCommit(token))return false;
       if(error)throw error;
       if(!Array.isArray(data))throw Error('INCOMPLETE_REPAIR_RESPONSE');
-      return await repairState.acceptRead(token, data.map(mapDbToRepair));
+      const previous = new Map(repairState.read().map(ticket => [ticket.id, ticket]));
+      return await repairState.acceptRead(token, data.map(row => {
+        const ticket = mapDbToRepair(row);
+        return details ? ticket : mergeRepairSummary(ticket, previous.get(ticket.id));
+      }));
     } catch(error) {
       recordOperationalError('runtime',error);
       if(repairState.canCommit(token)){
@@ -115,6 +120,30 @@ export function useRepairs({ enabled = true } = {}) {
   useEffect(() => {
     if (cacheHydrated && enabled) void fetchRepairs();
   }, [cacheHydrated, enabled, fetchRepairs]);
+
+  const fetchTicketDetails = useCallback(async id => {
+    const token = repairState.captureRead();
+    await repairState.flush();
+    const cached = repairState.read().find(ticket => ticket.id === id);
+    if (!repairState.canCommit(token)) throw new Error('Dữ liệu vừa thay đổi. Mở lại phiếu để tải bản mới.');
+    if (cached && cached.detailsLoaded !== false) return cached;
+    if (!isSupabaseConfigured || !navigator.onLine) return requireRepairDetails(cached);
+    const { data, error } = await safeQuery(sb => sb.from('repair_tickets').select(REPAIR_DETAIL_COLUMNS).eq('id', id).maybeSingle(), 'fetchRepairDetails');
+    if (error) throw error;
+    if (!data) throw new Error('Không tìm thấy phiếu hoặc bạn không còn quyền truy cập.');
+    const ticket = mapDbToRepair(data);
+    if (!await repairState.acceptRead(token, repairState.read().map(row => row.id === id ? ticket : row))) {
+      throw new Error('Dữ liệu vừa thay đổi. Mở lại phiếu để tải bản mới.');
+    }
+    return ticket;
+  }, [repairState]);
+
+  const fetchBackupTickets = useCallback(async () => {
+    if (isSupabaseConfigured && !await fetchRepairs({ details: true })) {
+      throw new Error('Chưa tải đủ phiếu để sao lưu. Kiểm tra kết nối hoặc hàng chờ đồng bộ.');
+    }
+    return repairState.read().map(requireRepairDetails);
+  }, [fetchRepairs, repairState]);
 
   const addTicket = useCallback(async (ticketData) => withRepairWrite(async owner => {
     const tempId = ticketData.id || crypto.randomUUID();
@@ -135,6 +164,7 @@ export function useRepairs({ enabled = true } = {}) {
   }), [withRepairWrite, persistRepairTickets, repairState]);
 
   const editTicket = useCallback(async (id, updates) => withRepairWrite(async owner => {
+    requireRepairDetails(repairState.read().find(ticket => ticket.id === id));
     const dbUpdates = {};
     const fieldMap = {
       ticketCode: 'ticket_code',
@@ -248,6 +278,8 @@ export function useRepairs({ enabled = true } = {}) {
 
   return {
     repairTickets,
+    fetchTicketDetails,
+    fetchBackupTickets,
     loading,
     loadError,
     addTicket,
@@ -260,6 +292,7 @@ export function useRepairs({ enabled = true } = {}) {
 
 function mapDbToRepair(row) {
   return {
+    detailsLoaded: Object.hasOwn(row, 'photos') && Object.hasOwn(row, 'before_photos') && Object.hasOwn(row, 'after_photos'),
     id:                    row.id,
     ticketCode:           row.ticket_code,
     date:                 row.date,

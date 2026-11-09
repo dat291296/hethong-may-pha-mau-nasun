@@ -1,3 +1,4 @@
+import { REPAIR_SUMMARY_COLUMNS, REPAIR_DETAIL_COLUMNS, mergeRepairSummary, requireRepairDetails } from '../src/modules/repairs/lib/repairQuery.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -124,6 +125,7 @@ async function hookFixture(overrides = {}) {
   let cursor = 0;
   const view = { cached: [], online: true, owner: 'A' };
   const dependencies = {
+    REPAIR_SUMMARY_COLUMNS, REPAIR_DETAIL_COLUMNS, mergeRepairSummary, requireRepairDetails,
     getOfflineOwner: () => view.owner,
     submitFieldCommand: async () => ({ queued: true }),
     recordOperationalError: () => {},
@@ -264,4 +266,41 @@ test('a failed server write releases the barrier so subsequent refreshes can rec
   assert.equal(await f.render().refetch(), true);
   assert.equal(f.render().repairTickets[0].id, 'server-A');
   assert.deepEqual(f.view.cached, f.render().repairTickets);
+});
+
+
+test('repair details load on demand, persist offline and cannot be overwritten by stale summaries', async () => {
+  const row = {id:'R1',record_version:3,ticket_code:'R1',date:'2026-11-07'};
+  let reads=0;
+  const f=await hookFixture({fetchAllRows:async()=>({data:[row],error:null}),safeQuery:async()=>{reads++;return {data:{...row,photos:['image'],before_photos:['before'],after_photos:['after']},error:null};}});
+  const hook=f.render();
+  assert.equal(await hook.refetch(),true);
+  assert.equal(f.render().repairTickets[0].detailsLoaded,false);
+  await assert.rejects(hook.editTicket('R1',{recordVersion:3,notes:'edit'}),/ảnh/);
+  const detail=await hook.fetchTicketDetails('R1');
+  assert.deepEqual(detail.photos,['image']);
+  assert.equal(reads,1);
+  f.view.online=false;
+  assert.deepEqual((await hook.fetchTicketDetails('R1')).photos,['image']);
+  assert.equal(reads,1);
+  assert.deepEqual(f.view.cached[0].afterPhotos,['after']);
+});
+
+test('repair detail failure and account changes never publish empty or foreign photos', async () => {
+  const gate=deferred();
+  const f=await hookFixture({fetchAllRows:async()=>({data:[{id:'R1',record_version:2}],error:null}),safeQuery:()=>gate.promise});
+  const hook=f.render();await hook.refetch();
+  const pending=hook.fetchTicketDetails('R1');
+  await new Promise(resolve=>setImmediate(resolve));
+  f.view.owner='B';
+  gate.resolve({data:{id:'R1',record_version:2,photos:['private'],before_photos:[],after_photos:[]},error:null});
+  await assert.rejects(pending);
+  assert.equal(f.view.cached.some(row=>row.photos.includes('private')),false);
+});
+
+test('offline summary-only repairs cannot open for editing or export as a complete backup', async () => {
+  const f=await hookFixture({fetchAllRows:async()=>({data:[{id:'R1',record_version:2}],error:null})});
+  const hook=f.render();await hook.refetch();f.view.online=false;
+  await assert.rejects(hook.fetchTicketDetails('R1'),/ảnh/);
+  await assert.rejects(hook.fetchBackupTickets());
 });

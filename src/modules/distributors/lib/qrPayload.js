@@ -15,18 +15,6 @@ export function isValidQrToken(token) {
   return TOKEN_PATTERN.test(String(token || ''));
 }
 
-export function buildNppQrPayload(token, publicUrl = PUBLIC_URL || (typeof window !== 'undefined' ? window.location.origin : '')) {
-  if (!isValidQrToken(token)) throw new Error('Mã QR không hợp lệ.');
-  const base = publicUrl;
-  if (!base) throw new Error('Chưa cấu hình địa chỉ ứng dụng để tạo mã QR.');
-  const url = new URL(base);
-  if (url.protocol !== 'https:' && url.hostname !== 'localhost') throw new Error('Địa chỉ ứng dụng phải dùng HTTPS.');
-  url.pathname = `/n/${token}`;
-  url.search = '';
-  url.hash = '';
-  return url.toString();
-}
-
 export function parseScannedPayload(text, publicUrl = PUBLIC_URL || (typeof window !== 'undefined' ? window.location.origin : '')) {
   const value = cleanScanValue(text);
   if (!value) throw new Error('Mã quét đang trống.');
@@ -42,7 +30,7 @@ export function parseScannedPayload(text, publicUrl = PUBLIC_URL || (typeof wind
     if (scanned.search || scanned.hash) throw new Error('Đường dẫn QR có tham số không hợp lệ.');
     const match = scanned.pathname.match(/^\/n\/([0-9A-HJKMNP-TV-Z]{10})\/?$/);
     if (!match) throw new Error('Đường dẫn QR không đúng định dạng.');
-    return { kind: 'token', value: match[1] };
+    return { kind: 'token', value: match[1], explicitToken: true };
   }
 
   if (isValidQrToken(value)) return { kind: 'token', value };
