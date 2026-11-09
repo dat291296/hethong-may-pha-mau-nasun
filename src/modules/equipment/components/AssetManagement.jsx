@@ -610,8 +610,13 @@ export default function AssetManagement({ onReplaceEquipment,replacementEvents=[
   const handleAddDeviceSubmit = async (e) => {
     e.preventDefault();
     if(stockSavingRef.current || stockDraft.existing)return;
-    if (!addFormData.id) {
-      alert('Chưa tạo được mã quản lý. Vui lòng tải lại kho rồi thử lại.');
+    let managementId;
+    try {
+      managementId = generateNextWarehouseId(addDeviceCategory);
+    } catch (error) {
+      alert(error.message === 'Device numbering limit reached'
+        ? 'Đã sử dụng hết dải mã QL 001–999 cho loại thiết bị này.'
+        : 'Chưa tạo được mã quản lý. Vui lòng tải lại kho rồi thử lại.');
       return;
     }
     if (addDeviceCategory !== 'computer' && !addFormData.model && !addFormData.type) {
@@ -623,6 +628,7 @@ export default function AssetManagement({ onReplaceEquipment,replacementEvents=[
       : addFormData.type;
     const finalData = {
       ...addFormData,
+      id: managementId,
       type: cleanType,
       model: addDeviceCategory === 'computer' ? cleanType : addFormData.model,
       serial: addDeviceCategory === 'computer' ? '—' : (addFormData.serial?.trim() || null)

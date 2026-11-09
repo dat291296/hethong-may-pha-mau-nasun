@@ -20,16 +20,19 @@ export function nextWarehouseId(category, devices = []) {
   if (!prefix) throw new Error('Unknown device category');
   const legacyPrefixes = { dispenser: ['DISP'], mixer: ['MIXE', 'MIX'], computer: ['COMP', 'PC'], printer: ['PRIN', 'PRN'] }[category];
   const acceptedPrefixes = new Set(legacyPrefixes.map(value => value.toUpperCase()));
-  const highest = devices.reduce((max, device) => {
+  const used = new Set(devices.reduce((numbers, device) => {
     const id = String(device.id || '').trim().toUpperCase();
     const match = id.match(/^([A-Z]+)-(\d+)$/);
     const number = match
       ? (acceptedPrefixes.has(match[1]) ? Number(match[2]) : 0)
       : (/^\d+$/.test(id) ? Number(id) : 0);
-    return Number.isSafeInteger(number) ? Math.max(max, number) : max;
-  }, 0);
-  if (!Number.isSafeInteger(highest + 1)) throw new Error('Device numbering limit reached');
-  return `${prefix}-${String(highest + 1).padStart(3, '0')}`;
+    if (Number.isSafeInteger(number) && number >= 1 && number <= 999) numbers.push(number);
+    return numbers;
+  }, []));
+  for (let number = 1; number <= 999; number += 1) {
+    if (!used.has(number)) return `${prefix}-${String(number).padStart(3, '0')}`;
+  }
+  throw new Error('Device numbering limit reached');
 }
 
 export function inventoryLinkIssues({ systemSets = [], ...devices }) {

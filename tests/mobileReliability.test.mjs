@@ -22,9 +22,9 @@ test('deferred, review and session failures always leave the syncing presentatio
   assert.equal(completedSyncState(false, 2, 'Session rejected').message, 'Session rejected');
 });
 
-test('corrected computer sequences continue after COMP-102', () => {
+test('computer code allocation reuses the lowest available value in a sparse sequence', () => {
   const renamed = Array.from({ length: 16 }, (_, index) => ({ id: `COMP-${String(index + 87).padStart(3, '0')}` }));
-  assert.equal(nextWarehouseId('computer', [{ id: 'COMP-086' }, ...renamed]), 'COMP-103');
+  assert.equal(nextWarehouseId('computer', [{ id: 'COMP-001' }, ...renamed]), 'COMP-002');
 });
 
 test('assembly acknowledgement uses the real set primary key and preserves blank serials', async () => {

@@ -27,14 +27,16 @@ test('explicit set references and either assignment marker exclude equipment fro
 });
 
 test('new category code uses only that category sequence and preserves its legacy prefixes', () => {
-  assert.equal(nextWarehouseId('computer', [{ id: 'COMP-061' }, { id: 'MIXE-076' }, { id: 'COMP-03' }]), 'COMP-062');
-  assert.equal(nextWarehouseId('computer', [{ id: 'PC-076' }, { id: 'PRIN-999' }]), 'COMP-077');
-  assert.equal(nextWarehouseId('dispenser', [{ id: 'DISP-061' }, { id: 'MIXE-076' }]), 'DISP-062');
-  assert.equal(nextWarehouseId('mixer', [{ id: 'MIX-076' }, { id: 'COMP-999' }]), 'MIXE-077');
-  assert.equal(nextWarehouseId('printer', [{ id: 'PRIN-061' }, { id: 'COMP-999' }]), 'PRIN-062');
-  assert.equal(nextWarehouseId('computer', [{ id: '1000' }, { id: 'unrelated-99999' }]), 'COMP-1001');
-  assert.equal(nextWarehouseId('computer', [{ id: 'PC-007' }]), 'COMP-008');
+  assert.equal(nextWarehouseId('computer', [{ id: 'COMP-061' }, { id: 'MIXE-076' }, { id: 'COMP-03' }]), 'COMP-001');
+  assert.equal(nextWarehouseId('computer', [{ id: 'PC-001' }, { id: 'PRIN-999' }]), 'COMP-002');
+  assert.equal(nextWarehouseId('dispenser', [{ id: 'DISP-001' }, { id: 'MIXE-076' }]), 'DISP-002');
+  assert.equal(nextWarehouseId('mixer', [{ id: 'MIX-001' }, { id: 'COMP-999' }]), 'MIXE-002');
+  assert.equal(nextWarehouseId('printer', [{ id: 'PRIN-001' }, { id: 'COMP-999' }]), 'PRIN-002');
+  assert.equal(nextWarehouseId('computer', [{ id: '1000' }, { id: 'unrelated-99999' }]), 'COMP-001');
+  assert.equal(nextWarehouseId('computer', [{ id: 'PC-007' }]), 'COMP-001');
   assert.equal(nextWarehouseId('printer'), 'PRIN-001');
+  assert.equal(nextWarehouseId('dispenser', [{ id: 'DISP-002' }, { id: 'DISP-003' }]), 'DISP-001');
+  assert.throws(() => nextWarehouseId('computer', Array.from({ length: 999 }, (_, index) => ({ id: `COMP-${String(index + 1).padStart(3, '0')}` }))), /numbering limit/);
 });
 
 test('audit exposes conflicting links and missing referenced devices without modifying records', () => {
