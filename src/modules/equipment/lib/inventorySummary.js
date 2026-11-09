@@ -1,4 +1,3 @@
-
 const categories = { dispensers: 'dispenser', mixers: 'mixer', computers: 'computer', printers: 'printer' };
 
 export function summarizeInventory({ systemSets = [], ...devices }) {
