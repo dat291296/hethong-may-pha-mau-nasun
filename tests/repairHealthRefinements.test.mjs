@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {normalizeCalendarDate,normalizeDateFields,normalizeOptionalTimestamp} from '../src/shared/utils/dateUtils.js';
 import {saveSystemSetEdit} from '../src/modules/equipment/lib/systemSetEdit.js';
 import {buildSystemHealth} from '../src/modules/dashboard/lib/systemHealth.js';
-import {repairListPage,repairStringList,hasMalformedRepairLists,uniqueAssignedMachine} from '../src/modules/repairs/lib/repairList.js';
+import {repairListPage,repairStringList,hasMalformedRepairLists,uniqueAssignedMachine,getRepairTicketYear} from '../src/modules/repairs/lib/repairList.js';
 test('calendar dates preserve valid dates, convert Vietnamese input and reject impossible dates',()=>{
  for(const value of ['', '  ',null,undefined])assert.equal(normalizeCalendarDate(value),null);
  assert.equal(normalizeCalendarDate('20/10/2026'),'2026-10-20');assert.equal(normalizeCalendarDate('2024-02-29'),'2024-02-29');
@@ -44,6 +44,15 @@ test('repair pagination bounds rendered rows without changing or losing the full
  const rows=Array.from({length:2503},(_,id)=>({id}));const first=repairListPage(rows,1,20);const last=repairListPage(rows,999,20);
  assert.equal(first.rows.length,20);assert.equal(first.rows[0].id,0);assert.equal(last.page,126);assert.equal(last.rows.length,3);assert.equal(rows.length,2503);
  assert.equal(repairListPage(rows,'bad',5000).size,20);assert.equal(repairListPage(rows,-9,10).page,1);assert.equal(repairListPage([],99).page,1);
+});
+test('repair year filter recognizes ISO, Vietnamese, timestamp and Date values',()=>{
+ assert.equal(getRepairTicketYear('2025-02-03'),'2025');
+ assert.equal(getRepairTicketYear('2040-12-31T22:10:00Z'),'2040');
+ assert.equal(getRepairTicketYear('3/2/2026'),'2026');
+ assert.equal(getRepairTicketYear('2027/01/09'),'2027');
+ assert.equal(getRepairTicketYear(new Date('2028-01-01T12:00:00Z')),'2028');
+ assert.equal(getRepairTicketYear('invalid-date'),null);
+ assert.equal(getRepairTicketYear(null),null);
 });
 test('malformed legacy image/material lists cannot crash the reader or be silently resaved',()=>{
  assert.deepEqual(repairStringList('legacy-invalid'),[]);assert.deepEqual(repairStringList(['image',null,{}]),['image']);

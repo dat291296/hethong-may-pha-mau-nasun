@@ -4,6 +4,17 @@ export function repairListPage(rows, requestedPage = 1, requestedSize = 20) {
   const page = Math.min(pages,Math.max(1,Number.isSafeInteger(Number(requestedPage)) ? Number(requestedPage) : 1));
   return {page,size,pages,total:rows.length,rows:rows.slice((page-1)*size,page*size)};
 }
+export function getRepairTicketYear(value) {
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : String(value.getFullYear());
+  const normalized = String(value ?? '').trim();
+  if (!normalized) return null;
+  const isoDate = normalized.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:$|[T\s])/);
+  if (isoDate) return isoDate[1];
+  const localDate = normalized.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/);
+  if (localDate) return localDate[3];
+  const parsed = new Date(normalized);
+  return Number.isNaN(parsed.getTime()) ? null : String(parsed.getFullYear());
+}
 export function repairStringList(value) {
   return Array.isArray(value) ? value.filter(item=>typeof item==='string') : [];
 }

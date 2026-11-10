@@ -11,7 +11,7 @@ import {
 
 test('every email auth operation releases the UI when the provider never responds', async () => {
   const hanging = () => new Promise(() => {});
-  const auth = { signInWithPassword: hanging, signUp: hanging, resend: hanging, resetPasswordForEmail: hanging, updateUser: hanging };
+  const auth = { signInWithPassword: hanging, signUp: hanging, resend: hanging, resetPasswordForEmail: hanging, getSession: hanging, refreshSession: hanging, updateUser: hanging };
   const credentials = { email: 'user@example.com', password: 'SyntheticPassword123' };
   for (const action of [
     () => signInEmailAccount(auth, credentials, 5),
@@ -45,13 +45,49 @@ test('password recovery sends normalized email and redirect URL', async () => {
 
 test('password recovery updates the password and propagates provider errors', async () => {
   let payload;
-  const successAuth = { updateUser: async value => { payload = value; return { data: { user: {} }, error: null }; } };
+  const session = { user: { id: 'user-1' }, refresh_token: 'refresh' };
+  let refreshed = 0;
+  const successAuth = {
+    getSession: async () => ({ data: { session }, error: null }),
+    refreshSession: async () => { refreshed++; return { data: { session }, error: null }; },
+    updateUser: async value => { payload = value; return { data: { user: {} }, error: null }; },
+  };
   await completePasswordRecovery(successAuth, 'SecurePassword123');
   assert.deepEqual(payload, { password: 'SecurePassword123' });
+  assert.equal(refreshed, 1);
 
   const providerError = new Error('expired link');
-  const failedAuth = { updateUser: async () => ({ data: null, error: providerError }) };
+  const failedAuth = {
+    getSession: async () => ({ data: { session }, error: null }),
+    refreshSession: async () => ({ data: { session }, error: null }),
+    updateUser: async () => ({ data: null, error: providerError }),
+  };
   await assert.rejects(() => completePasswordRecovery(failedAuth, 'SecurePassword123'), providerError);
+});
+
+test('password recovery refreshes once and retries an unauthorized update', async () => {
+  const session = { user: { id: 'user-1' }, refresh_token: 'refresh' };
+  let refreshCalls = 0;
+  let updateCalls = 0;
+  const auth = {
+    getSession: async () => ({ data: { session }, error: null }),
+    refreshSession: async () => { refreshCalls++; return { data: { session }, error: null }; },
+    updateUser: async () => {
+      updateCalls++;
+      return updateCalls === 1
+        ? { data: null, error: Object.assign(new Error('unauthorized'), { status: 401 }) }
+        : { data: { user: { id: 'user-1' } }, error: null };
+    },
+  };
+  const result = await completePasswordRecovery(auth, 'SecurePassword123');
+  assert.equal(result.user.id, 'user-1');
+  assert.equal(refreshCalls, 2);
+  assert.equal(updateCalls, 2);
+});
+
+test('password recovery fails closed when there is no recovery session', async () => {
+  const auth = { getSession: async () => ({ data: { session: null }, error: null }) };
+  await assert.rejects(() => completePasswordRecovery(auth, 'SecurePassword123'), { code: 'session_not_found' });
 });
 
 test('email callback waits for exchange before reading the session', async () => {
