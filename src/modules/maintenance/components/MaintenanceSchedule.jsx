@@ -103,6 +103,8 @@ export default function MaintenanceSchedule({ loading = false, onReturnToProfile
 
   const today = useVietnamDate();
   const currentYear = Number(today.slice(0, 4));
+  const maintenanceYears = useMemo(() => Array.from({ length: 16 }, (_, index) => 2025 + index), []);
+  const [selectedYear, setSelectedYear] = useState(currentYear);
 
   const annualRegionPlan = useMemo(() => {
     const eligibleSets = systemSets.filter(set =>
@@ -112,9 +114,9 @@ export default function MaintenanceSchedule({ loading = false, onReturnToProfile
 
     return MAINTENANCE_REGIONS.map(region => {
       const sets = eligibleSets.filter(set => normalizeRegion(set.region) === region);
-      const maintained = sets.filter(set => isDateInYear(set.lastMaintenanceDate, currentYear));
+      const maintained = sets.filter(set => isDateInYear(set.lastMaintenanceDate || set.last_maintenance_date, selectedYear));
       const pending = sets
-        .filter(set => !isDateInYear(set.lastMaintenanceDate, currentYear))
+        .filter(set => !isDateInYear(set.lastMaintenanceDate || set.last_maintenance_date, selectedYear))
         .sort((a, b) => {
           const aTime = a.nextMaintenanceDue ? new Date(a.nextMaintenanceDue).getTime() : 0;
           const bTime = b.nextMaintenanceDue ? new Date(b.nextMaintenanceDue).getTime() : 0;
@@ -129,7 +131,7 @@ export default function MaintenanceSchedule({ loading = false, onReturnToProfile
         progress: sets.length > 0 ? Math.round((maintained.length / sets.length) * 100) : 0
       };
     });
-  }, [systemSets, currentYear]);
+  }, [systemSets, selectedYear]);
 
   const pendingAnnualWork = useMemo(() => annualRegionPlan
     .flatMap(group => group.pending.map(set => ({ ...set, normalizedRegion: group.region })))
@@ -271,10 +273,10 @@ export default function MaintenanceSchedule({ loading = false, onReturnToProfile
       <div className="glass-panel" style={{ padding: '18px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap', marginBottom: '14px' }}>
           <div>
-            <h3 style={{ fontSize: '1rem', fontWeight: '800', color: 'var(--accent-cyan)', margin: 0 }}>🗺️ Kế Hoạch Công Tác Bảo Trì Năm {currentYear}</h3>
+            <h3 style={{ fontSize: '1rem', fontWeight: '800', color: 'var(--accent-cyan)', margin: 0 }}>🗺️ Kế Hoạch Công Tác Bảo Trì Năm {selectedYear}</h3>
             <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: '4px 0 0' }}>Theo dõi NPP đã bảo trì và danh sách cần đi công tác theo ba miền.</p>
           </div>
-          <button className={`btn btn-sm ${regionWorkFilter === 'ALL' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setRegionWorkFilter('ALL')}>Cả 3 miền</button>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}><label htmlFor="maintenance-year" style={{ color: 'var(--text-muted)', fontSize: '.82rem' }}>Năm</label><select id="maintenance-year" className="form-select" aria-label="Chọn năm bảo trì" value={selectedYear} onChange={event => setSelectedYear(Number(event.target.value))}>{maintenanceYears.map(year => <option key={year} value={year}>{year}</option>)}</select><button className={`btn btn-sm ${regionWorkFilter === 'ALL' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setRegionWorkFilter('ALL')}>Cả 3 miền</button></div>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '12px' }}>

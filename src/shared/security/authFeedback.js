@@ -5,6 +5,9 @@ export function shouldCountLoginFailure(error) {
 export function getAuthErrorMessage(error, action = 'signup') {
   const code = typeof error?.code === 'string' ? error.code : '';
   const message = typeof error?.message === 'string' ? error.message : '';
+  if (['pkce_verifier_missing', 'bad_code_verifier'].includes(code) || error?.name === 'AuthPKCECodeVerifierMissingError') return 'Không xác minh được liên kết trên trình duyệt này. Hãy yêu cầu liên kết mới và mở bằng đúng trình duyệt, thiết bị đã gửi yêu cầu; không dùng cửa sổ ẩn danh khác.';
+  if (['session_not_found', 'refresh_token_not_found', 'refresh_token_already_used'].includes(code) || error?.name === 'AuthSessionMissingError') return 'Phiên khôi phục không còn hợp lệ. Hãy yêu cầu liên kết mới và mở bằng đúng trình duyệt đã gửi yêu cầu.';
+  if (action === 'update-password' && (error?.status >= 500 || code === 'unexpected_failure')) return 'Máy chủ chưa xác nhận được việc đổi mật khẩu. Hãy thử đăng nhập bằng mật khẩu mới; nếu chưa được, yêu cầu liên kết khôi phục mới.';
   if (code === 'same_password') return 'Mật khẩu mới phải khác mật khẩu hiện tại.';
   if (['otp_expired', 'flow_state_expired', 'flow_state_not_found'].includes(code)) return 'Liên kết đã hết hạn hoặc đã được sử dụng. Hãy yêu cầu liên kết mới.';
   if (code === 'AUTH_RESPONSE_TIMEOUT' || code === 'request_timeout' || error?.status === 504 || error?.status === 408) {

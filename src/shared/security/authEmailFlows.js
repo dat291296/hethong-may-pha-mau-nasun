@@ -61,3 +61,22 @@ export async function completePasswordRecovery(authClient, password, timeoutMs =
   if (result.error) throw result.error;
   return result.data;
 }
+
+// Await URL exchange before trusting a callback or exposing account actions.
+export async function resolveEmailAuthSession(authClient, location, timeoutMs = 25000) {
+  const auth = requireAuthClient(authClient);
+  const result = await waitForAuthResponse(async () => {
+    const initialized = await auth.initialize();
+    if (initialized.error) throw initialized.error;
+    // The SDK leaves the code in the URL when no matching PKCE verifier exists.
+    if (new URLSearchParams(location.search).has('code')) {
+      throw Object.assign(new Error('PKCE verifier unavailable'), { code: 'pkce_verifier_missing' });
+    }
+    return auth.getSession();
+  }, timeoutMs);
+  if (result.error) throw result.error;
+  if (!result.data?.session) {
+    throw Object.assign(new Error('Recovery session unavailable'), { code: 'session_not_found' });
+  }
+  return result.data.session;
+}

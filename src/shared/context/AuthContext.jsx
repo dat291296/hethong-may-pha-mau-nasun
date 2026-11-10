@@ -1,3 +1,5 @@
+import { resolveEmailAuthSession } from '../security/authEmailFlows.js';
+import { getAuthErrorMessage } from '../security/authFeedback.js';
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { createAuthEventScheduler } from '../security/authEventScheduler.js';
 import { redactSecurityDetails } from '../security/securityEvents.js';
@@ -71,28 +73,45 @@ export function AuthProvider({ children }) {
         errorMsg = hashParams.get('error_description') || hashParams.get('error') || 'Xác thực email thất bại.';
       }
 
-      if (errorMsg) {
-        setPasswordRecovery(false);
-        setAuthRedirectError('Liên kết xác thực không hợp lệ hoặc đã hết hạn. Hãy yêu cầu liên kết mới.');
-
-        clearOfflineStorage().then(() => supabase.auth.signOut()).then(() => {
-          const newUrl = window.location.origin + window.location.pathname;
-          window.history.replaceState({}, document.title, newUrl);
-        });
-      } else if (isRecovery) {
-        setPasswordRecovery(true);
-      } else if (isVerified) {
-        setEmailVerifiedSuccess(true);
-        // Force logout to let user log in manually
-        clearOfflineStorage().then(() => supabase.auth.signOut()).then(() => {
-          // Clear query params so refreshing does not trigger this again
-          const newUrl = window.location.origin + window.location.pathname;
-          window.history.replaceState({}, document.title, newUrl);
-        });
+      const isEmailCallback = isRecovery || isVerified || Boolean(errorMsg);
+      let callbackPending = isEmailCallback;
+      let disposed = false;
+      if (isEmailCallback) {
+        const finishCallback = async () => {
+          try {
+            if (errorMsg) throw Object.assign(new Error('Invalid email link'), { code: 'otp_expired' });
+            await resolveEmailAuthSession(supabase.auth, window.location);
+            if (disposed) return;
+            if (isRecovery) {
+              const recoveryUrl = new URL(window.location.href);
+              recoveryUrl.searchParams.set('recovery', 'true');
+              window.history.replaceState({}, document.title, recoveryUrl.pathname + recoveryUrl.search);
+              setUser(null);
+              setRole(ROLES.VIEWER);
+              setPasswordRecovery(true);
+            } else {
+              const { error } = await supabase.auth.signOut({ scope: 'local' });
+              if (error) throw error;
+              if (disposed) return;
+              setEmailVerifiedSuccess(true);
+              window.history.replaceState({}, document.title, window.location.pathname);
+            }
+          } catch (error) {
+            if (disposed) return;
+            console.warn('[Auth] Email callback failed:', { code: error?.code, status: error?.status });
+            setPasswordRecovery(false);
+            setAuthRedirectError(getAuthErrorMessage(error, 'update-password'));
+            window.history.replaceState({}, document.title, window.location.pathname);
+          } finally {
+            callbackPending = false;
+            if (!disposed) setLoading(false);
+          }
+        };
+        void finishCallback();
       }
 
       // Production: Use Supabase Auth
-      supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!isEmailCallback) supabase.auth.getSession().then(async ({ data: { session } }) => {
         const currentUrlParams = new URLSearchParams(window.location.search);
         const currentIsVerified = currentUrlParams.get('verified') === 'true';
         const currentIsRecovery = currentUrlParams.get('recovery') === 'true';
@@ -126,7 +145,17 @@ export function AuthProvider({ children }) {
           const currentIsVerified = currentUrlParams.get('verified') === 'true';
           const currentIsRecovery = currentUrlParams.get('recovery') === 'true';
 
+          // Callback initialization owns this transition; never load a profile first.
+          if (callbackPending) return;
           if (event === 'PASSWORD_RECOVERY' || currentIsRecovery) {
+            if (!session) {
+              setPasswordRecovery(false);
+              setAuthRedirectError(getAuthErrorMessage({ code: 'session_not_found' }, 'update-password'));
+              setUser(null);
+              setRole(ROLES.VIEWER);
+              setLoading(false);
+              return;
+            }
             setPasswordRecovery(true);
             setUser(null);
             setRole(ROLES.VIEWER);
@@ -158,7 +187,7 @@ export function AuthProvider({ children }) {
         sessionOwner.current = owner;
         authEvents.listener(event, session);
       });
-      return () => { subscription.unsubscribe(); authEvents.dispose(); };
+      return () => { disposed = true; subscription.unsubscribe(); authEvents.dispose(); };
     } else if (isDevelopmentFallback) {
       // Development: use mock user (dropdown role selector in Header)
       initializeOfflineStorage(DEV_USERS[ROLES.ADMIN].id).finally(() => {
