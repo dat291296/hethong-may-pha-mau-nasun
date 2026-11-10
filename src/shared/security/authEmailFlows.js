@@ -105,8 +105,15 @@ export async function resolveEmailAuthSession(authClient, location, timeoutMs = 
   const result = await waitForAuthResponse(async () => {
     const initialized = await auth.initialize();
     if (initialized.error) throw initialized.error;
-    // The SDK leaves the code in the URL when no matching PKCE verifier exists.
-    if (new URLSearchParams(location.search).has('code')) {
+    const query = new URLSearchParams(location.search);
+    const hash = new URLSearchParams(String(location.hash || '').replace(/^#/, ''));
+    // A link may contain a PKCE code or a Supabase implicit-flow access token.
+    if (query.has('code') || hash.has('access_token')) {
+      const callback = await auth.getSession();
+      if (callback.error) throw callback.error;
+      if (callback.data?.session) return callback;
+    }
+    if (query.has('code')) {
       throw Object.assign(new Error('PKCE verifier unavailable'), { code: 'pkce_verifier_missing' });
     }
     return auth.getSession();
