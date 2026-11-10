@@ -303,8 +303,11 @@ export default function LoginModal() {
       await completePasswordRecovery(supabase.auth, password);
       window.history.replaceState({}, document.title, `${window.location.origin}${window.location.pathname}`);
       setPasswordRecovery(false);
-      await clearOfflineStorage();
-      await supabase.auth.signOut({ scope: 'local' });
+      try { await clearOfflineStorage(); } catch (cleanupError) { console.warn('[Login] Offline cleanup deferred after confirmed password update:', cleanupError?.name); }
+      try {
+        const { error: signOutError } = await supabase.auth.signOut({ scope: 'local' });
+        if (signOutError) throw signOutError;
+      } catch (signOutError) { console.warn('[Login] Local sign-out deferred after confirmed password update:', { code: signOutError?.code, status: signOutError?.status }); }
       setMode('login');
       setPassword('');
       setConfirmPassword('');

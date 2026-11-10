@@ -66,7 +66,26 @@ export async function verifyRecoveryMfa(authClient, factorId, code, timeoutMs = 
 
 export async function completePasswordRecovery(authClient, password, timeoutMs = 25000) {
   const auth = requireAuthClient(authClient);
-  const result = await waitForAuthResponse(() => auth.updateUser({ password }), timeoutMs);
+  const current = await waitForAuthResponse(() => auth.getSession(), timeoutMs);
+  if (current.error) throw current.error;
+  if (!current.data?.session) throw Object.assign(new Error('Recovery session unavailable'), { code: 'session_not_found' });
+
+  const refresh = async session => {
+    const refreshed = await waitForAuthResponse(() => auth.refreshSession(session), timeoutMs);
+    if (refreshed.error) throw refreshed.error;
+    if (!refreshed.data?.session) throw Object.assign(new Error('Recovery session unavailable'), { code: 'session_not_found' });
+    return refreshed.data.session;
+  };
+  const isUnauthorized = error => error?.code !== 'insufficient_aal' && (error?.status === 401 || ['invalid_jwt', 'session_not_found'].includes(error?.code));
+  const session = await refresh(current.data.session);
+  let result = await waitForAuthResponse(() => auth.updateUser({ password }), timeoutMs);
+  if (result.error && isUnauthorized(result.error)) {
+    await refresh(session);
+    result = await waitForAuthResponse(() => auth.updateUser({ password }), timeoutMs);
+    if (result.error && isUnauthorized(result.error)) {
+      throw Object.assign(new Error('Recovery session expired'), { code: 'session_not_found' });
+    }
+  }
   if (result.error?.code === 'insufficient_aal') {
     const factors = await waitForAuthResponse(() => auth.mfa.listFactors(), timeoutMs);
     if (factors.error) throw factors.error;
