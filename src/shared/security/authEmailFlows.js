@@ -55,6 +55,15 @@ export async function requestPasswordRecovery(authClient, email, redirectTo, tim
   return result.data;
 }
 
+export async function verifyRecoveryMfa(authClient, factorId, code, timeoutMs = 25000) {
+  if (!factorId || !/^\d{6}$/.test(code)) {
+    throw Object.assign(new Error('Invalid MFA code'), { code: 'mfa_verification_failed' });
+  }
+  const result = await waitForAuthResponse(() => requireAuthClient(authClient).mfa.challengeAndVerify({ factorId, code }), timeoutMs);
+  if (result.error) throw result.error;
+  return result.data;
+}
+
 export async function completePasswordRecovery(authClient, password, timeoutMs = 25000) {
   const auth = requireAuthClient(authClient);
   const current = await waitForAuthResponse(() => auth.getSession(), timeoutMs);
@@ -67,7 +76,7 @@ export async function completePasswordRecovery(authClient, password, timeoutMs =
     if (!refreshed.data?.session) throw Object.assign(new Error('Recovery session unavailable'), { code: 'session_not_found' });
     return refreshed.data.session;
   };
-  const isUnauthorized = error => error?.status === 401 || ['invalid_jwt', 'session_not_found'].includes(error?.code);
+  const isUnauthorized = error => error?.code !== 'insufficient_aal' && (error?.status === 401 || ['invalid_jwt', 'session_not_found'].includes(error?.code));
   const session = await refresh(current.data.session);
   let result = await waitForAuthResponse(() => auth.updateUser({ password }), timeoutMs);
   if (result.error && isUnauthorized(result.error)) {
@@ -76,6 +85,15 @@ export async function completePasswordRecovery(authClient, password, timeoutMs =
     if (result.error && isUnauthorized(result.error)) {
       throw Object.assign(new Error('Recovery session expired'), { code: 'session_not_found' });
     }
+  }
+  if (result.error?.code === 'insufficient_aal') {
+    const factors = await waitForAuthResponse(() => auth.mfa.listFactors(), timeoutMs);
+    if (factors.error) throw factors.error;
+    const available = (factors.data?.totp || []).filter(factor => factor.status === 'verified');
+    throw Object.assign(new Error('Recovery requires MFA'), {
+      code: available.length ? 'RECOVERY_MFA_REQUIRED' : 'RECOVERY_MFA_UNAVAILABLE',
+      factors: available.map(({ id, friendly_name }) => ({ id, friendly_name })),
+    });
   }
   if (result.error) throw result.error;
   return result.data;

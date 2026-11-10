@@ -6,7 +6,7 @@ import { supabase } from '../data-access/supabase.js';
 import { syncOfflineQueue } from '../sync/offlineSync.js';
 import { clearOfflineStorage } from '../sync/offlineDb.js';
 import { AUTH_REDIRECT_PURPOSES, createPrivateIdentifier, getAuthRedirectUrl } from '../security/authRuntime.js';
-import { completePasswordRecovery, signInEmailAccount, registerEmailAccount, requestPasswordRecovery, resendSignupVerification } from '../security/authEmailFlows.js';
+import { verifyRecoveryMfa, completePasswordRecovery, signInEmailAccount, registerEmailAccount, requestPasswordRecovery, resendSignupVerification } from '../security/authEmailFlows.js';
 
 const isKeycloakEnabled = import.meta.env.VITE_ENABLE_KEYCLOAK === 'true';
 const LOGIN_ATTEMPTS_KEY = 'nasun_login_attempts';
@@ -70,6 +70,15 @@ export default function LoginModal() {
   const [resendCooldown, setResendCooldown] = useState(0);
   const [resetCooldown, setResetCooldown] = useState(0);
   const [privacyOpen, setPrivacyOpen] = useState(false);
+  const [recoveryFactors, setRecoveryFactors] = useState([]);
+  const [recoveryFactorId, setRecoveryFactorId] = useState('');
+  const [recoveryCode, setRecoveryCode] = useState('');
+
+  useEffect(() => {
+    setRecoveryFactors([]);
+    setRecoveryFactorId('');
+    setRecoveryCode('');
+  }, [passwordRecovery, mode]);
 
   const passwordRules = getPasswordRules(password);
   const passwordIsStrong = passwordRules.every(rule => rule.passed);
@@ -285,6 +294,12 @@ export default function LoginModal() {
     }
     setPending(true);
     try {
+      if (recoveryFactorId) {
+        await verifyRecoveryMfa(supabase.auth, recoveryFactorId, recoveryCode);
+        setRecoveryFactors([]);
+        setRecoveryFactorId('');
+        setRecoveryCode('');
+      }
       await completePasswordRecovery(supabase.auth, password);
       window.history.replaceState({}, document.title, `${window.location.origin}${window.location.pathname}`);
       setPasswordRecovery(false);
@@ -298,6 +313,11 @@ export default function LoginModal() {
       setConfirmPassword('');
       setNotice('Mật khẩu đã được cập nhật. Bạn có thể đăng nhập bằng mật khẩu mới.');
     } catch (err) {
+      setRecoveryCode('');
+      if (err?.code === 'RECOVERY_MFA_REQUIRED') {
+        setRecoveryFactors(err.factors);
+        setRecoveryFactorId(err.factors[0].id);
+      }
       console.error('[Login] Password update failed:', { code: err?.code, status: err?.status, name: err?.name });
       setError(getAuthErrorMessage(err, 'update-password'));
     } finally {
@@ -430,6 +450,11 @@ export default function LoginModal() {
               <p className="auth-help">Tạo mật khẩu mới có ít nhất 12 ký tự cho tài khoản của bạn.</p>
               {renderPasswordInput()}
               {renderConfirmPasswordInput()}
+              {recoveryFactors.length > 0 && <>
+                {recoveryFactors.length > 1 && <label className="auth-field"><span>Ứng dụng xác thực</span><select value={recoveryFactorId} disabled={pending} onChange={event => { setRecoveryFactorId(event.target.value); setRecoveryCode(''); }}>{recoveryFactors.map((factor, index) => <option key={factor.id} value={factor.id}>{factor.friendly_name || `Ứng dụng ${index + 1}`}</option>)}</select></label>}
+                <label className="auth-field"><span>Mã xác thực hai lớp</span><div className="auth-input-wrap"><KeyRound size={18} aria-hidden="true" /><input type="text" inputMode="numeric" autoComplete="one-time-code" value={recoveryCode} onChange={event => setRecoveryCode(event.target.value.replace(/\D/g, '').slice(0, 6))} pattern="[0-9]{6}" maxLength={6} required disabled={pending} placeholder="Nhập mã 6 số" /></div></label>
+                <p className="auth-help">Lấy mã từ ứng dụng xác thực đã liên kết với tài khoản. Nếu mất quyền truy cập ứng dụng, hãy liên hệ quản trị viên.</p>
+              </>}
               <button className="btn btn-primary auth-submit" type="submit" disabled={pending}>{pending ? 'Đang cập nhật...' : 'Cập nhật mật khẩu'}</button>
               <button type="button" className="auth-back" disabled={pending} onClick={() => changeMode('reset')}>Yêu cầu liên kết khôi phục mới</button>
             </form>
