@@ -3,7 +3,7 @@ import RepairDetailDialog from './RepairDetailDialog.jsx';
 import { DataLoadingState, EmptyState } from '../../../shared/components/DataState.jsx';
 import { SERVICE_CHECKLIST, failureComponents, summarizeFailureComponents, requiresRepairReturn, isRepairAwaitingReturn } from '../lib/repairClassification.js';
 import { userErrorMessage } from '../../../shared/security/userError.js';
-import { repairListPage, repairStringList, hasMalformedRepairLists, uniqueAssignedMachine } from '../lib/repairList.js';
+import { repairListPage, repairStringList, hasMalformedRepairLists, uniqueAssignedMachine, getRepairTicketYear } from '../lib/repairList.js';
 import { validateDocumentFile } from '../../handbook/lib/technicalResources.js';
 import { compressImage } from '../../../shared/utils/imageCompressor.js';
 import { mapWithConcurrency } from '../../../shared/utils/mapWithConcurrency.js';
@@ -118,7 +118,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
   const [dateFrom, setDateFrom] = useWorkspaceState('repairs:from', '');
   const [dateTo, setDateTo] = useWorkspaceState('repairs:to', '');
   const availableYears = useMemo(() => Array.from({ length: 16 }, (_, index) => 2025 + index), []);
-  const [selectedYear, setSelectedYear] = useState(String(new Date().getFullYear()));
+  const [selectedYear, setSelectedYear] = useWorkspaceState('repairs:year', String(new Date().getFullYear()));
 
   // Modal states
   const [showModal, setShowModal] = useState(false);
@@ -151,12 +151,17 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
 
   useModalScrollLock(showModal || !!editingTicket || !!selectedTicket);
 
-  // 1-Year failure statistics for dashboard charts
+  const yearTickets = useMemo(
+    () => repairTickets.filter(ticket => getRepairTicketYear(ticket.date) === selectedYear),
+    [repairTickets, selectedYear]
+  );
+
+  // Failure statistics follow the selected year.
   const failureStats = useMemo(() => {
     const categoryCount = {};
     const errorTypeCount = {};
 
-    repairTickets.forEach(t => {
+    yearTickets.forEach(t => {
       const cat = t.productCategory || 'Khác';
       categoryCount[cat] = (categoryCount[cat] || 0) + 1;
 
@@ -177,9 +182,9 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
     }));
 
     return { categoryData, pieData };
-  }, [repairTickets]);
+  }, [yearTickets]);
 
-  const componentStats = useMemo(() => summarizeFailureComponents(repairTickets), [repairTickets]);
+  const componentStats = useMemo(() => summarizeFailureComponents(yearTickets), [yearTickets]);
 
   // Form State
   const defaultTechnician = (user && ['admin', 'manager', 'technician', 'qc'].includes(user.role))
@@ -338,7 +343,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
   };
 
   const exportRepairs = () => {
-    exportExcel(repairTickets, [
+    exportExcel(yearTickets, [
       { key: 'ticketCode', label: 'Mã Phiếu' }, { key: 'date', label: 'Ngày (YYYY-MM-DD)' },
       { key: 'nppName', label: 'Nhà Phân Phối' }, { key: 'productCategory', label: 'Loại Thiết Bị' },
       { key: 'machineModel', label: 'Model' }, { key: 'serialNumber', label: 'Số Seri' },
@@ -546,8 +551,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
 
   React.useEffect(() => { if (initialFilter !== 'ALL') setActiveTab(initialFilter === 'RETURN' ? 'NOT_RETURNED' : initialFilter); }, [initialFilter]);
   // Filtered Tickets
-  const filteredTickets = useMemo(()=>repairTickets.filter(t => {
-    if (String(t.date || '').slice(0, 4) !== selectedYear) return false;
+  const filteredTickets = useMemo(()=>yearTickets.filter(t => {
     const distributor = nppById.get(t.nppId);
     const found = matchesSearch(deferredSearch,[t.ticketCode,t.nppName,t.serialNumber,t.technician,t.errorDescription,distributor?.province,distributor?.region]);
     if (provinceFilter !== 'ALL' && distributor?.province !== provinceFilter) return false;
@@ -563,14 +567,14 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
     if (activeTab === 'REPLACED') matchesTab = t.actionDirection === 'Xuất đổi';
 
     return found && matchesCategory && matchesModel && matchesTab;
-  }),[repairTickets,nppById,deferredSearch,provinceFilter,ownerFilter,dateFrom,dateTo,categoryFilter,modelFilter,activeTab,selectedYear]);
+  }),[yearTickets,nppById,deferredSearch,provinceFilter,ownerFilter,dateFrom,dateTo,categoryFilter,modelFilter,activeTab]);
   useEffect(()=>setListPage(1),[deferredSearch,provinceFilter,ownerFilter,dateFrom,dateTo,categoryFilter,modelFilter,activeTab,selectedYear,listSize,setListPage]);
   const pageData=repairListPage(filteredTickets,listPage,listSize);
 
   // Calculate statistics
-  const pendingCount = repairTickets.filter(t => t.processingStatus === 'Chưa xử lý').length;
-  const notReturnedCount = repairTickets.filter(t => isRepairAwaitingReturn(t)).length;
-  const replacedCount = repairTickets.filter(t => t.actionDirection === 'Xuất đổi').length;
+  const pendingCount = yearTickets.filter(t => t.processingStatus === 'Chưa xử lý').length;
+  const notReturnedCount = yearTickets.filter(t => isRepairAwaitingReturn(t)).length;
+  const replacedCount = yearTickets.filter(t => t.actionDirection === 'Xuất đổi').length;
 
   return (
     <div className="workspace-screen devicerepairprocessing-screen" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -585,9 +589,9 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
         else { const ticket = repairTickets.find(item => item.id === id); if (!ticket) { alert('Phiếu gốc chưa có trong dữ liệu đã tải. Hãy tải lại trước khi mở nháp.'); return; } if (!isTicketAllowed(ticket.nppId) || isDateLocked(ticket.date)) { alert('Phiếu này không còn cho phép chỉnh sửa.'); return; } handleOpenEdit(ticket); }
         setResumeRequested(true);
       }}>Mở bản nháp</button></div>)}</section>}
-      <WorkspaceFilterBar search={searchTerm} onSearch={setSearchTerm} placeholder="Tìm mã phiếu, NPP, seri…" count={filteredTickets.length} fields={[{key:'year',label:'Năm',value:selectedYear,onChange:setSelectedYear,defaultValue:String(new Date().getFullYear()),options:availableYears.map(year=>({value:String(year),label:String(year)}))},{key:'province',label:'Tỉnh / thành',value:provinceFilter,onChange:setProvinceFilter,options:uniqueOptions(npps.map(item=>item.province))},{key:'owner',label:'Người phụ trách',value:ownerFilter,onChange:setOwnerFilter,options:[...qcUsers.map(item=>({value:item.id,label:item.name || item.full_name || item.id})),...uniqueOptions(repairTickets.filter(item=>!item.assignedUserId).map(item=>item.technician))]},{key:'category',label:'Loại thiết bị',value:categoryFilter,onChange:setCategoryFilter,options:uniqueOptions(PRODUCT_CATEGORIES)},{key:'model',label:'Model',value:modelFilter,onChange:setModelFilter,options:uniqueOptions(MACHINE_MODELS)},{key:'from',label:'Ngày tiếp nhận · từ',type:'date',defaultValue:'',value:dateFrom,onChange:setDateFrom},{key:'to',label:'Ngày tiếp nhận · đến',type:'date',defaultValue:'',value:dateTo,onChange:setDateTo}]} quick={[{value:'ALL',label:'Tất cả',count:repairTickets.filter(ticket=>String(ticket.date || '').slice(0, 4) === selectedYear).length},{value:'PENDING',label:'Chờ sửa',count:pendingCount},{value:'NOT_RETURNED',label:'Chờ trả',count:notReturnedCount},{value:'REPLACED',label:'Xuất đổi',count:replacedCount}]} quickValue={activeTab} onQuick={setActiveTab} onReset={() => { setSearchTerm(''); setActiveTab('ALL'); setCategoryFilter('ALL'); setModelFilter('ALL'); setProvinceFilter('ALL'); setOwnerFilter('ALL'); setDateFrom(''); setDateTo(''); setSelectedYear(String(new Date().getFullYear())); }} actions={<><details className="filter-more-actions"><summary>Thao tác khác</summary><div><button className="btn btn-secondary" onClick={()=>onOpenImportModal?.()}>Nhập Excel</button><button className="btn btn-secondary" onClick={exportRepairs}>Xuất Excel</button></div></details><button className="btn btn-primary" onClick={handleOpenAdd}>Tạo phiếu</button></>}/>
+      <WorkspaceFilterBar search={searchTerm} onSearch={setSearchTerm} placeholder="Tìm mã phiếu, NPP, seri…" count={filteredTickets.length} fields={[{key:'province',label:'Tỉnh / thành',value:provinceFilter,onChange:setProvinceFilter,options:uniqueOptions(npps.map(item=>item.province))},{key:'owner',label:'Người phụ trách',value:ownerFilter,onChange:setOwnerFilter,options:[...qcUsers.map(item=>({value:item.id,label:item.name || item.full_name || item.id})),...uniqueOptions(repairTickets.filter(item=>!item.assignedUserId).map(item=>item.technician))]},{key:'category',label:'Loại thiết bị',value:categoryFilter,onChange:setCategoryFilter,options:uniqueOptions(PRODUCT_CATEGORIES)},{key:'model',label:'Model',value:modelFilter,onChange:setModelFilter,options:uniqueOptions(MACHINE_MODELS)},{key:'from',label:'Ngày tiếp nhận · từ',type:'date',defaultValue:'',value:dateFrom,onChange:setDateFrom},{key:'to',label:'Ngày tiếp nhận · đến',type:'date',defaultValue:'',value:dateTo,onChange:setDateTo}]} inlineControl={<label className="filter-inline-control">Năm<select className="form-select" aria-label="Chọn năm sửa chữa" value={selectedYear} onChange={event=>setSelectedYear(event.target.value)}>{availableYears.map(year=><option key={year} value={String(year)}>{year}</option>)}</select></label>} quick={[{value:'ALL',label:'Tất cả',count:yearTickets.length},{value:'PENDING',label:'Chờ sửa',count:pendingCount},{value:'NOT_RETURNED',label:'Chờ trả',count:notReturnedCount},{value:'REPLACED',label:'Xuất đổi',count:replacedCount}]} quickValue={activeTab} onQuick={setActiveTab} onReset={() => { setSearchTerm(''); setActiveTab('ALL'); setCategoryFilter('ALL'); setModelFilter('ALL'); setProvinceFilter('ALL'); setOwnerFilter('ALL'); setDateFrom(''); setDateTo(''); setSelectedYear(String(new Date().getFullYear())); }} actions={<><details className="filter-more-actions"><summary>Thao tác khác</summary><div><button className="btn btn-secondary" onClick={()=>onOpenImportModal?.()}>Nhập Excel</button><button className="btn btn-secondary" onClick={exportRepairs}>Xuất Excel</button></div></details><button className="btn btn-primary" onClick={handleOpenAdd}>Tạo phiếu</button></>}/>
 
-      <details className="glass-panel repair-component-summary"><summary>Thống kê bộ phận / linh kiện hay hỏng · {componentStats.length} nhóm</summary><p>Số phiếu có ghi nhận từng linh kiện, chia theo loại thiết bị; một phiếu có thể có nhiều linh kiện. Phạm vi theo miền đang xem. Chưa phân loại: {repairTickets.filter(ticket=>!failureComponents(ticket).length).length} phiếu.</p>{componentStats.length ? <div className="data-table-container"><table className="data-table"><thead><tr><th>Thiết bị</th><th>Bộ phận / linh kiện</th><th>Số phiếu</th></tr></thead><tbody>{componentStats.map(row=><tr key={row.key}><td>{row.category}</td><td>{row.component}</td><td>{row.count}</td></tr>)}</tbody></table></div> : <p>Chưa có phân loại linh kiện. Bổ sung khi chỉnh sửa phiếu.</p>}</details>
+      <details className="glass-panel repair-component-summary"><summary>Thống kê bộ phận / linh kiện hay hỏng · {componentStats.length} nhóm · năm {selectedYear}</summary><p>Số phiếu có ghi nhận từng linh kiện, chia theo loại thiết bị; một phiếu có thể có nhiều linh kiện. Phạm vi theo miền và năm đang xem. Chưa phân loại: {yearTickets.filter(ticket=>!failureComponents(ticket).length).length} phiếu.</p>{componentStats.length ? <div className="data-table-container"><table className="data-table"><thead><tr><th>Thiết bị</th><th>Bộ phận / linh kiện</th><th>Số phiếu</th></tr></thead><tbody>{componentStats.map(row=><tr key={row.key}><td>{row.category}</td><td>{row.component}</td><td>{row.count}</td></tr>)}</tbody></table></div> : <p>Chưa có phân loại linh kiện. Bổ sung khi chỉnh sửa phiếu.</p>}</details>
       {/* 1-YEAR FAILURE ANALYSIS DASHBOARD CHARTS */}
       <div className="glass-panel" style={{ padding: '20px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
@@ -599,7 +603,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
               Phân tích tần suất hỏng hóc theo chủng loại thiết bị và linh kiện để chuẩn bị vật tư dự phòng.
             </p>
           </div>
-          <span className="badge badge-info" style={{ fontSize: '0.75rem' }}>Tổng {repairTickets.length} phiếu sửa chữa</span>
+          <span className="badge badge-info" style={{ fontSize: '0.75rem' }}>Năm {selectedYear}: {yearTickets.length} phiếu sửa chữa</span>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
@@ -665,10 +669,10 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
 
         <div className="glass-panel" style={{ padding: '16px 20px', borderLeft: '4px solid var(--accent-cyan)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: '600' }}>Tổng Số Phiếu Xử Lý</span>
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: '600' }}>Tổng Phiếu Năm {selectedYear}</span>
             <Wrench size={20} color="var(--accent-cyan)" />
           </div>
-          <div style={{ fontSize: '1.6rem', fontWeight: '800', marginTop: '6px' }}>{repairTickets.length}</div>
+          <div style={{ fontSize: '1.6rem', fontWeight: '800', marginTop: '6px' }}>{yearTickets.length}</div>
         </div>
 
         <div className="glass-panel" style={{ padding: '16px 20px', borderLeft: '4px solid var(--accent-amber)' }}>
