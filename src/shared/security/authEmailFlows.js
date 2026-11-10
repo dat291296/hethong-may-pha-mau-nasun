@@ -55,9 +55,27 @@ export async function requestPasswordRecovery(authClient, email, redirectTo, tim
   return result.data;
 }
 
+export async function verifyRecoveryMfa(authClient, factorId, code, timeoutMs = 25000) {
+  if (!factorId || !/^\d{6}$/.test(code)) {
+    throw Object.assign(new Error('Invalid MFA code'), { code: 'mfa_verification_failed' });
+  }
+  const result = await waitForAuthResponse(() => requireAuthClient(authClient).mfa.challengeAndVerify({ factorId, code }), timeoutMs);
+  if (result.error) throw result.error;
+  return result.data;
+}
+
 export async function completePasswordRecovery(authClient, password, timeoutMs = 25000) {
   const auth = requireAuthClient(authClient);
   const result = await waitForAuthResponse(() => auth.updateUser({ password }), timeoutMs);
+  if (result.error?.code === 'insufficient_aal') {
+    const factors = await waitForAuthResponse(() => auth.mfa.listFactors(), timeoutMs);
+    if (factors.error) throw factors.error;
+    const available = (factors.data?.totp || []).filter(factor => factor.status === 'verified');
+    throw Object.assign(new Error('Recovery requires MFA'), {
+      code: available.length ? 'RECOVERY_MFA_REQUIRED' : 'RECOVERY_MFA_UNAVAILABLE',
+      factors: available.map(({ id, friendly_name }) => ({ id, friendly_name })),
+    });
+  }
   if (result.error) throw result.error;
   return result.data;
 }
