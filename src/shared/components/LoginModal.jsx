@@ -262,7 +262,7 @@ export default function LoginModal() {
       const redirectTo = await getAuthRedirectUrl(AUTH_REDIRECT_PURPOSES.RECOVERY);
       await requestPasswordRecovery(supabase.auth, email, redirectTo);
       setResetCooldown(RESEND_COOLDOWN_SECONDS);
-      setNotice('Nếu email đã đăng ký, liên kết đặt lại mật khẩu sẽ được gửi. Hãy kiểm tra hộp thư đến hoặc thư rác.');
+      setNotice('Nếu email đã đăng ký, liên kết đặt lại mật khẩu sẽ được gửi. Hãy kiểm tra hộp thư và mở liên kết mới nhất bằng đúng trình duyệt, thiết bị đang sử dụng.');
     } catch (err) {
       console.error('[Login] Password reset failed:', err.message);
       setError(getAuthErrorMessage(err, 'recovery'));
@@ -295,7 +295,7 @@ export default function LoginModal() {
       setConfirmPassword('');
       setNotice('Mật khẩu đã được cập nhật. Bạn có thể đăng nhập bằng mật khẩu mới.');
     } catch (err) {
-      console.error('[Login] Password update failed:', err.message);
+      console.error('[Login] Password update failed:', { code: err?.code, status: err?.status, name: err?.name });
       setError(getAuthErrorMessage(err, 'update-password'));
     } finally {
       setPending(false);
@@ -428,6 +428,7 @@ export default function LoginModal() {
               {renderPasswordInput()}
               {renderConfirmPasswordInput()}
               <button className="btn btn-primary auth-submit" type="submit" disabled={pending}>{pending ? 'Đang cập nhật...' : 'Cập nhật mật khẩu'}</button>
+              <button type="button" className="auth-back" disabled={pending} onClick={() => changeMode('reset')}>Yêu cầu liên kết khôi phục mới</button>
             </form>
           )}
 

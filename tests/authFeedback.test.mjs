@@ -29,3 +29,9 @@ test('password length is enforced independently of character variety', () => {
   assert.equal(getPasswordRuleState('abcdefghijkl').uppercase, false);
   assert.equal(getPasswordRuleState('ExampleLonger').number, false);
 });
+
+test('recovery errors explain invalid sessions and PKCE browser mismatch', () => {
+  assert.match(getAuthErrorMessage({ name: 'AuthSessionMissingError' }, 'update-password'), /Phiên khôi phục/);
+  assert.match(getAuthErrorMessage({ code: 'pkce_verifier_missing' }, 'update-password'), /đúng trình duyệt/);
+  assert.doesNotMatch(getAuthErrorMessage({ status: 500 }, 'update-password'), /gửi.*email/);
+});

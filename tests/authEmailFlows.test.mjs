@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  resolveEmailAuthSession,
   signInEmailAccount,
   registerEmailAccount,
   completePasswordRecovery,
@@ -51,4 +52,35 @@ test('password recovery updates the password and propagates provider errors', as
   const providerError = new Error('expired link');
   const failedAuth = { updateUser: async () => ({ data: null, error: providerError }) };
   await assert.rejects(() => completePasswordRecovery(failedAuth, 'SecurePassword123'), providerError);
+});
+
+test('email callback waits for exchange before reading the session', async () => {
+  const location = { search: '?recovery=true&code=synthetic' };
+  let initialized = false;
+  const session = { user: { id: 'synthetic' } };
+  const auth = {
+    initialize: async () => { await Promise.resolve(); initialized = true; location.search = '?recovery=true'; return { error: null }; },
+    getSession: async () => { assert.equal(initialized, true); return { data: { session }, error: null }; },
+  };
+  assert.equal(await resolveEmailAuthSession(auth, location), session);
+});
+
+test('missing PKCE verifier cannot reuse an unrelated existing session', async () => {
+  const auth = {
+    initialize: async () => ({ error: null }),
+    getSession: async () => { assert.fail('Must not use an existing session'); },
+  };
+  await assert.rejects(() => resolveEmailAuthSession(auth, { search: '?recovery=true&code=synthetic' }), { code: 'pkce_verifier_missing' });
+});
+
+test('callback rejects missing sessions and propagates exchange errors', async () => {
+  const auth = {
+    initialize: async () => ({ error: null }),
+    getSession: async () => ({ data: { session: null }, error: null }),
+  };
+  await assert.rejects(() => resolveEmailAuthSession(auth, { search: '?recovery=true' }), { code: 'session_not_found' });
+  auth.initialize = async () => ({ error: { code: 'flow_state_expired' } });
+  await assert.rejects(() => resolveEmailAuthSession(auth, { search: '?verified=true' }), { code: 'flow_state_expired' });
+  auth.initialize = () => new Promise(() => {});
+  await assert.rejects(() => resolveEmailAuthSession(auth, { search: '' }, 5), { code: 'AUTH_RESPONSE_TIMEOUT' });
 });
