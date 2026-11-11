@@ -9,6 +9,7 @@ export function getAuthErrorMessage(error, action = 'signup') {
   if (['session_not_found', 'refresh_token_not_found', 'refresh_token_already_used', 'invalid_refresh_token', 'invalid_grant'].includes(code) || error?.name === 'AuthSessionMissingError') return 'Phiên khôi phục không còn hợp lệ. Hãy yêu cầu liên kết mới và mở bằng đúng trình duyệt đã gửi yêu cầu.';
   if (action === 'update-password' && (error?.status >= 500 || code === 'unexpected_failure')) return 'Máy chủ chưa xác nhận được việc đổi mật khẩu. Hãy thử đăng nhập bằng mật khẩu mới; nếu chưa được, yêu cầu liên kết khôi phục mới.';
   if (['insufficient_aal', 'RECOVERY_MFA_REQUIRED'].includes(code)) return 'Tài khoản đã bật xác thực hai lớp. Nhập mã 6 số từ ứng dụng xác thực để cập nhật mật khẩu.';
+  if (code === 'RECOVERY_UPDATE_UNCONFIRMED') return 'Máy chủ chưa xác nhận việc đổi mật khẩu. Hãy thử đăng nhập bằng mật khẩu mới; nếu chưa được, yêu cầu mã khôi phục email mới.';
   if (code === 'RECOVERY_EMAIL_CODE_REQUIRED') return 'Yêu cầu mã xác nhận email trước khi cập nhật mật khẩu.';
   if (['email_otp_invalid', 'otp_expired'].includes(code) && action === 'update-password') return 'Mã email không đúng hoặc đã hết hạn. Gửi mã mới rồi thử lại.';
   if (code === 'RECOVERY_MFA_UNAVAILABLE') return 'Tài khoản yêu cầu xác thực hai lớp nhưng không có ứng dụng xác thực khả dụng. Liên hệ quản trị viên để được hỗ trợ khôi phục quyền truy cập.';

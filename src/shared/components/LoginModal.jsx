@@ -6,7 +6,7 @@ import { supabase } from '../data-access/supabase.js';
 import { syncOfflineQueue } from '../sync/offlineSync.js';
 import { clearOfflineStorage } from '../sync/offlineDb.js';
 import { AUTH_REDIRECT_PURPOSES, createPrivateIdentifier, getAuthRedirectUrl } from '../security/authRuntime.js';
-import { completePasswordRecovery, signInEmailAccount, registerEmailAccount, requestRecoveryEmailCode, verifyRecoveryEmailCode, resendSignupVerification } from '../security/authEmailFlows.js';
+import { completeEmailOtpPasswordRecovery, completePasswordRecovery, signInEmailAccount, registerEmailAccount, requestRecoveryEmailCode, verifyRecoveryEmailCode, resendSignupVerification } from '../security/authEmailFlows.js';
 
 const isKeycloakEnabled = import.meta.env.VITE_ENABLE_KEYCLOAK === 'true';
 const LOGIN_ATTEMPTS_KEY = 'nasun_login_attempts';
@@ -71,6 +71,7 @@ export default function LoginModal() {
   const [resetCooldown, setResetCooldown] = useState(0);
   const [recoveryCodeSent, setRecoveryCodeSent] = useState(false);
   const [recoveryEmailCode, setRecoveryEmailCode] = useState('');
+  const emailOtpRecovery = mode === 'reset' && recoveryCodeSent;
   const [privacyOpen, setPrivacyOpen] = useState(false);
   const [recoveryFactors, setRecoveryFactors] = useState([]);
   const [recoveryFactorId, setRecoveryFactorId] = useState('');
@@ -302,15 +303,17 @@ export default function LoginModal() {
       if (mode === 'reset' && !recoveryCodeSent) throw Object.assign(new Error('RECOVERY_EMAIL_CODE_REQUIRED'), { code: 'RECOVERY_EMAIL_CODE_REQUIRED' });
       if (mode === 'reset') {
         const verified = await verifyRecoveryEmailCode(supabase.auth, email, recoveryEmailCode);
-        await supabase.auth.setSession({ access_token: verified.session.access_token, refresh_token: verified.session.refresh_token });
+        const { error: sessionError } = await supabase.auth.setSession({ access_token: verified.session.access_token, refresh_token: verified.session.refresh_token });
+        if (sessionError) throw sessionError;
       }
-      if (recoveryFactorId) {
+      if (!emailOtpRecovery && recoveryFactorId) {
         await supabase.auth.mfa.challengeAndVerify({ factorId: recoveryFactorId, code: recoveryCode });
         setRecoveryFactors([]);
         setRecoveryFactorId('');
         setRecoveryCode('');
       }
-      await completePasswordRecovery(supabase.auth, password);
+      if (emailOtpRecovery) await completeEmailOtpPasswordRecovery(supabase, password);
+      else await completePasswordRecovery(supabase.auth, password);
       window.history.replaceState({}, document.title, `${window.location.origin}${window.location.pathname}`);
       setPasswordRecovery(false);
       try { await clearOfflineStorage(); } catch (cleanupError) { console.warn('[Login] Offline cleanup deferred after confirmed password update:', cleanupError?.name); }
@@ -460,7 +463,7 @@ export default function LoginModal() {
             </form>
           )}
 
-          {(mode === 'new-password' || (mode === 'reset' && recoveryCodeSent)) && (
+          {mode === 'new-password' && (
             <form className="auth-form" onSubmit={submitNewPassword}>
               <p className="auth-help">Tạo mật khẩu mới có ít nhất 12 ký tự cho tài khoản của bạn.</p>
               {renderPasswordInput()}
