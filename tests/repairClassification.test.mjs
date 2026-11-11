@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {SERVICE_CHECKLIST,failureComponents,summarizeFailureComponents,requiresRepairReturn,isRepairAwaitingReturn,repairReturnLabel} from '../src/modules/repairs/lib/repairClassification.js';
+import {SERVICE_CHECKLIST,FAILURE_COMPONENTS,failureComponents,summarizeFailureComponents,requiresRepairReturn,isRepairAwaitingReturn,repairReturnLabel} from '../src/modules/repairs/lib/repairClassification.js';
 import {repairMissingFields} from '../src/modules/repairs/lib/repairCompleteness.js';
 import {repairNeedsAction} from '../src/modules/fieldwork/lib/teamWorkspace.js';
 test('local service never creates a return backlog, exchanges and explicit collections do',()=>{
@@ -12,6 +12,7 @@ test('local service never creates a return backlog, exchanges and explicit colle
  assert.equal(repairReturnLabel({...local,customerReturnStatus:'Đã gửi trả'}),'Đã gửi trả');
 });
 test('component incidents count once per ticket and remain separate by equipment category',()=>{
+ assert.ok(['Pannel','Cảm biến giấy','Laser nhiệt'].every(component=>FAILURE_COMPONENTS.includes(component)));
  assert.deepEqual(failureComponents({errorCategory:'Main; SSD; Main'}),['Main','SSD']);
  const rows=summarizeFailureComponents([{productCategory:'Case',errorCategory:'SSD; Main; SSD'},{productCategory:'Case',errorCategory:'SSD'},{productCategory:'AIO',errorCategory:'SSD'},{}]);
  assert.equal(rows[0].category,'Case');assert.equal(rows[0].component,'SSD');assert.equal(rows[0].count,2);assert.equal(rows.length,3);

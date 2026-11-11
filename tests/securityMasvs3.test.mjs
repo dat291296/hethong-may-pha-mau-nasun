@@ -29,11 +29,11 @@ test('native sessions require secure platform storage and approved redirects', a
   assert.match(runtime, /INVALID_NATIVE_AUTH_REDIRECT/);
 });
 
-test('email verification, recovery, and OAuth use centralized redirect generation', async () => {
+test('email verification and OAuth use centralized redirect generation while recovery uses email OTP', async () => {
   const source = await readFile(loginUrl, 'utf8');
   assert.match(source, /getAuthRedirectUrl\(AUTH_REDIRECT_PURPOSES\.LOGIN\)/);
   assert.match(source, /getAuthRedirectUrl\(AUTH_REDIRECT_PURPOSES\.VERIFIED\)/);
-  assert.match(source, /getAuthRedirectUrl\(AUTH_REDIRECT_PURPOSES\.RECOVERY\)/);
+  assert.match(source, /requestRecoveryEmailCode\(supabase\.auth, email\)/);
   assert.doesNotMatch(source, /redirectTo: window\.location\.origin/);
 });
 
