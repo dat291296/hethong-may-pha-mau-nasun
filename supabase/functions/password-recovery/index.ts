@@ -12,7 +12,7 @@ const allowedOrigins = new Set([
 
 const headersFor = (origin: string | null) => ({
   "Access-Control-Allow-Origin": origin && allowedOrigins.has(origin) ? origin : "https://kythuat.nasun.workers.dev",
-  "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info",
+  "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info, x-application-name, x-retry-count",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Vary": "Origin",
   "Content-Type": "application/json",
