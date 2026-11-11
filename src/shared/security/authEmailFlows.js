@@ -75,6 +75,23 @@ export async function verifyRecoveryEmailCode(authClient, email, token, timeoutM
   return result.data;
 }
 
+export async function completeEmailOtpPasswordRecovery(supabaseClient, password, timeoutMs = 25000) {
+  if (!supabaseClient?.auth || !supabaseClient?.functions) throw new Error('AUTH_CLIENT_REQUIRED');
+  if (typeof password !== 'string' || password.length < 12 || password.length > 128 || !/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/\\d/.test(password)) {
+    throw Object.assign(new Error('Password does not meet recovery requirements'), { code: 'weak_password' });
+  }
+  const current = await waitForAuthResponse(() => supabaseClient.auth.getSession(), timeoutMs);
+  if (current.error) throw current.error;
+  if (!current.data?.session?.access_token) throw Object.assign(new Error('Recovery session unavailable'), { code: 'session_not_found' });
+  const result = await waitForAuthResponse(() => supabaseClient.functions.invoke('password-recovery', {
+    body: { password },
+    headers: { Authorization: `Bearer ${current.data.session.access_token}` },
+  }), timeoutMs);
+  if (result.error) throw result.error;
+  if (!result.data?.success) throw Object.assign(new Error('Password recovery was not confirmed'), { code: 'RECOVERY_UPDATE_UNCONFIRMED' });
+  return result.data;
+}
+
 export async function verifyRecoveryMfa(authClient, factorId, code, timeoutMs = 25000) {
   if (!factorId || !/^\d{6}$/.test(code)) {
     throw Object.assign(new Error('Invalid MFA code'), { code: 'mfa_verification_failed' });
