@@ -68,8 +68,8 @@ export async function requestRecoveryEmailCode(authClient, email, timeoutMs = 25
 export async function verifyRecoveryEmailCode(authClient, email, token, timeoutMs = 25000) {
   const auth = requireAuthClient(authClient);
   const normalized = normalizeEmail(email);
-  if (!/^\d{6}$/.test(token)) throw Object.assign(new Error('Invalid email code'), { code: 'email_otp_invalid' });
-  const result = await waitForAuthResponse(() => auth.verifyOtp({ email: normalized, token, type: 'magiclink' }), timeoutMs);
+  if (!/^\d{6,10}$/.test(token)) throw Object.assign(new Error('Invalid email code'), { code: 'email_otp_invalid' });
+  const result = await waitForAuthResponse(() => auth.verifyOtp({ email: normalized, token, type: 'email' }), timeoutMs);
   if (result.error) throw result.error;
   if (!result.data?.session) throw Object.assign(new Error('Recovery session unavailable'), { code: 'session_not_found' });
   return result.data;

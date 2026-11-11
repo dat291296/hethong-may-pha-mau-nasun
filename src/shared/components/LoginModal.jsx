@@ -277,7 +277,7 @@ export default function LoginModal() {
       setMode('reset');
       setRecoveryCodeSent(true);
       setResetCooldown(RESEND_COOLDOWN_SECONDS);
-      setNotice('Nếu email đã đăng ký, mã xác nhận 6 số đã được gửi. Kiểm tra hộp thư đến hoặc thư rác.');
+      setNotice('Nếu email đã đăng ký, mã xác nhận đã được gửi. Kiểm tra hộp thư đến hoặc thư rác.');
     } catch (err) {
       console.error('[Login] Password reset failed:', err.message);
       setError(getAuthErrorMessage(err, 'recovery'));
@@ -334,7 +334,7 @@ export default function LoginModal() {
       }
       console.error('[Login] Password update failed:', { code: err?.code, status: err?.status, name: err?.name });
       setError(emailOtpRecovery && ['insufficient_aal', 'RECOVERY_MFA_REQUIRED'].includes(err?.code)
-        ? 'Phiên xác nhận email chưa hợp lệ hoặc đã hết hạn. Hãy gửi mã email mới và nhập mã 6 số nhận được.'
+        ? 'Phiên xác nhận email chưa hợp lệ hoặc đã hết hạn. Hãy gửi mã email mới và nhập đầy đủ mã nhận được.'
         : getAuthErrorMessage(err, 'update-password'));
     } finally {
       setPending(false);
@@ -454,14 +454,14 @@ export default function LoginModal() {
 
           {mode === 'reset' && (
             <form className="auth-form" onSubmit={recoveryCodeSent ? submitNewPassword : submitReset}>
-              <p className="auth-help">Nhập email công việc. Hệ thống sẽ gửi mã xác nhận 6 số để đặt lại mật khẩu.</p>
+              <p className="auth-help">Nhập email công việc. Hệ thống sẽ gửi mã xác nhận để đặt lại mật khẩu.</p>
               <label className="auth-field"><span>Email công việc</span><div className="auth-input-wrap"><Mail size={18} aria-hidden="true" /><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required autoComplete="email" disabled={recoveryCodeSent} /></div></label>
               {recoveryCodeSent && <>
-                <label className="auth-field"><span>Mã xác nhận email</span><div className="auth-input-wrap"><KeyRound size={18} aria-hidden="true" /><input type="text" inputMode="numeric" autoComplete="one-time-code" value={recoveryEmailCode} onChange={event => setRecoveryEmailCode(event.target.value.replace(/\D/g, '').slice(0, 6))} pattern="[0-9]{6}" maxLength={6} required placeholder="Nhập mã 6 số trong email" /></div></label>
+                <label className="auth-field"><span>Mã xác nhận email</span><div className="auth-input-wrap"><KeyRound size={18} aria-hidden="true" /><input type="text" inputMode="numeric" autoComplete="one-time-code" value={recoveryEmailCode} onChange={event => setRecoveryEmailCode(event.target.value.replace(/\D/g, '').slice(0, 10))} pattern="[0-9]{6,10}" maxLength={10} required placeholder="Nhập đầy đủ mã trong email" /></div></label>
                 {renderPasswordInput()}
                 {renderConfirmPasswordInput()}
               </>}
-              <button className="btn btn-primary auth-submit" type={recoveryCodeSent ? 'submit' : 'button'} onClick={recoveryCodeSent ? undefined : submitReset} disabled={pending || (!recoveryCodeSent && resetCooldown > 0) || (recoveryCodeSent && (!passwordIsStrong || password !== confirmPassword || recoveryEmailCode.length !== 6))}>{pending ? 'Đang xử lý...' : recoveryCodeSent ? 'Xác nhận mã và cập nhật mật khẩu' : resetCooldown > 0 ? `Gửi lại sau ${resetCooldown}s` : 'Gửi mã xác nhận'}</button>
+              <button className="btn btn-primary auth-submit" type={recoveryCodeSent ? 'submit' : 'button'} onClick={recoveryCodeSent ? undefined : submitReset} disabled={pending || (!recoveryCodeSent && resetCooldown > 0) || (recoveryCodeSent && (!passwordIsStrong || password !== confirmPassword || !/^[0-9]{6,10}$/.test(recoveryEmailCode)))}>{pending ? 'Đang xử lý...' : recoveryCodeSent ? 'Xác nhận mã và cập nhật mật khẩu' : resetCooldown > 0 ? `Gửi lại sau ${resetCooldown}s` : 'Gửi mã xác nhận'}</button>
               <button type="button" className="auth-back" onClick={() => changeMode('login')}><ArrowLeft size={16} />Quay lại đăng nhập</button>
             </form>
           )}

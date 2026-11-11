@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { completeEmailOtpPasswordRecovery, requestRecoveryEmailCode } from '../src/shared/security/authEmailFlows.js';
+import { completeEmailOtpPasswordRecovery, requestRecoveryEmailCode, verifyRecoveryEmailCode } from '../src/shared/security/authEmailFlows.js';
 
-test('password recovery requests a six-digit email OTP without creating accounts', async () => {
+test('password recovery requests an email OTP without creating accounts', async () => {
   let request;
   const auth = {
     signInWithOtp: async value => { request = value; return { data: {}, error: null }; },
@@ -36,4 +36,18 @@ test('email OTP recovery rejects missing sessions, weak passwords, and unconfirm
   await assert.rejects(() => completeEmailOtpPasswordRecovery(client, 'weak'), { code: 'weak_password' });
   client.functions.invoke = async () => ({ data: { success: false } });
   await assert.rejects(() => completeEmailOtpPasswordRecovery(client, 'StrongPassword123'), { code: 'RECOVERY_UPDATE_UNCONFIRMED' });
+});
+
+
+test('email OTP preserves configured code lengths and rejects malformed codes before sending', async () => {
+  const requests = [];
+  const auth = { verifyOtp: async request => { requests.push(request); return { data: { session: { access_token: 'synthetic' } } }; } };
+  for (const token of ['012345', '01234567', '0123456789']) {
+    await verifyRecoveryEmailCode(auth, 'admin@example.com', token);
+    assert.deepEqual(requests.at(-1), { email: 'admin@example.com', token, type: 'email' });
+  }
+  for (const token of ['12345', '12345678901', '1234abcd']) {
+    await assert.rejects(() => verifyRecoveryEmailCode(auth, 'admin@example.com', token), { code: 'email_otp_invalid' });
+  }
+  assert.equal(requests.length, 3);
 });
