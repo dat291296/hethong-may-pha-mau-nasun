@@ -73,14 +73,14 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y postgresql-client
 
+      - name: Apply viewer read-only national scope to approved staging
+        run: node scripts/apply-viewer-read-scope-staging.mjs
+
       - name: Verify frontend permission matrix against effective staging RLS and session guards
         run: node scripts/authorization-boundaries.mjs
 
       - name: Verify withdrawal releases all four inventory categories atomically
         run: node scripts/verify-withdrawal.mjs
-
-      - name: Apply viewer read-only national scope to approved staging
-        run: node scripts/apply-viewer-read-scope-staging.mjs
 
       - name: Run RLS integration checks
         run: |

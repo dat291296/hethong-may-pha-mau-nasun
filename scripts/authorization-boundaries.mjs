@@ -11,7 +11,7 @@ export function authorizationCases() {
     ['read', 'create', 'edit', 'delete', 'move'].map(action => {
       const user = { role, managedRegion: role === 'admin' ? 'Toàn Quốc' : assignedRegion };
       const permission = `npp:${action === 'move' ? 'edit' : action}`;
-      const regional = action === 'read' ? role === 'admin' || assignedRegion === targetRegion
+      const regional = action === 'read' ? ['admin', 'viewer'].includes(role) || assignedRegion === targetRegion
         : action === 'delete' ? true : canEditRegion(user, targetRegion);
       return { role, assignedRegion, targetRegion, action,
         allowed: hasPermission(role, permission) && regional };
