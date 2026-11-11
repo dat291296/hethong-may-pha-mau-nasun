@@ -108,7 +108,7 @@ export async function resolveEmailAuthSession(authClient, location, timeoutMs = 
     const query = new URLSearchParams(location.search);
     const hash = new URLSearchParams(String(location.hash || '').replace(/^#/, ''));
     // A link may contain a PKCE code or a Supabase implicit-flow access token.
-    if (query.has('code') || hash.has('access_token')) {
+    if (hash.has('access_token')) {
       const callback = await auth.getSession();
       if (callback.error) throw callback.error;
       if (callback.data?.session) return callback;
