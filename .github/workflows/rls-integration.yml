@@ -79,6 +79,9 @@ jobs:
       - name: Verify withdrawal releases all four inventory categories atomically
         run: node scripts/verify-withdrawal.mjs
 
+      - name: Apply viewer read-only national scope to approved staging
+        run: node scripts/apply-viewer-read-scope-staging.mjs
+
       - name: Run RLS integration checks
         run: |
           if [ -n "$STAGING_SUPABASE_SERVICE_ROLE_KEY" ]; then
