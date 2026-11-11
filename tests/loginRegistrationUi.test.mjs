@@ -45,3 +45,11 @@ test('password confirmation, reset cooldown, and privacy notice are visible', as
   assert.match(source, /Chính sách quyền riêng tư/);
   assert.match(source, /Camera và vị trí chỉ được truy cập/);
 });
+
+test('login can remember the account email without storing the password', async () => {
+  const source = await readFile(loginUrl, 'utf8');
+  assert.match(source, /Nhớ thiết bị này/);
+  assert.match(source, /Lưu email đăng nhập trên thiết bị\. Mật khẩu không được lưu\./);
+  assert.match(source, /saveRememberedAccount\(normalizedEmail\)/);
+  assert.match(source, /loadRememberedAccount\(\)/);
+});

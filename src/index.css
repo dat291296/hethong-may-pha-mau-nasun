@@ -1390,6 +1390,10 @@ body:has(.modal-backdrop) .mobile-bottom-nav,
 .auth-submit { width: 100%; min-height: 48px; border-radius: 11px; font-size: .93rem; }
 .auth-text-link { padding: 0; border: 0; color: #0369a1; background: transparent; font: inherit; font-weight: 750; cursor: pointer; }
 .auth-forgot { justify-self: end; margin-top: -8px; font-size: .78rem; }
+.auth-remember { display: flex; align-items: flex-start; gap: 9px; color: #bfdbfe; cursor: pointer; text-align: left; }
+.auth-remember input { flex: 0 0 auto; width: 16px; height: 16px; margin: 2px 0 0; accent-color: #06b6d4; }
+.auth-remember span { display: grid; gap: 3px; font-size: .8rem; }
+.auth-remember small { color: #94a3b8; font-size: .72rem; font-weight: 500; line-height: 1.4; }
 .auth-switch { margin: 2px 0 0; color: #64748b; text-align: center; font-size: .83rem; }
 .auth-divider { display: flex; align-items: center; gap: 12px; color: #94a3b8; font-size: .74rem; }
 .auth-divider::before, .auth-divider::after { content: ''; flex: 1; border-top: 1px solid #e2e8f0; }
