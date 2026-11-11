@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, CheckCircle2, Circle, Eye, EyeOff, KeyRound, LockKeyhole, Mail, UserRound } from 'lucide-react';
 import { getAuthErrorMessage, getPasswordRuleState, shouldCountLoginFailure } from '../security/authFeedback.js';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -6,6 +6,7 @@ import { supabase } from '../data-access/supabase.js';
 import { syncOfflineQueue } from '../sync/offlineSync.js';
 import { clearOfflineStorage } from '../sync/offlineDb.js';
 import { AUTH_REDIRECT_PURPOSES, createPrivateIdentifier, getAuthRedirectUrl } from '../security/authRuntime.js';
+import { clearRememberedAccount, loadRememberedAccount, saveRememberedAccount } from '../security/rememberedAccount.js';
 import { completeEmailOtpPasswordRecovery, completePasswordRecovery, signInEmailAccount, registerEmailAccount, requestRecoveryEmailCode, verifyRecoveryEmailCode, resendSignupVerification } from '../security/authEmailFlows.js';
 
 const isKeycloakEnabled = import.meta.env.VITE_ENABLE_KEYCLOAK === 'true';
@@ -58,6 +59,8 @@ export default function LoginModal() {
   const { user, isDevMode, switchDevRole, loading, emailVerifiedSuccess, setEmailVerifiedSuccess, passwordRecovery, setPasswordRecovery, authRedirectError, setAuthRedirectError } = useAuth();
   const [mode, setMode] = useState('login');
   const [email, setEmail] = useState('');
+  const [rememberDevice, setRememberDevice] = useState(false);
+  const emailWasEdited = useRef(false);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [fullName, setFullName] = useState('');
@@ -76,6 +79,19 @@ export default function LoginModal() {
   const [recoveryFactors, setRecoveryFactors] = useState([]);
   const [recoveryFactorId, setRecoveryFactorId] = useState('');
   const [recoveryCode, setRecoveryCode] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    loadRememberedAccount().then(rememberedEmail => {
+      if (active && rememberedEmail && !emailWasEdited.current) {
+        setEmail(rememberedEmail);
+        setRememberDevice(true);
+      }
+    }).catch(storageError => {
+      console.warn('[Login] Could not load remembered account:', storageError?.name);
+    });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     setRecoveryFactors([]);
@@ -159,6 +175,12 @@ export default function LoginModal() {
         throw new Error(`LOCAL_LOGIN_LOCKED:${remainingMinutes}`);
       }
       await signInEmailAccount(supabase.auth, { email: normalizedEmail, password });
+      try {
+        if (rememberDevice) await saveRememberedAccount(normalizedEmail);
+        else await clearRememberedAccount();
+      } catch (storageError) {
+        console.warn('[Login] Could not save remembered account:', storageError?.name);
+      }
       await updateLoginAttemptState(normalizedEmail, true);
       syncOfflineQueue().catch(() => console.warn('[Login] Offline synchronization deferred'));
     } catch (err) {
@@ -176,6 +198,26 @@ export default function LoginModal() {
       }
     } finally {
       setPending(false);
+    }
+  };
+
+  const handleRememberDeviceChange = async (event) => {
+    const shouldRemember = event.target.checked;
+    setRememberDevice(shouldRemember);
+    if (!shouldRemember) {
+      try {
+        await clearRememberedAccount();
+      } catch (storageError) {
+        console.warn('[Login] Could not clear remembered account:', storageError?.name);
+      }
+      return;
+    }
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail) return;
+    try {
+      await saveRememberedAccount(normalizedEmail);
+    } catch (storageError) {
+      console.warn('[Login] Could not save remembered account:', storageError?.name);
     }
   };
 
@@ -430,9 +472,13 @@ export default function LoginModal() {
             <form className="auth-form" onSubmit={submitLogin}>
               <label className="auth-field">
                 <span>Email công việc</span>
-                <div className="auth-input-wrap"><Mail size={18} aria-hidden="true" /><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required autoComplete="email" /></div>
+                <div className="auth-input-wrap"><Mail size={18} aria-hidden="true" /><input type="email" value={email} onChange={(event) => { emailWasEdited.current = true; setEmail(event.target.value); }} required autoComplete="email" /></div>
               </label>
               {renderPasswordInput()}
+              <label className="auth-remember">
+                <input type="checkbox" checked={rememberDevice} onChange={handleRememberDeviceChange} disabled={pending} />
+                <span><strong>Nhớ thiết bị này</strong><small>Lưu email đăng nhập trên thiết bị. Mật khẩu không được lưu.</small></span>
+              </label>
               <button type="button" className="auth-text-link auth-forgot" onClick={() => changeMode('reset')}>Quên mật khẩu?</button>
               <button className="btn btn-primary auth-submit" type="submit" disabled={pending}>{pending ? 'Đang xử lý...' : 'Đăng nhập'}</button>
               {isKeycloakEnabled && !isDevMode && <><div className="auth-divider"><span>hoặc</span></div><button type="button" className="btn auth-keycloak-button" onClick={signInWithKeycloak} disabled={pending}><KeyRound size={18} />Đăng nhập qua Keycloak</button></>}
