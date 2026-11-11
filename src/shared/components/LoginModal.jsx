@@ -327,12 +327,15 @@ export default function LoginModal() {
       setNotice('Mật khẩu đã được cập nhật. Bạn có thể đăng nhập bằng mật khẩu mới.');
     } catch (err) {
       setRecoveryCode('');
-      if (err?.code === 'RECOVERY_MFA_REQUIRED') {
+      const emailOtpRecovery = mode === 'reset' && recoveryCodeSent;
+      if (!emailOtpRecovery && err?.code === 'RECOVERY_MFA_REQUIRED') {
         setRecoveryFactors(err.factors);
         setRecoveryFactorId(err.factors[0].id);
       }
       console.error('[Login] Password update failed:', { code: err?.code, status: err?.status, name: err?.name });
-      setError(getAuthErrorMessage(err, 'update-password'));
+      setError(emailOtpRecovery && ['insufficient_aal', 'RECOVERY_MFA_REQUIRED'].includes(err?.code)
+        ? 'Phiên xác nhận email chưa hợp lệ hoặc đã hết hạn. Hãy gửi mã email mới và nhập mã 6 số nhận được.'
+        : getAuthErrorMessage(err, 'update-password'));
     } finally {
       setPending(false);
     }

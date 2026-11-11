@@ -1,6 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { completeEmailOtpPasswordRecovery } from '../src/shared/security/authEmailFlows.js';
+import { completeEmailOtpPasswordRecovery, requestRecoveryEmailCode } from '../src/shared/security/authEmailFlows.js';
+
+test('password recovery requests a six-digit email OTP without creating accounts', async () => {
+  let request;
+  const auth = {
+    signInWithOtp: async value => { request = value; return { data: {}, error: null }; },
+    resetPasswordForEmail: async () => { throw new Error('legacy recovery-link flow must not be used'); },
+  };
+  await requestRecoveryEmailCode(auth, ' Admin@Example.com ');
+  assert.equal(request.email, 'admin@example.com');
+  assert.equal(request.options.shouldCreateUser, false);
+});
 
 test('email OTP recovery calls the server gate with the verified user session', async () => {
   let invocation;
@@ -26,4 +37,3 @@ test('email OTP recovery rejects missing sessions, weak passwords, and unconfirm
   client.functions.invoke = async () => ({ data: { success: false } });
   await assert.rejects(() => completeEmailOtpPasswordRecovery(client, 'StrongPassword123'), { code: 'RECOVERY_UPDATE_UNCONFIRMED' });
 });
-

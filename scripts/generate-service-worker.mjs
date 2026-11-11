@@ -61,7 +61,7 @@ self.addEventListener('install', event => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE_NAME);
     await Promise.all(CORE_FILES.map(async url => cache.put(url, await fetchVerified(url))));
-    // Keep the current build active until all existing application tabs close.
+    await self.skipWaiting();
   })());
 });
 

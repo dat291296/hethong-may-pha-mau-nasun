@@ -7,6 +7,7 @@ import ErrorBoundary from './shared/components/ErrorBoundary.jsx'
 import { startPerformanceMonitoring } from './shared/diagnostics/performanceMetrics.js'
 import { startErrorMonitoring, configureOperationalReporting } from './shared/diagnostics/operationalDiagnostics.js'
 import { createRemoteReporter } from './shared/diagnostics/remoteReporting.js'
+import { flushBeforeAppUpdate } from './shared/updates/appUpdateSafety.js'
 
 if (import.meta.env.VITE_REMOTE_REPORTING_ENABLED === 'true') {
 configureOperationalReporting(createRemoteReporter({
@@ -35,8 +36,19 @@ createRoot(document.getElementById('root')).render(
 // Register Service Worker with update check & error recovery
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      window.dispatchEvent(new CustomEvent('nasun-field-notice',{detail:'Ứng dụng đã có phiên bản mới. Lưu bản nháp, đóng các tab rồi mở lại khi thuận tiện.'}));
+    const hadController = Boolean(navigator.serviceWorker.controller);
+    let updateReloading = false;
+    navigator.serviceWorker.addEventListener('controllerchange', async () => {
+      if (!hadController || updateReloading) return;
+      updateReloading = true;
+      try {
+        await flushBeforeAppUpdate();
+        window.location.reload();
+      } catch (error) {
+        updateReloading = false;
+        console.error('[SW] Could not save open drafts before updating:', error?.name);
+        window.dispatchEvent(new CustomEvent('nasun-field-notice',{detail:'Bản mới đã sẵn sàng nhưng chưa lưu được bản nháp đang mở. Hãy lưu biểu mẫu rồi bấm cập nhật.'}));
+      }
     });
 
     navigator.serviceWorker.register('/sw.js?v=8.0', { updateViaCache: 'none' })

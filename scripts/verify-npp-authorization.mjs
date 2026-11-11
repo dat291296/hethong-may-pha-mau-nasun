@@ -41,7 +41,7 @@ export async function verifyNppAuthorization(admin, clients, environment = proce
       assert.equal(profile.role, role);
       const user = { role, managedRegion: profile.managed_region };
       for (const fixture of fixtures) {
-        const canRead = role === 'admin' || profile.managed_region === fixture.region;
+        const canRead = role === 'admin' || role === 'viewer' || profile.managed_region === fixture.region;
         const canWrite = hasPermission(role, 'npp:create') && canEditRegion(user, fixture.region);
         const visible = checked(await client.from('distributors').select('id').eq('id', fixture.id));
         assert.equal(visible.length === 1, canRead, `${role}: NPP read boundary`);

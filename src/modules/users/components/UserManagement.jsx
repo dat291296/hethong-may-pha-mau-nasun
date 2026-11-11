@@ -437,8 +437,8 @@ export default function UserManagement({
                           </select>
                         </td>
                         <td>
-                          {p.role === 'admin' ? (
-                            <span style={{ fontSize: '0.8rem', color: '#f59e0b', fontWeight: 'bold' }}>Toàn Quốc</span>
+                          {p.role === 'admin' || p.role === 'viewer' ? (
+                            <span style={{ fontSize: '0.8rem', color: p.role === 'admin' ? '#f59e0b' : 'var(--accent-cyan)', fontWeight: 'bold' }}>{p.role === 'viewer' ? 'Toàn Quốc · Chỉ xem' : 'Toàn Quốc'}</span>
                           ) : (
                             <select 
                               value={['Miền Bắc', 'Miền Trung', 'Miền Nam'].includes(p.managed_region) ? p.managed_region : ''}

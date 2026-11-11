@@ -22,14 +22,14 @@ test('cache installation fails closed and runtime caches only manifest assets', 
   assert.match(source, /url\.origin !== self\.location\.origin/);
 });
 
-test('PWA registration bypasses HTTP cache and leaves active drafts open during updates', async () => {
+test('PWA registration preserves drafts and reloads tabs when verified updates activate', async () => {
   const source = await readFile(mainUrl, 'utf8');
   assert.match(source, /updateViaCache: 'none'/);
   assert.match(source, /controllerchange/);
-  assert.doesNotMatch(source, /window\.location\.reload\(\)/);
+  assert.match(source, /await flushBeforeAppUpdate\(\)[\s\S]*window\.location\.reload\(\)/);
   assert.match(source, /nasun-app-update-ready/);
   const worker=await readFile(generatorUrl,'utf8');
-  assert.doesNotMatch(worker,/self\.skipWaiting\(\)/);
+  assert.match(worker,/await self\.skipWaiting\(\)/);
 });
 
 test('MASVS-7 is marked implemented', async () => {

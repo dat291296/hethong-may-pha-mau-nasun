@@ -9,10 +9,10 @@ test('authorization matrix covers five roles, three assigned regions, three targ
   const cases = authorizationCases();
   assert.equal(cases.length, 225);
   assert.equal(new Set(cases.map(value => JSON.stringify(value))).size, 225);
-  assert.equal(cases.filter(item => item.allowed).length, 84);
+  assert.equal(cases.filter(item => item.allowed).length, 90);
   for (const item of cases) {
     if (item.role === 'admin') assert.equal(item.allowed, true);
-    else if (item.action === 'read') assert.equal(item.allowed, item.assignedRegion === item.targetRegion);
+    else if (item.action === 'read') assert.equal(item.allowed, item.role === 'viewer' || item.assignedRegion === item.targetRegion);
     else if (item.role === 'viewer' || item.action === 'delete') assert.equal(item.allowed, false);
     else assert.equal(item.allowed, item.assignedRegion === item.targetRegion);
   }
@@ -98,7 +98,7 @@ function jwtFixture({ permitViewerEdit = false, failDelete = false } = {}) {
           return Promise.resolve().then(() => {
             if (table === 'profiles') return { data: { role, managed_region: role === 'admin' ? 'Toàn Quốc' : 'Miền Bắc' }, error: null };
             const matches = [...rows.values()].filter(row => (!field || row[field] === expected) && (!ids || ids.includes(row.id)));
-            const visible = row => role === 'admin' || row.region === 'Miền Bắc';
+            const visible = row => role === 'admin' || role === 'viewer' || row.region === 'Miền Bắc';
             const writable = row => visible(row) && role !== 'viewer';
             let data = [];
             if (action === 'insert') {
@@ -133,7 +133,7 @@ test('real-JWT acceptance helper checks all five clients and removes only its ge
   const receipt = await verifyNppAuthorization(f.admin, f.clients, stagingEnvironment);
   assert.equal(receipt.status, 'passed');
   assert.equal(receipt.realJwt, true);
-  assert.equal(receipt.checks, 64);
+  assert.equal(receipt.checks, 66);
   assert.deepEqual([...f.rows.keys()], ['existing-business-row']);
   assert.ok(f.removed.every(id => id.startsWith('SYN-NPP-AUTH-')));
 });

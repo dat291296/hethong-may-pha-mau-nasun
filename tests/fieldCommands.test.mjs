@@ -73,7 +73,7 @@ test('five isolated field clients preserve independent queues and stable identit
 test('application updates wait for every active draft and stop if one cannot be saved',async()=>{
  const target=new EventTarget();let saved=0;
  target.addEventListener('nasun-prepare-update',event=>{event.detail.waitUntil(Promise.resolve().then(()=>saved++));event.detail.waitUntil(Promise.resolve().then(()=>saved++));});
- assert.deepEqual(await flushBeforeAppUpdate(target),{draftsFlushed:2,requiresAllTabsClosed:true});assert.equal(saved,2);
+ assert.deepEqual(await flushBeforeAppUpdate(target),{draftsFlushed:2,requiresAllTabsClosed:false});assert.equal(saved,2);
  target.addEventListener('nasun-prepare-update',event=>event.detail.waitUntil(Promise.reject(Error('QUOTA'))));
  await assert.rejects(flushBeforeAppUpdate(target),/QUOTA/);
 });
