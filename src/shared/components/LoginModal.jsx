@@ -71,6 +71,7 @@ export default function LoginModal() {
   const [resetCooldown, setResetCooldown] = useState(0);
   const [recoveryCodeSent, setRecoveryCodeSent] = useState(false);
   const [recoveryEmailCode, setRecoveryEmailCode] = useState('');
+  const emailOtpRecovery = mode === 'reset' && recoveryCodeSent;
   const [privacyOpen, setPrivacyOpen] = useState(false);
   const [recoveryFactors, setRecoveryFactors] = useState([]);
   const [recoveryFactorId, setRecoveryFactorId] = useState('');
@@ -302,7 +303,8 @@ export default function LoginModal() {
       if (mode === 'reset' && !recoveryCodeSent) throw Object.assign(new Error('RECOVERY_EMAIL_CODE_REQUIRED'), { code: 'RECOVERY_EMAIL_CODE_REQUIRED' });
       if (mode === 'reset') {
         const verified = await verifyRecoveryEmailCode(supabase.auth, email, recoveryEmailCode);
-        const { error: sessionError } = await supabase.auth.setSession({ access_token: verified.session.access_token, refresh_token: verified.session.refresh_token });\n        if (sessionError) throw sessionError;
+        const { error: sessionError } = await supabase.auth.setSession({ access_token: verified.session.access_token, refresh_token: verified.session.refresh_token });
+        if (sessionError) throw sessionError;
       }
       if (!emailOtpRecovery && recoveryFactorId) {
         await supabase.auth.mfa.challengeAndVerify({ factorId: recoveryFactorId, code: recoveryCode });
@@ -310,7 +312,8 @@ export default function LoginModal() {
         setRecoveryFactorId('');
         setRecoveryCode('');
       }
-      if (emailOtpRecovery) await completeEmailOtpPasswordRecovery(supabase, password);\n      else await completePasswordRecovery(supabase.auth, password);
+      if (emailOtpRecovery) await completeEmailOtpPasswordRecovery(supabase, password);
+      else await completePasswordRecovery(supabase.auth, password);
       window.history.replaceState({}, document.title, `${window.location.origin}${window.location.pathname}`);
       setPasswordRecovery(false);
       try { await clearOfflineStorage(); } catch (cleanupError) { console.warn('[Login] Offline cleanup deferred after confirmed password update:', cleanupError?.name); }
