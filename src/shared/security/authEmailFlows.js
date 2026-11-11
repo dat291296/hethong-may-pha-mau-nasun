@@ -77,7 +77,7 @@ export async function verifyRecoveryEmailCode(authClient, email, token, timeoutM
 
 export async function completeEmailOtpPasswordRecovery(supabaseClient, password, timeoutMs = 25000) {
   if (!supabaseClient?.auth || !supabaseClient?.functions) throw new Error('AUTH_CLIENT_REQUIRED');
-  if (typeof password !== 'string' || password.length < 12 || password.length > 128 || !/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/\d/.test(password)) {
+  if (typeof password !== 'string' || password.length < 12 || password.length > 128 || !/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/\\d/.test(password)) {
     throw Object.assign(new Error('Password does not meet recovery requirements'), { code: 'weak_password' });
   }
   const current = await waitForAuthResponse(() => supabaseClient.auth.getSession(), timeoutMs);
