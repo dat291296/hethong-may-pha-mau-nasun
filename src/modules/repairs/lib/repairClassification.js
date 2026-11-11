@@ -1,5 +1,5 @@
 export const SERVICE_CHECKLIST = [['inspection', 'Kiểm tra tổng thể'], ['functionalTest', 'Chạy thử chức năng']];
-export const FAILURE_COMPONENTS = ['Main', 'SSD', 'HDD', 'RAM', 'CPU', 'Nguồn', 'Màn hình', 'Cao su', 'Motor', 'Dây curoa', 'Vòng bi', 'Bơm', 'Van', 'Cảm biến', 'Bo điều khiển', 'Đầu in', 'Cáp / dây điện', 'Phần mềm', 'Khác', 'Chưa xác định'];
+export const FAILURE_COMPONENTS = ['Main', 'SSD', 'HDD', 'RAM', 'CPU', 'Nguồn', 'Màn hình', 'Cao su', 'Motor', 'Dây curoa', 'Vòng bi', 'Bơm', 'Van', 'Cảm biến', 'Cảm biến giấy', 'Pannel', 'Laser nhiệt', 'Bo điều khiển', 'Đầu in', 'Cáp / dây điện', 'Phần mềm', 'Khác', 'Chưa xác định'];
 export function failureComponents(ticket) {
   return [...new Set(String(ticket.errorCategory || '').split(';').map(value => value.trim()).filter(Boolean))];
 }

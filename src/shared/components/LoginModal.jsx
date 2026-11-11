@@ -6,7 +6,7 @@ import { supabase } from '../data-access/supabase.js';
 import { syncOfflineQueue } from '../sync/offlineSync.js';
 import { clearOfflineStorage } from '../sync/offlineDb.js';
 import { AUTH_REDIRECT_PURPOSES, createPrivateIdentifier, getAuthRedirectUrl } from '../security/authRuntime.js';
-import { verifyRecoveryMfa, completePasswordRecovery, signInEmailAccount, registerEmailAccount, requestPasswordRecovery, resendSignupVerification } from '../security/authEmailFlows.js';
+import { completePasswordRecovery, signInEmailAccount, registerEmailAccount, requestRecoveryEmailCode, verifyRecoveryEmailCode, resendSignupVerification } from '../security/authEmailFlows.js';
 
 const isKeycloakEnabled = import.meta.env.VITE_ENABLE_KEYCLOAK === 'true';
 const LOGIN_ATTEMPTS_KEY = 'nasun_login_attempts';
@@ -69,6 +69,8 @@ export default function LoginModal() {
   const [verificationEmail, setVerificationEmail] = useState('');
   const [resendCooldown, setResendCooldown] = useState(0);
   const [resetCooldown, setResetCooldown] = useState(0);
+  const [recoveryCodeSent, setRecoveryCodeSent] = useState(false);
+  const [recoveryEmailCode, setRecoveryEmailCode] = useState('');
   const [privacyOpen, setPrivacyOpen] = useState(false);
   const [recoveryFactors, setRecoveryFactors] = useState([]);
   const [recoveryFactorId, setRecoveryFactorId] = useState('');
@@ -268,10 +270,13 @@ export default function LoginModal() {
         setNotice('Mô phỏng: yêu cầu đặt lại mật khẩu đã được gửi.');
         return;
       }
-      const redirectTo = await getAuthRedirectUrl(AUTH_REDIRECT_PURPOSES.RECOVERY);
-      await requestPasswordRecovery(supabase.auth, email, redirectTo);
+      setRecoveryCodeSent(false);
+      setRecoveryEmailCode('');
+      await requestRecoveryEmailCode(supabase.auth, email);
+      setMode('reset');
+      setRecoveryCodeSent(true);
       setResetCooldown(RESEND_COOLDOWN_SECONDS);
-      setNotice('Nếu email đã đăng ký, liên kết đặt lại mật khẩu sẽ được gửi. Hãy kiểm tra hộp thư và mở liên kết mới nhất bằng đúng trình duyệt, thiết bị đang sử dụng.');
+      setNotice('Nếu email đã đăng ký, mã xác nhận 6 số đã được gửi. Kiểm tra hộp thư đến hoặc thư rác.');
     } catch (err) {
       console.error('[Login] Password reset failed:', err.message);
       setError(getAuthErrorMessage(err, 'recovery'));
@@ -294,8 +299,13 @@ export default function LoginModal() {
     }
     setPending(true);
     try {
+      if (mode === 'reset' && !recoveryCodeSent) throw Object.assign(new Error('RECOVERY_EMAIL_CODE_REQUIRED'), { code: 'RECOVERY_EMAIL_CODE_REQUIRED' });
+      if (mode === 'reset') {
+        const verified = await verifyRecoveryEmailCode(supabase.auth, email, recoveryEmailCode);
+        await supabase.auth.setSession({ access_token: verified.session.access_token, refresh_token: verified.session.refresh_token });
+      }
       if (recoveryFactorId) {
-        await verifyRecoveryMfa(supabase.auth, recoveryFactorId, recoveryCode);
+        await supabase.auth.mfa.challengeAndVerify({ factorId: recoveryFactorId, code: recoveryCode });
         setRecoveryFactors([]);
         setRecoveryFactorId('');
         setRecoveryCode('');
@@ -437,15 +447,20 @@ export default function LoginModal() {
           )}
 
           {mode === 'reset' && (
-            <form className="auth-form" onSubmit={submitReset}>
-              <p className="auth-help">Nhập email công việc. Hệ thống sẽ gửi liên kết đặt lại mật khẩu.</p>
-              <label className="auth-field"><span>Email công việc</span><div className="auth-input-wrap"><Mail size={18} aria-hidden="true" /><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required autoComplete="email" /></div></label>
-              <button className="btn btn-primary auth-submit" type="submit" disabled={pending || resetCooldown > 0}>{pending ? 'Đang xử lý...' : resetCooldown > 0 ? `Gửi lại sau ${resetCooldown}s` : 'Gửi liên kết khôi phục'}</button>
+            <form className="auth-form" onSubmit={recoveryCodeSent ? submitNewPassword : submitReset}>
+              <p className="auth-help">Nhập email công việc. Hệ thống sẽ gửi mã xác nhận 6 số để đặt lại mật khẩu.</p>
+              <label className="auth-field"><span>Email công việc</span><div className="auth-input-wrap"><Mail size={18} aria-hidden="true" /><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required autoComplete="email" disabled={recoveryCodeSent} /></div></label>
+              {recoveryCodeSent && <>
+                <label className="auth-field"><span>Mã xác nhận email</span><div className="auth-input-wrap"><KeyRound size={18} aria-hidden="true" /><input type="text" inputMode="numeric" autoComplete="one-time-code" value={recoveryEmailCode} onChange={event => setRecoveryEmailCode(event.target.value.replace(/\D/g, '').slice(0, 6))} pattern="[0-9]{6}" maxLength={6} required placeholder="Nhập mã 6 số trong email" /></div></label>
+                {renderPasswordInput()}
+                {renderConfirmPasswordInput()}
+              </>}
+              <button className="btn btn-primary auth-submit" type={recoveryCodeSent ? 'submit' : 'button'} onClick={recoveryCodeSent ? undefined : submitReset} disabled={pending || (!recoveryCodeSent && resetCooldown > 0) || (recoveryCodeSent && (!passwordIsStrong || password !== confirmPassword || recoveryEmailCode.length !== 6))}>{pending ? 'Đang xử lý...' : recoveryCodeSent ? 'Xác nhận mã và cập nhật mật khẩu' : resetCooldown > 0 ? `Gửi lại sau ${resetCooldown}s` : 'Gửi mã xác nhận'}</button>
               <button type="button" className="auth-back" onClick={() => changeMode('login')}><ArrowLeft size={16} />Quay lại đăng nhập</button>
             </form>
           )}
 
-          {mode === 'new-password' && (
+          {(mode === 'new-password' || (mode === 'reset' && recoveryCodeSent)) && (
             <form className="auth-form" onSubmit={submitNewPassword}>
               <p className="auth-help">Tạo mật khẩu mới có ít nhất 12 ký tự cho tài khoản của bạn.</p>
               {renderPasswordInput()}
