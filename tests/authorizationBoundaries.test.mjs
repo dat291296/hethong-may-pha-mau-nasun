@@ -98,7 +98,7 @@ function jwtFixture({ permitViewerEdit = false, failDelete = false } = {}) {
           return Promise.resolve().then(() => {
             if (table === 'profiles') return { data: { role, managed_region: role === 'admin' ? 'Toàn Quốc' : 'Miền Bắc' }, error: null };
             const matches = [...rows.values()].filter(row => (!field || row[field] === expected) && (!ids || ids.includes(row.id)));
-            const visible = row => role === 'admin' || row.region === 'Miền Bắc';
+            const visible = row => role === 'admin' || role === 'viewer' || row.region === 'Miền Bắc';
             const writable = row => visible(row) && role !== 'viewer';
             let data = [];
             if (action === 'insert') {
@@ -133,7 +133,7 @@ test('real-JWT acceptance helper checks all five clients and removes only its ge
   const receipt = await verifyNppAuthorization(f.admin, f.clients, stagingEnvironment);
   assert.equal(receipt.status, 'passed');
   assert.equal(receipt.realJwt, true);
-  assert.equal(receipt.checks, 64);
+  assert.equal(receipt.checks, 66);
   assert.deepEqual([...f.rows.keys()], ['existing-business-row']);
   assert.ok(f.removed.every(id => id.startsWith('SYN-NPP-AUTH-')));
 });
