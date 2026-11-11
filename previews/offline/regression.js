@@ -110,7 +110,7 @@ async function inspectCurrent() {
   verify('stage8OfflineAllocationCannotEnterOutbox',allocationBlocked&&(await storage.getQueue()).length===1);
   let flushed=false;const prepare=event=>event.detail.waitUntil(Promise.resolve().then(()=>{flushed=true;}));window.addEventListener('nasun-prepare-update',prepare);
   const update=await flushBeforeAppUpdate();window.removeEventListener('nasun-prepare-update',prepare);
-  verify('stage9UpdateWaitsForDraftFlush',flushed&&update.requiresAllTabsClosed);
+  verify('stage9UpdateWaitsForDraftFlushWithoutClosingTabs',flushed&&!update.requiresAllTabsClosed);
   const failing=event=>event.detail.waitUntil(Promise.reject(Error('QUOTA')));window.addEventListener('nasun-prepare-update',failing);
   let updateBlocked=false;try{await flushBeforeAppUpdate();}catch{updateBlocked=true;}window.removeEventListener('nasun-prepare-update',failing);
   verify('stage9QuotaPreventsUpdateAcknowledgement',updateBlocked);
