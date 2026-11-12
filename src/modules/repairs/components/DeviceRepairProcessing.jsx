@@ -149,7 +149,9 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
     if (ticket) { openedSearch.current = globalSearch; void openDetail(ticket); }
   }, [globalSearch, repairTickets]);
 
-  useModalScrollLock(showModal || !!editingTicket || !!selectedTicket);
+  // Only visible dialogs may lock page scrolling. `editingTicket` is retained
+  // as form context and can outlive a dismissed editor while its draft remains.
+  useModalScrollLock(showModal || !!selectedTicket);
 
   const yearTickets = useMemo(
     () => selectedYear === 'ALL' ? repairTickets : repairTickets.filter(ticket => getRepairTicketYear(ticket.date) === selectedYear),
@@ -280,7 +282,12 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
   }, [resumeRequested, draft.existing]);
   const closeForm = async () => {
     if (saving || photoBusy) return;
-    try { await draft.flush(); setShowModal(false); onReturnToProfile?.(); }
+    try {
+      await draft.flush();
+      setShowModal(false);
+      setEditingTicket(null);
+      onReturnToProfile?.();
+    }
     catch { setSaveError('Chưa lưu được nháp. Hãy giữ phiếu mở và thử lại.'); }
   };
 
