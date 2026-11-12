@@ -52,6 +52,8 @@ test('remember-device stores credentials through the browser password manager wi
   assert.match(source, /rememberDevice \? 'current-password' : 'off'/);
   assert.match(source, /rememberDevice \? 'username' : 'off'/);
   assert.match(source, /saveBrowserPasswordCredential\(normalizedEmail, password\)/);
+  assert.match(source, /loadBrowserPasswordCredential\(\)/);
+  assert.match(source, /setPassword\(currentPassword => currentPassword \|\| credential\.password\)/);
   assert.match(source, /name=\{mode === 'login' \? 'password'/);
   assert.match(source, /name="username"/);
   assert.doesNotMatch(source, /<small>/);

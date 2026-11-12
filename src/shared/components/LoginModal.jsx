@@ -7,7 +7,7 @@ import { syncOfflineQueue } from '../sync/offlineSync.js';
 import { clearOfflineStorage } from '../sync/offlineDb.js';
 import { AUTH_REDIRECT_PURPOSES, createPrivateIdentifier, getAuthRedirectUrl } from '../security/authRuntime.js';
 import { clearRememberedAccount, loadRememberedAccount, saveRememberedAccount } from '../security/rememberedAccount.js';
-import { saveBrowserPasswordCredential } from '../security/browserCredentials.js';
+import { loadBrowserPasswordCredential, saveBrowserPasswordCredential } from '../security/browserCredentials.js';
 import { completeEmailOtpPasswordRecovery, completePasswordRecovery, signInEmailAccount, registerEmailAccount, requestRecoveryEmailCode, verifyRecoveryEmailCode, resendSignupVerification } from '../security/authEmailFlows.js';
 
 const isKeycloakEnabled = import.meta.env.VITE_ENABLE_KEYCLOAK === 'true';
@@ -62,6 +62,7 @@ export default function LoginModal() {
   const [email, setEmail] = useState('');
   const [rememberDevice, setRememberDevice] = useState(false);
   const emailWasEdited = useRef(false);
+  const credentialLookupStarted = useRef(false);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [fullName, setFullName] = useState('');
@@ -93,6 +94,27 @@ export default function LoginModal() {
     });
     return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    if (!rememberDevice || mode !== 'login') {
+      if (!rememberDevice) credentialLookupStarted.current = false;
+      return undefined;
+    }
+    if (credentialLookupStarted.current) return undefined;
+    credentialLookupStarted.current = true;
+    let active = true;
+    loadBrowserPasswordCredential().then(credential => {
+      if (!active || !credential || emailWasEdited.current) return;
+      setEmail(currentEmail => {
+        if (currentEmail && currentEmail.trim().toLowerCase() !== credential.email) return currentEmail;
+        return credential.email;
+      });
+      setPassword(currentPassword => currentPassword || credential.password);
+    }).catch(error => {
+      console.warn('[Login] Browser credential autofill unavailable:', error?.name);
+    });
+    return () => { active = false; };
+  }, [rememberDevice, mode]);
 
   useEffect(() => {
     setRecoveryFactors([]);
