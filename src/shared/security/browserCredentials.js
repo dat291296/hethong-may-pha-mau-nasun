@@ -12,3 +12,19 @@ export async function saveBrowserPasswordCredential(email, password, {
   await credentials.store(credential);
   return true;
 }
+
+export async function loadBrowserPasswordCredential({
+  credentials = globalThis.navigator?.credentials,
+} = {}) {
+  if (typeof credentials?.get !== 'function') return null;
+
+  const credential = await credentials.get({ password: true, mediation: 'optional' });
+  if (typeof credential?.id !== 'string' || typeof credential?.password !== 'string' || !credential.password) {
+    return null;
+  }
+
+  return {
+    email: credential.id.trim().toLowerCase(),
+    password: credential.password,
+  };
+}
