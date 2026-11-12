@@ -9,8 +9,6 @@ import { compressImage } from '../../../shared/utils/imageCompressor.js';
 import { mapWithConcurrency } from '../../../shared/utils/mapWithConcurrency.js';
 import { validateRepairReturn } from '../lib/repairLifecycle.js';
 import { repairMissingFields } from '../lib/repairCompleteness.js';
-import { getOwnedCacheEntries } from '../../../shared/sync/offlineDb.js';
-import { isDraftExpired } from '../../fieldwork/lib/teamWorkspace.js';
 import WorkspaceFilterBar from '../../../shared/components/WorkspaceFilterBar.jsx';
 import { matchesSearch, matchesDateRange, uniqueOptions, canEditRegion } from '../../../shared/workspace/workspaceFilters.js';
 import React, { useState, useMemo, useEffect, useDeferredValue } from 'react';
@@ -268,18 +266,6 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
   const [handbookErrors, setHandbookErrors] = useState([]);
   useEffect(() => { let active = true; import('../../../shared/sync/offlineSync.js').then(({ getCachedOfflineData }) => getCachedOfflineData('tech_handbook_errors', [])).then(rows => { if (active && Array.isArray(rows)) setHandbookErrors(rows); }).catch(() => {}); return () => { active = false; }; }, []);
   const draft = useFormDraft(`${user.id}:repair:${editingTicket?.id || 'new'}`, formData, showModal, saved => setFormData(saved));
-  const [savedDrafts, setSavedDrafts] = useState([]);
-  const [resumeRequested, setResumeRequested] = useState(false);
-  useEffect(() => {
-    let active = true;
-    if (!showModal) getOwnedCacheEntries(`form-draft:${user.id}:repair:`).then(entries => {
-      if (active) setSavedDrafts(entries.filter(entry => entry.value && !isDraftExpired(entry.value)).sort((a, b) => b.value.savedAt - a.value.savedAt));
-    }).catch(() => { if (active) setSaveError('Không đọc được danh sách bản nháp trên thiết bị.'); });
-    return () => { active = false; };
-  }, [showModal, user.id]);
-  useEffect(() => {
-    if (resumeRequested && draft.existing) { draft.resume(); setResumeRequested(false); }
-  }, [resumeRequested, draft.existing]);
   const closeForm = async () => {
     if (saving || photoBusy) return;
     try {
@@ -595,12 +581,6 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
       {saveError&&!showModal&&<p role="alert" className="resource-error">{saveError}</p>}
       {saveNotice && <p role="status" className="repair-save-notice">{saveNotice}</p>}
 
-      {savedDrafts.length > 0 && <section className="glass-panel repair-draft-list" aria-label="Phiếu nháp đã lưu"><h3>Phiếu nháp trên thiết bị ({savedDrafts.length})</h3><p>Chỉ tài khoản này có thể mở các bản nháp trên thiết bị này.</p>{savedDrafts.map(entry => <div className="workspace-task-row" key={entry.key}><div><strong>{entry.value.value.nppName || 'Chưa chọn NPP'} · {entry.value.value.serialNumber || entry.value.value.productCategory}</strong><p>Lưu lúc {new Date(entry.value.savedAt).toLocaleString('vi-VN')}</p></div><button className="btn btn-primary" onClick={() => {
-        const id = entry.key.slice(`form-draft:${user.id}:repair:`.length);
-        if (id === 'new') handleOpenAdd();
-        else { const ticket = repairTickets.find(item => item.id === id); if (!ticket) { alert('Phiếu gốc chưa có trong dữ liệu đã tải. Hãy tải lại trước khi mở nháp.'); return; } if (!isTicketAllowed(ticket.nppId) || isDateLocked(ticket.date)) { alert('Phiếu này không còn cho phép chỉnh sửa.'); return; } handleOpenEdit(ticket); }
-        setResumeRequested(true);
-      }}>Mở bản nháp</button></div>)}</section>}
       <WorkspaceFilterBar search={searchTerm} onSearch={setSearchTerm} placeholder="Tìm mã phiếu, NPP, seri…" count={filteredTickets.length} fields={[{key:'province',label:'Tỉnh / thành',value:provinceFilter,onChange:setProvinceFilter,options:uniqueOptions(npps.map(item=>item.province))},{key:'owner',label:'Người phụ trách',value:ownerFilter,onChange:setOwnerFilter,options:[...qcUsers.map(item=>({value:item.id,label:item.name || item.full_name || item.id})),...uniqueOptions(repairTickets.filter(item=>!item.assignedUserId).map(item=>item.technician))]},{key:'category',label:'Loại thiết bị',value:categoryFilter,onChange:setCategoryFilter,options:uniqueOptions(PRODUCT_CATEGORIES)},{key:'model',label:'Model',value:modelFilter,onChange:setModelFilter,options:uniqueOptions(MACHINE_MODELS)},{key:'from',label:'Ngày tiếp nhận · từ',type:'date',defaultValue:'',value:dateFrom,onChange:setDateFrom},{key:'to',label:'Ngày tiếp nhận · đến',type:'date',defaultValue:'',value:dateTo,onChange:setDateTo}]} inlineControl={<label className="filter-inline-control">Năm<select className="form-select" aria-label="Chọn năm sửa chữa" value={selectedYear} onChange={event=>setSelectedYear(event.target.value)}>{<option value="ALL">Tất cả năm</option>}{availableYears.map(year=><option key={year} value={String(year)}>{year}</option>)}</select></label>} quick={[{value:'ALL',label:'Tất cả',count:yearTickets.length},{value:'PENDING',label:'Chờ sửa',count:pendingCount},{value:'NOT_RETURNED',label:'Chờ trả',count:notReturnedCount},{value:'REPLACED',label:'Xuất đổi',count:replacedCount}]} quickValue={activeTab} onQuick={setActiveTab} onReset={() => { setSearchTerm(''); setActiveTab('ALL'); setCategoryFilter('ALL'); setModelFilter('ALL'); setProvinceFilter('ALL'); setOwnerFilter('ALL'); setDateFrom(''); setDateTo(''); setSelectedYear(String(new Date().getFullYear())); }} actions={<><details className="filter-more-actions"><summary>Thao tác khác</summary><div><button className="btn btn-secondary" onClick={()=>onOpenImportModal?.()}>Nhập Excel</button><button className="btn btn-secondary" onClick={exportRepairs}>Xuất Excel</button></div></details><button className="btn btn-primary" onClick={handleOpenAdd}>Tạo phiếu</button></>}/>
 
       <details className="glass-panel repair-component-summary"><summary>Thống kê bộ phận / linh kiện hay hỏng · {componentStats.length} nhóm · {selectedYear === 'ALL' ? 'tất cả năm' : `năm ${selectedYear}`}</summary><p>Số phiếu có ghi nhận từng linh kiện, chia theo loại thiết bị; một phiếu có thể có nhiều linh kiện. Phạm vi theo miền và năm đang xem. Chưa phân loại: {yearTickets.filter(ticket=>!failureComponents(ticket).length).length} phiếu.</p>{componentStats.length ? <div className="data-table-container"><table className="data-table"><thead><tr><th>Thiết bị</th><th>Bộ phận / linh kiện</th><th>Số phiếu</th></tr></thead><tbody>{componentStats.map(row=><tr key={row.key}><td>{row.category}</td><td>{row.component}</td><td>{row.count}</td></tr>)}</tbody></table></div> : <p>Chưa có phân loại linh kiện. Bổ sung khi chỉnh sửa phiếu.</p>}</details>

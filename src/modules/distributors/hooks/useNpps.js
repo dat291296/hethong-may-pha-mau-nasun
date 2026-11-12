@@ -2,7 +2,7 @@ import { getOfflineOwner } from '../../../shared/sync/offlineDb.js';
 import { recordDataLoadMetric } from '../../../shared/diagnostics/performanceMetrics.js';
 import { updateWithRevision } from '../../../shared/data-access/guardedWrite.js';
 import { fetchAllRows } from '../../../shared/data-access/paginatedQuery.js';
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { supabase, isSupabaseConfigured, safeQuery } from '../../../shared/data-access/supabase.js';
 import { persistMutation, persistBatchMutation } from '../../../shared/data-access/durableMutation.js';
 import { INITIAL_NPPS } from '../../../shared/data/mockData.js';
@@ -16,16 +16,74 @@ import { generateQrToken } from '../lib/qrPayload.js';
  * Uses Supabase when configured, falls back to mock data locally, with offline caching & queuing.
  */
 export function useNpps() {
-  const [npps, setNpps] = useState(() => isSupabaseConfigured ? [] : INITIAL_NPPS.map(item => ({ ...item, qrToken: item.qrToken || generateQrToken() })));
+  const [npps, publishNpps] = useState(() => isSupabaseConfigured ? [] : INITIAL_NPPS.map(item => ({ ...item, qrToken: item.qrToken || generateQrToken() })));
   const [loading, setLoading] = useState(isSupabaseConfigured);
   const [error, setError]   = useState(null);
   const fetchVersion = useRef(0);
-  const cacheHydrated = useRef(false);
+  const activeOwner = useRef(null);
+  const cacheDirty = useRef(false);
+  const cacheRevision = useRef(0);
   const nppsRef = useRef(npps);
-  nppsRef.current = npps;
+  const setNpps = useCallback(updater => {
+    if (activeOwner.current !== null && activeOwner.current !== getOfflineOwner()) throw Object.assign(new Error('OFFLINE_OWNER_CHANGED'), { code: 'OFFLINE_OWNER_CHANGED' });
+    const rows = typeof updater === 'function' ? updater(nppsRef.current) : updater;
+    nppsRef.current = rows;
+    publishNpps(rows);
+  }, []);
+  const refreshRef = useRef(null);
+  const mutationTail = useRef(Promise.resolve());
+  const pendingWrites = useRef(0);
+  const cacheTail = useRef(Promise.resolve());
+  const persistNpps = useCallback((rows, setter, publish = true) => {
+    const owner = getOfflineOwner();
+    if (publish) setter(rows);
+    cacheDirty.current = true;
+    const revision = ++cacheRevision.current;
+    const saved = cacheTail.current.then(async () => {
+      if (owner !== getOfflineOwner()) return false;
+      try {
+        const success = await cacheOfflineData('npps', rows);
+        if (owner !== getOfflineOwner()) return false;
+        if (success && revision === cacheRevision.current) cacheDirty.current = false;
+        return success;
+      } catch (error) {
+        recordOperationalError('runtime', error);
+        return false;
+      }
+    });
+    cacheTail.current = saved;
+    return saved;
+  }, []);
+  const serializeMutation = useCallback(action => (...args) => {
+    const owner = getOfflineOwner();
+    pendingWrites.current++;
+    fetchVersion.current++;
+    const operation = mutationTail.current.then(async () => {
+      if (owner !== getOfflineOwner()) throw new Error('OFFLINE_OWNER_CHANGED');
+      activeOwner.current = owner;
+      try {
+        const result = await action(...args);
+        const saved = await cacheTail.current;
+        if (owner === getOfflineOwner() && saved === false) {
+          setError('Thao tác đã được tiếp nhận nhưng chưa lưu được bản xem ngoại tuyến. Không tạo lại NPP; kiểm tra dung lượng thiết bị.');
+        }
+        return result;
+      } finally {
+        activeOwner.current = null;
+        fetchVersion.current++;
+      }
+    }).finally(async () => {
+      pendingWrites.current--;
+      if (!pendingWrites.current && owner === getOfflineOwner()) await refreshRef.current?.();
+      if (!pendingWrites.current && owner === getOfflineOwner()) setLoading(false);
+    });
+    mutationTail.current = operation.catch(() => {});
+    return operation;
+  }, []);
 
   // ── Fetch all NPPs ─────────────────────────────────────────────────────────
   const fetchNpps = useCallback(async () => {
+    if (pendingWrites.current) return false;
     const startedAt = performance.now();
     const requestOwner = getOfflineOwner();
     const version = ++fetchVersion.current;
@@ -38,8 +96,14 @@ export function useNpps() {
       }
       return;
     }
-    setError(null);
     try {
+      await cacheTail.current;
+      if (version !== fetchVersion.current || requestOwner !== getOfflineOwner()) return false;
+      if (cacheDirty.current && !await persistNpps(nppsRef.current, setNpps, false)) {
+        setError('Thao tác đã được tiếp nhận nhưng chưa lưu được bản xem ngoại tuyến. Không tạo lại NPP; kiểm tra dung lượng thiết bị.');
+        return false;
+      }
+      setError(null);
       const pendingQueue = await getOfflineQueue();
       if (version !== fetchVersion.current || requestOwner !== getOfflineOwner()) return false;
       if (pendingQueue.some(item => ['ADD_NPP', 'EDIT_NPP', 'DELETE_NPP'].includes(item.action))) {
@@ -65,32 +129,35 @@ export function useNpps() {
       if (version === fetchVersion.current && requestOwner === getOfflineOwner()) {
         setError(cacheSaved ? null : 'Đã tải NPP nhưng chưa lưu được bản ngoại tuyến trên thiết bị.');
       }
-      return cacheSaved;
+      return version === fetchVersion.current && requestOwner === getOfflineOwner() && cacheSaved;
     } catch (fetchError) {
       recordOperationalError('runtime', fetchError);
       if (version !== fetchVersion.current || requestOwner !== getOfflineOwner()) return false;
       setError(userErrorMessage(fetchError, 'Chưa tải được NPP. Dữ liệu trên thiết bị được giữ nguyên; kiểm tra phiên đăng nhập, quyền truy cập và kết nối.'));
       try {
         const cached = await getCachedOfflineData('npps', null);
-        if (version === fetchVersion.current && requestOwner === getOfflineOwner() && Array.isArray(cached)) setNpps(cached);
+        if (!cacheDirty.current && version === fetchVersion.current && requestOwner === getOfflineOwner() && Array.isArray(cached)) setNpps(cached);
       } catch (cacheError) {
         recordOperationalError('runtime', cacheError);
       }
       return false;
     } finally {
-      if (version === fetchVersion.current) setLoading(false);
+      if (version === fetchVersion.current && requestOwner === getOfflineOwner()) setLoading(false);
       recordDataLoadMetric(performance.now() - startedAt, 'NPP_DATA_LOAD');
     }
-  }, []);
+  }, [persistNpps, setNpps]);
+
+  refreshRef.current = fetchNpps;
 
   // Hydrate local data first, then refresh it in the background.
   useEffect(() => {
     let disposed = false;
     async function loadCached() {
       const owner = getOfflineOwner();
+      const version = fetchVersion.current;
       try {
         const cached = await getCachedOfflineData('npps', null);
-        if (!disposed && owner === getOfflineOwner() && Array.isArray(cached)) {
+        if (!disposed && version === fetchVersion.current && !pendingWrites.current && !cacheDirty.current && owner === getOfflineOwner() && Array.isArray(cached)) {
           setNpps(cached);
           setLoading(false);
         }
@@ -98,14 +165,13 @@ export function useNpps() {
         recordOperationalError('runtime', cacheError);
       } finally {
         if (!disposed) {
-          cacheHydrated.current = true;
           void fetchNpps();
         }
       }
     }
     void loadCached();
     return () => { disposed = true; };
-  }, [fetchNpps]);
+  }, [fetchNpps, persistNpps, setNpps]);
 
   // ── CRUD Operations ────────────────────────────────────────────────────────
   const addNpp = useCallback(async (nppData) => {
@@ -123,10 +189,9 @@ export function useNpps() {
       persistNpps(updated, setNpps, false);
       return updated;
     });
-    if (isSupabaseConfigured && !result.queued) await fetchNpps();
     localNpp.queued = result.queued;
     return localNpp;
-  }, [fetchNpps]);
+  }, [persistNpps, setNpps]);
 
   const editNpp = useCallback(async (id, updates) => {
     const mappedUpdates = {};
@@ -161,9 +226,8 @@ export function useNpps() {
       persistNpps(updated, setNpps, false);
       return updated;
     });
-    if (isSupabaseConfigured && !result.queued) await fetchNpps();
     return result;
-  }, [fetchNpps]);
+  }, [persistNpps, setNpps]);
 
   const deleteNpp = useCallback(async (id) => {
     const result = !isSupabaseConfigured ? { queued: false } : await persistMutation({
@@ -177,7 +241,7 @@ export function useNpps() {
       return updated;
     });
     return result;
-  }, []);
+  }, [persistNpps, setNpps]);
   const reissueQrToken = useCallback(async id => {
     if (!isSupabaseConfigured) {
       const token = generateQrToken();
@@ -197,9 +261,8 @@ export function useNpps() {
       persistNpps(updated, setNpps, false);
       return updated;
     });
-    await fetchNpps();
     return data;
-  }, [fetchNpps]);
+  }, [persistNpps, setNpps]);
   const importNpps = useCallback(async (newNpps) => {
     const mapped = newNpps.map(npp => {
       const existing = nppsRef.current.find(item => item.id === npp.id || (npp.code && item.code === npp.code));
@@ -216,9 +279,8 @@ export function useNpps() {
       persistNpps(updated, setNpps, false);
       return updated;
     });
-    if (isSupabaseConfigured && !result.queued) await fetchNpps();
     return result;
-  }, [fetchNpps]);
+  }, [persistNpps, setNpps]);
   const fetchNppPhotos = useCallback(async id => {
     const owner = getOfflineOwner();
     const cachedPhotos = nppsRef.current.find(npp => npp.id === id)?.photos;
@@ -232,14 +294,14 @@ export function useNpps() {
     setNpps(updated);
     await persistNpps(updated, setNpps);
     return photos;
-  }, []);
+  }, [persistNpps, setNpps]);
 
-  return { npps, setNpps, loading, error, addNpp, editNpp, deleteNpp, importNpps, fetchNppPhotos, reissueQrToken, refetch: fetchNpps };
-}
-
-function persistNpps(nextNpps, setNpps, shouldSetState = true) {
-  if (shouldSetState) setNpps(nextNpps);
-  return cacheOfflineData('npps', nextNpps);
+  const mutations = useMemo(() => ({
+    addNpp: serializeMutation(addNpp), editNpp: serializeMutation(editNpp),
+    deleteNpp: serializeMutation(deleteNpp), importNpps: serializeMutation(importNpps),
+    fetchNppPhotos: serializeMutation(fetchNppPhotos), reissueQrToken: serializeMutation(reissueQrToken),
+  }), [serializeMutation, addNpp, editNpp, deleteNpp, importNpps, fetchNppPhotos, reissueQrToken]);
+  return { npps, setNpps, loading, error, ...mutations, refetch: fetchNpps };
 }
 
 // ─── Field Mappers ─────────────────────────────────────────────────────────────
