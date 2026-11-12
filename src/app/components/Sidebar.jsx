@@ -10,6 +10,7 @@ import {
   Wrench,
   X,
   UserCheck,
+  History,
   LogOut,
   BookOpen,
   MapPin,
@@ -58,7 +59,10 @@ export default function Sidebar({ activeTab, setActiveTab, maintenanceCount, pen
       items: [
         { id: 'auditLogs', label: 'Nhật Ký Tác Nghiệp', icon: FileText },
         { id: 'syncLog', label: 'Lịch Sử Đồng Bộ', icon: FileClock },
-        ...(role === 'admin' ? [{ id: 'users', label: 'Quản Lý Tài Khoản', icon: UserCheck }] : [])
+        ...(role === 'admin' ? [
+          { id: 'users', label: 'Quản Lý Tài Khoản', icon: UserCheck },
+          { id: 'adminChanges', label: 'Lịch Sử Chỉnh Sửa', icon: History }
+        ] : [])
       ]
     }
   ];

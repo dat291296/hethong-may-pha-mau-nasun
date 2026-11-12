@@ -45,6 +45,7 @@ const NppManagement = lazy(() => import('../modules/distributors/components/NppM
 const AssetManagement = lazy(() => import('../modules/equipment/components/AssetManagement'));
 const MaintenanceSchedule = lazy(() => import('../modules/maintenance/components/MaintenanceSchedule'));
 const AuditLogs = lazy(() => import('../modules/audit/components/AuditLogs'));
+const AdminChangeHistory = lazy(() => import('../modules/audit/components/AdminChangeHistory.jsx'));
 const DeviceRepairProcessing = lazy(() => import('../modules/repairs/components/DeviceRepairProcessing'));
 const ExcelImportModal = lazy(() => import('../modules/imports/components/ExcelImportModal'));
 const UserManagement = lazy(() => import('../modules/users/components/UserManagement'));
@@ -951,7 +952,7 @@ function AppWorkspace() {
           <button type="button" className="btn btn-secondary btn-sm" disabled={nppsLoading || assetsLoading} onClick={() => Promise.allSettled([refetchNpps(), refetchAssets()])}>Tải lại dữ liệu NPP và bộ máy</button>
         </div>}
         <main key={activeTab} className="page-transition nasun-workspace" data-page={activeTab} style={{ flex: 1, padding: '28px', overflowY: 'auto' }}>
-          {!['users', 'techHandbook', 'profile', 'syncLog', 'offline'].includes(activeTab) && <RegionalWorkspaceBar key={regionalIdentity} user={user} region={workspaceRegion} onChange={setWorkspaceRegion} counts={regionCounts} compact={activeTab === 'npp'} extra={activeTab === 'npp' ? <label className="coverage-inline">Ghép bộ<select aria-label="Lọc NPP theo tình trạng ghép bộ" className="form-select" value={nppCoverageFilter} onChange={event => setNppCoverageFilter(event.target.value)}><option value="ALL">Tất cả NPP</option><option value="ASSIGNED">Đã ghép bộ</option><option value="UNASSIGNED">Chưa ghép bộ</option></select></label> : null} />}
+          {!['users', 'adminChanges', 'techHandbook', 'profile', 'syncLog', 'offline'].includes(activeTab) && <RegionalWorkspaceBar key={regionalIdentity} user={user} region={workspaceRegion} onChange={setWorkspaceRegion} counts={regionCounts} compact={activeTab === 'npp'} extra={activeTab === 'npp' ? <label className="coverage-inline">Ghép bộ<select aria-label="Lọc NPP theo tình trạng ghép bộ" className="form-select" value={nppCoverageFilter} onChange={event => setNppCoverageFilter(event.target.value)}><option value="ALL">Tất cả NPP</option><option value="ASSIGNED">Đã ghép bộ</option><option value="UNASSIGNED">Chưa ghép bộ</option></select></label> : null} />}
           <WorkspaceRegionContext.Provider value={workspaceRegion}><ErrorBoundary key={`${regionalIdentity}:${workspaceRegion}:${activeTab}`} fallback={({ reset }) => <section role="alert" className="glass-panel" style={{ margin: '28px auto', maxWidth: 720, padding: 24 }}><h2>Không tải được màn hình này</h2><p>Phần dữ liệu đã lưu trên thiết bị vẫn được giữ nguyên. Thử tải lại module hoặc chuyển sang màn hình khác.</p><button type="button" className="btn btn-primary" onClick={reset}>Thử lại</button></section>}><Suspense key={`${regionalIdentity}:${workspaceRegion}`} fallback={<ModuleLoadingSkeleton type={activeTab} />}>
           {machineProfileReturn && ['repairs', 'maintenance'].includes(activeTab) && (
             <div className="glass-panel" style={{ padding: 12, marginBottom: 16 }}>
@@ -1167,6 +1168,8 @@ function AppWorkspace() {
               auditLogs={regionalData.auditLogs}
             />
           )}
+
+          {activeTab === 'adminChanges' && <AdminChangeHistory />}
 
           {activeTab === 'users' && (
             <UserManagement

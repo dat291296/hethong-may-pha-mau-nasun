@@ -388,7 +388,7 @@ export default function LoginModal() {
       <span>Mật khẩu</span>
       <div className="auth-input-wrap">
         <LockKeyhole size={18} aria-hidden="true" />
-        <input type={showPassword ? 'text' : 'password'} value={password} onChange={(event) => setPassword(event.target.value)} onKeyDown={(event) => setCapsLockOn(event.getModifierState('CapsLock'))} onKeyUp={(event) => setCapsLockOn(event.getModifierState('CapsLock'))} onBlur={() => setCapsLockOn(false)} minLength={mode === 'login' ? 6 : 12} required placeholder={mode === 'login' ? 'Nhập mật khẩu' : 'Tối thiểu 12 ký tự'} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} />
+        <input type={showPassword ? 'text' : 'password'} value={password} onChange={(event) => setPassword(event.target.value)} onKeyDown={(event) => setCapsLockOn(event.getModifierState('CapsLock'))} onKeyUp={(event) => setCapsLockOn(event.getModifierState('CapsLock'))} onBlur={() => setCapsLockOn(false)} minLength={mode === 'login' ? 6 : 12} required placeholder={mode === 'login' ? 'Nhập mật khẩu' : 'Tối thiểu 12 ký tự'} autoComplete={mode === 'login' ? (rememberDevice ? 'current-password' : 'off') : 'new-password'} />
         <button type="button" className="auth-icon-button" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}>
           {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
         </button>
@@ -469,15 +469,15 @@ export default function LoginModal() {
           )}
 
           {mode === 'login' && (
-            <form className="auth-form" onSubmit={submitLogin}>
+            <form className="auth-form" onSubmit={submitLogin} autoComplete={rememberDevice ? 'on' : 'off'}>
               <label className="auth-field">
                 <span>Email công việc</span>
-                <div className="auth-input-wrap"><Mail size={18} aria-hidden="true" /><input type="email" value={email} onChange={(event) => { emailWasEdited.current = true; setEmail(event.target.value); }} required autoComplete="email" /></div>
+                <div className="auth-input-wrap"><Mail size={18} aria-hidden="true" /><input type="email" value={email} onChange={(event) => { emailWasEdited.current = true; setEmail(event.target.value); }} required autoComplete={rememberDevice ? 'username' : 'off'} /></div>
               </label>
               {renderPasswordInput()}
               <label className="auth-remember">
                 <input type="checkbox" checked={rememberDevice} onChange={handleRememberDeviceChange} disabled={pending} />
-                <span><strong>Nhớ thiết bị này</strong><small>Lưu email đăng nhập trên thiết bị. Mật khẩu không được lưu.</small></span>
+                <span><strong>Nhớ thiết bị này</strong><small>Cho phép trình duyệt đề nghị lưu email và mật khẩu trong trình quản lý mật khẩu của thiết bị.</small></span>
               </label>
               <button type="button" className="auth-text-link auth-forgot" onClick={() => changeMode('reset')}>Quên mật khẩu?</button>
               <button className="btn btn-primary auth-submit" type="submit" disabled={pending}>{pending ? 'Đang xử lý...' : 'Đăng nhập'}</button>

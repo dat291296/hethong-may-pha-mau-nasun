@@ -46,10 +46,13 @@ test('password confirmation, reset cooldown, and privacy notice are visible', as
   assert.match(source, /Camera và vị trí chỉ được truy cập/);
 });
 
-test('login can remember the account email without storing the password', async () => {
+test('remember-device enables browser password-manager autofill without app-side password storage', async () => {
   const source = await readFile(loginUrl, 'utf8');
   assert.match(source, /Nhớ thiết bị này/);
-  assert.match(source, /Lưu email đăng nhập trên thiết bị\. Mật khẩu không được lưu\./);
+  assert.match(source, /rememberDevice \? 'current-password' : 'off'/);
+  assert.match(source, /rememberDevice \? 'username' : 'off'/);
+  assert.match(source, /trình quản lý mật khẩu của thiết bị/);
+  assert.doesNotMatch(source, /saveRememberedAccount\([^)]*password/i);
   assert.match(source, /saveRememberedAccount\(normalizedEmail\)/);
   assert.match(source, /loadRememberedAccount\(\)/);
 });
