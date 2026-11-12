@@ -1,4 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { compressImage } from '../../../shared/utils/imageCompressor.js';
+import { validateDocumentFile } from '../lib/technicalResources.js';
+import { userErrorMessage } from '../../../shared/security/userError.js';
 import {
   BookOpen,
   Search,
@@ -62,6 +65,9 @@ export default function TechHandbook({ globalSearch = '', onSelectErrorForRepair
   // Add / Edit Error Modal State
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [editingError, setEditingError] = useState(null);
+  const errorImageInput = React.useRef(null);
+  const [imageBusy, setImageBusy] = useState(false);
+  const [imageError, setImageError] = useState('');
   const [errorFormData, setErrorFormData] = useState({
     code: '',
     title: '',
@@ -73,8 +79,15 @@ export default function TechHandbook({ globalSearch = '', onSelectErrorForRepair
     actionSteps: '',
     sparePartsNeeded: '',
     preventiveMaintenance: '',
-    author: 'KTV. Kỹ Thuật Viên'
+    author: 'KTV. Kỹ Thuật Viên',
+    images: []
   });
+  const nextErrorCode = (category) => {
+    const prefixes = { 'Máy chiết': 'MC', 'Máy lắc': 'ML', 'Máy in': 'MT', QL700: 'MT', Case: 'PC', AIO: 'PC', 'Màn hình': 'MH', 'Phần mềm': 'PM', Khác: 'LK' };
+    const prefix = prefixes[category] || 'LK';
+    const used = errorCodes.map(item => item.code).filter(code => code?.startsWith(`${prefix}-`)).map(code => Number(code.slice(prefix.length + 1))).filter(Number.isInteger);
+    return `${prefix}-${String(Math.max(0, ...used) + 1).padStart(3, '0')}`;
+  };
 
   // Dynamic available models for filter
   const availableModels = useMemo(() => {
@@ -115,10 +128,12 @@ export default function TechHandbook({ globalSearch = '', onSelectErrorForRepair
 
   const handleOpenAddError = () => {
     setEditingError(null);
+    const category = 'Máy chiết';
+    const nextCode = nextErrorCode(category);
     setErrorFormData({
-      code: '',
+      code: nextCode,
       title: '',
-      category: 'Máy chiết',
+      category,
       machineModel: 'Satint A2',
       severity: 'MEDIUM',
       symptoms: '',
@@ -126,7 +141,8 @@ export default function TechHandbook({ globalSearch = '', onSelectErrorForRepair
       actionSteps: '',
       sparePartsNeeded: '',
       preventiveMaintenance: '',
-      author: 'KTV. Kỹ Thuật Viên'
+      author: 'KTV. Kỹ Thuật Viên',
+      images: []
     });
     setShowErrorModal(true);
   };
@@ -144,9 +160,29 @@ export default function TechHandbook({ globalSearch = '', onSelectErrorForRepair
       actionSteps: Array.isArray(err.actionSteps) ? err.actionSteps.join('\n') : (err.actionSteps || ''),
       sparePartsNeeded: Array.isArray(err.sparePartsNeeded) ? err.sparePartsNeeded.join(', ') : (err.sparePartsNeeded || ''),
       preventiveMaintenance: err.preventiveMaintenance || '',
-      author: err.author || 'KTV. Kỹ Thuật Viên'
+      author: err.author || 'KTV. Kỹ Thuật Viên',
+      images: Array.isArray(err.images) ? err.images : []
     });
     setShowErrorModal(true);
+  };
+
+  const addErrorImages = async (event) => {
+    const files = Array.from(event.target.files || []);
+    event.target.value = '';
+    setImageError('');
+    if (!files.length) return;
+    if (files.length + (errorFormData.images || []).length > 4) { setImageError('Tối đa 4 ảnh cho mỗi mã lỗi.'); return; }
+    setImageBusy(true);
+    try {
+      const images = [];
+      for (const file of files) {
+        if (!file.type.startsWith('image/')) throw new Error('Chỉ nhận file ảnh.');
+        await validateDocumentFile(file);
+        images.push(await compressImage(file, 1280, 960, 0.72));
+      }
+      setErrorFormData(previous => ({ ...previous, images: [...(previous.images || []), ...images] }));
+    } catch (error) { setImageError(userErrorMessage(error)); }
+    finally { setImageBusy(false); }
   };
 
   const handleDeleteError = async (err) => {
@@ -167,6 +203,11 @@ export default function TechHandbook({ globalSearch = '', onSelectErrorForRepair
       alert('Vui lòng nhập Mã lỗi và Tên lỗi!');
       return;
     }
+    const normalizedCode = errorFormData.code.trim().toUpperCase();
+    if (errorCodes.some(item => item.code?.trim().toUpperCase() === normalizedCode && item.id !== editingError?.id)) {
+      alert('Mã lỗi này đã tồn tại. Hãy dùng mã khác để tránh trùng hồ sơ.');
+      return;
+    }
 
     const symptomsArr = errorFormData.symptoms
       .split('\n')
@@ -183,7 +224,7 @@ export default function TechHandbook({ globalSearch = '', onSelectErrorForRepair
         if (item.id === editingError.id) {
           return {
             ...item,
-            code: errorFormData.code.trim(),
+            code: normalizedCode,
             title: errorFormData.title.trim(),
             category: errorFormData.category,
             machineModel: errorFormData.machineModel.trim(),
@@ -193,6 +234,7 @@ export default function TechHandbook({ globalSearch = '', onSelectErrorForRepair
             actionSteps: actionStepsArr.length > 0 ? actionStepsArr : ['Chưa có thông tin quy trình khắc phục'],
             sparePartsNeeded: errorFormData.sparePartsNeeded.trim(),
             preventiveMaintenance: errorFormData.preventiveMaintenance.trim(),
+            images: errorFormData.images || [],
             author: errorFormData.author.trim() || 'KTV. Kỹ Thuật Viên'
           };
         }
@@ -201,7 +243,7 @@ export default function TechHandbook({ globalSearch = '', onSelectErrorForRepair
     } else {
       const newErr = {
         id: `ERR-${Date.now()}`,
-        code: errorFormData.code.trim(),
+        code: normalizedCode,
         title: errorFormData.title.trim(),
         category: errorFormData.category,
         machineModel: errorFormData.machineModel.trim() || 'Chung',
@@ -211,6 +253,7 @@ export default function TechHandbook({ globalSearch = '', onSelectErrorForRepair
         actionSteps: actionStepsArr.length > 0 ? actionStepsArr : ['Chưa có thông tin quy trình khắc phục'],
         sparePartsNeeded: errorFormData.sparePartsNeeded.trim(),
         preventiveMaintenance: errorFormData.preventiveMaintenance.trim(),
+        images: errorFormData.images || [],
         author: errorFormData.author.trim() || 'KTV. Kỹ Thuật Viên'
       };
       setErrorCodes(prev => [newErr, ...prev]);
@@ -647,6 +690,8 @@ export default function TechHandbook({ globalSearch = '', onSelectErrorForRepair
                           </ul>
                         </div>
 
+                        {(error.images || []).length > 0 && <section aria-label="Hình ảnh minh họa" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(160px,1fr))', gap: 10 }}>{error.images.map((src, index) => <a href={src} target="_blank" rel="noreferrer" key={`${index}-${src.slice(0,24)}`}><img loading="lazy" src={src} alt={`${error.code} · ảnh minh họa ${index + 1}`} style={{ width: '100%', height: 150, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--border-color)' }} /></a>)}</section>}
+
                         {/* Root Cause */}
                         <div style={{ background: 'rgba(239, 68, 68, 0.06)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(239,68,68,0.2)' }}>
                           <span style={{ fontSize: '0.8rem', fontWeight: '800', color: '#ef4444', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '4px' }}>
@@ -790,7 +835,7 @@ export default function TechHandbook({ globalSearch = '', onSelectErrorForRepair
                       <select
                         className="form-select"
                         value={errorFormData.category}
-                        onChange={e => setErrorFormData({ ...errorFormData, category: e.target.value })}
+                        onChange={e => setErrorFormData({ ...errorFormData, category: e.target.value, code: editingError ? errorFormData.code : nextErrorCode(e.target.value) })}
                       >
                         <option value="Máy chiết">Máy chiết</option>
                         <option value="Máy lắc">Máy lắc</option>
@@ -856,6 +901,15 @@ export default function TechHandbook({ globalSearch = '', onSelectErrorForRepair
                       onChange={e => setErrorFormData({ ...errorFormData, actionSteps: e.target.value })}
                     />
                   </div>
+
+                  <section className="form-group" aria-label="Hình ảnh minh họa mã lỗi" style={{ border: '1px solid var(--border-color)', borderRadius: 10, padding: 14 }}>
+                    <label className="form-label" style={{ fontWeight: 800 }}>📷 Hình ảnh minh họa (tối đa 4 ảnh)</label>
+                    <p className="resource-muted">Thêm ảnh lỗi, vị trí linh kiện hoặc thao tác sửa chữa. Ảnh được nén trước khi lưu.</p>
+                    <input ref={errorImageInput} type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/bmp,image/tiff" multiple hidden onChange={addErrorImages} />
+                    <button type="button" className="btn btn-secondary" disabled={imageBusy || (errorFormData.images || []).length >= 4} onClick={() => errorImageInput.current?.click()}>{imageBusy ? 'Đang xử lý ảnh…' : 'Chọn hình ảnh'}</button>
+                    {imageError && <p className="resource-error" role="alert">{imageError}</p>}
+                    {(errorFormData.images || []).length > 0 && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(130px,1fr))', gap: 10, marginTop: 12 }}>{errorFormData.images.map((src, index) => <figure key={`${index}-${src.slice(0,24)}`} style={{ margin: 0, position: 'relative' }}><img src={src} alt={`Ảnh minh họa ${index + 1}`} style={{ width: '100%', height: 120, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--border-color)' }} /><button type="button" className="btn btn-secondary btn-sm" aria-label={`Xóa ảnh ${index + 1}`} onClick={() => setErrorFormData(previous => ({ ...previous, images: previous.images.filter((_, imageIndex) => imageIndex !== index) }))}>Xóa ảnh</button></figure>)}</div>}
+                  </section>
 
                   <div className="responsive-form-grid">
                     <div className="form-group">
