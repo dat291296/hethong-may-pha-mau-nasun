@@ -6,7 +6,7 @@ import React from 'react';
 import SafePortal from '../../../shared/components/SafePortal.jsx';
 import { validateSerial } from '../../../shared/security/sanitize.js';
 import DraftNotice from '../../../shared/components/DraftNotice';
-export default function RepairEditorDialog({ PRODUCT_CATEGORIES, addErrorPhotos, closeForm, currentAssignedSet, draft, editingTicket, errorPhotoInput, filteredNpps, formData, handleCategoryChange, handleSelectNpp, handleSubmit, nppSearchTerm, npps, onReturnToProfile, photoBusy, qcUsers, saveError, saving, setFormData, setNppSearchTerm, setSaveError, showModal, user }) { return (<>{/* CREATE / EDIT TICKET MODAL */}
+export default function RepairEditorDialog({ PRODUCT_CATEGORIES, addErrorPhotos, closeForm, currentAssignedSet, draft, editingTicket, errorPhotoInput, filteredNpps, formData, handbookErrors = [], handleCategoryChange, handleSelectNpp, handleSubmit, nppSearchTerm, npps, onReturnToProfile, photoBusy, qcUsers, saveError, saving, setFormData, setNppSearchTerm, setSaveError, showModal, user }) { return (<>{/* CREATE / EDIT TICKET MODAL */}
       {showModal && (
         <SafePortal>
           <div className="modal-overlay">
