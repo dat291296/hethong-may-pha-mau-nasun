@@ -46,13 +46,15 @@ test('password confirmation, reset cooldown, and privacy notice are visible', as
   assert.match(source, /Camera và vị trí chỉ được truy cập/);
 });
 
-test('remember-device enables browser password-manager autofill without app-side password storage', async () => {
+test('remember-device stores credentials through the browser password manager without showing helper text', async () => {
   const source = await readFile(loginUrl, 'utf8');
   assert.match(source, /Nhớ thiết bị này/);
   assert.match(source, /rememberDevice \? 'current-password' : 'off'/);
   assert.match(source, /rememberDevice \? 'username' : 'off'/);
-  assert.match(source, /trình quản lý mật khẩu của thiết bị/);
-  assert.doesNotMatch(source, /saveRememberedAccount\([^)]*password/i);
+  assert.match(source, /saveBrowserPasswordCredential\(normalizedEmail, password\)/);
+  assert.match(source, /name=\{mode === 'login' \? 'password'/);
+  assert.match(source, /name="username"/);
+  assert.doesNotMatch(source, /<small>/);
   assert.match(source, /saveRememberedAccount\(normalizedEmail\)/);
   assert.match(source, /loadRememberedAccount\(\)/);
 });
