@@ -40,10 +40,44 @@ import {
   FIELD_TIPS_DATA
 } from '../data/troubleshootingData.js';
 
-async function downloadHandbook(title, metadata, sections) {
+function createHandbookPdf(images) {
+  const encoder = new TextEncoder();
+  const parts = [];
+  const offsets = [0];
+  let size = 0;
+  const append = value => {
+    const bytes = typeof value === 'string' ? encoder.encode(value) : value;
+    parts.push(bytes);
+    size += bytes.byteLength;
+  };
+  const object = (id, contents) => {
+    offsets[id] = size;
+    append(`${id} 0 obj\n`);
+    for (const part of contents) append(part);
+    append('\nendobj\n');
+  };
+
+  append('%PDF-1.4\n');
+  object(1, ['<< /Type /Catalog /Pages 2 0 R >>']);
+  const pageRefs = images.map((_, index) => `${3 + index * 3} 0 R`).join(' ');
+  object(2, [`<< /Type /Pages /Count ${images.length} /Kids [${pageRefs}] >>`]);
+  images.forEach(({ bytes, width, height }, index) => {
+    const id = 3 + index * 3;
+    const commands = 'q 595.28 0 0 841.89 0 0 cm /PageImage Do Q';
+    object(id, [`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Resources << /XObject << /PageImage ${id + 1} 0 R >> >> /Contents ${id + 2} 0 R >>`]);
+    object(id + 1, [`<< /Type /XObject /Subtype /Image /Width ${width} /Height ${height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${bytes.length} >>\nstream\n`, bytes, '\nendstream']);
+    object(id + 2, [`<< /Length ${commands.length} >>\nstream\n${commands}\nendstream`]);
+  });
+  const xref = size;
+  append(`xref\n0 ${offsets.length}\n0000000000 65535 f \n`);
+  offsets.slice(1).forEach(offset => append(`${String(offset).padStart(10, '0')} 00000 n \n`));
+  append(`trailer\n<< /Size ${offsets.length} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`);
+  return new Blob(parts, { type: 'application/pdf' });
+}
+
+function downloadHandbook(title, metadata, sections) {
   try {
-    const { jsPDF } = await import('jspdf');
-    const pdf = new jsPDF({ compress: true });
+    const images = [];
     const canvas = document.createElement('canvas');
     canvas.width = 1240;
     canvas.height = 1754;
@@ -55,14 +89,16 @@ async function downloadHandbook(title, metadata, sections) {
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       y = margin;
     };
-    const addPageImage = () => pdf.addImage(canvas, 'JPEG', 0, 0, 210, 297, undefined, 'FAST');
+    const addPageImage = () => {
+      const encoded = canvas.toDataURL('image/jpeg', 0.9).split(',')[1];
+      images.push({ width: canvas.width, height: canvas.height, bytes: Uint8Array.from(atob(encoded), char => char.charCodeAt(0)) });
+    };
     const write = (value, size = 24, bold = false) => {
       ctx.font = `${bold ? 700 : 400} ${size}px sans-serif`;
       const lineHeight = Math.ceil(size * 1.45);
       const draw = line => {
         if (y + lineHeight > canvas.height - margin) {
           addPageImage();
-          pdf.addPage();
           clearPage();
         }
         ctx.fillStyle = bold ? '#155e75' : '#172033';
@@ -105,7 +141,14 @@ async function downloadHandbook(title, metadata, sections) {
       entries.forEach((entry, index) => write(Array.isArray(content) ? `${index + 1}. ${entry}` : entry));
     }
     addPageImage();
-    pdf.save(`${title.replace(/[^\p{L}\p{N} -]/gu, '').trim().slice(0, 100) || 'NASUN'}.pdf`);
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(createHandbookPdf(images));
+    link.href = url;
+    link.download = `${title.replace(/[^\p{L}\p{N} -]/gu, '').trim().slice(0, 100) || 'NASUN'}.pdf`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
   } catch (error) {
     console.error('Handbook PDF export failed', error);
     window.alert('Không tạo được tệp PDF. Hãy thử lại.');
