@@ -1,20 +1,20 @@
 import React from 'react';
-import { Cpu, Wrench, CalendarClock, Building2, UserCircle } from 'lucide-react';
+import { Cpu, Wrench, CalendarClock, Building2, UserCircle, ScanLine, LayoutDashboard } from 'lucide-react';
 import { triggerHaptic } from '../../shared/platform/haptics.js';
-import { Camera } from 'lucide-react';
 import { useAuth } from '../../shared/context/AuthContext.jsx';
 import { hasPermission } from '../../shared/security/rbac.js';
 
 export default function MobileBottomNav({ activeTab, setActiveTab, maintenanceCount, pendingRepairCount, onOpenQrScan }) {
   const { role } = useAuth();
+  const canScan = hasPermission(role, 'qr:scan');
   const mainItems = [
+    ...(canScan ? [{ id: 'dashboard', label: 'Tổng Quan', icon: LayoutDashboard }] : []),
+    { id: 'npp', label: 'NPP', icon: Building2 },
+    { id: 'profile', label: 'Tài Khoản', icon: UserCircle },
     { id: 'assets', label: 'Thiết Bị', icon: Cpu },
     { id: 'repairs', label: 'Sửa Chữa', icon: Wrench, badge: pendingRepairCount },
     { id: 'maintenance', label: 'Bảo Trì', icon: CalendarClock, badge: maintenanceCount },
-    { id: 'npp', label: 'NPP', icon: Building2 },
-    { id: 'profile', label: 'Tài Khoản', icon: UserCircle },
   ];
-
   return (
     <>
       <style>{`
@@ -33,6 +33,22 @@ export default function MobileBottomNav({ activeTab, setActiveTab, maintenanceCo
           outline: none;
           position: relative;
           transition: opacity 0.1s ease;
+        }
+        .mnav-btn:focus-visible { outline: 2px solid #67e8f9; outline-offset: -2px; }
+        .mnav-btn.mnav-qr { color: #a5f3fc; min-height: 48px; }
+        .mnav-qr .mnav-icon-wrap {
+          width: min(44px, 100%);
+          height: 30px;
+          border-radius: 12px;
+          color: #082339;
+          background: #67e8f9;
+          box-shadow: 0 0 12px #22d3ee55;
+        }
+        @media (max-width: 768px) {
+          .mobile-bottom-nav.mnav-with-qr {
+            display: grid !important;
+            grid-template-columns: repeat(7, minmax(0, 1fr));
+          }
         }
         .mnav-btn:active {
           opacity: 0.55;
@@ -79,6 +95,14 @@ export default function MobileBottomNav({ activeTab, setActiveTab, maintenanceCo
           white-space: nowrap;
           transition: color 0.2s ease;
         }
+        .mnav-qr::after { content: ''; height: 4px; margin-top: 2px; order: 1; }
+        .mnav-qr .mnav-label { order: 2; }
+        @media (max-width: 420px) {
+          .mnav-with-qr .mnav-label {
+            font-size: 0.625rem;
+            letter-spacing: 0;
+          }
+        }
         .mnav-badge {
           position: absolute;
           top: -3px;
@@ -98,13 +122,13 @@ export default function MobileBottomNav({ activeTab, setActiveTab, maintenanceCo
         }
       `}</style>
 
-      <nav className="mobile-bottom-nav no-print" style={{ zIndex: 999 }}>
-        {mainItems.map(item => {
+      <nav className={'mobile-bottom-nav no-print' + (canScan ? ' mnav-with-qr' : '')} style={{ zIndex: 999 }}>
+        {mainItems.map((item, index) => {
           const Icon = item.icon;
           const isActive = activeTab === item.id;
           return (
-            <button
-              key={item.id}
+            <React.Fragment key={item.id}>
+            <button type="button"
               className={`mnav-btn${isActive ? ' is-active' : ''}`}
               aria-current={isActive ? 'page' : undefined}
               aria-label={item.label}
@@ -128,9 +152,16 @@ export default function MobileBottomNav({ activeTab, setActiveTab, maintenanceCo
                 {item.label}
               </span>
             </button>
+            {canScan && index === 2 && (
+              <button type="button" className="mnav-btn mnav-qr" aria-label="Quét QR tra cứu NPP"
+                onClick={() => { triggerHaptic('light'); onOpenQrScan?.(); }}>
+                <span className="mnav-icon-wrap"><ScanLine size={23} aria-hidden="true" /></span>
+                <span className="mnav-label">Quét QR</span>
+              </button>
+            )}
+            </React.Fragment>
           );
         })}
-        {hasPermission(role, 'qr:scan') && <button type="button" className="mnav-btn" aria-label="Quét QR tra cứu NPP" onClick={() => { triggerHaptic('light'); onOpenQrScan?.(); }} style={{ minHeight: 48 }}><span className="mnav-icon-wrap"><Camera size={20}/></span><span className="mnav-label">Quét QR</span></button>}
 
       </nav>
     </>
