@@ -2022,3 +2022,13 @@ main.page-transition .nppmanagement-screen .npp-card-withdrawn { border-top-colo
 .nasun-confirm-dialog p { margin: 0; color: var(--text-muted, #cbd5e1); line-height: 1.65; white-space: pre-line; overflow-wrap: anywhere; }
 .nasun-confirm-dialog__actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; }
 .nasun-confirm-dialog__actions .btn { min-height: 44px; }
+
+.sop-editor { display: grid; gap: 16px; padding: clamp(12px, 3vw, 24px); }
+.sop-editor-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 12px; }
+.sop-editor label { display: grid; gap: 6px; min-width: 0; }
+.sop-editor fieldset { display: grid; gap: 10px; min-width: 0; margin: 0; padding: 14px; border: 1px solid var(--border-color); border-radius: 12px; background: var(--bg-tertiary); }
+.sop-editor legend { padding-inline: 8px; color: var(--accent-cyan); font-weight: 700; }
+.sop-editor textarea { resize: vertical; line-height: 1.5; }
+.sop-editor fieldset button { justify-self: start; }
+.sop-editor-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.sop-editor button { min-height: 44px; }

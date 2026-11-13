@@ -1,3 +1,4 @@
+import { searchText } from '../../../shared/utils/searchText.js';
 import React, { useState, useEffect, useMemo } from 'react';
 import { compressImage } from '../../../shared/utils/imageCompressor.js';
 import { validateDocumentFile } from '../lib/technicalResources.js';
@@ -35,8 +36,81 @@ import { cacheOfflineData, getCachedOfflineData } from '../../../shared/sync/off
 import {
   ERROR_CODES_DATA,
   TECHNICAL_SOPS_DATA,
+  NASUN_SERVICE_SOPS,
   FIELD_TIPS_DATA
 } from '../data/troubleshootingData.js';
+
+async function downloadHandbook(title, metadata, sections) {
+  try {
+    const { jsPDF } = await import('jspdf');
+    const pdf = new jsPDF({ compress: true });
+    const canvas = document.createElement('canvas');
+    canvas.width = 1240;
+    canvas.height = 1754;
+    const ctx = canvas.getContext('2d');
+    const margin = 95;
+    let y = margin;
+    const clearPage = () => {
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      y = margin;
+    };
+    const addPageImage = () => pdf.addImage(canvas, 'JPEG', 0, 0, 210, 297, undefined, 'FAST');
+    const write = (value, size = 24, bold = false) => {
+      ctx.font = `${bold ? 700 : 400} ${size}px sans-serif`;
+      const lineHeight = Math.ceil(size * 1.45);
+      const draw = line => {
+        if (y + lineHeight > canvas.height - margin) {
+          addPageImage();
+          pdf.addPage();
+          clearPage();
+        }
+        ctx.fillStyle = bold ? '#155e75' : '#172033';
+        ctx.textBaseline = 'top';
+        ctx.fillText(line, margin, y);
+        y += lineHeight;
+      };
+      for (const paragraph of String(value).split('\n')) {
+        let line = '';
+        for (const word of paragraph.split(/\s+/)) {
+          const candidate = line ? `${line} ${word}` : word;
+          if (line && ctx.measureText(candidate).width > canvas.width - margin * 2) {
+            draw(line);
+            line = '';
+          }
+          if (ctx.measureText(word).width > canvas.width - margin * 2) {
+            for (const character of word) {
+              if (ctx.measureText(line + character).width > canvas.width - margin * 2) {
+                draw(line);
+                line = '';
+              }
+              line += character;
+            }
+          } else {
+            line = line ? `${line} ${word}` : word;
+          }
+        }
+        draw(line);
+      }
+    };
+    clearPage();
+    write('NASUN · Sổ tay kỹ thuật', 24, true);
+    write(title, 42, true);
+    write(metadata.filter(Boolean).join(' · '));
+    for (const [heading, content] of sections) {
+      const entries = (Array.isArray(content) ? content : [content]).filter(Boolean);
+      if (!entries.length) continue;
+      y += 18;
+      write(heading, 30, true);
+      entries.forEach((entry, index) => write(Array.isArray(content) ? `${index + 1}. ${entry}` : entry));
+    }
+    addPageImage();
+    pdf.save(`${title.replace(/[^\p{L}\p{N} -]/gu, '').trim().slice(0, 100) || 'NASUN'}.pdf`);
+  } catch (error) {
+    console.error('Handbook PDF export failed', error);
+    window.alert('Không tạo được tệp PDF. Hãy thử lại.');
+  }
+}
 
 export default function TechHandbook({ globalSearch = '', onSelectErrorForRepair }) {
   const [activeSubTab, setActiveSubTab] = useState('ERRORS'); // 'ERRORS' | 'SOPS' | 'TIPS'
@@ -100,7 +174,7 @@ export default function TechHandbook({ globalSearch = '', onSelectErrorForRepair
 
   // Filter Error Codes
   const filteredErrors = useMemo(() => {
-    const term = searchTerm.toLowerCase().trim();
+    const term = searchText(searchTerm).trim();
     return errorCodes.filter((item) => {
       let matchesSearch = true;
       if (term) {
@@ -115,7 +189,7 @@ export default function TechHandbook({ globalSearch = '', onSelectErrorForRepair
           ...(item.symptoms || []),
           ...(item.actionSteps || [])
         ];
-        matchesSearch = targets.some(t => String(t).toLowerCase().includes(term));
+        matchesSearch = term.split(/\s+/).every(word => targets.some(target => searchText(String(target)).includes(word)));
       }
 
       const matchesCategory = categoryFilter === 'ALL' || item.category === categoryFilter;
@@ -273,20 +347,45 @@ export default function TechHandbook({ globalSearch = '', onSelectErrorForRepair
     content: ''
   });
 
+  const [sops, setSops] = useState(() => [...NASUN_SERVICE_SOPS, ...TECHNICAL_SOPS_DATA]);
+  const [sopsReady, setSopsReady] = useState(false);
+  const [sopDraft, setSopDraft] = useState(null);
+  const [tipId, setTipId] = useState(null);
+  const [storageError, setStorageError] = useState('');
+
+  useEffect(() => {
+    getCachedOfflineData('tech_handbook_sops', null).then(cached => {
+      if (cached?.version === 1 && Array.isArray(cached.items)) {
+        setSops(cached.items);
+      } else if (Array.isArray(cached)) {
+        const savedIds = new Set(cached.map(sop => sop.id));
+        setSops([...NASUN_SERVICE_SOPS.filter(sop => !savedIds.has(sop.id)), ...cached]);
+      }
+      setSopsReady(true);
+    }).catch(() => setStorageError('Không tải được quy trình đã lưu.'));
+  }, []);
+
+  async function saveHandbookItems(key, items, apply) {
+    try {
+      await cacheOfflineData(key, key === 'tech_handbook_sops' ? { version: 1, items } : items);
+      apply(items);
+      setStorageError('');
+      return true;
+    } catch {
+      setStorageError('Không lưu được thay đổi. Hãy thử lại.');
+      return false;
+    }
+  }
+
   // Expandable SOPs state
   const [expandedSopId, setExpandedSopId] = useState('SOP-01');
 
   useEffect(() => {
-    if (tipsHydrated) cacheOfflineData('tech_handbook_field_tips', fieldTips);
-  }, [fieldTips, tipsHydrated]);
-
-  useEffect(() => {
     getCachedOfflineData('tech_handbook_field_tips', null).then(cached => {
       if (Array.isArray(cached)) setFieldTips(cached);
-    }).finally(() => setTipsHydrated(true));
+      setTipsHydrated(true);
+    }).catch(() => setStorageError('Không tải được mẹo đã lưu.'));
   }, []);
-
-
 
   // Severity Badge Helper
   const getSeverityBadge = (severity) => {
@@ -302,7 +401,7 @@ export default function TechHandbook({ globalSearch = '', onSelectErrorForRepair
     }
   };
 
-  const handleAddTipSubmit = (e) => {
+  const handleAddTipSubmit = async (e) => {
     e.preventDefault();
     if (!newTip.title.trim() || !newTip.content.trim()) {
       alert('Vui lòng điền đầy đủ tiêu đề và nội dung mẹo thực địa!');
@@ -310,15 +409,17 @@ export default function TechHandbook({ globalSearch = '', onSelectErrorForRepair
     }
 
     const createdTip = {
-      id: `TIP-${Date.now()}`,
+      id: tipId || `TIP-${(globalThis.crypto?.randomUUID?.() ?? Date.now().toString(36))}`,
       title: newTip.title,
       author: newTip.author || 'KTV. Hiện Trường',
-      date: new Date().toISOString().split('T')[0],
+      date: fieldTips.find(tip => tip.id === tipId)?.date || new Date().toISOString().split('T')[0],
       tags: newTip.tags ? newTip.tags.split(',').map((t) => t.trim()) : ['Thực địa', 'Kỹ thuật'],
       content: newTip.content
     };
 
-    setFieldTips([createdTip, ...fieldTips]);
+    const next = tipId ? fieldTips.map(tip => tip.id === tipId ? createdTip : tip) : [createdTip, ...fieldTips];
+    if (!await saveHandbookItems('tech_handbook_field_tips', next, setFieldTips)) return;
+    setTipId(null);
     setShowAddTipModal(false);
     setNewTip({ title: '', author: 'KTV. Kỹ Thuật Viên', tags: '', content: '' });
   };
@@ -383,7 +484,7 @@ export default function TechHandbook({ globalSearch = '', onSelectErrorForRepair
               }}
             >
               <FileText size={16} />
-              <span>Quy Trình Chuẩn SOPs ({TECHNICAL_SOPS_DATA.length})</span>
+              <span>Quy Trình Chuẩn SOPs ({sops.length})</span>
             </button>
 
             <button
@@ -678,6 +779,22 @@ export default function TechHandbook({ globalSearch = '', onSelectErrorForRepair
                     {/* Expanded Detail Content */}
                     {isExpanded && (
                       <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                        <button type="button" className="btn btn-secondary" onClick={() => downloadHandbook(
+                          `${error.code} · ${error.title}`, [error.category, error.machineModel, error.severity, error.author],
+                          [['Dấu hiệu', error.symptoms], ['Nguyên nhân', error.rootCause], ['Cách xử lý', error.actionSteps],
+                            ['Linh kiện', error.sparePartsNeeded], ['Phòng tránh', error.preventiveMaintenance]]
+                        )}>Xuất PDF</button>
+                        {sops.filter(sop => {
+                          const category = searchText(error.category);
+                          const relatedId = { 'may chiet': '04', 'may lac': '05', 'may tinh': '06', 'phan mem': '06', 'may in': '06' }[category];
+                          return relatedId && sop.id === `NASUN-SOP-${relatedId}`;
+                        }).map(sop => (
+                          <button key={sop.id} type="button" className="btn btn-secondary" onClick={() => {
+                            setExpandedSopId(sop.id);
+                            setActiveSubTab('SOPS');
+                            requestAnimationFrame(() => document.getElementById(sop.id)?.scrollIntoView({ block: 'start' }));
+                          }}>SOP gợi ý · {sop.title}</button>
+                        ))}
                         {/* Symptoms */}
                         <div>
                           <div style={{ fontSize: '0.8rem', fontWeight: '800', color: '#f59e0b', textTransform: 'uppercase', marginBottom: '6px', letterSpacing: '0.05em' }}>
@@ -963,11 +1080,43 @@ export default function TechHandbook({ globalSearch = '', onSelectErrorForRepair
       {/* 📋 SUB-TAB 2: QUY TRÌNH CHUẨN SOPs */}
       {activeSubTab === 'SOPS' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {TECHNICAL_SOPS_DATA.map((sop) => {
+          {storageError && <p role="alert">{storageError}</p>}
+          <button id="handbook-sop-editor" className="btn btn-primary" disabled={!sopsReady} onClick={() => setSopDraft({ title: '', machineType: '', duration: '', toolsRequired: [], steps: [{ title: '', desc: '' }] })}>Thêm quy trình</button>
+          {sopDraft && (
+            <form className="glass-panel sop-editor" onSubmit={async event => {
+              event.preventDefault();
+              const entry = { ...sopDraft, id: sopDraft.id || `SOP-${(globalThis.crypto?.randomUUID?.() ?? Date.now().toString(36))}`, title: sopDraft.title.trim(),
+                toolsRequired: sopDraft.toolsRequired.map(tool => tool.trim()).filter(Boolean),
+                steps: sopDraft.steps.map((step, index) => ({ ...step, stepNumber: index + 1 })) };
+              if (!entry.title || entry.steps.some(step => !step.title.trim())) return;
+              const next = sopDraft.id ? sops.map(sop => sop.id === entry.id ? entry : sop) : [entry, ...sops];
+              if (await saveHandbookItems('tech_handbook_sops', next, setSops)) {
+                setExpandedSopId(entry.id);
+                setSopDraft(null);
+              }
+            }}>
+              <div className="sop-editor-meta">
+              {[['title','Tiêu đề'],['machineType','Loại máy'],['duration','Thời lượng']].map(([key,label]) =>
+                <label key={key}>{label}<input className="form-input" required={key === 'title'} value={sopDraft[key]} onChange={event => setSopDraft({ ...sopDraft, [key]: event.target.value })}/></label>)}
+              <label>Dụng cụ (cách nhau bằng dấu phẩy)<input className="form-input" value={sopDraft.toolsRequired.join(',')} onChange={event => setSopDraft({ ...sopDraft, toolsRequired: event.target.value.split(',') })}/></label>
+              </div>
+              {sopDraft.steps.map((step,index) => <fieldset key={index}><legend>Bước {index + 1}</legend>
+                {[['title','Tên bước'],['desc','Hướng dẫn']].map(([key,label]) => <label key={key}>{label}<textarea rows={key === 'desc' ? 4 : 2} className="form-input" required={key === 'title'} value={step[key]} onChange={event => setSopDraft({ ...sopDraft, steps: sopDraft.steps.map((item,i) => i === index ? { ...item, [key]: event.target.value } : item) })}/></label>)}
+                <button type="button" className="btn btn-secondary" disabled={sopDraft.steps.length === 1} onClick={() => setSopDraft({ ...sopDraft, steps: sopDraft.steps.filter((_,i) => i !== index) })}>Bỏ bước</button>
+              </fieldset>)}
+              <div className="sop-editor-actions">
+              <button type="button" className="btn btn-secondary" onClick={() => setSopDraft({ ...sopDraft, steps: [...sopDraft.steps, { title: '', desc: '' }] })}>Thêm bước</button>
+              <button type="button" className="btn btn-secondary" onClick={() => setSopDraft(null)}>Hủy</button>
+              <button className="btn btn-primary" type="submit">Lưu quy trình</button>
+              </div>
+            </form>
+          )}
+          {sops.map((sop) => {
             const isExpanded = expandedSopId === sop.id;
             return (
               <div
                 key={sop.id}
+                id={sop.id}
                 className="glass-panel"
                 style={{
                   padding: '20px 24px',
@@ -1002,75 +1151,35 @@ export default function TechHandbook({ globalSearch = '', onSelectErrorForRepair
                   </button>
                 </div>
 
-                {isExpanded && (
-                  <div style={{ marginTop: '18px', paddingTop: '16px', borderTop: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                    {/* Required Tools */}
-                    <div style={{ background: 'rgba(6,182,212,0.06)', padding: '12px 16px', borderRadius: '8px', border: '1px solid rgba(6,182,212,0.2)' }}>
-                      <span style={{ fontSize: '0.8rem', fontWeight: '800', color: 'var(--accent-cyan)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '6px' }}>
-                        🧰 Dụng cụ Kỹ thuật cần chuẩn bị:
-                      </span>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                        {sop.toolsRequired.map((tool, idx) => (
-                          <span
-                            key={idx}
-                            style={{
-                              background: 'rgba(15,23,42,0.6)',
-                              color: '#e2e8f0',
-                              padding: '3px 10px',
-                              borderRadius: '12px',
-                              fontSize: '0.775rem',
-                              border: '1px solid var(--border-color)'
-                            }}
-                          >
-                            ✓ {tool}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
+                <div className="workspace-actions">
+                  <button className="btn btn-secondary" aria-expanded={isExpanded} onClick={() => setExpandedSopId(isExpanded ? null : sop.id)}>{isExpanded ? 'Thu gọn' : 'Xem'}</button>
+                  <button type="button" className="btn btn-secondary" onClick={() => downloadHandbook(
+                    sop.title, [sop.machineType, sop.duration],
+                    [['Dụng cụ', sop.toolsRequired], ['Các bước', sop.steps.map(step => [step.title, step.desc].filter(Boolean).join('\n'))]]
+                  )}>Xuất PDF</button>
+                  <button className="btn btn-secondary" disabled={!sopsReady} onClick={() => { setSopDraft(sop); document.getElementById('handbook-sop-editor')?.scrollIntoView(); }}>Sửa</button>
+                  <button className="btn btn-secondary" disabled={!sopsReady} onClick={() => {
+                    if (window.confirm(`Xóa quy trình “${sop.title}”?`)) void saveHandbookItems('tech_handbook_sops', sops.filter(item => item.id !== sop.id), setSops);
+                  }}>Xóa</button>
+                </div>
 
-                    {/* Step Timeline */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                      {sop.steps.map((st) => (
-                        <div
-                          key={st.stepNumber}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'flex-start',
-                            gap: '14px',
-                            background: 'rgba(15, 23, 42, 0.3)',
-                            padding: '12px 16px',
-                            borderRadius: '8px',
-                            border: '1px solid rgba(255,255,255,0.05)'
-                          }}
-                        >
-                          <div
-                            style={{
-                              background: 'linear-gradient(135deg, #06b6d4 0%, #0284c7 100%)',
-                              color: '#fff',
-                              fontWeight: '900',
-                              fontSize: '0.85rem',
-                              width: '28px',
-                              height: '28px',
-                              borderRadius: '50%',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              flexShrink: 0
-                            }}
-                          >
-                            {st.stepNumber}
-                          </div>
-                          <div>
-                            <h4 style={{ margin: '0 0 4px 0', fontSize: '0.95rem', fontWeight: '800', color: 'var(--text-main)' }}>
-                              {st.title}
-                            </h4>
-                            <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-muted)', lineHeight: '1.4' }}>
-                              {st.desc}
-                            </p>
-                          </div>
-                        </div>
+                {isExpanded && (
+                  <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border-color)' }}>
+                    {sop.toolsRequired.length > 0 && <>
+                      <h4>Dụng cụ</h4>
+                      <ul style={{ display: 'flex', flexWrap: 'wrap', gap: 8, padding: 0, listStyle: 'none' }}>
+                        {sop.toolsRequired.map((tool, index) => <li key={index} className="badge badge-info">{tool}</li>)}
+                      </ul>
+                    </>}
+                    <h4>Các bước</h4>
+                    <ol style={{ display: 'grid', gap: 10, paddingInlineStart: 28 }}>
+                      {sop.steps.map((step, index) => (
+                        <li key={index} style={{ background: 'var(--bg-tertiary)', borderRadius: 10, padding: 12, overflowWrap: 'anywhere' }}>
+                          <strong>{step.title}</strong>
+                          {step.desc && <p style={{ margin: '4px 0 0', whiteSpace: 'pre-wrap', lineHeight: 1.55 }}>{step.desc}</p>}
+                        </li>
                       ))}
-                    </div>
+                    </ol>
                   </div>
                 )}
               </div>
@@ -1087,7 +1196,8 @@ export default function TechHandbook({ globalSearch = '', onSelectErrorForRepair
               Kinh nghiệm xử lý thực địa được đúc kết bởi các Kỹ thuật viên Nasun Paint khi đi công tác xa.
             </p>
             <button
-              onClick={() => setShowAddTipModal(true)}
+              disabled={!tipsHydrated}
+              onClick={() => { setTipId(null); setNewTip({ title: '', author: 'KTV. Kỹ Thuật Viên', tags: '', content: '' }); setShowAddTipModal(true); }}
               className="btn btn-primary"
               style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem' }}
             >
@@ -1119,7 +1229,15 @@ export default function TechHandbook({ globalSearch = '', onSelectErrorForRepair
                   </div>
 
                   <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', lineHeight: '1.5', margin: 0 }}>
-                    "{tip.content}"
+                    <details><summary>Xem mẹo</summary><p style={{ whiteSpace: 'pre-wrap' }}>{tip.content}</p></details>
+                    <button className="btn btn-secondary" disabled={!tipsHydrated} onClick={() => {
+                      setTipId(tip.id);
+                      setNewTip({ ...tip, tags: tip.tags.join(', ') });
+                      setShowAddTipModal(true);
+                    }}>Sửa</button>
+                    <button className="btn btn-secondary" disabled={!tipsHydrated} onClick={() => {
+                      if (window.confirm(`Xóa mẹo “${tip.title}”?`)) void saveHandbookItems('tech_handbook_field_tips', fieldTips.filter(item => item.id !== tip.id), setFieldTips);
+                    }}>Xóa</button>
                   </p>
                 </div>
 
@@ -1145,6 +1263,7 @@ export default function TechHandbook({ globalSearch = '', onSelectErrorForRepair
 
       {activeSubTab === 'DOCUMENTS' && <TechnicalResources />}
 
+      {activeSubTab === 'TIPS' && storageError && <p role="alert">{storageError}</p>}
       {/* Modal Đóng góp Mẹo thực địa */}
       {showAddTipModal && (
         <div
@@ -1173,7 +1292,7 @@ export default function TechHandbook({ globalSearch = '', onSelectErrorForRepair
             }}
           >
             <h3 style={{ fontSize: '1.2rem', fontWeight: '800', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Lightbulb color="#f59e0b" /> Đóng Góp Mẹo Thực Địa Mới
+              <Lightbulb color="#f59e0b" /> {tipId ? 'Sửa mẹo thực địa' : 'Thêm mẹo thực địa'}
             </h3>
 
             <form onSubmit={handleAddTipSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
@@ -1235,7 +1354,7 @@ export default function TechHandbook({ globalSearch = '', onSelectErrorForRepair
                   Hủy bỏ
                 </button>
                 <button type="submit" className="btn btn-primary">
-                  Lưu & Chia Sẻ Mẹo
+                  Lưu mẹo
                 </button>
               </div>
             </form>

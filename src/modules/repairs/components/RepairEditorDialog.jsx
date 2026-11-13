@@ -255,6 +255,13 @@ export default function RepairEditorDialog({ PRODUCT_CATEGORIES, addErrorPhotos,
                   </div>
 
                   <fieldset className="repair-failure-classification"><legend>Bộ phận / linh kiện gây lỗi</legend><p>Chọn các linh kiện đã xác định. Chọn “Chưa xác định” khi đang kiểm tra; vật tư sử dụng được ghi riêng bên dưới.</p><div className="repair-component-options">{[...new Set([...FAILURE_COMPONENTS,...failureComponents(formData)])].map(component => <label key={component}><input type="checkbox" checked={failureComponents(formData).includes(component)} onChange={event => setFormData(previous => ({...previous,errorCategory:(event.target.checked?[...failureComponents(previous),component]:failureComponents(previous).filter(value => value !== component)).join('; ')}))}/>{component}</label>)}</div></fieldset>
+                  <div className="form-group">
+                    <label className="form-label" htmlFor="repair-verification-notes">Kết quả kiểm tra và chạy thử</label>
+                    <textarea id="repair-verification-notes" className="form-input" rows={3}
+                      placeholder="Đã kiểm tra gì? Chạy thử đạt hay chưa? Còn việc gì cần theo dõi?"
+                      value={formData.notes ?? ''}
+                      onChange={event => setFormData(previous => ({ ...previous, notes: event.target.value }))} />
+                  </div>
                   {handbookErrors.length > 0 && <div className="form-group"><label className="form-label">Mã lỗi sổ tay theo thiết bị</label><select className="form-select" value={formData.handbookErrorCode || ''} onChange={event => { const selected = handbookErrors.find(item => item.code === event.target.value); setFormData(previous => ({...previous, handbookErrorCode: selected?.code || '', errorDescription: selected ? `[${selected.code}] ${selected.title}${previous.errorDescription ? ` — ${previous.errorDescription}` : ''}` : previous.errorDescription})); }}><option value="">Chọn mã lỗi để tự điền vào mô tả</option>{handbookErrors.filter(item => item.category === formData.productCategory || (formData.productCategory === 'QL700' && item.category === 'Máy in') || item.category === 'Khác').map(item => <option key={item.id} value={item.code}>{item.code} · {item.title} ({item.machineModel})</option>)}</select></div>}
                   <div className="form-group">
                     <label className="form-label">⚠️ 5. Diễn Giải Tình Trạng Lỗi *</label>

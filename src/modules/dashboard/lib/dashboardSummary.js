@@ -25,7 +25,7 @@ export function summarizeDashboard(systemSets, npps, today) {
   return { ...stats, regionalCounts: [...regions.values()], modelChartData: Array.from(models, ([name, value]) => ({ name, value })) };
 }
 
-export function countOperationalDevices(devices = [], systemSets = [], npps = []) {
+export function listOperationalDevices(devices = [], systemSets = [], npps = []) {
   const distributors = new Map(npps.map(npp => [npp.id, npp]));
   const sets = new Map(systemSets.map(set => [set.setCode, set]));
   return devices.filter(device => {
@@ -34,5 +34,9 @@ export function countOperationalDevices(devices = [], systemSets = [], npps = []
     const set = sets.get(device.setCode);
     if (!set) return false;
     return !set.nppId || distributors.get(set.nppId)?.status === 'Đang hợp tác';
-  }).length;
+  });
+}
+
+export function countOperationalDevices(devices, systemSets, npps) {
+  return listOperationalDevices(devices, systemSets, npps).length;
 }

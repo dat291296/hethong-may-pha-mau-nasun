@@ -268,3 +268,56 @@ export const FIELD_TIPS_DATA = [
     content: 'Khi tem in ra bị lệch chéo lề, hãy kiểm tra 2 gờ nhựa kẹp cuộn giấy inside thân máy QL700. Nếu gờ bị xô lệch, nhấn chốt lò xo gạt sát mép cuộn giấy 62mm. Sau đó bấm nút Feed trên máy in 1 lần để máy tự canh lề con cảm biến.'
   }
 ];
+
+const NASUN_SERVICE_PROCEDURES = [
+  ['Lắp đặt và bàn giao', 'Cả bộ máy', [
+    ['Đối chiếu thiết bị', 'Ghi NPP, mã bộ, model và seri máy chiết, máy lắc, máy tính và máy in.'],
+    ['Kiểm tra vị trí', 'Đối chiếu mặt bằng, nguồn điện, tiếp địa và khoảng trống thao tác theo tài liệu từng máy.'],
+    ['Cấu hình', 'Cài phần mềm và bộ công thức đã duyệt. Kiểm tra kết nối và sao lưu cấu hình.'],
+    ['Chạy thử và bàn giao', 'Chiết, lắc và in tem với mẫu đúng nền và quy cách. Lưu ảnh và biên bản. Đạt khi mẫu đạt tiêu chí QC và NPP thực hiện được thao tác cơ bản.'],
+  ]],
+  ['Kiểm tra đầu ca và vệ sinh cuối ca', 'Máy chiết', [
+    ['Kiểm tra đầu ca', 'Kiểm tra mức tinh màu, rò rỉ, đầu chiết và bộ phận vệ sinh hoặc giữ ẩm.'],
+    ['Kiểm tra trước khi pha', 'Chạy chu trình kiểm tra theo đúng model. Quan sát tia chiết và hiện tượng nhỏ giọt.'],
+    ['Vệ sinh cuối ca', 'Dùng vật tư phù hợp với hệ tinh màu và ghi bất thường. Đạt khi đầu chiết sạch, kiểm tra hoàn tất và không có rò hoặc tia bất thường.'],
+  ]],
+  ['Xử lý pha sai màu', 'Hệ thống pha màu', [
+    ['Giữ mẫu lỗi', 'Ghi mã màu, dòng sơn, nền, quy cách, lô và phiên bản công thức.'],
+    ['Khoanh vùng', 'Đối chiếu đầu vào, kênh tinh màu, quá trình lắc và cách tạo mẫu. So màu theo điều kiện QC quy định.'],
+    ['Kiểm tra lại', 'Làm mẫu đối chứng. Nếu chiết sai định lượng, kiểm tra máy chiết. Nếu định lượng đạt mà vẫn lệch, chuyển mẫu và hồ sơ cho QC. Đạt khi mẫu đối chứng đạt tiêu chí QC.'],
+  ]],
+  ['Kiểm tra định lượng máy chiết', 'Máy chiết', [
+    ['Ghi hiện trạng', 'Ghi model, seri, kênh cần kiểm tra và sao lưu thông số trước khi chỉnh.'],
+    ['Kiểm tra và đo', 'Kiểm tra đầu chiết, mức tinh màu và rò rỉ. Ghi lượng đặt, lượng đo, đơn vị và từng lần đo theo hướng dẫn đúng model. Chỉ quy đổi với tỷ trọng đã xác nhận.'],
+    ['Xác nhận', 'Hiệu chuẩn theo tài liệu đúng model khi được phân công. Đo lại và chạy mẫu. Đạt khi kết quả nằm trong dung sai được duyệt.'],
+  ]],
+  ['Xử lý sự cố máy lắc', 'Máy lắc', [
+    ['Dừng và ghi nhận', 'Dừng khi rung mạnh, va đập hoặc kẹp không chắc. Ghi mã lỗi, model, lon và tải.'],
+    ['Kiểm tra bên ngoài', 'Kiểm tra mặt đặt, nắp lon, vị trí đặt lon, giới hạn tải và cơ cấu kẹp. Cô lập nguồn theo quy trình nếu cần mở vỏ và giao người được phân công.'],
+    ['Chạy thử', 'Lắp đầy đủ che chắn, dùng lon và tải phù hợp. Chỉ bàn giao khi chu trình, cơ cấu kẹp và khóa an toàn hoạt động bình thường.'],
+  ]],
+  ['Khôi phục máy tính và máy in tem', 'Máy tính · Máy in', [
+    ['Sao lưu', 'Lưu bộ công thức, cấu hình máy chiết, thiết lập in, phiên bản phần mềm và driver.'],
+    ['Khoanh vùng', 'Kiểm tra nguồn, cáp, cổng và cấu hình. In tem thử để phân biệt lỗi máy in với lỗi phần mềm pha màu.'],
+    ['Xác nhận', 'Mở công thức mẫu, kiểm tra giao tiếp và in tem từ phần mềm. Đạt khi khởi động lại vẫn kết nối và in đúng nội dung.'],
+  ]],
+  ['Bảo trì định kỳ', 'Cả bộ máy', [
+    ['Chuẩn bị', 'Xem lịch sử phiếu, lỗi lặp và danh mục bảo trì theo model. Ghi hiện trạng.'],
+    ['Kiểm tra từng thiết bị', 'Kiểm tra rò rỉ và đầu chiết, cơ cấu kẹp và che chắn máy lắc, sao lưu cấu hình và in tem thử.'],
+    ['Chốt bảo trì', 'Ghi hạng mục đã làm, linh kiện, kết quả thử và lịch tiếp theo. Việc còn tồn phải có người phụ trách và hạn xử lý.'],
+  ]],
+  ['Tiếp nhận, sửa chữa và đổi trả', 'Cả bộ máy', [
+    ['Tiếp nhận', 'Ghi NPP, mã bộ, loại thiết bị, seri, triệu chứng và ảnh lỗi.'],
+    ['Xử lý và theo dõi', 'Ghi kết quả chẩn đoán. Nếu đổi, ghi riêng model, seri máy thu về và máy cấp ra, tình trạng mới/cũ và nơi nhận.'],
+    ['Bàn giao', 'Ghi kết quả chạy thử, người nhận và ngày bàn giao. Thiết bị chờ trả cần có trạng thái và hạn trả. Đạt khi truy được thiết bị thu và cấp ra.'],
+  ]],
+];
+
+export const NASUN_SERVICE_SOPS = NASUN_SERVICE_PROCEDURES.map(([title, machineType, steps], index) => ({
+  id: `NASUN-SOP-${String(index + 1).padStart(2, '0')}`,
+  title,
+  machineType,
+  duration: 'Theo model và hiện trạng',
+  toolsRequired: [],
+  steps: steps.map(([stepTitle, desc], stepIndex) => ({ stepNumber: stepIndex + 1, title: stepTitle, desc })),
+}));
