@@ -1,10 +1,10 @@
 import { getTicketsForSetOrNpp, getNppTicketStats } from '../lib/repairDashboard.js';
-import { requiresRepairReturn, isRepairAwaitingReturn, repairReturnLabel } from '../../repairs/lib/repairClassification.js';
+import { requiresRepairReturn, repairReturnLabel } from '../../repairs/lib/repairClassification.js';
 import SystemHealthPanel from './SystemHealthPanel.jsx';
 import {matchesSearch} from '../../../shared/workspace/workspaceFilters.js';
 import { WorkspaceRegionContext } from '../../../shared/hooks/useWorkspaceState.js';
 import { nppCoverage } from '../../distributors/lib/nppCoverage.js';
-import { countOperationalDevices, summarizeDashboard } from '../lib/dashboardSummary.js';
+import { listOperationalDevices, summarizeDashboard } from '../lib/dashboardSummary.js';
 import { summarizeInventory } from '../../equipment/lib/inventorySummary.js';
 import { findAssignedDevice } from '../../equipment/lib/deviceEdit.js';
 import React, { useState, useMemo, useContext, useEffect } from 'react';
@@ -41,12 +41,13 @@ import {
   CartesianGrid, 
   Tooltip, 
   ResponsiveContainer, 
-  Cell, 
-  PieChart, 
-  Pie 
+  Cell,
+  PieChart,
+  Pie
 } from 'recharts';
 import SafePortal from '../../../shared/components/SafePortal.jsx';
 import TeamWorkPanel from '../../fieldwork/components/TeamWorkPanel';
+import './dashboard.css';
 
 export default function Dashboard({
   replacementEvents=[],replacementHistoryError='',
@@ -74,31 +75,61 @@ export default function Dashboard({
   const totalSetsCount = stats.dashboardSetCount + inventory.completeFromLooseDevices;
   const installedSetsCount = stats.installed;
   const stockSetsCount = stats.stock + inventory.completeFromLooseDevices;
-  const operationalDispenserCount = useMemo(() => countOperationalDevices(dispensers, systemSets, npps), [dispensers, systemSets, npps]);
-  const operationalMixerCount = useMemo(() => countOperationalDevices(mixers, systemSets, npps), [mixers, systemSets, npps]);
+  const [deviceGroup, setDeviceGroup] = useState(null);
+  const [deviceLimit, setDeviceLimit] = useState(8);
+  const deviceGroups = useMemo(() => {
+    const sets = new Map(systemSets.map(set => [set.setCode, set]));
+    const distributors = new Map(npps.map(npp => [npp.id, npp.name]));
+    return [['Máy chiết', dispensers], ['Máy lắc', mixers], ['Máy tính', computers], ['Máy in', printers]]
+      .map(([label, devices]) => ({
+        label,
+        total: devices.length,
+        rows: listOperationalDevices(devices, systemSets, npps).map(device => {
+          const set = sets.get(device.setCode);
+          return {
+            id: device.id,
+            model: device.model || device.type || label,
+            serial: device.serial,
+            npp: distributors.get(set?.nppId) || set?.nppName || 'Chưa gắn NPP',
+          };
+        }),
+      }));
+  }, [dispensers, mixers, computers, printers, systemSets, npps]);
+  const selectedDevices = deviceGroups.find(group => group.label === deviceGroup);
 
   // Repair & replacement statistics
   const totalRepairsCount = useMemo(() => 
     repairTickets.filter(t => t.actionDirection === 'Sửa chữa' || !t.actionDirection).length
   , [repairTickets]);
 
-  const newExchangesCount = useMemo(() => 
-    repairTickets.filter(t => t.actionDirection === 'Xuất đổi' && t.replacementCondition === 'Mới').length
-  , [repairTickets]);
+  const exchangeSummary = useMemo(() => {
+    const groups = new Map();
+    let total = 0;
+    for (const ticket of repairTickets) {
+      if (ticket.actionDirection !== 'Xuất đổi') continue;
+      const label = ticket.productCategory?.trim() || 'Chưa rõ thiết bị';
+      const counts = groups.get(label) ?? { new: 0, used: 0, unknown: 0 };
+      const condition = ticket.replacementCondition;
+      const key = condition === 'Mới' ? 'new' : condition === 'Cũ' ? 'used' : 'unknown';
+      counts[key]++;
+      groups.set(label, counts);
+      total++;
+    }
+    return { total, rows: [...groups].sort(([a], [b]) => a.localeCompare(b, 'vi')) };
+  }, [repairTickets]);
 
-  const oldExchangesCount = useMemo(() => 
-    repairTickets.filter(t => t.actionDirection === 'Xuất đổi' && t.replacementCondition === 'Cũ').length
-  , [repairTickets]);
-
-  const totalExchangesCount = newExchangesCount + oldExchangesCount;
-
-  const uniqueNppsWithRepairs = useMemo(() => {
-    const setOfNpps = new Set();
-    repairTickets.forEach(t => {
-      if (t.nppId) setOfNpps.add(t.nppId);
-      else if (t.nppName) setOfNpps.add(t.nppName);
-    });
-    return setOfNpps.size;
+  const frequentRepairs = useMemo(() => {
+    const counts = new Map();
+    for (const ticket of repairTickets) {
+      if (ticket.actionDirection && ticket.actionDirection !== 'Sửa chữa') continue;
+      const category = ticket.productCategory?.trim();
+      if (!category) continue;
+      const label = ['Case', 'AIO', 'Màn hình'].includes(category) ? 'Máy tính'
+        : category === 'QL700' ? 'Máy in' : category;
+      counts.set(label, (counts.get(label) ?? 0) + 1);
+    }
+    return [...counts].filter(([, count]) => count >= 3)
+      .sort(([a, countA], [b, countB]) => countB - countA || a.localeCompare(b, 'vi'));
   }, [repairTickets]);
 
   // Region data for chart
@@ -122,8 +153,6 @@ export default function Dashboard({
   const [repairActionFilter, setRepairActionFilter] = useState('ALL');
   const [repairPage, setRepairPage] = useState(1);
   const [repairPageSize, setRepairPageSize] = useState(10);
-  const pendingTasks = useMemo(() => repairTickets.filter(item => item.processingStatus === 'Chưa xử lý'), [repairTickets]);
-  const returnTasks = useMemo(() => repairTickets.filter(item => item.processingStatus === 'Đã xử lý' && isRepairAwaitingReturn(item)), [repairTickets]);
 
 
   // Sắp xếp bộ máy mới lắp đặt gần nhất lên đầu
@@ -202,7 +231,12 @@ export default function Dashboard({
   return (
     <div className="workspace-screen dashboard-screen" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
 
-      <TeamWorkPanel teamUsers={teamUsers} repairTickets={repairTickets} systemSets={systemSets} npps={npps} onNavigate={(tab, query) => onNavigateWorkspace?.(tab, query)} />
+      <nav className="dashboard-jump" aria-label="Đi nhanh trong tổng quan">
+        <button type="button" onClick={() => { document.getElementById('dashboard-charts')?.scrollIntoView({ block: 'start' }); }}>Biểu đồ</button>
+        <button type="button" onClick={() => { setHealthOpen(true); document.getElementById('dashboard-health')?.scrollIntoView({ block: 'start' }); }}>Sức khỏe hệ thống</button>
+        <button type="button" onClick={() => { const work = document.getElementById('dashboard-work'); if (work) { work.open = true; work.scrollIntoView({ block: 'start' }); } }}>Công việc kỹ thuật</button>
+        <button type="button" onClick={() => { document.getElementById('repair-tracking-section')?.scrollIntoView({ block: 'start' }); }}>Lịch sử sửa chữa</button>
+      </nav>
       {/* Warning Banners */}
       {maintenanceAlerts.length > 0 && (
         <div className="dashboard-warning" style={{
@@ -273,86 +307,57 @@ export default function Dashboard({
           </div>
         </div>
 
-        {/* Dispenser & Mixer Inventory */}
-        <div className="glass-panel glass-panel-hover" style={{ padding: '20px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: '600', textTransform: 'uppercase' }}>Thiết Bị Chiết & Lắc</span>
-            <div style={{ padding: '8px', borderRadius: '8px', background: 'rgba(16, 185, 129, 0.15)', color: 'var(--accent-emerald)' }}>
-              <Flame size={20} />
+        <section className="glass-panel dashboard-device-kpi">
+          <h3>Thiết bị</h3>
+          <div className="dashboard-device-counts">
+            {deviceGroups.map(group => (
+              <button type="button" className="btn btn-secondary" key={group.label}
+                aria-expanded={deviceGroup === group.label}
+                onClick={() => { setDeviceGroup(deviceGroup === group.label ? null : group.label); setDeviceLimit(8); }}>
+                <span>{group.label}</span><strong>{group.total}</strong><small>{group.rows.length} chạy tốt</small>
+              </button>
+            ))}
+          </div>
+          {selectedDevices && (
+            <div className="dashboard-device-list">
+              <h4>{selectedDevices.label} chạy tốt</h4>
+              {selectedDevices.rows.length ? <ul>{selectedDevices.rows.slice(0, deviceLimit).map(row => (
+                <li key={row.id}><strong>{row.model}</strong>{row.serial && <small>{row.serial}</small>}<span>{row.npp}</span></li>
+              ))}</ul> : <p>Chưa có thiết bị chạy tốt.</p>}
+              {selectedDevices.rows.length > deviceLimit && <button type="button" className="btn btn-secondary" onClick={() => setDeviceLimit(limit => limit + 8)}>Xem thêm</button>}
             </div>
-          </div>
-          <div style={{ fontSize: '2rem', fontWeight: '800', color: 'var(--text-main)', lineHeight: 1.1 }}>
-            {operationalDispenserCount + operationalMixerCount} <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)', fontWeight: 'normal' }}>Máy đang chạy tốt</span>
-          </div>
-          <div style={{ marginTop: '12px', display: 'flex', gap: '8px', fontSize: '0.75rem', flexWrap: 'wrap' }}>
-            <span className="badge badge-purple">{operationalDispenserCount} Máy Chiết</span>
-            <span className="badge badge-info">{operationalMixerCount} Máy Lắc</span>
-          </div>
-        </div>
+          )}
+        </section>
 
-        {/* Repair & Parts Stat Card */}
-        <div 
-          className="glass-panel glass-panel-hover" 
-          style={{ padding: '20px', cursor: 'pointer' }}
-          onClick={() => {
-            const el = document.getElementById('repair-tracking-section');
-            if (el) el.scrollIntoView({ behavior: 'smooth' });
-          }}
-          title="Bấm để cuộn xuống bảng chi tiết sửa chữa & thay thế linh kiện"
-        >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-            <span style={{ fontSize: '0.8rem', color: 'var(--accent-cyan)', fontWeight: '700', textTransform: 'uppercase' }}>Sửa Chữa & Linh Kiện</span>
-            <div style={{ padding: '8px', borderRadius: '8px', background: 'rgba(6, 182, 212, 0.15)', color: 'var(--accent-cyan)' }}>
-              <Wrench size={20} />
-            </div>
-          </div>
-          <div style={{ fontSize: '2rem', fontWeight: '800', color: 'var(--text-main)', lineHeight: 1.1 }}>
-            {totalRepairsCount} <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)', fontWeight: 'normal' }}>Lượt sửa</span>
-          </div>
-          <div style={{ marginTop: '12px', display: 'flex', gap: '8px', fontSize: '0.75rem', flexWrap: 'wrap' }}>
-            <span className="badge badge-info">● {uniqueNppsWithRepairs} NPP có sự cố</span>
-            <span className="badge badge-neutral">Chiết • Lắc • Tính • In</span>
-          </div>
-        </div>
+        <section className="glass-panel dashboard-repair-kpi">
+          <h3>Sửa chữa & linh kiện</h3>
+          <strong className="dashboard-kpi-value">{totalRepairsCount}</strong> <small>phiếu sửa</small>
+          {frequentRepairs.length ? (
+            <ol>{frequentRepairs.map(([label, count]) => <li key={label}><span>{label}</span><strong>{count}</strong></li>)}</ol>
+          ) : <p>Chưa có loại nào từ 3 phiếu.</p>}
+          <button type="button" className="btn btn-secondary"
+            onClick={() => document.getElementById('repair-tracking-section')?.scrollIntoView({ block: 'start' })}>Xem phiếu</button>
+        </section>
 
-        {/* Machine Exchanges Stat Card */}
-        <div 
-          className="glass-panel glass-panel-hover" 
-          style={{ padding: '20px', cursor: 'pointer' }}
-          onClick={() => {
-            const el = document.getElementById('repair-tracking-section');
-            if (el) el.scrollIntoView({ behavior: 'smooth' });
-          }}
-          title="Bấm để cuộn xuống bảng chi tiết đổi trả máy"
-        >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-            <span style={{ fontSize: '0.8rem', color: 'var(--accent-amber)', fontWeight: '700', textTransform: 'uppercase' }}>Đổi Trả Thiết Bị</span>
-            <div style={{ padding: '8px', borderRadius: '8px', background: 'rgba(245, 158, 11, 0.15)', color: 'var(--accent-amber)' }}>
-              <RefreshCw size={20} />
-            </div>
-          </div>
-          <div style={{ fontSize: '2rem', fontWeight: '800', color: 'var(--text-main)', lineHeight: 1.1 }}>
-            {totalExchangesCount} <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)', fontWeight: 'normal' }}>Lượt đổi</span>
-          </div>
-          <div style={{ marginTop: '12px', display: 'flex', gap: '8px', fontSize: '0.75rem', flexWrap: 'wrap' }}>
-            <span className="badge badge-success">✨ {newExchangesCount} Máy mới</span>
-            <span className="badge badge-purple">🔁 {oldExchangesCount} Máy cũ</span>
-          </div>
-        </div>
+        <section className="glass-panel dashboard-exchange-kpi">
+          <h3>Đổi trả <span>{exchangeSummary.total}</span></h3>
+          {exchangeSummary.rows.length ? (
+            <table>
+              <thead><tr><th scope="col">Thiết bị</th><th scope="col">Mới</th><th scope="col">Cũ</th>{exchangeSummary.rows.some(([, row]) => row.unknown > 0) && <th scope="col">Chưa rõ</th>}</tr></thead>
+              <tbody>{exchangeSummary.rows.map(([label, counts]) => (
+                <tr key={label}><th scope="row">{label}</th><td>{counts.new}</td><td>{counts.used}</td>{exchangeSummary.rows.some(([, row]) => row.unknown > 0) && <td>{counts.unknown}</td>}</tr>
+              ))}</tbody>
+            </table>
+          ) : <p className="resource-muted">Chưa có phiếu đổi trả.</p>}
+        </section>
 
       </div>
 
-      <div className="workspace-tabs" aria-label="Thống kê nhanh">{[['assets','STOCK','Trong kho',stockSetsCount],['repairs','PENDING','Chờ sửa',pendingTasks.length],['repairs','RETURN','Chờ gửi trả',returnTasks.length],['maintenance','OVERDUE','Quá hạn bảo trì',stats.overdue]].map(([tab,filter,label,count]) => <button key={filter} onClick={() => onNavigateWorkspace?.(tab, '', filter)}>{label} ({count})</button>)}</div>
 
 
-      <details className="dashboard-chart-group health-chart-group" open={healthOpen} onToggle={event=>setHealthOpen(event.currentTarget.open)}>
-        <summary>Sức khỏe hệ thống máy pha màu</summary>
-        {healthOpen&&<SystemHealthPanel machines={systemSets} devices={{computer:computers,dispenser:dispensers,mixer:mixers,printer:printers}} tickets={repairTickets} events={replacementEvents} npps={npps} historyError={replacementHistoryError} onNavigate={onNavigateWorkspace}/>}
-      </details>
-      {/* Charts Section */}
-      <details className="dashboard-chart-group" open={!window.matchMedia('(max-width: 600px)').matches}>
-      <summary>Biểu đồ tổng quan</summary>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px' }}>
+      <section id="dashboard-charts" className="dashboard-chart-group" aria-labelledby="dashboard-chart-heading">
+      <h2 id="dashboard-chart-heading">Biểu đồ tổng quan</h2>
+      <div className="dashboard-chart-grid">
 
         {/* Region Distribution Chart */}
         <div className="glass-panel" style={{ padding: '20px' }}>
@@ -410,6 +415,14 @@ export default function Dashboard({
       </div>
 
       {/* Installed System Sets Table */}
+      </section>
+      <details id="dashboard-health" className="dashboard-chart-group health-chart-group" open={healthOpen} onToggle={event=>setHealthOpen(event.currentTarget.open)}>
+        <summary>Sức khỏe hệ thống máy pha màu</summary>
+        {healthOpen&&<SystemHealthPanel machines={systemSets} devices={{computer:computers,dispenser:dispensers,mixer:mixers,printer:printers}} tickets={repairTickets} events={replacementEvents} npps={npps} historyError={replacementHistoryError} onNavigate={onNavigateWorkspace}/>}
+      </details>
+      <details id="dashboard-work" className="dashboard-chart-group health-chart-group">
+        <summary>Công việc kỹ thuật</summary>
+        <TeamWorkPanel teamUsers={teamUsers} repairTickets={repairTickets} systemSets={systemSets} npps={npps} onNavigate={(tab, query) => onNavigateWorkspace?.(tab, query)} />
       </details>
       <div className="glass-panel" style={{ padding: '20px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
