@@ -1,3 +1,4 @@
+import { getTicketsForSetOrNpp, getNppTicketStats } from '../lib/repairDashboard.js';
 import { requiresRepairReturn, isRepairAwaitingReturn, repairReturnLabel } from '../../repairs/lib/repairClassification.js';
 import SystemHealthPanel from './SystemHealthPanel.jsx';
 import {matchesSearch} from '../../../shared/workspace/workspaceFilters.js';
@@ -147,65 +148,6 @@ export default function Dashboard({
     (dashboardPage - 1) * dashboardPageSize,
     dashboardPage * dashboardPageSize
   );
-
-  // Helper to match tickets for an NPP or Set
-  const getTicketsForSetOrNpp = (setOrNpp) => {
-    if (!setOrNpp) return [];
-    const nppId = (setOrNpp.nppId || setOrNpp.id || '').trim().toLowerCase();
-    const nppName = (setOrNpp.nppName || setOrNpp.name || '').trim().toLowerCase();
-    const setCode = (setOrNpp.setCode || '').trim().toLowerCase();
-    const dispenserSerial = (setOrNpp.dispenserSerial || '').trim().toLowerCase();
-    const mixerSerial = (setOrNpp.mixerSerial || '').trim().toLowerCase();
-    const pcSerial = (setOrNpp.pcSerial || '').trim().toLowerCase();
-    const printerSerial = (setOrNpp.printerSerial || '').trim().toLowerCase();
-
-    return repairTickets.filter(t => {
-      const tNppId = (t.nppId || '').trim().toLowerCase();
-      const tNppName = (t.nppName || '').trim().toLowerCase();
-      const tSerial = (t.serialNumber || '').trim().toLowerCase();
-      const tNotes = (t.notes || '').trim().toLowerCase();
-
-      if (nppId && tNppId && tNppId === nppId) return true;
-      if (nppName && tNppName && (tNppName.includes(nppName) || nppName.includes(tNppName))) return true;
-      if (setCode && tNotes && tNotes.includes(setCode)) return true;
-      if (dispenserSerial && dispenserSerial !== '—' && tSerial && tSerial === dispenserSerial) return true;
-      if (mixerSerial && mixerSerial !== '—' && tSerial && tSerial === mixerSerial) return true;
-      if (pcSerial && pcSerial !== '—' && tSerial && tSerial === pcSerial) return true;
-      if (printerSerial && printerSerial !== '—' && tSerial && tSerial === printerSerial) return true;
-      return false;
-    }).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-  };
-
-  // Helper to compute statistics for tickets of an NPP
-  const getNppTicketStats = (tickets = []) => {
-    const total = tickets.length;
-    const exchangeNew = tickets.filter(t => t.actionDirection === 'Xuất đổi' && t.replacementCondition === 'Mới').length;
-    const exchangeOld = tickets.filter(t => t.actionDirection === 'Xuất đổi' && t.replacementCondition === 'Cũ').length;
-    const totalExchanges = exchangeNew + exchangeOld;
-    const repairs = tickets.filter(t => t.actionDirection === 'Sửa chữa' || !t.actionDirection).length;
-
-    const dispenserTickets = tickets.filter(t => t.productCategory === 'Máy chiết');
-    const mixerTickets = tickets.filter(t => t.productCategory === 'Máy lắc');
-    const computerTickets = tickets.filter(t => 
-      t.productCategory === 'Case' || 
-      t.productCategory === 'AIO' || 
-      t.productCategory === 'Máy tính' || 
-      t.productCategory === 'Màn hình'
-    );
-    const printerTickets = tickets.filter(t => t.productCategory === 'Máy in' || t.productCategory === 'QL700');
-
-    return {
-      total,
-      exchangeNew,
-      exchangeOld,
-      totalExchanges,
-      repairs,
-      dispenserTickets,
-      mixerTickets,
-      computerTickets,
-      printerTickets
-    };
-  };
 
   // Filtered repair tickets for dedicated table
   const filteredRepairTickets = useMemo(() => {
@@ -514,7 +456,7 @@ export default function Dashboard({
                 const pcOs = set.pcOs || pcObj?.os || 'Chưa có thông tin';
 
                 // Find repair & exchange history for this specific set/NPP
-                const nppTickets = getTicketsForSetOrNpp(set);
+                const nppTickets = getTicketsForSetOrNpp(repairTickets, set);
                 const nppStats = getNppTicketStats(nppTickets);
 
                 const hasPcExchangeTicket = nppStats.computerTickets.some(t => t.actionDirection === 'Xuất đổi' && t.replacementCondition === 'Mới');
@@ -701,7 +643,7 @@ export default function Dashboard({
             const pcType = set.pcType || pcObj?.type || 'Chưa có thông tin';
             const pcOs = set.pcOs || pcObj?.os || 'Chưa có thông tin';
 
-            const nppTickets = getTicketsForSetOrNpp(set);
+            const nppTickets = getTicketsForSetOrNpp(repairTickets, set);
             const nppStats = getNppTicketStats(nppTickets);
 
             const hasPcExchangeTicket = nppStats.computerTickets.some(t => t.actionDirection === 'Xuất đổi' && t.replacementCondition === 'Mới');
