@@ -34,6 +34,7 @@ export function useRepairs({ enabled = true } = {}) {
   const [repairTickets, publishRepairTickets] = useState(INITIAL_REPAIR_TICKETS);
   const [loading, setLoading] = useState(false);
   const [loadError,setLoadError]=useState('');
+  const [hasRepairSnapshot, setHasRepairSnapshot] = useState(false);
   const [cacheHydrated,setCacheHydrated]=useState(false);
   const fetchVersion = useRef(0);
   const stateRef = useRef(null);
@@ -66,7 +67,7 @@ export function useRepairs({ enabled = true } = {}) {
     async function loadCached() {
       try {
         const cached = await getCachedOfflineData('repair_tickets', null);
-        if (!disposed && Array.isArray(cached)) await repairState.acceptRead(token, cached, false);
+        if (!disposed && Array.isArray(cached) && await repairState.acceptRead(token, cached, false) && !disposed) setHasRepairSnapshot(true);
       } catch (error) { recordOperationalError('runtime', error); }
       finally { if (!disposed) setCacheHydrated(true); }
     }
@@ -277,6 +278,7 @@ export function useRepairs({ enabled = true } = {}) {
   }, [withRepairWrite, persistRepairTickets, repairState, fetchRepairs]);
 
   return {
+    hasRepairSnapshot,
     repairTickets,
     fetchTicketDetails,
     fetchBackupTickets,

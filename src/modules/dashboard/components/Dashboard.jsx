@@ -1,3 +1,4 @@
+import DashboardReport from './DashboardReport.jsx';
 import { getTicketsForSetOrNpp, getNppTicketStats } from '../lib/repairDashboard.js';
 import { requiresRepairReturn, repairReturnLabel } from '../../repairs/lib/repairClassification.js';
 import SystemHealthPanel from './SystemHealthPanel.jsx';
@@ -50,6 +51,7 @@ import TeamWorkPanel from '../../fieldwork/components/TeamWorkPanel';
 import './dashboard.css';
 
 export default function Dashboard({
+  fetchTicketDetails,
   replacementEvents=[],replacementHistoryError='',
   teamUsers = [],
   systemSets = [], 
@@ -231,6 +233,8 @@ export default function Dashboard({
   return (
     <div className="workspace-screen dashboard-screen" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
 
+      <DashboardReport machines={systemSets} npps={npps} devices={{ computer: computers, dispenser: dispensers, mixer: mixers, printer: printers }} events={replacementEvents} fetchTicketDetails={fetchTicketDetails} tickets={repairTickets} region={workspaceRegion} today={today}
+        fleet={totalSetsCount} stock={stockSetsCount} regionalCounts={regionChartData} models={modelChartData} />
       <nav className="dashboard-jump" aria-label="Đi nhanh trong tổng quan">
         <button type="button" onClick={() => { document.getElementById('dashboard-charts')?.scrollIntoView({ block: 'start' }); }}>Biểu đồ</button>
         <button type="button" onClick={() => { setHealthOpen(true); document.getElementById('dashboard-health')?.scrollIntoView({ block: 'start' }); }}>Sức khỏe hệ thống</button>
