@@ -1,13 +1,13 @@
-import { StrictMode } from 'react'
+import { StrictMode, useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './app/App.jsx'
 import { AuthProvider } from './shared/context/AuthContext.jsx'
 import ErrorBoundary from './shared/components/ErrorBoundary.jsx'
+import { flushBeforeAppUpdate } from './shared/updates/appUpdateSafety.js'
 import { startPerformanceMonitoring } from './shared/diagnostics/performanceMetrics.js'
 import { startErrorMonitoring, configureOperationalReporting } from './shared/diagnostics/operationalDiagnostics.js'
 import { createRemoteReporter } from './shared/diagnostics/remoteReporting.js'
-import { flushBeforeAppUpdate } from './shared/updates/appUpdateSafety.js'
 
 if (import.meta.env.VITE_REMOTE_REPORTING_ENABLED === 'true') {
 configureOperationalReporting(createRemoteReporter({
@@ -23,11 +23,34 @@ const stopErrorMonitoring = startErrorMonitoring()
 const hotContext = import.meta.hot
 if (hotContext) hotContext.dispose(stopErrorMonitoring)
 
+const updateNoticeKey = 'nasun-update-completed';
+
+function AppUpdateNotice() {
+  const [visible, setVisible] = useState(() => {
+    try { return sessionStorage.getItem(updateNoticeKey) === 'true'; }
+    catch { return false; }
+  });
+
+  useEffect(() => {
+    if (!visible) return;
+    try { sessionStorage.removeItem(updateNoticeKey); } catch { /* Storage is unavailable. */ }
+  }, [visible]);
+
+  if (!visible) return null;
+  return (
+    <aside className="app-update-notice">
+      <span role="status">NASUN đã cập nhật lên phiên bản mới.</span>
+      <button type="button" className="btn btn-secondary" onClick={() => setVisible(false)}>Đóng</button>
+    </aside>
+  );
+}
+
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <ErrorBoundary>
       <AuthProvider>
         <App />
+        <AppUpdateNotice />
       </AuthProvider>
     </ErrorBoundary>
   </StrictMode>,
@@ -37,25 +60,36 @@ createRoot(document.getElementById('root')).render(
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => {
     const hadController = Boolean(navigator.serviceWorker.controller);
-    let updateReloading = false;
-    navigator.serviceWorker.addEventListener('controllerchange', async () => {
-      if (!hadController || updateReloading) return;
-      updateReloading = true;
+    let reloading = false;
+    const applyUpdate = async () => {
+      if (reloading || !document.documentElement.dataset.appUpdateReady) return;
+      reloading = true;
       try {
         await flushBeforeAppUpdate();
+        try { sessionStorage.setItem(updateNoticeKey, 'true'); } catch { /* Reload remains available. */ }
         window.location.reload();
-      } catch (error) {
-        updateReloading = false;
-        console.error('[SW] Could not save open drafts before updating:', error?.name);
-        window.dispatchEvent(new CustomEvent('nasun-field-notice',{detail:'Bản mới đã sẵn sàng nhưng chưa lưu được bản nháp đang mở. Hãy lưu biểu mẫu rồi bấm cập nhật.'}));
+      } catch {
+        reloading = false;
       }
+    };
+    const notify = () => {
+      document.documentElement.dataset.appUpdateReady = 'true';
+      window.dispatchEvent(new Event('nasun-app-update-ready'));
+      void applyUpdate();
+    };
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (hadController) notify();
     });
 
     navigator.serviceWorker.register('/sw.js?v=8.0', { updateViaCache: 'none' })
       .then(reg => {
-        const notify=()=>window.dispatchEvent(new Event('nasun-app-update-ready'));
-        if(reg.waiting)notify();
-        reg.addEventListener('updatefound',()=>{const worker=reg.installing;worker?.addEventListener('statechange',()=>{if(worker.state==='installed'&&navigator.serviceWorker.controller)notify();});});
+        const check = () => {
+          if (navigator.onLine) void reg.update().catch(() => {});
+          void applyUpdate();
+        };
+        window.addEventListener('focus', check);
+        window.addEventListener('online', check);
+        window.setInterval(check, 5 * 60_000);
         console.log('[SW] Registered successfully:', reg.scope);
         return reg.update();
       })
