@@ -212,7 +212,7 @@ function AppWorkspace() {
     return result;
   };
 
-  const { repairTickets, fetchTicketDetails, fetchBackupTickets, addTicket, editTicket, deleteTicket, importTickets, loading: repairsLoading, loadError: repairsLoadError, refetch: refetchRepairs } = useRepairs({ enabled: ['dashboard', 'repairs'].includes(activeTab) });
+  const { repairTickets, hasRepairSnapshot, fetchTicketDetails, fetchBackupTickets, addTicket, editTicket, deleteTicket, importTickets, loading: repairsLoading, loadError: repairsLoadError, refetch: refetchRepairs } = useRepairs({ enabled: ['dashboard', 'repairs'].includes(activeTab) });
   const { auditLogs, setAuditLogs, addAuditLog, importAuditLogs, refetch: refetchAuditLogs } = useAuditLogs({ enabled: ['auditLogs', 'dashboard'].includes(activeTab) });
   const { lockedMonths, lockMonth, unlockMonth, isDateLocked, loading: lockLoading, error: lockError, refetch: refetchLockedMonths } = useLockedMonths();
   const { tintingLogs, importLogs, refetch: refetchTintingLogs } = useTintingLogs({ enabled: activeTab === 'workflows' });
@@ -960,8 +960,9 @@ function AppWorkspace() {
             </div>
           )}
 
-          {activeTab === 'dashboard' && ((!assetSummaryReady || nppsLoading && !npps.length || repairsLoading && !repairTickets.length) ? <ModuleLoadingSkeleton type="dashboard" /> : (
+          {activeTab === 'dashboard' && ((!assetSummaryReady || nppsLoading && !npps.length || repairsLoading && !hasRepairSnapshot && !repairTickets.length) ? <ModuleLoadingSkeleton type="dashboard" /> : (
             <Dashboard
+              fetchTicketDetails={fetchTicketDetails}
               replacementEvents={replacementHistory.events}
               replacementHistoryError={replacementHistory.error}
               teamUsers={qcUsers}
