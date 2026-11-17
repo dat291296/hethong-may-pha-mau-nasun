@@ -850,6 +850,19 @@ function AppWorkspace() {
 
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    const previousOverscrollBehavior = document.body.style.overscrollBehavior;
+    if (isMobileSidebarOpen) {
+      document.body.style.overflow = 'hidden';
+      document.body.style.overscrollBehavior = 'none';
+    }
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.body.style.overscrollBehavior = previousOverscrollBehavior;
+    };
+  }, [isMobileSidebarOpen]);
+
   const handleImportData = async (importedPackage) => {
     if (!importedPackage) return;
     if (importedPackage.npps && Array.isArray(importedPackage.npps)) {
@@ -895,7 +908,7 @@ function AppWorkspace() {
   return (
     <>
     {authenticationDialog}
-    <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg-main)' }}>
+    <div className="nasun-app-shell" style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg-main)' }}>
 
       {/* Sidebar Navigation for Desktop & Mobile sliding drawer */}
       <Sidebar

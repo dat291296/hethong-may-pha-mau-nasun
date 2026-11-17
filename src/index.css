@@ -2091,3 +2091,57 @@ main.page-transition .nppmanagement-screen .npp-card-withdrawn { border-top-colo
   .dashboard-period-undated { flex-basis: 100%; }
 }
 @media (prefers-reduced-motion: reduce) { .dashboard-period-segments button { transition: none; } }
+
+/* Mobile platform polish: dynamic viewport and safe-area support for iOS/Android. */
+html {
+  min-height: 100%;
+  background: var(--bg-main);
+  -webkit-text-size-adjust: 100%;
+  overscroll-behavior-x: none;
+}
+
+#root,
+.nasun-app-shell {
+  min-height: 100dvh;
+}
+
+@media (max-width: 768px) {
+  .sidebar-backdrop {
+    touch-action: none;
+  }
+
+  .desktop-sidebar {
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .desktop-sidebar nav {
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: max(16px, env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  .desktop-sidebar button {
+    min-height: 48px;
+  }
+
+  .mobile-bottom-nav {
+    height: calc(64px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-left: max(4px, env(safe-area-inset-left, 0px));
+    padding-right: max(4px, env(safe-area-inset-right, 0px));
+    overscroll-behavior: contain;
+  }
+
+  main {
+    padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  .header-notifications {
+    top: calc(116px + env(safe-area-inset-top, 0px)) !important;
+    max-height: calc(100dvh - 200px) !important;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+}
