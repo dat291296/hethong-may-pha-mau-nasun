@@ -1,4 +1,5 @@
 import { resolveEmailAuthSession } from '../security/authEmailFlows.js';
+import { readStoredAuthUser } from '../security/authRuntime.js';
 import { getAuthErrorMessage } from '../security/authFeedback.js';
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { createAuthEventScheduler } from '../security/authEventScheduler.js';
@@ -76,6 +77,24 @@ export function AuthProvider({ children }) {
       const isEmailCallback = isRecovery || isVerified || Boolean(errorMsg);
       let callbackPending = isEmailCallback;
       let disposed = false;
+      // Restore local access without waiting for the SDK's network token refresh.
+      const localRestore = isEmailCallback ? Promise.resolve(null) : (async () => {
+        try {
+          const storedUser = await readStoredAuthUser();
+          if (!storedUser || disposed || (sessionOwner.current !== undefined && sessionOwner.current !== storedUser.id)) return null;
+          await initializeOfflineStorage(storedUser.id);
+          const cachedUser = await getOfflineUser(storedUser);
+          if (!cachedUser || disposed || (sessionOwner.current !== undefined && sessionOwner.current !== storedUser.id)) return null;
+          sessionOwner.current = storedUser.id;
+          setUser(cachedUser);
+          setRole(cachedUser.role);
+          setLoading(false);
+          return cachedUser;
+        } catch {
+          console.warn('[Auth] Local session restore unavailable.');
+          return null;
+        }
+      })();
       if (isEmailCallback) {
         const finishCallback = async () => {
           try {
@@ -112,6 +131,8 @@ export function AuthProvider({ children }) {
 
       // Production: Use Supabase Auth
       if (!isEmailCallback) supabase.auth.getSession().then(async ({ data: { session } }) => {
+        await localRestore;
+        if (disposed) return;
         const currentUrlParams = new URLSearchParams(window.location.search);
         const currentIsVerified = currentUrlParams.get('verified') === 'true';
         const currentIsRecovery = currentUrlParams.get('recovery') === 'true';
@@ -140,6 +161,9 @@ export function AuthProvider({ children }) {
 
       const authEvents = createAuthEventScheduler(
         async (event, session) => {
+          const restoredUser = await localRestore;
+          if (disposed) return;
+          if (event === 'INITIAL_SESSION' && !session && restoredUser) return;
           if ((session?.user?.id || null) !== sessionOwner.current) return;
           const currentUrlParams = new URLSearchParams(window.location.search);
           const currentIsVerified = currentUrlParams.get('verified') === 'true';
@@ -183,8 +207,10 @@ export function AuthProvider({ children }) {
       );
       const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
         const owner = session?.user?.id || null;
-        if (sessionOwner.current !== owner) trustedSessionRegistered.current = false;
-        sessionOwner.current = owner;
+        if (event !== 'INITIAL_SESSION' || session) {
+          if (sessionOwner.current !== owner) trustedSessionRegistered.current = false;
+          sessionOwner.current = owner;
+        }
         authEvents.listener(event, session);
       });
       return () => { disposed = true; subscription.unsubscribe(); authEvents.dispose(); };
@@ -253,9 +279,9 @@ export function AuthProvider({ children }) {
         avatarUrl: profile?.avatar_url || null,
         managedRegion: finalRegion,
       };
-      setUser(resolvedUser);
       await persistOfflineAuthorization(resolvedUser,verifiedLimits);
       if (sessionOwner.current !== authUser.id) return;
+      setUser(resolvedUser);
       setRole(finalRole);
       if (navigator.onLine && !trustedSessionRegistered.current) {
         try {

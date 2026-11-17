@@ -104,6 +104,7 @@ export function useNpps() {
         return false;
       }
       setError(null);
+      if (!navigator.onLine) return false;
       const pendingQueue = await getOfflineQueue();
       if (version !== fetchVersion.current || requestOwner !== getOfflineOwner()) return false;
       if (pendingQueue.some(item => ['ADD_NPP', 'EDIT_NPP', 'DELETE_NPP'].includes(item.action))) {
@@ -165,6 +166,7 @@ export function useNpps() {
         recordOperationalError('runtime', cacheError);
       } finally {
         if (!disposed) {
+          setLoading(false);
           void fetchNpps();
         }
       }

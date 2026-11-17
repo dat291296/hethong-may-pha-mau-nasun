@@ -25,7 +25,14 @@ export function isTransientMutationError(error) {
 
 export async function persistMutation({ online, write, queue }) {
   if (online) {
-    const { data, error } = await write();
+    let response;
+    try {
+      response = await write();
+    } catch (error) {
+      if (!isTransientMutationError(error)) throw error;
+      response = { error };
+    }
+    const { data, error } = response;
     if (!error) {
       if (Array.isArray(data) && data.length === 0) {
         throw Object.assign(new Error('Không có quyền ghi hoặc bản ghi không còn tồn tại.'), { code: 'PERSISTENCE_DENIED' });

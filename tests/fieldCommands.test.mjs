@@ -89,3 +89,59 @@ test('outbox byte budget rejects a new photo-heavy intent without discarding old
  const stage=createFieldOutbox({owner:()=>base.owner,loadQueue:async()=>[original],loadReceipt:async()=>null,saveQueue:async()=>{writes++;return true;},maxBytes:100});
  await assert.rejects(stage(command),{code:'OFFLINE_DOCUMENT_FULL'});assert.equal(writes,0);assert.equal(original.payload.notes,'Legacy entry retained');
 });
+
+import { readFile } from 'node:fs/promises';
+import { ONLINE_FIELD_KINDS, fieldError } from '../src/modules/fieldwork/lib/fieldCommands.js';
+
+test('field notes return after durable staging even while online replay is stalled', async () => {
+  const queue = [];
+  let release, transportStarted = false;
+  const stalled = new Promise(resolve => { release = resolve; });
+  const dependencies = {
+    makeFieldCommand, createFieldOutbox, requireFieldReceipt, fieldError, ONLINE_FIELD_KINDS,
+    getOfflineOwner: () => base.owner,
+    getQueue: async () => queue,
+    addToQueue: async item => { queue.push(item); return true; },
+    getCacheStrict: async () => null,
+    withOfflineLease: async (_key, action) => ({ acquired: true, value: await action() }),
+    window: { dispatchEvent() {} }, Event,
+    navigator: { onLine: true },
+    loadSync: async () => ({ syncOfflineQueue: () => { transportStarted = true; return stalled; } }),
+    console,
+  };
+  const source = (await readFile(new URL('../src/modules/fieldwork/lib/fieldCommandClient.js', import.meta.url), 'utf8'))
+    .replace(/^import .*;\r?\n/gm, '').replaceAll('export async function', 'async function')
+    .replaceAll("import('../../../shared/sync/offlineSync.js')", 'loadSync()');
+  const submit = new Function(...Object.keys(dependencies), source + '\nreturn submitFieldCommand;')(...Object.values(dependencies));
+  let timeout;
+  try {
+    const result = await Promise.race([submit(base), new Promise((_, reject) => { timeout = setTimeout(() => reject(Error('form blocked on network')), 500); })]);
+    assert.equal(result.queued, true);
+    assert.equal(queue.length, 1);
+    assert.equal(transportStarted, true);
+    assert.equal(queue[0].payload.payload.notes, base.payload.notes);
+  } finally { clearTimeout(timeout); release(false); }
+});
+
+test('check-in audit publishing waits for durable storage and stops on quota failure', async () => {
+  const source = (await readFile(new URL('../src/modules/audit/hooks/useAuditLogs.js', import.meta.url), 'utf8'))
+    .replace(/^import .*;\r?\n/gm, '').replaceAll('export function', 'function');
+  let published = [], finish, rejectStorage;
+  const dependencies = {
+    useState: initial => [typeof initial === 'function' ? initial() : initial, update => { if (typeof update === 'function') published = update(published); }],
+    useEffect() {}, useCallback: fn => fn, INITIAL_AUDIT_LOGS: [],
+    getOfflineOwner: () => 'A', isSupabaseConfigured: true, crypto,
+    enqueueOfflineAction: (action, payload) => { assert.equal(action, 'ADD_AUDIT_LOG'); assert.ok(payload.id); return new Promise((resolve, reject) => { finish = resolve; rejectStorage = reject; }); },
+    cacheOfflineData: async () => true,
+  };
+  const hook = new Function(...Object.keys(dependencies), source + '\nreturn useAuditLogs();')(...Object.values(dependencies));
+  const saved = hook.addAuditLog({ type: 'CHECK-IN', nppId: 'A' });
+  assert.equal(published.length, 0);
+  finish();
+  assert.equal((await saved).queued, true);
+  assert.equal(published.length, 1);
+  const failed = hook.addAuditLog({ type: 'CHECK-IN', nppId: 'B' });
+  rejectStorage(Error('QUOTA_EXCEEDED'));
+  await assert.rejects(failed, /QUOTA_EXCEEDED/);
+  assert.equal(published.length, 1);
+});

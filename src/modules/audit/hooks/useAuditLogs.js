@@ -50,26 +50,29 @@ function persistAuditLogs(logs) {
 export function useAuditLogs({ enabled = true } = {}) {
   const [auditLogs, setAuditLogs] = useState(getInitialAuditLogs);
   const [loading, setLoading] = useState(false);
+  const [cacheHydrated, setCacheHydrated] = useState(false);
 
   // Hydrate cache from IndexedDB on mount if localStorage is empty
   useEffect(() => {
+    let disposed = false;
+    const owner = getOfflineOwner();
     async function loadCached() {
-      if (navigator.onLine) return;
-      const cached = await getCachedOfflineData('audit_logs', null);
-      if (cached && cached.length > 0) {
-        const cleaned = sanitizeAndRenumberAuditLogs(cached);
-        setAuditLogs(cleaned);
-        persistAuditLogs(cleaned);
-      } else {
-        persistAuditLogs(INITIAL_AUDIT_LOGS);
+      try {
+        const cached = await getCachedOfflineData('audit_logs', null);
+        if (!disposed && owner === getOfflineOwner() && Array.isArray(cached)) setAuditLogs(sanitizeAndRenumberAuditLogs(cached));
+      } catch {
+        console.warn('[fetchAuditLogs] Local snapshot unavailable.');
+      } finally {
+        if (!disposed && owner === getOfflineOwner()) setCacheHydrated(true);
       }
     }
-    loadCached();
+    void loadCached();
+    return () => { disposed = true; };
   }, []);
 
   const fetchAuditLogs = useCallback(async () => {
     const requestOwner = getOfflineOwner();
-    if (!isSupabaseConfigured) return;
+    if (!isSupabaseConfigured || !navigator.onLine) return false;
     setLoading(true);
     const { data, error } = await fetchAllRows(
       sb => sb.from('audit_logs').select('id,type,timestamp,set_code,npp_id,npp_name,serial_list,technician,reason,notes,severity').order('timestamp', { ascending: false }).order('id'),
@@ -94,45 +97,24 @@ export function useAuditLogs({ enabled = true } = {}) {
   }, []);
 
   useEffect(() => {
-    if (enabled) fetchAuditLogs();
-  }, [enabled, fetchAuditLogs]);
+    if (cacheHydrated && enabled) fetchAuditLogs();
+  }, [cacheHydrated, enabled, fetchAuditLogs]);
 
   const addAuditLog = useCallback(async (logData) => {
-    const timestamp = logData.timestamp || new Date().toISOString().replace('T', ' ').substring(0, 16);
-    const stableId = logData.id || `AUDIT-${Date.now()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
-    let finalLog = null;
-
-    // Update local state immediately while preserving a stable database ID.
-    setAuditLogs(prev => {
-      const newLog = {
-        ...logData,
-        id: stableId,
-        timestamp
-      };
-      const combined = [newLog, ...prev];
-      combined.sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
-      finalLog = newLog;
-      persistAuditLogs(combined);
-      return combined;
+    const owner = getOfflineOwner();
+    const timestamp = logData.timestamp || new Date().toISOString();
+    const stableId = logData.id || 'AUDIT-' + crypto.randomUUID();
+    const entry = { ...logData, id: stableId, timestamp };
+    // A check-in is acknowledged locally only after its durable outbox commit.
+    if (isSupabaseConfigured) await enqueueOfflineAction('ADD_AUDIT_LOG', mapAuditToDb(entry));
+    if (owner !== getOfflineOwner()) throw Object.assign(new Error('OFFLINE_OWNER_CHANGED'), { code: 'OFFLINE_OWNER_CHANGED' });
+    setAuditLogs(previous => {
+      const next = sanitizeAndRenumberAuditLogs([entry, ...previous.filter(item => item.id !== stableId)]);
+      persistAuditLogs(next);
+      return next;
     });
-
-    const dbPayload = mapAuditToDb(finalLog || { ...logData, timestamp, id: stableId });
-
-    if (isSupabaseConfigured && navigator.onLine) {
-      try {
-        await createAuditLogRpc(dbPayload);
-        await fetchAuditLogs();
-      } catch (err) {
-        console.warn('[Offline] Failed online addAuditLog. Queueing.', err);
-        enqueueOfflineAction('ADD_AUDIT_LOG', dbPayload);
-      }
-    } else if (isSupabaseConfigured && !navigator.onLine) {
-      console.log('[Offline] Network down. Enqueueing addAuditLog.');
-      enqueueOfflineAction('ADD_AUDIT_LOG', dbPayload);
-    }
-
-    return finalLog || { ...logData, timestamp };
-  }, [fetchAuditLogs]);
+    return { ...entry, queued: isSupabaseConfigured };
+  }, []);
 
   const editAuditLog = useCallback(async () => { throw new Error('Nhật ký tác nghiệp chỉ đọc, không được sửa.'); }, []);
   const deleteAuditLog = useCallback(async () => { throw new Error('Nhật ký tác nghiệp chỉ đọc, không được xóa.'); }, []);

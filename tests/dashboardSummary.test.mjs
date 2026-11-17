@@ -40,3 +40,36 @@ test('dashboard counts only operational equipment and excludes devices assigned 
 
   assert.equal(countOperationalDevices(devices, sets, npps), 2);
 });
+
+import { dashboardRecordDate, dashboardPeriod, filterDashboardRecords, devicesForDashboardPeriod } from '../src/modules/dashboard/lib/dashboardSummary.js';
+
+test('dashboard calendar handles leap months and Vietnam midnight boundaries', () => {
+  assert.equal(dashboardPeriod('MONTH', '2024-02').end, '2024-02-29');
+  assert.equal(dashboardPeriod('MONTH', '2025-02').end, '2025-02-28');
+  assert.equal(dashboardPeriod('YEAR', '2026').end, '2026-12-31');
+  assert.equal(dashboardRecordDate('2026-11-15T17:00:00Z'), '2026-11-16');
+  assert.equal(dashboardRecordDate('2026-11-15T16:59:59Z'), '2026-11-15');
+  assert.equal(dashboardRecordDate('16/11/2026'), '2026-11-16');
+  assert.equal(dashboardPeriod('DAY', '2026-02-30').valid, false);
+  assert.equal(dashboardPeriod('YEAR', '').valid, false);
+  assert.equal(dashboardPeriod('MONTH', '2026-13').valid, false);
+});
+
+test('installation filters exclude undated machines and include both period boundaries', () => {
+  const rows = [
+    { id: 'start', installedDate: '2026-11-01' },
+    { id: 'end', installedDate: '2026-11-30' },
+    { id: 'before', installedDate: '2026-10-31' },
+    { id: 'after', installedDate: '2026-12-01' },
+    { id: 'undated', createdAt: '2026-11-16' },
+  ];
+  assert.deepEqual(filterDashboardRecords(rows, ['installedDate'], dashboardPeriod('MONTH', '2026-11')).map(row => row.id), ['start', 'end']);
+  assert.equal(filterDashboardRecords(rows, ['installedDate'], dashboardPeriod('ALL')), rows);
+  assert.deepEqual(filterDashboardRecords(rows, ['installedDate'], dashboardPeriod('DAY', '')), []);
+  assert.equal(filterDashboardRecords(rows, ['installedDate'], dashboardPeriod('YEAR', '2026')).length, 4);
+});
+
+test('device totals in a period include only equipment linked to matching installed sets', () => {
+  const devices = [{ id: 'linked', setCode: 'A' }, { id: 'by-id' }, { id: 'other', setCode: 'B' }, { id: 'loose' }];
+  assert.deepEqual(devicesForDashboardPeriod(devices, [{ setCode: 'A', dispenserId: 'by-id' }], 'dispenser').map(row => row.id), ['linked', 'by-id']);
+});

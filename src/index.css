@@ -2048,3 +2048,46 @@ main.page-transition .nppmanagement-screen .npp-card-withdrawn { border-top-colo
   color: #ecfdf5;
   box-shadow: 0 8px 24px #0004;
 }
+/* Compact dashboard period controls. */
+.dashboard-screen .dashboard-period { padding: 20px 24px; border-top: 2px solid var(--accent-cyan); }
+.dashboard-period-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+.dashboard-period-heading h2 { display: flex; align-items: center; gap: 9px; margin: 0; font-size: 1rem; font-weight: 700; color: var(--text-main); }
+.dashboard-period-heading h2 svg { color: var(--accent-cyan); }
+.dashboard-period-caption { color: var(--text-muted); font-size: .8125rem; }
+.dashboard-period-controls { display: flex; align-items: flex-end; gap: 20px; flex-wrap: wrap; }
+.dashboard-period-segments { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); padding: 4px; gap: 4px; border: 1px solid var(--border-color); border-radius: 12px; background: rgba(2,6,23,.24); min-width: 280px; }
+.dashboard-period-segments button { min-height: 44px; padding: 8px 20px; border: 1px solid transparent; border-radius: 8px; color: var(--text-muted); background: transparent; font: inherit; font-size: .875rem; font-weight: 600; cursor: pointer; transition: background .15s, color .15s; }
+.dashboard-period-segments button:hover { color: var(--text-main); background: rgba(56,189,248,.08); }
+.dashboard-period-segments button[aria-pressed="true"] { color: var(--text-main); background: rgba(6,182,212,.19); border-color: rgba(6,182,212,.42); box-shadow: inset 0 1px 0 rgba(255,255,255,.04); }
+.dashboard-period-selection { display: flex; align-items: flex-end; gap: 12px; flex: 1; max-width: 400px; min-width: 0; }
+.dashboard-period-field { display: grid; gap: 5px; flex: 1; min-width: 0; }
+.dashboard-period-field > span { font-size: .75rem; color: var(--text-muted); }
+.dashboard-period-field .form-input { min-height: 46px; width: 100%; min-width: 0; box-sizing: border-box; font-size: .9375rem; color-scheme: dark; }
+.dashboard-period-current { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 46px; padding: 6px 10px; flex-shrink: 0; border: 0; border-radius: 8px; background: transparent; color: var(--accent-cyan); font: inherit; font-size: .8125rem; font-weight: 600; cursor: pointer; }
+.dashboard-period-current:hover { background: rgba(6,182,212,.08); }
+.dashboard-period-segments button:focus-visible, .dashboard-period-current:focus-visible, .dashboard-period-help summary:focus-visible { outline: 2px solid var(--accent-cyan); outline-offset: 3px; }
+.dashboard-period-footer { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; border-top: 1px solid var(--border-color); margin-top: 16px; padding-top: 10px; }
+.dashboard-period-results { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; flex: 1; font-size: .8125rem; color: var(--text-muted); }
+.dashboard-period-results strong { color: var(--text-main); font-weight: 700; }
+.dashboard-period-undated { font-size: .75rem; color: #fbbf24; }
+.dashboard-period-help { font-size: .8125rem; }
+.dashboard-period-help summary { display: flex; align-items: center; gap: 6px; min-height: 44px; cursor: pointer; color: var(--text-muted); list-style: none; }
+.dashboard-period-help summary::-webkit-details-marker { display: none; }
+.dashboard-period-help summary::after { content: '+'; color: var(--accent-cyan); }
+.dashboard-period-help[open] { flex: 1 0 100%; }
+.dashboard-period-help[open] summary::after { content: '−'; }
+.dashboard-period-help p { color: var(--text-muted); line-height: 1.6; margin: 0 0 6px; max-width: 800px; }
+.dashboard-period-error { font-size: .875rem; color: #fca5a5; margin: 10px 0 0; }
+@media (max-width: 600px) {
+  .dashboard-screen .dashboard-period { padding: 16px; }
+  .dashboard-period-heading { margin-bottom: 12px; gap: 6px; }
+  .dashboard-period-caption { font-size: .75rem; }
+  .dashboard-period-controls { gap: 12px; }
+  .dashboard-period-segments { width: 100%; min-width: 0; }
+  .dashboard-period-segments button { padding: 8px 6px; }
+  .dashboard-period-selection { flex-basis: 100%; max-width: none; }
+  .dashboard-period-field .form-input { font-size: 16px; }
+  .dashboard-period-footer { margin-top: 12px; padding-top: 6px; gap: 4px 10px; }
+  .dashboard-period-undated { flex-basis: 100%; }
+}
+@media (prefers-reduced-motion: reduce) { .dashboard-period-segments button { transition: none; } }

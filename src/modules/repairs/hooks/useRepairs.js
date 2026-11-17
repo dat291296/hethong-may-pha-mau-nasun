@@ -36,6 +36,7 @@ export function useRepairs({ enabled = true } = {}) {
   const [loadError,setLoadError]=useState('');
   const [hasRepairSnapshot, setHasRepairSnapshot] = useState(false);
   const [cacheHydrated,setCacheHydrated]=useState(false);
+  const hasSnapshot = useRef(false);
   const fetchVersion = useRef(0);
   const stateRef = useRef(null);
   if (!stateRef.current) stateRef.current = createRepairState({
@@ -67,7 +68,7 @@ export function useRepairs({ enabled = true } = {}) {
     async function loadCached() {
       try {
         const cached = await getCachedOfflineData('repair_tickets', null);
-        if (!disposed && Array.isArray(cached) && await repairState.acceptRead(token, cached, false) && !disposed) setHasRepairSnapshot(true);
+        if (!disposed && Array.isArray(cached) && await repairState.acceptRead(token, cached, false) && !disposed) { hasSnapshot.current = true; setHasRepairSnapshot(true); }
       } catch (error) { recordOperationalError('runtime', error); }
       finally { if (!disposed) setCacheHydrated(true); }
     }
@@ -80,7 +81,7 @@ export function useRepairs({ enabled = true } = {}) {
     const version = ++fetchVersion.current;
     const token = repairState.captureRead();
     const requestOwner = token.owner;
-    setLoading(true);setLoadError('');
+    setLoading(!hasSnapshot.current);setLoadError('');
     try {
       await repairState.flush();
       if (!repairState.canCommit(token)) return false;
@@ -100,10 +101,12 @@ export function useRepairs({ enabled = true } = {}) {
       if(error)throw error;
       if(!Array.isArray(data))throw Error('INCOMPLETE_REPAIR_RESPONSE');
       const previous = new Map(repairState.read().map(ticket => [ticket.id, ticket]));
-      return await repairState.acceptRead(token, data.map(row => {
+      const accepted = await repairState.acceptRead(token, data.map(row => {
         const ticket = mapDbToRepair(row);
         return details ? ticket : mergeRepairSummary(ticket, previous.get(ticket.id));
       }));
+      if (accepted) hasSnapshot.current = true;
+      return accepted;
     } catch(error) {
       recordOperationalError('runtime',error);
       if(repairState.canCommit(token)){

@@ -15,11 +15,14 @@ test('invalid and nationwide non-admin scopes are never granted offline',()=>{
  for(const role of ['manager','technician','qc','viewer','unknown'])assert.throws(()=>createOfflineAccessGrant({...user,role,managedRegion:'Toàn Quốc'}));
  assert.equal(createOfflineAccessGrant({...user,role:'admin',managedRegion:'Toàn Quốc'}).role,'admin');
 });
-test('offline grant never outlives known server session or trusted device deadlines',()=>{
+test('seven-day local lease is independent of online session expiry and bounded by device trust',()=>{
  const grant=createOfflineAccessGrant(user,1000,{trusted_until:new Date(5000).toISOString(),session_expires_at:new Date(9000).toISOString()});
  assert.equal(grant.expiresAt,5000);assert.equal(offlineAccessDecision(grant,user,5000).allowed,false);
  assert.throws(()=>createOfflineAccessGrant(user,1000,{trusted_until:'invalid'}));
- assert.throws(()=>createOfflineAccessGrant(user,1000,{session_expires_at:new Date(1000).toISOString()}));
+ const local=createOfflineAccessGrant(user,1000,{session_expires_at:new Date(2000).toISOString(),idle_expires_at:new Date(1500).toISOString()});
+ assert.equal(MAX_OFFLINE_READ_MS,7*24*60*60*1000);
+ assert.equal(offlineAccessDecision(local,user,1000+6*24*60*60*1000).allowed,true);
+ assert.equal(offlineAccessDecision(local,user,1000+7*24*60*60*1000).allowed,false);
 });
 test('server replay identity and active role/region must be complete and current',()=>{
  const state={user_id:'A',role:'technician',managed_region:'Miền Bắc',profile_found:true,is_active:true};

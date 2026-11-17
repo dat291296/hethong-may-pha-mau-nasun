@@ -47,11 +47,14 @@ export function useStaleWhileRevalidate({ cacheKey, fetcher, initialData = null,
       try {
         const cached = await readIdbCache(cacheKey, { allowExpired: true });
         if (disposed || generation !== generationRef.current || owner !== getOfflineOwner()) return;
-        if (cached) setData(cached.data);
+        if (cached) {
+          setData(cached.data);
+          setLoading(false);
+        }
       } catch (cacheError) {
         if (!disposed && generation === generationRef.current) console.warn('[useStaleWhileRevalidate] Cache read failed.');
       }
-      if (!disposed && generation === generationRef.current) await revalidate({ signal: controller.signal });
+      if (!disposed && generation === generationRef.current && navigator.onLine) await revalidate({ signal: controller.signal });
     }
     void hydrateThenRefresh().finally(() => {
       if (!disposed && generation === generationRef.current) setLoading(false);

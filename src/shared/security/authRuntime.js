@@ -42,6 +42,19 @@ export const secureAuthStorage = Object.freeze({
   },
 });
 
+// This identifies a previously signed-in account only; the encrypted offline grant
+// must separately authorize local access. Never use this for server authorization.
+export async function readStoredAuthUser(storage = secureAuthStorage) {
+  try {
+    const session = JSON.parse(await storage.getItem('paint-tinting-auth'));
+    return typeof session?.user?.id === 'string' && session.user.id
+      && typeof session.refresh_token === 'string' && session.refresh_token
+      ? { id: session.user.id } : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function getAuthRedirectUrl(purpose = AUTH_REDIRECT_PURPOSES.LOGIN) {
   if (!Object.values(AUTH_REDIRECT_PURPOSES).includes(purpose)) {
     throw new Error('INVALID_AUTH_REDIRECT_PURPOSE');

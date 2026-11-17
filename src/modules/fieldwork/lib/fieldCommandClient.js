@@ -1,6 +1,6 @@
 import {supabase} from '../../../shared/data-access/supabase.js';
 import {getOfflineOwner,getQueue,addToQueue,getCacheStrict,setCache,withOfflineLease} from '../../../shared/sync/offlineDb.js';
-import {makeFieldCommand,createFieldOutbox,requireFieldReceipt,fieldError} from './fieldCommands.js';
+import {makeFieldCommand,createFieldOutbox,requireFieldReceipt,fieldError,ONLINE_FIELD_KINDS} from './fieldCommands.js';
 
 const receiptKey=id=>`field-receipt:${id}`;
 export async function replayFieldCommand(command,assertOwner) {
@@ -29,6 +29,13 @@ export async function submitFieldCommand(input,options={}) {
   if(!locked.acquired)throw fieldError('SYNC_LEASE_LOST');
   const result=locked.value;
   if(!result.queued||!navigator.onLine)return result;
+  if (!ONLINE_FIELD_KINDS.includes(command.kind)) {
+    // Field notes and evidence are already durable. Network replay must not block the form.
+    void import('../../../shared/sync/offlineSync.js').then(({syncOfflineQueue}) => {
+      if (owner === getOfflineOwner() && navigator.onLine) return syncOfflineQueue();
+    }).catch(() => console.warn('[Field] Background sync deferred; queued work remains on this device.'));
+    return result;
+  }
   const {syncOfflineQueue}=await import('../../../shared/sync/offlineSync.js');
   await syncOfflineQueue();assertOwner();
   const receipt=await getCacheStrict(receiptKey(command.operationId));assertOwner();

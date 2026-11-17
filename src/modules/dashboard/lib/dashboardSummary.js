@@ -1,4 +1,5 @@
 import { normalizeRegion } from '../../fieldwork/lib/teamWorkspace.js';
+import { getVietnamDate, normalizeCalendarDate } from '../../../shared/utils/dateUtils.js';
 
 export function summarizeDashboard(systemSets, npps, today) {
   const distributors = new Map(npps.map(npp => [npp.id, npp]));
@@ -39,4 +40,55 @@ export function listOperationalDevices(devices = [], systemSets = [], npps = [])
 
 export function countOperationalDevices(devices, systemSets, npps) {
   return listOperationalDevices(devices, systemSets, npps).length;
+}
+
+export function dashboardRecordDate(value) {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  const text = value.trim();
+  try {
+    if (/^\d{4}-\d{2}-\d{2}[T ]/.test(text)) {
+      normalizeCalendarDate(text.slice(0, 10));
+      if (/(Z|[+-]\d{2}:?\d{2})$/i.test(text)) {
+        const instant = new Date(text);
+        return Number.isFinite(instant.getTime()) ? getVietnamDate(instant) : null;
+      }
+      return text.slice(0, 10);
+    }
+    return normalizeCalendarDate(text);
+  } catch { return null; }
+}
+
+export function dashboardPeriod(mode, value) {
+  if (mode === 'ALL') return { valid: true, active: false, label: 'Tất cả thời gian' };
+  const invalid = { valid: false, active: true, label: 'Chọn thời gian hợp lệ' };
+  const text = String(value || '');
+  if (mode === 'DAY') {
+    const day = dashboardRecordDate(text);
+    return day && /^\d{4}-\d{2}-\d{2}$/.test(text) ? { valid: true, active: true, start: day, end: day, label: 'Ngày ' + day.split('-').reverse().join('/') } : invalid;
+  }
+  if (mode === 'MONTH' && /^\d{4}-(0[1-9]|1[0-2])$/.test(text)) {
+    const start = text + '-01';
+    if (!dashboardRecordDate(start)) return invalid;
+    const [year, month] = text.split('-').map(Number);
+    const endDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    return { valid: true, active: true, start, end: text + '-' + endDay, label: 'Tháng ' + text.slice(5) + '/' + text.slice(0, 4) };
+  }
+  if (mode === 'YEAR' && /^[1-9]\d{3}$/.test(text)) return { valid: true, active: true, start: text + '-01-01', end: text + '-12-31', label: 'Năm ' + text };
+  return invalid;
+}
+
+export function filterDashboardRecords(rows, fields, period) {
+  if (!period.active) return rows;
+  if (!period.valid) return [];
+  return rows.filter(row => {
+    const value = fields.map(field => row[field]).find(value => value != null && String(value).trim() !== '');
+    const day = dashboardRecordDate(value);
+    return day && day >= period.start && day <= period.end;
+  });
+}
+
+export function devicesForDashboardPeriod(devices, sets, category) {
+  const codes = new Set(sets.map(set => set.setCode).filter(Boolean));
+  const ids = new Set(sets.map(set => set[category + 'Id']).filter(Boolean));
+  return devices.filter(device => ids.has(device.id) || codes.has(device.setCode));
 }

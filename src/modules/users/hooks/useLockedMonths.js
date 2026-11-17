@@ -13,24 +13,31 @@ export function useLockedMonths() {
   const { user } = useAuth();
   const [lockedMonths, setLockedMonths] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [cacheHydrated, setCacheHydrated] = useState(false);
   const [error, setError] = useState(null);
 
   // Load cache on mount
   useEffect(() => {
+    let disposed = false;
+    const owner = getOfflineOwner();
     async function loadCached() {
-      if (navigator.onLine) return;
-      const cached = await getCachedOfflineData('locked_months', null);
-      if (cached && cached.length > 0) {
-        setLockedMonths(cached);
+      try {
+        const cached = await getCachedOfflineData('locked_months', null);
+        if (!disposed && owner === getOfflineOwner() && Array.isArray(cached)) setLockedMonths(cached);
+      } catch {
+        console.warn('[fetchLockedMonths] Local snapshot unavailable.');
+      } finally {
+        if (!disposed && owner === getOfflineOwner()) setCacheHydrated(true);
       }
     }
-    loadCached();
+    void loadCached();
+    return () => { disposed = true; };
   }, []);
 
   // Fetch locked months from Supabase
   const fetchLockedMonths = useCallback(async () => {
     const requestOwner = getOfflineOwner();
-    if (!isSupabaseConfigured) return;
+    if (!isSupabaseConfigured || !navigator.onLine) return false;
     setLoading(true);
     setError(null);
     const { data, error: err } = await fetchAllRows(
@@ -52,8 +59,8 @@ export function useLockedMonths() {
   }, []);
 
   useEffect(() => {
-    fetchLockedMonths();
-  }, [fetchLockedMonths]);
+    if (cacheHydrated) fetchLockedMonths();
+  }, [cacheHydrated, fetchLockedMonths]);
 
   useEffect(() => {
     window.addEventListener('nasun-locked-months-changed', fetchLockedMonths);
