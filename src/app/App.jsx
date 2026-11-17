@@ -853,11 +853,15 @@ function AppWorkspace() {
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
     const previousOverscrollBehavior = document.body.style.overscrollBehavior;
-    if (isMobileSidebarOpen) {
-      document.body.style.overflow = 'hidden';
-      document.body.style.overscrollBehavior = 'none';
-    }
+    const mobile = matchMedia('(max-width: 768px), (orientation: landscape) and (max-height: 600px) and (max-width: 1024px)');
+    const update = () => {
+      document.body.style.overflow = isMobileSidebarOpen && mobile.matches ? 'hidden' : previousOverflow;
+      document.body.style.overscrollBehavior = isMobileSidebarOpen && mobile.matches ? 'none' : previousOverscrollBehavior;
+    };
+    update();
+    mobile.addEventListener('change', update);
     return () => {
+      mobile.removeEventListener('change', update);
       document.body.style.overflow = previousOverflow;
       document.body.style.overscrollBehavior = previousOverscrollBehavior;
     };
@@ -945,6 +949,7 @@ function AppWorkspace() {
           maintenanceAlerts={scopedMaintenanceAlerts}
           unstabilizedAlerts={scopedUnstabilizedAlerts}
           onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
+          isMobileSidebarOpen={isMobileSidebarOpen}
           npps={regionalData.npps}
           dispensers={regionalData.dispensers}
           mixers={regionalData.mixers}
@@ -1208,6 +1213,7 @@ function AppWorkspace() {
         pendingRepairCount={scopedPendingRepairCount}
         onOpenQrScan={() => { setQrScanError(''); setShowQrScanner(true); }}
         onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
+        isMobileSidebarOpen={isMobileSidebarOpen}
       />
       <PwaInstallPrompt />
       <NotificationPermissionPrompt />
