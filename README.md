@@ -97,6 +97,8 @@ Bản nháp phiếu được lưu theo tài khoản trên thiết bị đang s�
 4. Chạy `npm run dev` và mở địa chỉ được terminal hiển thị.
 5. Trước khi phát hành, chạy `npm run test:all`, `npm run lint` và `npm run build`.
 
+Hướng dẫn chi tiết cho các thay đổi giao diện trên desktop, mobile portrait và mobile landscape nằm trong [Mobile Responsive Guidelines](docs/mobile-responsive-guidelines.md).
+
 Production cần cấu hình riêng cho Supabase, email, Cloudflare và GitHub Actions. Không dùng dữ liệu thật để tạo bộ dữ liệu kiểm thử công khai.
 
 ## 10. Kiểm thử và phát hành
