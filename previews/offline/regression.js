@@ -83,7 +83,8 @@ async function inspectCurrent() {
   const profile={id:owner,role:'technician',managedRegion:'Miền Bắc'};
   const now=Date.now();const grant=createOfflineAccessGrant(profile,now,{session_expires_at:new Date(now+60000).toISOString()});
   verify('stage3OfflineReadScopeValid',offlineAccessDecision(grant,profile,now+1).allowed);
-  verify('stage3ExpiredOrForeignGrantRejected',!offlineAccessDecision(grant,profile,now+60000).allowed&&!offlineAccessDecision(grant,{...profile,id:'foreign'},now+1).allowed);
+  verify('stage3OfflineAccessSurvivesOnlineSessionExpiry',offlineAccessDecision(grant,profile,now+60000).allowed);
+  verify('stage3ExpiredOrForeignGrantRejected',!offlineAccessDecision(grant,profile,now+7*24*60*60*1000).allowed&&!offlineAccessDecision(grant,{...profile,id:'foreign'},now+1).allowed);
   let downgradeRejected=false;try{requireOfflineReplayPermission({...profile,role:'viewer'},{action:'EDIT_NPP',ownerId:owner,payload:{region:'Miền Bắc'}});}catch{downgradeRejected=true;}
   verify('stage3DowngradeStopsReplayWithoutDroppingQueue',downgradeRejected&&(await storage.getQueue()).length===1);
   let wrongRegionRejected=false;try{requireOfflineReplayPermission(profile,{action:'EDIT_NPP',ownerId:owner,payload:{region:'Miền Nam'}});}catch{wrongRegionRejected=true;}
