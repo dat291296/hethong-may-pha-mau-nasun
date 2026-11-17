@@ -20,6 +20,7 @@ export default function Header({
   maintenanceAlerts: allMaintenanceAlerts = [],
   unstabilizedAlerts: allUnstabilizedAlerts = [],
   onOpenMobileSidebar,
+  isMobileSidebarOpen = false,
   npps = [],
   dispensers = [],
   mixers = [],
@@ -50,6 +51,15 @@ export default function Header({
   };
   const [showSearchResults, setShowSearchResults] = useState(false);
   const utilityRef = useRef(null);
+  const headerRef = useRef(null);
+  useEffect(() => {
+    const header = headerRef.current;
+    const measure = () => header.style.setProperty('--mobile-popover-top', `${header.getBoundingClientRect().height + 8}px`);
+    const observer = new ResizeObserver(measure);
+    observer.observe(header);
+    measure();
+    return () => observer.disconnect();
+  }, []);
   const { role, user, isDevMode } = useAuth();
   
   // Connection and sync states
@@ -187,7 +197,7 @@ export default function Header({
   }, []);
 
   return (
-    <header className="no-print main-header">
+    <header ref={headerRef} className="no-print main-header">
       {/* Title */}
       <div className="header-title-wrapper">
         <div className="header-title-inner">
@@ -195,6 +205,9 @@ export default function Header({
             onClick={onOpenMobileSidebar}
             className="header-menu-toggle-btn"
             title="Mở menu quản lý"
+            aria-label="Mở menu quản lý"
+            aria-expanded={isMobileSidebarOpen}
+            aria-controls="nasun-sidebar"
           >
             <Menu size={20} />
           </button>
@@ -308,7 +321,7 @@ export default function Header({
         )}
 
         {/* Notifications Dropdown */}
-        <div style={{ position: 'relative' }}>
+        <div className="header-notification-anchor" style={{ position: 'relative' }}>
           <button
             onClick={() => setShowNotifications(!showNotifications)}
             className="header-notify-btn"
@@ -353,7 +366,7 @@ export default function Header({
             }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px' }}>
                 <span style={{ fontWeight: '700', fontSize: '0.9rem' }}>Thông Báo Hệ Thống ({totalAlertsCount})</span>
-                <span style={{ fontSize: '0.75rem', color: 'var(--accent-cyan)', cursor: 'pointer' }} onClick={() => setShowNotifications(false)}>Đóng</span>
+                <button type="button" className="notification-close" style={{ fontSize: '0.75rem', color: 'var(--accent-cyan)', cursor: 'pointer', border: 0, background: 'none', padding: 0, fontFamily: 'inherit' }} onClick={() => setShowNotifications(false)}>Đóng</button>
               </div>
 
               {totalAlertsCount === 0 ? (

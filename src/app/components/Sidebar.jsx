@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   LayoutDashboard, 
   Building2, 
@@ -23,6 +23,40 @@ import { confirmAction } from '../../shared/utils/confirmDialog.js';
 
 export default function Sidebar({ activeTab, setActiveTab, maintenanceCount, pendingRepairCount, isOpen, onClose }) {
   const { role, signOut } = useAuth();
+  const sidebarRef = useRef(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  useEffect(() => {
+    const query = matchMedia('(max-width: 768px), (orientation: landscape) and (max-height: 600px) and (max-width: 1024px)');
+    const sidebar = sidebarRef.current;
+    const previousFocus = document.activeElement;
+    const update = () => {
+      sidebar.inert = query.matches && !isOpen;
+      if (query.matches && isOpen) {
+        sidebar.setAttribute('role', 'dialog');
+        sidebar.setAttribute('aria-modal', 'true');
+        sidebar.querySelector('.sidebar-close-btn')?.focus();
+      } else {
+        sidebar.removeAttribute('role');
+        sidebar.removeAttribute('aria-modal');
+      }
+    };
+    const onKey = event => {
+      if (!query.matches || !isOpen) return;
+      if (event.key === 'Escape') { event.preventDefault(); closeRef.current?.(); }
+      if (event.key !== 'Tab') return;
+      const controls = [...sidebar.querySelectorAll('button:not(:disabled), a[href], [tabindex="0"]')].filter(element => element.getClientRects().length);
+      const first = controls[0], last = controls.at(-1);
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    };
+    update(); query.addEventListener('change', update); window.addEventListener('keydown', onKey);
+    return () => {
+      query.removeEventListener('change', update); window.removeEventListener('keydown', onKey);
+      sidebar.inert = false;
+      if (isOpen && query.matches && previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus();
+    };
+  }, [isOpen]);
 
   const [expandedGroups, setExpandedGroups] = useState({
     partner_assets: true,
@@ -95,7 +129,7 @@ export default function Sidebar({ activeTab, setActiveTab, maintenanceCount, pen
   };
 
   return (
-    <aside 
+    <aside ref={sidebarRef} id="nasun-sidebar" aria-label="Menu quản lý"
       className={`desktop-sidebar no-print ${isOpen ? 'mobile-open' : ''}`}
       style={{
         width: '270px',
@@ -156,6 +190,7 @@ export default function Sidebar({ activeTab, setActiveTab, maintenanceCount, pen
           <button 
             onClick={onClose}
             className="sidebar-close-btn"
+            aria-label="Đóng menu quản lý"
             style={{
               background: 'none',
               border: 'none',
@@ -176,6 +211,7 @@ export default function Sidebar({ activeTab, setActiveTab, maintenanceCount, pen
 
       {/* Custom styles for interactive animations */}
       <style>{`
+        .sidebar-mobile-account { display: none; }
         .sidebar-menu-btn {
           transition: all 0.2s cubic-bezier(0.23, 1, 0.32, 1);
         }
@@ -351,6 +387,9 @@ export default function Sidebar({ activeTab, setActiveTab, maintenanceCount, pen
             </div>
           );
         })}
+        <button type="button" className="sidebar-mobile-account sidebar-menu-btn" aria-current={activeTab === 'profile' ? 'page' : undefined} onClick={() => { setActiveTab('profile'); onClose?.(); }}>
+          <UserCheck size={20} aria-hidden="true" /> Tài khoản của tôi
+        </button>
       </nav>
 
       {/* Logout button */}
