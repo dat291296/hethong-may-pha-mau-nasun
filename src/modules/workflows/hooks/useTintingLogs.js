@@ -8,22 +8,29 @@ import { cacheOfflineData, getCachedOfflineData } from '../../../shared/sync/off
 export function useTintingLogs({ enabled = true } = {}) {
   const [tintingLogs, setTintingLogs] = useState(INITIAL_TINTING_LOGS);
   const [loading, setLoading] = useState(false);
+  const [cacheHydrated, setCacheHydrated] = useState(false);
 
   // Hydrate cache from IndexedDB on mount
   useEffect(() => {
+    let disposed = false;
+    const owner = getOfflineOwner();
     async function loadCached() {
-      if (navigator.onLine) return;
-      const cached = await getCachedOfflineData('tinting_logs', null);
-      if (cached && cached.length > 0) {
-        setTintingLogs(cached);
+      try {
+        const cached = await getCachedOfflineData('tinting_logs', null);
+        if (!disposed && owner === getOfflineOwner() && Array.isArray(cached)) setTintingLogs(cached);
+      } catch {
+        console.warn('[fetchLogs] Local snapshot unavailable.');
+      } finally {
+        if (!disposed && owner === getOfflineOwner()) setCacheHydrated(true);
       }
     }
-    loadCached();
+    void loadCached();
+    return () => { disposed = true; };
   }, []);
 
   const fetchLogs = useCallback(async () => {
     const requestOwner = getOfflineOwner();
-    if (!isSupabaseConfigured) return;
+    if (!isSupabaseConfigured || !navigator.onLine) return false;
     setLoading(true);
     const { data, error } = await fetchAllRows(
       sb => sb.from('tinting_logs')
@@ -46,8 +53,8 @@ export function useTintingLogs({ enabled = true } = {}) {
   }, []);
 
   useEffect(() => {
-    if (enabled) fetchLogs();
-  }, [enabled, fetchLogs]);
+    if (cacheHydrated && enabled) fetchLogs();
+  }, [cacheHydrated, enabled, fetchLogs]);
 
   const addLog = useCallback(async (logData) => {
     const tempId = logData.id || `LOG-TEMP-${Date.now()}`;

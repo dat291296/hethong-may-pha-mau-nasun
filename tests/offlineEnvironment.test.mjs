@@ -44,3 +44,29 @@ test('preview refuses tampered files and a manifest declaring a live backend',as
   await writeFile(join(directory,'preview-manifest.json'),JSON.stringify({version:1,synthetic:true,backendConnected:true,files:[]}));
   await assert.rejects(createOfflinePreviewServer({directory,port:0}),/PREVIEW_MANIFEST_REQUIRED/);
 });
+
+import { readFile } from 'node:fs/promises';
+import vm from 'node:vm';
+
+test('installed application shell opens from verified cache without any network wait', async () => {
+  const generator = await readFile(new URL('../scripts/generate-service-worker.mjs', import.meta.url), 'utf8');
+  const template = generator.slice(generator.indexOf('const serviceWorker = `') + 'const serviceWorker = '.length, generator.indexOf('\nawait writeFile(path.join(distDir, \'sw.js\')')).trim().replace(/;$/, '');
+  const html = '<!doctype html><h1>Cached application</h1>';
+  const hashes = { '/index.html': createHash('sha256').update(html).digest('hex') };
+  const worker = vm.runInNewContext(template, { cacheName: 'synthetic', coreFiles: [], assetHashes: hashes });
+  for (const intact of [true, false]) {
+    let onFetch, calls = 0;
+    const response = new Response(intact ? html : 'tampered');
+    vm.runInNewContext(worker, {
+      self: { location: { origin: 'https://offline.invalid' }, addEventListener: (name, handler) => { if (name === 'fetch') onFetch = handler; } },
+      caches: { open: async () => ({ match: async () => response.clone() }) },
+      crypto: globalThis.crypto, URL, Response, AbortController, setTimeout, clearTimeout,
+      fetch: async () => { calls++; throw Error('offline'); },
+    });
+    let result;
+    onFetch({ request: { method: 'GET', mode: 'navigate', url: 'https://offline.invalid/' }, respondWith: promise => { result = promise; } });
+    const served = await result;
+    if (intact) { assert.equal(await served.text(), html); assert.equal(calls, 0); }
+    else { assert.equal(served.type, 'error'); assert.equal(calls, 1); }
+  }
+});

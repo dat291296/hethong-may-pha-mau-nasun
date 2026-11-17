@@ -120,6 +120,9 @@ self.addEventListener('fetch', event => {
 
   if (request.mode === 'navigate') {
     event.respondWith((async () => {
+      const installedCache = await caches.open(CACHE_NAME);
+      const installedShell = await installedCache.match('/index.html');
+      if (installedShell && await verifyResponse('/index.html', installedShell)) return installedShell;
       try {
         const response = await networkWithTimeout(request);
         if (await verifyResponse('/index.html', response)) {

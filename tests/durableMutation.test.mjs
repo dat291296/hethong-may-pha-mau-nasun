@@ -48,3 +48,11 @@ test('network timeout queues while successful writes do not', async () => {
   assert.equal(result.queued, false);
   assert.equal(queued, 1);
 });
+
+test('a thrown connection failure preserves work in the durable queue', async () => {
+  let saved = 0;
+  const result = await persistMutation({ online: true, write: async () => { throw new TypeError('Failed to fetch'); }, queue: async () => { saved++; } });
+  assert.deepEqual(result, { queued: true });
+  assert.equal(saved, 1);
+  await assert.rejects(persistMutation({ online: true, write: async () => { throw Object.assign(Error('permission denied'), { code: '42501' }); }, queue: async () => assert.fail('must not queue rejected authorization') }));
+});

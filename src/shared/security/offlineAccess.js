@@ -1,12 +1,13 @@
 export const OFFLINE_GRANT_KEY = 'offline_access_grant_v1';
-export const MAX_OFFLINE_READ_MS = 8 * 60 * 60 * 1000;
+export const MAX_OFFLINE_READ_MS = 7 * 24 * 60 * 60 * 1000;
 const roles = new Set(['admin','manager','technician','qc','viewer']);
 const regions = new Set(['Miền Bắc','Miền Trung','Miền Nam']);
 export function createOfflineAccessGrant(user, now = Date.now(), limits = {}) {
   if (!user?.id || !roles.has(user.role) || (!regions.has(user.managedRegion) && !(user.role === 'admin' && user.managedRegion === 'Toàn Quốc')) || !Number.isSafeInteger(now)) {
     throw Object.assign(new Error('OFFLINE_SCOPE_INVALID'), { code:'OFFLINE_SCOPE_INVALID' });
   }
-  const deadlines=['trusted_until','session_expires_at','expires_at','idle_expires_at'].filter(key=>limits[key]!=null).map(key=>Date.parse(limits[key]));
+  // Local access has its own lease. Online session expiry still blocks server writes.
+  const deadlines=['trusted_until'].filter(key=>limits[key]!=null).map(key=>Date.parse(limits[key]));
   if(deadlines.some(value=>!Number.isFinite(value)||value<=now))throw Object.assign(new Error('OFFLINE_ACCESS_EXPIRED'),{code:'OFFLINE_ACCESS_EXPIRED'});
   return { version:1, owner:user.id, role:user.role, region:user.managedRegion,
     verifiedAt:now, expiresAt:Math.min(now+MAX_OFFLINE_READ_MS,...deadlines) };

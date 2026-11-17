@@ -121,19 +121,25 @@ export function useAssets() {
 
   // Hydrate from IndexedDB cache on mount if available
   useEffect(() => {
+    let disposed = false;
+    const owner = getOfflineOwner();
     async function loadCached() {
       try {
         const setters = { dispensers: setDispensers, mixers: setMixers, computers: setComputers, printers: setPrinters, system_sets: setSystemSets };
-        for (const table of ASSET_TABLES) {
-          const full = await getCachedOfflineData(table, null);
-          const summary = await getCachedOfflineData(assetCacheKey(table, false), null);
+        await Promise.all(ASSET_TABLES.map(async table => {
+          const [full, summary] = await Promise.all([
+            getCachedOfflineData(table, null),
+            getCachedOfflineData(assetCacheKey(table, false), null),
+          ]);
+          if (disposed || owner !== getOfflineOwner()) return;
           const { rows, details } = cachedAssetSnapshot(full, summary);
           if (Array.isArray(rows)) {
             setters[table](rows);
             readyTablesRef.current.add(table);
             if (details) fullTablesRef.current.add(table);
           }
-        }
+        }));
+        if (disposed || owner !== getOfflineOwner()) return;
         setSummaryReady(!isSupabaseConfigured || ASSET_TABLES.every(table => readyTablesRef.current.has(table)));
         setSystemSetsReady(!isSupabaseConfigured || readyTablesRef.current.has('system_sets'));
         const complete = ASSET_TABLES.every(table => fullTablesRef.current.has(table));
@@ -143,12 +149,15 @@ export function useAssets() {
         recordOperationalError('runtime', error);
         setLoadError('Chưa đọc được dữ liệu máy đã lưu trên thiết bị. Không có dữ liệu nào bị xóa.');
       } finally {
-        setCacheHydrated(true);
-        setLoading(false);
+        if (!disposed && owner === getOfflineOwner()) {
+          setCacheHydrated(true);
+          setLoading(false);
+        }
         hydrationRef.current.resolve();
       }
     }
     loadCached();
+    return () => { disposed = true; };
   }, []);
 
   // ── Fetch all asset tables ────────────────────────────────────────────────
@@ -158,8 +167,8 @@ export function useAssets() {
     if (!readBarrierRef.current.canCommit(readEpoch)) return false;
     const startedAt = performance.now();
     const details = detailsRequestedRef.current;
-    if (!isSupabaseConfigured) return;
-    setLoading(true);
+    if (!isSupabaseConfigured || !navigator.onLine) return false;
+    setLoading(!tables.every(table => readyTablesRef.current.has(table)));
     try {
       const pendingQueue = await getOfflineQueue();
       if (requestOwner !== getOfflineOwner()) return false;
@@ -247,9 +256,13 @@ export function useAssets() {
   }, [fetchAssets]);
 
   useEffect(() => {
-    if (!cacheHydrated || detailsRequestedRef.current) return;
+    if (!cacheHydrated) return;
     if (!navigator.onLine) {
       if (!ASSET_TABLES.every(table => readyTablesRef.current.has(table))) setLoadError('Thiết bị chưa lưu đủ dữ liệu tổng quan ngoại tuyến. Kết nối mạng để tải dữ liệu.');
+      return;
+    }
+    if (detailsRequestedRef.current) {
+      void fetchAssets();
       return;
     }
     let cancelled = false;
@@ -258,7 +271,11 @@ export function useAssets() {
     // Render machine summaries before requesting the lightweight inventory index.
     void fetchAssets(['system_sets']).then(() => {
       if (cancelled || detailsRequestedRef.current) return;
-      const loadInventory = () => { if (!cancelled) void fetchAssets(DEVICE_TABLES); };
+      const loadInventory = async () => {
+        if (cancelled) return;
+        await fetchAssets(DEVICE_TABLES);
+        if (!cancelled && navigator.onLine) await ensureDetails();
+      };
       if (window.requestIdleCallback) idleHandle = window.requestIdleCallback(loadInventory, { timeout: 1000 });
       else timer = window.setTimeout(loadInventory, 0);
     });
@@ -267,7 +284,7 @@ export function useAssets() {
       if (idleHandle !== undefined) window.cancelIdleCallback(idleHandle);
       window.clearTimeout(timer);
     };
-  }, [cacheHydrated, fetchAssets]);
+  }, [cacheHydrated, fetchAssets, ensureDetails]);
 
   // ── Generic add stock device ────────────────────────────────────────────────
   const addStockDevice = useCallback(async (category, deviceData) => {

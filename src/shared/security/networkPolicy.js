@@ -3,6 +3,7 @@ const DEFAULT_TIMEOUT_MS = 15_000;
 
 const EXTERNAL_ENDPOINT_RULES = Object.freeze([
   Object.freeze({ hostname: 'router.project-osrm.org', pathPrefix: '/route/v1/driving/' }),
+  Object.freeze({ hostname: 'router.project-osrm.org', pathPrefix: '/table/v1/driving/' }),
   Object.freeze({ hostname: 'api.bigdatacloud.net', pathPrefix: '/data/reverse-geocode-client' }),
   Object.freeze({ hostname: 'ipapi.co', pathPrefix: '/json/' }),
 ]);

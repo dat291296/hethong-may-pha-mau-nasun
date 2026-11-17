@@ -1,11 +1,12 @@
 import DashboardReport from './DashboardReport.jsx';
 import { getTicketsForSetOrNpp, getNppTicketStats } from '../lib/repairDashboard.js';
 import { requiresRepairReturn, repairReturnLabel } from '../../repairs/lib/repairClassification.js';
+import { useVietnamDate } from '../../../shared/hooks/useVietnamDate.js';
 import SystemHealthPanel from './SystemHealthPanel.jsx';
 import {matchesSearch} from '../../../shared/workspace/workspaceFilters.js';
 import { WorkspaceRegionContext } from '../../../shared/hooks/useWorkspaceState.js';
 import { nppCoverage } from '../../distributors/lib/nppCoverage.js';
-import { listOperationalDevices, summarizeDashboard } from '../lib/dashboardSummary.js';
+import { dashboardPeriod, filterDashboardRecords, devicesForDashboardPeriod, listOperationalDevices, summarizeDashboard } from '../lib/dashboardSummary.js';
 import { summarizeInventory } from '../../equipment/lib/inventorySummary.js';
 import { findAssignedDevice } from '../../equipment/lib/deviceEdit.js';
 import React, { useState, useMemo, useContext, useEffect } from 'react';
@@ -54,29 +55,46 @@ export default function Dashboard({
   fetchTicketDetails,
   replacementEvents=[],replacementHistoryError='',
   teamUsers = [],
-  systemSets = [], 
-  npps = [], 
-  dispensers = [], 
-  mixers = [], 
-  computers = [], 
-  printers = [],
-  repairTickets = [],
+  systemSets: allSystemSets = [],
+  npps: allNpps = [],
+  dispensers: allDispensers = [],
+  mixers: allMixers = [],
+  computers: allComputers = [],
+  printers: allPrinters = [],
+  repairTickets: allRepairTickets = [],
   auditLogs = [],
-  maintenanceAlerts = [], 
-  unstabilizedAlerts = [],
+  maintenanceAlerts: allMaintenanceAlerts = [],
+  unstabilizedAlerts: allUnstabilizedAlerts = [],
   setActiveTab,
   onNavigateWorkspace,
   onOpenNewInstallation
 }) {
+  const today = useVietnamDate();
+  const [timeFilter, setTimeFilter] = useState(() => ({ mode: 'ALL', DAY: today, MONTH: today.slice(0, 7), YEAR: today.slice(0, 4) }));
+  const period = useMemo(() => dashboardPeriod(timeFilter.mode, timeFilter[timeFilter.mode]), [timeFilter]);
+  const systemSets = useMemo(() => filterDashboardRecords(allSystemSets, ['installDate', 'installedDate', 'install_date', 'installed_date'], period), [allSystemSets, period]);
+  const repairTickets = useMemo(() => filterDashboardRecords(allRepairTickets, ['date', 'createdAt', 'created_at'], period), [allRepairTickets, period]);
+  const npps = useMemo(() => {
+    if (!period.active) return allNpps;
+    const ids = new Set(systemSets.map(set => set.nppId));
+    return allNpps.filter(npp => ids.has(npp.id));
+  }, [allNpps, systemSets, period.active]);
+  const dispensers = useMemo(() => period.active ? devicesForDashboardPeriod(allDispensers, systemSets, 'dispenser') : allDispensers, [allDispensers, systemSets, period.active]);
+  const mixers = useMemo(() => period.active ? devicesForDashboardPeriod(allMixers, systemSets, 'mixer') : allMixers, [allMixers, systemSets, period.active]);
+  const computers = useMemo(() => period.active ? devicesForDashboardPeriod(allComputers, systemSets, 'computer') : allComputers, [allComputers, systemSets, period.active]);
+  const printers = useMemo(() => period.active ? devicesForDashboardPeriod(allPrinters, systemSets, 'printer') : allPrinters, [allPrinters, systemSets, period.active]);
+  const visibleSetCodes = useMemo(() => new Set(systemSets.map(set => set.setCode)), [systemSets]);
+  const maintenanceAlerts = useMemo(() => period.active ? allMaintenanceAlerts.filter(set => visibleSetCodes.has(set.setCode)) : allMaintenanceAlerts, [allMaintenanceAlerts, period.active, visibleSetCodes]);
+  const unstabilizedAlerts = useMemo(() => period.active ? allUnstabilizedAlerts.filter(set => visibleSetCodes.has(set.setCode)) : allUnstabilizedAlerts, [allUnstabilizedAlerts, period.active, visibleSetCodes]);
+  const undatedSets = useMemo(() => allSystemSets.length - filterDashboardRecords(allSystemSets, ['installDate', 'installedDate', 'install_date', 'installed_date'], { active: true, valid: true, start: '0001-01-01', end: '9999-12-31' }).length, [allSystemSets]);
   // Stat calculations
   const inventory = useMemo(() => summarizeInventory({ systemSets, dispensers, mixers, computers, printers }), [systemSets, dispensers, mixers, computers, printers]);
   const activeNpps = useMemo(() => npps.filter(npp => npp.status === 'Đang hợp tác'), [npps]);
   const coverage = useMemo(() => nppCoverage(activeNpps, systemSets), [activeNpps, systemSets]);
-  const today = new Date().toLocaleDateString('en-CA');
   const stats = useMemo(() => summarizeDashboard(systemSets, npps, today), [systemSets, npps, today]);
-  const totalSetsCount = stats.dashboardSetCount + inventory.completeFromLooseDevices;
+  const totalSetsCount = stats.dashboardSetCount + (period.active ? 0 : inventory.completeFromLooseDevices);
   const installedSetsCount = stats.installed;
-  const stockSetsCount = stats.stock + inventory.completeFromLooseDevices;
+  const stockSetsCount = stats.stock + (period.active ? 0 : inventory.completeFromLooseDevices);
   const [deviceGroup, setDeviceGroup] = useState(null);
   const [deviceLimit, setDeviceLimit] = useState(8);
   const deviceGroups = useMemo(() => {
@@ -155,6 +173,7 @@ export default function Dashboard({
   const [repairActionFilter, setRepairActionFilter] = useState('ALL');
   const [repairPage, setRepairPage] = useState(1);
   const [repairPageSize, setRepairPageSize] = useState(10);
+  useEffect(() => { setDashboardPage(1); setRepairPage(1); setSelectedNppHistory(null); setDeviceGroup(null); }, [period]);
 
 
   // Sắp xếp bộ máy mới lắp đặt gần nhất lên đầu
@@ -233,6 +252,43 @@ export default function Dashboard({
   return (
     <div className="workspace-screen dashboard-screen" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
 
+      <section className="glass-panel dashboard-period" aria-label="Lọc thời gian dashboard">
+        <div className="dashboard-period-heading">
+          <h2><CalendarClock size={20} aria-hidden="true" /> Thời gian thống kê</h2>
+          <span className="dashboard-period-caption" role="status">{period.label}</span>
+        </div>
+        <div className="dashboard-period-controls">
+          <div className="dashboard-period-segments" role="group" aria-label="Xem theo">
+            {[['ALL', 'Tất cả'], ['DAY', 'Ngày'], ['MONTH', 'Tháng'], ['YEAR', 'Năm']].map(([mode, label]) => (
+              <button type="button" key={mode} aria-pressed={timeFilter.mode === mode} onClick={() => setTimeFilter(previous => ({ ...previous, mode }))}>{label}</button>
+            ))}
+          </div>
+          {timeFilter.mode !== 'ALL' && <div className="dashboard-period-selection">
+            <label className="dashboard-period-field">
+              <span>{timeFilter.mode === 'DAY' ? 'Chọn ngày' : timeFilter.mode === 'MONTH' ? 'Chọn tháng' : 'Chọn năm'}</span>
+              <input className="form-input" type={timeFilter.mode === 'DAY' ? 'date' : timeFilter.mode === 'MONTH' ? 'month' : 'number'} min={timeFilter.mode === 'YEAR' ? '1000' : undefined} max={timeFilter.mode === 'YEAR' ? '9999' : undefined} step={1} value={timeFilter[timeFilter.mode]} aria-invalid={!period.valid} aria-describedby={!period.valid ? 'dashboard-period-error' : undefined} onChange={event => setTimeFilter(previous => ({ ...previous, [previous.mode]: event.target.value }))} />
+            </label>
+            <button type="button" className="dashboard-period-current" onClick={() => setTimeFilter(previous => ({ ...previous, [previous.mode]: previous.mode === 'DAY' ? today : previous.mode === 'MONTH' ? today.slice(0, 7) : today.slice(0, 4) }))}>
+              <RotateCcw size={14} aria-hidden="true" />{timeFilter.mode === 'DAY' ? 'Hôm nay' : timeFilter.mode === 'MONTH' ? 'Tháng này' : 'Năm nay'}
+            </button>
+          </div>}
+        </div>
+        {!period.valid && <p id="dashboard-period-error" role="alert" className="dashboard-period-error">{timeFilter.mode === 'YEAR' ? 'Nhập năm gồm 4 chữ số.' : 'Chọn thời gian hợp lệ để xem số liệu.'}</p>}
+        <div className="dashboard-period-footer">
+          <div className="dashboard-period-results" aria-live="polite">
+            {period.valid && <><span><strong>{systemSets.length}</strong> bộ máy</span><span className="dashboard-period-dot" aria-hidden="true">·</span><span><strong>{repairTickets.length}</strong> phiếu sửa / đổi</span></>}
+            {period.active && undatedSets > 0 && <span className="dashboard-period-undated">{undatedSets} bộ chưa có ngày lắp</span>}
+          </div>
+          <details className="dashboard-period-help">
+            <summary>Cách tính</summary>
+            <div>
+              <p>Bộ máy theo ngày lắp đặt. Phiếu sửa chữa và xuất đổi theo ngày ghi nhận. NPP và thiết bị theo bộ máy đã lọc.</p>
+              <p>Trạng thái máy là hiện tại, không phải tồn kho lịch sử. Bộ máy thiếu ngày lắp không tính trong kỳ; chọn “Tất cả” để xem đầy đủ.</p>
+            </div>
+          </details>
+        </div>
+      </section>
+
       <DashboardReport machines={systemSets} npps={npps} devices={{ computer: computers, dispenser: dispensers, mixer: mixers, printer: printers }} events={replacementEvents} fetchTicketDetails={fetchTicketDetails} tickets={repairTickets} region={workspaceRegion} today={today}
         fleet={totalSetsCount} stock={stockSetsCount} regionalCounts={regionChartData} models={modelChartData} />
       <nav className="dashboard-jump" aria-label="Đi nhanh trong tổng quan">
@@ -290,7 +346,7 @@ export default function Dashboard({
           <div style={{ marginTop: '12px', display: 'flex', gap: '8px', fontSize: '0.75rem', flexWrap: 'wrap' }}>
             {regionalCounts.map(region => <span key={region.name} className="badge badge-info">{region.name}: {region.count} bộ</span>)}
             <span className="badge badge-success">● {installedSetsCount} Đã Lắp</span>
-            <span className="badge badge-info" title="Gồm bộ đã ghép và số bộ có thể ghép đủ từ thiết bị lẻ, đồng nhất với Kho thiết bị">● {stockSetsCount} Trong Kho</span>
+            <span className="badge badge-info" title={period.active ? "Bộ máy lắp trong kỳ, hiện đang ở kho" : "Gồm bộ đã ghép và số bộ có thể ghép đủ từ thiết bị lẻ, đồng nhất với Kho thiết bị"}>● {stockSetsCount} Trong Kho</span>
           </div>
         </div>
 
@@ -303,7 +359,7 @@ export default function Dashboard({
             </div>
           </div>
           <div style={{ fontSize: '2rem', fontWeight: '800', color: 'var(--text-main)', lineHeight: 1.1 }}>
-            {activeNpps.length} <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)', fontWeight: 'normal' }}>NPP đang hợp tác</span>
+            {activeNpps.length} <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)', fontWeight: 'normal' }}>{period.active ? 'NPP có bộ máy trong kỳ' : 'NPP đang hợp tác'}</span>
           </div>
           <div style={{ marginTop: '12px', display: 'flex', gap: '8px', fontSize: '0.75rem', flexWrap: 'wrap' }}>
             <span className="badge badge-info">{coverage.assigned.length} NPP đã ghép bộ</span><span className="badge badge-warning">{coverage.unassigned.length} NPP chưa ghép</span>
@@ -422,11 +478,11 @@ export default function Dashboard({
       </section>
       <details id="dashboard-health" className="dashboard-chart-group health-chart-group" open={healthOpen} onToggle={event=>setHealthOpen(event.currentTarget.open)}>
         <summary>Sức khỏe hệ thống máy pha màu</summary>
-        {healthOpen&&<SystemHealthPanel machines={systemSets} devices={{computer:computers,dispenser:dispensers,mixer:mixers,printer:printers}} tickets={repairTickets} events={replacementEvents} npps={npps} historyError={replacementHistoryError} onNavigate={onNavigateWorkspace}/>}
+        {healthOpen&&<SystemHealthPanel machines={systemSets} devices={{computer:computers,dispenser:dispensers,mixer:mixers,printer:printers}} tickets={allRepairTickets} events={replacementEvents} npps={npps} historyError={replacementHistoryError} onNavigate={onNavigateWorkspace}/>}
       </details>
       <details id="dashboard-work" className="dashboard-chart-group health-chart-group">
         <summary>Công việc kỹ thuật</summary>
-        <TeamWorkPanel teamUsers={teamUsers} repairTickets={repairTickets} systemSets={systemSets} npps={npps} onNavigate={(tab, query) => onNavigateWorkspace?.(tab, query)} />
+        <TeamWorkPanel teamUsers={teamUsers} repairTickets={repairTickets} systemSets={systemSets} npps={allNpps} onNavigate={(tab, query) => onNavigateWorkspace?.(tab, query)} />
       </details>
       <div className="glass-panel" style={{ padding: '20px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
