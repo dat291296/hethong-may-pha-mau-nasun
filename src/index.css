@@ -2145,3 +2145,103 @@ html {
     -webkit-overflow-scrolling: touch;
   }
 }
+
+/* Landscape phones commonly report 800–950px width while remaining mobile. */
+@media (orientation: landscape) and (max-height: 600px) and (max-width: 1024px) {
+  .sidebar-backdrop {
+    display: block !important;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    z-index: 1000;
+    touch-action: none;
+  }
+
+  .desktop-sidebar {
+    position: fixed !important;
+    inset: 0 auto 0 0 !important;
+    display: flex !important;
+    width: min(300px, 78vw) !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    z-index: 1001 !important;
+    transform: translateX(-100%) !important;
+    box-shadow: 10px 0 40px rgba(0, 0, 0, 0.65) !important;
+  }
+
+  .desktop-sidebar.mobile-open {
+    transform: translateX(0) !important;
+  }
+
+  .mobile-bottom-nav {
+    display: flex !important;
+    position: fixed;
+    inset: auto 0 0;
+    height: calc(58px + env(safe-area-inset-bottom, 0px));
+    padding: 0 max(4px, env(safe-area-inset-left, 0px)) env(safe-area-inset-bottom, 0px) max(4px, env(safe-area-inset-right, 0px));
+    z-index: 900;
+  }
+
+  main,
+  .nasun-workspace {
+    padding: 14px 18px calc(72px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  .main-header {
+    min-height: 58px;
+    height: auto !important;
+    padding: calc(6px + env(safe-area-inset-top, 0px)) 14px 6px !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 10px;
+  }
+
+  .header-title-wrapper {
+    min-width: 0;
+    flex: 1 1 auto;
+    flex-direction: row !important;
+    align-items: center;
+  }
+
+  .header-title-inner {
+    min-width: 0;
+    width: auto;
+  }
+
+  .header-title-text {
+    max-width: min(28vw, 220px);
+    font-size: .95rem !important;
+  }
+
+  .header-actions-wrapper {
+    width: auto;
+    flex: 0 1 auto;
+    justify-content: flex-end;
+    gap: 6px !important;
+  }
+
+  .header-search-container {
+    width: min(34vw, 240px) !important;
+    flex: 0 1 240px;
+  }
+
+  .header-profile-container,
+  .header-action-btn {
+    display: none !important;
+  }
+
+  .header-subtitle-text {
+    display: none;
+  }
+
+  .header-notifications {
+    top: calc(66px + env(safe-area-inset-top, 0px)) !important;
+    max-height: calc(100dvh - 100px) !important;
+  }
+
+  .modal-overlay > .modal-content {
+    max-height: 96dvh !important;
+  }
+}
