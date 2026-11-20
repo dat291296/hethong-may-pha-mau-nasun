@@ -249,6 +249,23 @@ export default function Sidebar({ activeTab, setActiveTab, maintenanceCount, pen
         {/* Dashboard Standalone Item */}
         <button
           onClick={() => {
+            setActiveTab('technicianWork');
+            if (onClose) onClose();
+          }}
+          className="sidebar-menu-btn"
+          style={{
+            width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '10px 14px', marginBottom: '8px', borderRadius: '8px', border: 'none',
+            background: activeTab === 'technicianWork' ? 'linear-gradient(90deg, rgba(16,185,129,0.18) 0%, rgba(6,182,212,0.05) 100%)' : 'transparent',
+            color: activeTab === 'technicianWork' ? 'var(--accent-emerald)' : 'var(--text-muted)',
+            fontWeight: activeTab === 'technicianWork' ? '700' : '500', fontSize: '0.875rem', cursor: 'pointer',
+            borderLeft: activeTab === 'technicianWork' ? '3px solid var(--accent-emerald)' : '3px solid transparent'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><Wrench size={18} color={activeTab === 'technicianWork' ? 'var(--accent-emerald)' : 'var(--text-muted)'} /><span>Việc hôm nay</span></div>
+        </button>
+        <button
+          onClick={() => {
             setActiveTab('dashboard');
             if (onClose) onClose();
           }}

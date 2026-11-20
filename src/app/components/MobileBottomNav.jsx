@@ -7,8 +7,9 @@ import { hasPermission } from '../../shared/security/rbac.js';
 export default function MobileBottomNav({ activeTab, setActiveTab, maintenanceCount = 0, pendingRepairCount = 0, onOpenQrScan, onOpenMobileSidebar, isMobileSidebarOpen = false }) {
   const { role } = useAuth();
   const canScan = hasPermission(role, 'qr:scan');
+  const isTechnician = role === 'technician';
   const items = [
-    { id: 'dashboard', label: 'Tổng quan', icon: LayoutDashboard },
+    { id: isTechnician ? 'technicianWork' : 'dashboard', label: isTechnician ? 'Việc hôm nay' : 'Tổng quan', icon: isTechnician ? Wrench : LayoutDashboard },
     { id: 'npp', label: 'NPP', icon: Building2 },
     canScan ? { id: 'qr', label: 'Quét QR', icon: ScanLine, action: onOpenQrScan } : { id: 'repairs', label: 'Sửa chữa', icon: Wrench, badge: pendingRepairCount },
     { id: 'assets', label: 'Thiết bị', icon: Cpu },

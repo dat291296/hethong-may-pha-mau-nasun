@@ -156,6 +156,7 @@ export default function Header({
   const getTitle = () => {
     switch (activeTab) {
       case 'dashboard': return 'Dashboard Quản Trị Hệ Thống Máy Pha Màu';
+      case 'technicianWork': return 'Công việc hôm nay của kỹ thuật viên';
       case 'npp': return 'Danh Sách Quản Lý Nhà Phân Phối (NPP)';
       case 'assets': return 'Quản Lý Bộ Máy Pha Màu & Kho Thiết Bị Lẻ';
       case 'workflows': return 'Nghiệp Vụ Lắp Đặt, Thu Hồi & Điều Chuyển';
@@ -171,7 +172,7 @@ export default function Header({
   const missingDataAlerts=dataCompletenessAlerts({npps,systemSets,devices:assetDetailsReady?{dispenser:dispensers,mixer:mixers,computer:computers,printer:printers}:{},user});
   const totalAlertsCount = maintenanceAlerts.length + unstabilizedAlerts.length + pendingRegionalRepairs.length + missingDataAlerts.length;
   const compactTitle = {
-    dashboard: 'Tổng quan', npp: 'Nhà phân phối', assets: 'Bộ máy & kho thiết bị',
+    dashboard: 'Tổng quan', technicianWork: 'Việc hôm nay', npp: 'Nhà phân phối', assets: 'Bộ máy & kho thiết bị',
     workflows: 'Cấp phát / Thu hồi', repairs: 'Sửa chữa', maintenance: 'Bảo trì',
     techHandbook: 'Sổ tay kỹ thuật', routeMap: 'Tuyến công tác', auditLogs: 'Nhật ký', users: 'Quản lý người dùng',
   }[activeTab] || getTitle();

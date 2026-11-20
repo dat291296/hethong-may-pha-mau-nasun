@@ -51,6 +51,7 @@ const ExcelImportModal = lazy(() => import('../modules/imports/components/ExcelI
 const UserManagement = lazy(() => import('../modules/users/components/UserManagement'));
 const TechHandbook = lazy(() => import('../modules/handbook/components/TechHandbook'));
 const FieldRouteMap = lazy(() => import('../modules/fieldwork/components/FieldRouteMap'));
+const TechnicianWorkQueue = lazy(() => import('../modules/fieldwork/components/TechnicianWorkQueue.jsx'));
 const ProfileScreen = lazy(() => import('../modules/users/components/ProfileScreen.jsx'));
 const SyncLogScreen = lazy(() => import('../modules/fieldwork/components/SyncLogScreen.jsx'));
 const QrScannerModal = lazy(() => import('../shared/components/QrScannerModal.jsx'));
@@ -114,12 +115,15 @@ function AppWorkspace() {
     if (shortcut === 'scan') return 'assets';
     if (shortcut === 'repair') return 'repairs';
     if (shortcut === 'report') return 'dashboard';
+    if (user?.role === 'technician') return 'technicianWork';
     try {
       const savedTab = window.localStorage.getItem('nasun_active_tab');
-      if (savedTab === 'technicianWork') return 'dashboard';
-      return ['documents', 'support', 'account'].includes(savedTab) ? 'techHandbook' : savedTab || 'dashboard';
+      if (savedTab === 'technicianWork') return user?.role === 'technician' ? 'technicianWork' : 'dashboard';
+      return ['documents', 'support', 'account'].includes(savedTab)
+        ? 'techHandbook'
+        : savedTab || (user?.role === 'technician' ? 'technicianWork' : 'dashboard');
     } catch {
-      return 'dashboard';
+      return user?.role === 'technician' ? 'technicianWork' : 'dashboard';
     }
   });
 
@@ -212,7 +216,7 @@ function AppWorkspace() {
     return result;
   };
 
-  const { repairTickets, hasRepairSnapshot, fetchTicketDetails, fetchBackupTickets, addTicket, editTicket, deleteTicket, importTickets, loading: repairsLoading, loadError: repairsLoadError, refetch: refetchRepairs } = useRepairs({ enabled: ['dashboard', 'repairs'].includes(activeTab) });
+  const { repairTickets, hasRepairSnapshot, fetchTicketDetails, fetchBackupTickets, addTicket, editTicket, deleteTicket, importTickets, loading: repairsLoading, loadError: repairsLoadError, refetch: refetchRepairs } = useRepairs({ enabled: ['dashboard', 'technicianWork', 'repairs'].includes(activeTab) });
   const { auditLogs, setAuditLogs, addAuditLog, importAuditLogs, refetch: refetchAuditLogs } = useAuditLogs({ enabled: ['auditLogs', 'dashboard'].includes(activeTab) });
   const { lockedMonths, lockMonth, unlockMonth, isDateLocked, loading: lockLoading, error: lockError, refetch: refetchLockedMonths } = useLockedMonths();
   const { tintingLogs, importLogs, refetch: refetchTintingLogs } = useTintingLogs({ enabled: activeTab === 'workflows' });
@@ -333,7 +337,7 @@ function AppWorkspace() {
         } else if (['assets', 'maintenance', 'workflows'].includes(activeTab)) {
           tasks.push(refetchAssets());
         }
-        if (['dashboard', 'repairs'].includes(activeTab)) tasks.push(refetchRepairs());
+        if (['dashboard', 'technicianWork', 'repairs'].includes(activeTab)) tasks.push(refetchRepairs());
         if (activeTab === 'auditLogs') tasks.push(refetchAuditLogs());
         if (activeTab === 'workflows') tasks.push(refetchTintingLogs());
         if (activeTab === 'users') tasks.push(refetchLockedMonths());
@@ -977,6 +981,19 @@ function AppWorkspace() {
               <button className="btn btn-secondary" onClick={() => navigateWorkspace('assets', machineProfileReturn.search, machineProfileReturn.filter)}>← Quay lại hồ sơ máy {machineProfileReturn.machine.setCode}</button>
             </div>
           )}
+
+          {activeTab === 'technicianWork' && ((!assetSummaryReady || nppsLoading && !npps.length || repairsLoading && !hasRepairSnapshot && !repairTickets.length) ? <ModuleLoadingSkeleton type="repairs" /> : (
+            <TechnicianWorkQueue
+              repairTickets={regionalData.repairTickets}
+              systemSets={regionalData.systemSets}
+              npps={regionalData.npps}
+              teamUsers={qcUsers}
+              onNavigate={navigateWorkspace}
+              onOpenQrScan={() => { setQrScanError(''); setShowQrScanner(true); }}
+              onOpenRouteMap={() => setActiveTab('routeMap')}
+              onRefresh={() => Promise.allSettled([refetchRepairs(), refetchAssets(['system_sets']), refetchNpps()])}
+            />
+          ))}
 
           {activeTab === 'dashboard' && ((!assetSummaryReady || nppsLoading && !npps.length || repairsLoading && !hasRepairSnapshot && !repairTickets.length) ? <ModuleLoadingSkeleton type="dashboard" /> : (
             <Dashboard
