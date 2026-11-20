@@ -310,7 +310,7 @@ export default function TechHandbook({ globalSearch = '', onSelectErrorForRepair
   }
 
   // Expandable SOPs state
-  const [expandedSopId, setExpandedSopId] = useState('SOP-01');
+  const [expandedSopId, setExpandedSopId] = useState(null);
 
   useEffect(() => {
     getCachedOfflineData('tech_handbook_field_tips', null).then(cached => {

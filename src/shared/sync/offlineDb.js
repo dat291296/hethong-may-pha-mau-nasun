@@ -1,4 +1,4 @@
-import { retainEncryptedDraft } from './offlineRetention.js';
+import { retainEncryptedDraft, retainEncryptedHandbook } from './offlineRetention.js';
 import {
   getMobileSecurityCapabilities,
   getNativeKeyAlias,
@@ -502,12 +502,12 @@ export async function clearOfflineStorage(userId = activeOwnerId) {
       cursorRequest.onsuccess = () => {
         const cursor = cursorRequest.result;
         if (!cursor) {
-          // Decide key deletion only after both queued edits and encrypted drafts
+          // Decide key deletion only after queued edits, drafts and handbook data
           // have been checked inside the same transaction.
           if (!preservePending && !usesNativeCrypto()) transaction.objectStore('crypto_keys').delete(ownerId);
           return;
         }
-        if (retainEncryptedDraft(cursor.value, ownerId)) preservePending = true;
+        if (retainEncryptedDraft(cursor.value, ownerId) || retainEncryptedHandbook(cursor.value, ownerId)) preservePending = true;
         else if (cursor.value.ownerId === ownerId) cursor.delete();
         cursor.continue();
       };

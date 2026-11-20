@@ -60,9 +60,30 @@ test('machine albums validate new batches while retaining cumulative historical 
  assert.match(sql,/field='installation_photos'/);assert.match(sql,/EXCEPT ALL/);assert.match(sql,/validate_inline_image_list\(added_images\)/);
 });
 
-import { retainEncryptedDraft } from '../src/shared/sync/offlineRetention.js';
+import { retainEncryptedDraft, retainEncryptedHandbook } from '../src/shared/sync/offlineRetention.js';
 test('session cleanup retains encrypted own drafts but not master cache or foreign/unprotected rows',()=>{
  const draft={ownerId:'synthetic-A',encrypted:true,logicalKey:'form-draft:synthetic-A:repair'};
  assert.equal(retainEncryptedDraft(draft,'synthetic-A'),true);
  for(const row of [{...draft,ownerId:'synthetic-B'},{...draft,encrypted:false},{...draft,logicalKey:'repair_tickets'},null]) assert.equal(retainEncryptedDraft(row,'synthetic-A'),false);
+});
+
+test('logout retains edited handbook collections including an empty error list', () => {
+ for (const logicalKey of ['tech_handbook_errors', 'tech_handbook_sops', 'tech_handbook_field_tips']) {
+  for (const items of [[], [{ id: 'remaining-error' }]]) {
+   const record = { ownerId: 'synthetic-A', encrypted: true, logicalKey, items };
+   assert.equal(retainEncryptedHandbook(record, 'synthetic-A'), true);
+   assert.equal(retainEncryptedHandbook(record, 'synthetic-B'), false);
+   assert.equal(retainEncryptedHandbook({ ...record, encrypted: false }, 'synthetic-A'), false);
+  }
+ }
+ for (const logicalKey of ['repair_tickets', 'nasun_offline_user', 'tech_handbook_unknown']) {
+  assert.equal(retainEncryptedHandbook({ ownerId: 'synthetic-A', encrypted: true, logicalKey }, 'synthetic-A'), false);
+ }
+ assert.equal(retainEncryptedHandbook(null, 'synthetic-A'), false);
+});
+
+test('logout preserves handbook encryption keys in the same cleanup transaction', async () => {
+ const source = await readFile(new URL('../src/shared/sync/offlineDb.js', import.meta.url), 'utf8');
+ assert.match(source, /retainEncryptedHandbook\(cursor.value, ownerId\)\) preservePending = true/);
+ assert.match(source, /if \(!preservePending && !usesNativeCrypto\(\)\) transaction.objectStore\('crypto_keys'\).delete\(ownerId\)/);
 });
