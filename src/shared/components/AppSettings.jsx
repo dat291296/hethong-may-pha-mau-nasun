@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Settings, X } from 'lucide-react';
-import { useAuth } from '../../shared/context/AuthContext.jsx';
+import { useAuth } from '../context/AuthContext.jsx';
 
 const defaults = { theme: 'dark', fontSize: 16, showOperations: true, showCharts: true, showReport: true, company: 'NASUN PAINT', contact: '', logo: '' };
 const eventName = 'nasun-app-settings-changed';
@@ -77,3 +77,4 @@ export default function AppSettings() {
     <footer><button type="button" className="btn btn-secondary" onClick={()=>setDraft(canEditCompany?{...defaults}:{...defaults,company:settings.company,contact:settings.contact,logo:settings.logo})}>Khôi phục mặc định</button><button type="submit" className="btn btn-primary" disabled={loading}>Lưu & áp dụng</button></footer>
   </form></dialog></>;
 }
+

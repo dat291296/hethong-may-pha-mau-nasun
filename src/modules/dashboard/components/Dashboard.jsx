@@ -1,4 +1,4 @@
-import AppSettings, { useAppSettings } from '../../../app/components/AppSettings.jsx';
+import AppSettings, { useAppSettings } from '../../../shared/components/AppSettings.jsx';
 import DashboardReport from './DashboardReport.jsx';
 import { getTicketsForSetOrNpp, getNppTicketStats } from '../lib/repairDashboard.js';
 import { requiresRepairReturn, repairReturnLabel } from '../../repairs/lib/repairClassification.js';
@@ -1355,3 +1355,4 @@ export default function Dashboard({
     </div>
   );
 }
+

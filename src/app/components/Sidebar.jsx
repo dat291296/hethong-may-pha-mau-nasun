@@ -1,4 +1,4 @@
-import { useAppSettings } from './AppSettings.jsx';
+import { useAppSettings } from '../../shared/components/AppSettings.jsx';
 import React, { useState, useEffect, useRef } from 'react';
 import {
   LayoutDashboard,
@@ -461,3 +461,4 @@ export default function Sidebar({ activeTab, setActiveTab, maintenanceCount, pen
     </aside>
   );
 }
+
