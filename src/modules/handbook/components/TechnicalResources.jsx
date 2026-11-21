@@ -1,5 +1,4 @@
 import { fetchAllRows } from '../../../shared/data-access/paginatedQuery.js';
-import { useSensitiveActionGate } from '../../../shared/components/SensitiveActionGate.jsx';
 import { matchesDocumentModel } from '../../equipment/lib/machineWorkspace';
 import React, { useEffect, useRef, useState } from 'react';
 import { FileText, ExternalLink, Upload, Trash2 } from 'lucide-react';
@@ -11,7 +10,7 @@ import './technicalResources.css';
 const fields = 'id,title,category,machine_model,url,storage_path,file_name,file_size,created_at';
 export default function TechnicalResources({ machineModel = '', modelOptions = [] }) {
   const { user, role } = useAuth();
-  const { requireAuthentication, dialog } = useSensitiveActionGate();
+  const canEdit = ['admin', 'technician'].includes(role);
   const [documents, setDocuments] = useState([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -51,13 +50,20 @@ export default function TechnicalResources({ machineModel = '', modelOptions = [
   }, [user?.id]);
   async function save(event) {
     event.preventDefault();
-    if (role !== 'admin' || busy) return;
+    if (!canEdit || busy) return;
     setBusy(true); setError('');
     let uploadedPath;
     try {
-      await requireAuthentication();
+
       if (!supabase) throw new Error('Cần kết nối Supabase để tải file.');
-      if (!file) throw new Error('Vui lòng chọn file PDF hoặc ảnh.');
+      if (form.id) {
+        const {data, error} = await supabase.from('technical_documents').update({title: form.title.trim(), category: form.category, machine_model: form.machine_model.trim()}).eq('id', form.id).select(fields).single();
+        if (error) throw error;
+        setDocuments(previous => previous.map(item => item.id === data.id ? data : item));
+        setForm(null);
+        return;
+      }
+      if (!file) throw new Error('Vui lòng chọn tệp tài liệu.');
       const { extension, mime } = await validateDocumentFile(file);
       const title = form.title.trim();
       if (!title || title.length > 160) throw new Error('Tên tài liệu phải từ 1 đến 160 ký tự.');
@@ -93,10 +99,10 @@ export default function TechnicalResources({ machineModel = '', modelOptions = [
     } catch (err) { tab?.close(); setError(resourceError(err)); }
   }
   async function remove(document) {
-    if (role !== 'admin' || busy || !await confirmAction(`Xóa "${document.title}" khỏi thư viện?`, { title: 'Xác nhận xóa tài liệu', confirmLabel: 'Xóa tài liệu', danger: true })) return;
+    if (!canEdit || busy || !await confirmAction(`Xóa "${document.title}" khỏi thư viện?`, { title: 'Xác nhận xóa tài liệu', confirmLabel: 'Xóa tài liệu', danger: true })) return;
     setBusy(true); setError('');
     try {
-      await requireAuthentication();
+
       const { error: deleteError, data } = await supabase.from('technical_documents').delete().eq('id', document.id).select('id');
       if (deleteError) throw deleteError;
       if (!data?.length) throw new Error('Không có quyền xóa tài liệu.');
@@ -109,25 +115,25 @@ export default function TechnicalResources({ machineModel = '', modelOptions = [
   }
   const filteredDocuments = documents.filter(item => (categoryFilter === 'ALL' || item.category === categoryFilter) && (modelFilter === 'ALL' || (modelFilter === 'COMMON' ? !item.machine_model : item.machine_model === modelFilter))).filter(item => (!machineModel || matchesDocumentModel(item.machine_model, machineModel))).filter(item => `${item.title} ${item.machine_model}`.toLocaleLowerCase('vi').includes(search.toLocaleLowerCase('vi')));
   return <section className="technical-resources glass-panel resource-panel" aria-label="Tài liệu và bản vẽ">
-    <div className="resource-heading"><h3><FileText size={20} /> Tài liệu & Bản vẽ</h3>{role === 'admin' && <button className="btn btn-primary btn-sm" disabled={busy} onClick={() => { setFile(null); setForm({ title: '', category: 'Tài liệu', machine_model: machineModel }); }}><Upload size={16} /> Tải file lên</button>}</div>
-    <p className="resource-muted">PDF, PNG, JPG, WEBP, GIF, BMP, TIFF · Tối đa 20 MB/file.</p>
+    <div className="resource-heading"><h3><FileText size={20} /> Tài liệu & Bản vẽ</h3>{canEdit && <button className="btn btn-primary btn-sm" disabled={busy} onClick={() => { setFile(null); setForm({ title: '', category: 'Tài liệu', machine_model: machineModel }); }}><Upload size={16} /> Tải file lên</button>}</div>
+    <p className="resource-muted">DOCX, XLSX, PPTX, TXT, CSV, PDF, PNG, JPG, WEBP, GIF, BMP, TIFF · Tối đa 20 MB/file.</p>
     {error && <p role="alert" className="resource-error">{error}</p>}
     {!supabase && <p className="resource-muted">Cần kết nối Supabase để tải và xem tài liệu thật.</p>}
     {loading && <p role="status">Đang tải tài liệu...</p>}
     <input className="form-input" aria-label="Tìm tài liệu" placeholder="Tìm tên tài liệu, dòng máy..." value={search} onChange={event => setSearch(event.target.value)} />
     <div className="resource-filters"><label>Loại tài liệu<select className="form-select" value={categoryFilter} onChange={event => setCategoryFilter(event.target.value)}><option value="ALL">Tất cả</option><option>Tài liệu</option><option>Bản vẽ</option></select></label>{!machineModel && <label>Dòng máy<select className="form-select" value={modelFilter} onChange={event => setModelFilter(event.target.value)}><option value="ALL">Tất cả dòng máy</option><option value="COMMON">Tài liệu dùng chung</option>{[...new Set([...modelOptions, ...documents.map(item => item.machine_model)].filter(Boolean))].sort().map(model => <option key={model}>{model}</option>)}</select></label>}</div>
-    {form && <form ref={uploadFormRef} className="resource-form" onSubmit={save}><p role="status">Chọn file PDF hoặc ảnh, nhập tên tài liệu rồi bấm Lưu tài liệu.</p>
+    {form && <form ref={uploadFormRef} className="resource-form" onSubmit={save}><p role="status">Chọn tệp tài liệu, nhập tên tài liệu rồi bấm Lưu tài liệu.</p>
       <label>Tên tài liệu<input className="form-input" required maxLength={160} disabled={busy} value={form.title} onChange={event => setForm({ ...form, title: event.target.value })} /></label>
       <label>Phân loại<select className="form-select" disabled={busy} value={form.category} onChange={event => setForm({ ...form, category: event.target.value })}><option>Tài liệu</option><option>Bản vẽ</option></select></label>
       <label>Dòng máy<input list="document-model-options" className="form-input" maxLength={120} disabled={busy} value={form.machine_model} onChange={event => setForm({ ...form, machine_model: event.target.value })} /></label>
-      <datalist id="document-model-options">{modelOptions.map(model => <option key={model} value={model} />)}</datalist><label>File PDF hoặc ảnh<input type="file" required disabled={busy} accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.bmp,.tif,.tiff" onChange={event => setFile(event.target.files?.[0] || null)} /></label>
-      <p role="status">{file ? 'Đã chọn: ' + file.name : 'Chưa chọn file.'}</p><div className="resource-actions"><button className="btn btn-primary" disabled={busy}>{busy ? 'Đang tải...' : 'Lưu tài liệu'}</button><button type="button" className="btn btn-secondary" disabled={busy} onClick={() => setForm(null)}>Hủy</button></div>
+      <datalist id="document-model-options">{modelOptions.map(model => <option key={model} value={model} />)}</datalist>{!form.id && <label>Tệp tài liệu<input type="file" required disabled={busy} accept=".docx,.xlsx,.pptx,.txt,.csv,.pdf,.png,.jpg,.jpeg,.webp,.gif,.bmp,.tif,.tiff" onChange={event => setFile(event.target.files?.[0] || null)} /></label>}
+      <p role="status">{form.id ? 'Đang sửa thông tin tài liệu.' : file ? 'Đã chọn: ' + file.name : 'Chưa chọn file.'}</p><div className="resource-actions"><button className="btn btn-primary" disabled={busy}>{busy ? 'Đang tải...' : 'Lưu tài liệu'}</button><button type="button" className="btn btn-secondary" disabled={busy} onClick={() => setForm(null)}>Hủy</button></div>
     </form>}
-    {!loading && !documents.length && <p className="resource-muted">Chưa có tài liệu. Admin có thể tải file PDF hoặc ảnh bản vẽ lên.</p>}
-    {filteredDocuments.slice(0,visibleCount).map(document => <div className="resource-row" key={document.id}><FileText size={22} /><div className="resource-content"><strong>{document.title}</strong><small>{document.category}{document.machine_model && ` · ${document.machine_model}`}</small>{document.file_name && <small>{document.file_name} · {(document.file_size / 1048576).toFixed(2)} MB</small>}</div><button className="btn btn-secondary btn-sm" onClick={() => open(document)}><ExternalLink size={16} /> Mở</button>{role === 'admin' && <button className="btn btn-secondary btn-sm" disabled={busy} onClick={() => remove(document)} aria-label={`Xóa ${document.title}`}><Trash2 size={16} /></button>}</div>)}
+    {!loading && !documents.length && <p className="resource-muted">Chưa có tài liệu. Admin và kỹ thuật viên có thể tải tệp tài liệu bản vẽ lên.</p>}
+    {filteredDocuments.slice(0,visibleCount).map(document => <div className="resource-row" key={document.id}><FileText size={22} /><div className="resource-content"><strong>{document.title}</strong><small>{document.category}{document.machine_model && ` · ${document.machine_model}`}</small>{document.file_name && <small>{document.file_name} · {(document.file_size / 1048576).toFixed(2)} MB</small>}</div><button className="btn btn-secondary btn-sm" onClick={() => open(document)}><ExternalLink size={16} /> Mở</button>{canEdit && <button className="btn btn-secondary btn-sm" disabled={busy} onClick={() => { setFile(null); setForm({...document}); }}>Sửa</button>}{canEdit && <button type="button" className="btn btn-secondary btn-sm" disabled={busy} onClick={() => remove(document)} aria-label={`Xóa ${document.title}`}><Trash2 size={16} /></button>}</div>)}
     {!loading && documents.length > 0 && !filteredDocuments.length && <p className="resource-muted">Không có tài liệu phù hợp bộ lọc.</p>}
     {filteredDocuments.length > visibleCount && <button className="btn btn-secondary" onClick={()=>setVisibleCount(value=>value+25)}>Xem thêm tài liệu</button>}
-    {dialog}
+
   </section>;
 }
 

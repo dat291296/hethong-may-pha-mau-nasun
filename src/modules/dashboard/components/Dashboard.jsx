@@ -1,3 +1,4 @@
+import AppSettings, { useAppSettings } from '../../../app/components/AppSettings.jsx';
 import DashboardReport from './DashboardReport.jsx';
 import { getTicketsForSetOrNpp, getNppTicketStats } from '../lib/repairDashboard.js';
 import { requiresRepairReturn, repairReturnLabel } from '../../repairs/lib/repairClassification.js';
@@ -6,7 +7,7 @@ import SystemHealthPanel from './SystemHealthPanel.jsx';
 import {matchesSearch} from '../../../shared/workspace/workspaceFilters.js';
 import { WorkspaceRegionContext } from '../../../shared/hooks/useWorkspaceState.js';
 import { nppCoverage } from '../../distributors/lib/nppCoverage.js';
-import { dashboardPeriod, filterDashboardRecords, devicesForDashboardPeriod, listOperationalDevices, summarizeDashboard } from '../lib/dashboardSummary.js';
+import { dashboardPeriod, filterDashboardRecords, devicesForDashboardPeriod, summarizeDashboard } from '../lib/dashboardSummary.js';
 import { summarizeInventory } from '../../equipment/lib/inventorySummary.js';
 import { findAssignedDevice } from '../../equipment/lib/deviceEdit.js';
 import React, { useState, useMemo, useContext, useEffect } from 'react';
@@ -69,6 +70,7 @@ export default function Dashboard({
   onNavigateWorkspace,
   onOpenNewInstallation
 }) {
+  const appSettings = useAppSettings();
   const today = useVietnamDate();
   const [timeFilter, setTimeFilter] = useState(() => ({ mode: 'ALL', DAY: today, MONTH: today.slice(0, 7), YEAR: today.slice(0, 4) }));
   const period = useMemo(() => dashboardPeriod(timeFilter.mode, timeFilter[timeFilter.mode]), [timeFilter]);
@@ -95,28 +97,6 @@ export default function Dashboard({
   const totalSetsCount = stats.dashboardSetCount + (period.active ? 0 : inventory.completeFromLooseDevices);
   const installedSetsCount = stats.installed;
   const stockSetsCount = stats.stock + (period.active ? 0 : inventory.completeFromLooseDevices);
-  const [deviceGroup, setDeviceGroup] = useState(null);
-  const [deviceLimit, setDeviceLimit] = useState(8);
-  const deviceGroups = useMemo(() => {
-    const sets = new Map(systemSets.map(set => [set.setCode, set]));
-    const distributors = new Map(npps.map(npp => [npp.id, npp.name]));
-    return [['Máy chiết', dispensers], ['Máy lắc', mixers], ['Máy tính', computers], ['Máy in', printers]]
-      .map(([label, devices]) => ({
-        label,
-        total: devices.length,
-        rows: listOperationalDevices(devices, systemSets, npps).map(device => {
-          const set = sets.get(device.setCode);
-          return {
-            id: device.id,
-            model: device.model || device.type || label,
-            serial: device.serial,
-            npp: distributors.get(set?.nppId) || set?.nppName || 'Chưa gắn NPP',
-          };
-        }),
-      }));
-  }, [dispensers, mixers, computers, printers, systemSets, npps]);
-  const selectedDevices = deviceGroups.find(group => group.label === deviceGroup);
-
   // Repair & replacement statistics
   const totalRepairsCount = useMemo(() => 
     repairTickets.filter(t => t.actionDirection === 'Sửa chữa' || !t.actionDirection).length
@@ -173,7 +153,7 @@ export default function Dashboard({
   const [repairActionFilter, setRepairActionFilter] = useState('ALL');
   const [repairPage, setRepairPage] = useState(1);
   const [repairPageSize, setRepairPageSize] = useState(10);
-  useEffect(() => { setDashboardPage(1); setRepairPage(1); setSelectedNppHistory(null); setDeviceGroup(null); }, [period]);
+  useEffect(() => { setDashboardPage(1); setRepairPage(1); setSelectedNppHistory(null); }, [period]);
 
 
   // Sắp xếp bộ máy mới lắp đặt gần nhất lên đầu
@@ -249,8 +229,13 @@ export default function Dashboard({
   );
 
   const [healthOpen,setHealthOpen]=useState(false);
+  const pendingRepairCount = repairTickets.filter(ticket => ticket.processingStatus === 'Chưa xử lý').length;
   return (
-    <div className="workspace-screen dashboard-screen" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+    <div className={`workspace-screen dashboard-screen${appSettings.showOperations ? "" : " hide-operations"}${appSettings.showCharts ? "" : " hide-charts"}${appSettings.showReport ? "" : " hide-report"}`} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      <header className="erp-heading">
+        <div><span className="erp-eyebrow">{appSettings.company} / QUẢN TRỊ VẬN HÀNH</span><h1>Trung tâm điều hành</h1><p>Hệ thống máy pha màu · {workspaceRegion === 'ALL' ? 'Tất cả miền được phân quyền' : workspaceRegion}</p></div>
+        <div className="erp-heading-actions"><AppSettings/><button type="button" className="btn btn-primary" onClick={onOpenNewInstallation}><Layers size={18} /> Lắp đặt bộ máy</button></div>
+      </header>
 
       <section className="glass-panel dashboard-period" aria-label="Lọc thời gian dashboard">
         <div className="dashboard-period-heading">
@@ -289,8 +274,86 @@ export default function Dashboard({
         </div>
       </section>
 
-      <DashboardReport machines={systemSets} npps={npps} devices={{ computer: computers, dispenser: dispensers, mixer: mixers, printer: printers }} events={replacementEvents} fetchTicketDetails={fetchTicketDetails} tickets={repairTickets} region={workspaceRegion} today={today}
-        fleet={totalSetsCount} stock={stockSetsCount} regionalCounts={regionChartData} models={modelChartData} />
+      {/* Stat Cards Overview */}
+
+      <div className="overview-stats" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '16px' }}>
+
+        {/* Total Sets */}
+        <div className="glass-panel glass-panel-hover" style={{ padding: '20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: '600', textTransform: 'uppercase' }}>Tổng Bộ Máy Pha Màu</span>
+            <div style={{ padding: '8px', borderRadius: '8px', background: 'rgba(56, 189, 248, 0.15)', color: 'var(--accent-blue)' }}>
+              <Cpu size={20} />
+            </div>
+          </div>
+          <div style={{ fontSize: '2rem', fontWeight: '800', color: 'var(--text-main)', lineHeight: 1.1 }}>
+            {totalSetsCount} <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)', fontWeight: 'normal' }}>Bộ</span>
+          </div>
+          <div style={{ marginTop: '12px', display: 'flex', gap: '8px', fontSize: '0.75rem', flexWrap: 'wrap' }}>
+            {regionalCounts.map(region => <span key={region.name} className="badge badge-info">{region.name}: {region.count} bộ</span>)}
+            <span className="badge badge-success">● {installedSetsCount} Đã Lắp</span>
+            <span className="badge badge-info" title={period.active ? "Bộ máy lắp trong kỳ, hiện đang ở kho" : "Gồm bộ đã ghép và số bộ có thể ghép đủ từ thiết bị lẻ, đồng nhất với Kho thiết bị"}>● {stockSetsCount} Trong Kho</span>
+          </div>
+        </div>
+
+        {/* Active Distributors */}
+        <div className="glass-panel glass-panel-hover" style={{ padding: '20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: '600', textTransform: 'uppercase' }}>Nhà Phân Phối (NPP)</span>
+            <div style={{ padding: '8px', borderRadius: '8px', background: 'rgba(56, 189, 248, 0.15)', color: 'var(--accent-blue)' }}>
+              <Building2 size={20} />
+            </div>
+          </div>
+          <div style={{ fontSize: '2rem', fontWeight: '800', color: 'var(--text-main)', lineHeight: 1.1 }}>
+            {activeNpps.length} <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)', fontWeight: 'normal' }}>{period.active ? 'NPP có bộ máy trong kỳ' : 'NPP đang hợp tác'}</span>
+          </div>
+          <div style={{ marginTop: '12px', display: 'flex', gap: '8px', fontSize: '0.75rem', flexWrap: 'wrap' }}>
+            <span className="badge badge-info">{coverage.assigned.length} NPP đã ghép bộ</span><span className="badge badge-warning">{coverage.unassigned.length} NPP chưa ghép</span>
+            <span className="badge badge-success">● Chỉ tính NPP đang hợp tác</span>
+          </div>
+        </div>
+
+        <section className="glass-panel dashboard-repair-kpi">
+          <h3>Sửa chữa & linh kiện</h3>
+          <strong className="dashboard-kpi-value">{totalRepairsCount}</strong> <small>phiếu sửa</small>
+          {frequentRepairs.length ? (
+            <ol>{frequentRepairs.map(([label, count]) => <li key={label}><span>{label}</span><strong>{count}</strong></li>)}</ol>
+          ) : <p>Chưa có loại nào từ 3 phiếu.</p>}
+          <button type="button" className="btn btn-secondary"
+            onClick={() => document.getElementById('repair-tracking-section')?.scrollIntoView({ block: 'start' })}>Xem phiếu</button>
+        </section>
+
+        <section className="glass-panel dashboard-exchange-kpi">
+          <h3>Đổi trả <span>{exchangeSummary.total}</span></h3>
+          {exchangeSummary.rows.length ? (
+            <table>
+              <thead><tr><th scope="col">Thiết bị</th><th scope="col">Mới</th><th scope="col">Cũ</th>{exchangeSummary.rows.some(([, row]) => row.unknown > 0) && <th scope="col">Chưa rõ</th>}</tr></thead>
+              <tbody>{exchangeSummary.rows.map(([label, counts]) => (
+                <tr key={label}><th scope="row">{label}</th><td>{counts.new}</td><td>{counts.used}</td>{exchangeSummary.rows.some(([, row]) => row.unknown > 0) && <td>{counts.unknown}</td>}</tr>
+              ))}</tbody>
+            </table>
+          ) : <p className="resource-muted">Chưa có phiếu đổi trả.</p>}
+        </section>
+
+      </div>
+
+
+
+      <section className="erp-operations" aria-labelledby="erp-priority-title">
+        <div className="erp-priority">
+          <div className="erp-section-heading"><h2 id="erp-priority-title">Cần xử lý</h2><span>Theo kỳ đang chọn</span></div>
+          <button type="button" onClick={() => setActiveTab('repairs')}><span className="erp-indicator erp-amber"><Wrench size={19} /></span><span><b>Phiếu chưa xử lý</b><small>Theo dõi tiến độ sửa chữa</small></span><strong>{pendingRepairCount}</strong><ArrowUpRight size={18} /></button>
+          <button type="button" onClick={() => setActiveTab('maintenance')}><span className="erp-indicator erp-red"><CalendarClock size={19} /></span><span><b>Bảo trì trong 30 ngày</b><small>Chủ động sắp xếp lịch kỹ thuật</small></span><strong>{maintenanceAlerts.length}</strong><ArrowUpRight size={18} /></button>
+          <button type="button" onClick={() => { setHealthOpen(true); document.getElementById('dashboard-health')?.scrollIntoView({ block: 'start' }); }}><span className="erp-indicator"><ShieldAlert size={19} /></span><span><b>Bộ máy chưa ổn định</b><small>Kiểm tra sức khỏe hệ thống</small></span><strong>{unstabilizedAlerts.length}</strong><ArrowUpRight size={18} /></button>
+        </div>
+        <div className="erp-regions">
+          <div className="erp-section-heading"><h2>Phân bổ theo miền</h2><span>{installedSetsCount} bộ đã lắp</span></div>
+          {regionalCounts.map(region => <div className="erp-region" key={region.name}><div><span>{region.name}</span><strong>{region.count} <small>bộ máy</small></strong></div><progress aria-label={`Số bộ máy ${region.name}`} value={region.count} max={Math.max(1, ...regionalCounts.map(item => item.count))} /></div>)}
+          <p>Số lượng bộ máy trong phạm vi dữ liệu bạn được truy cập.</p>
+        </div>
+      </section>
+      <details className="erp-report"><summary><FileText size={18} /> Báo cáo & xuất dữ liệu</summary><DashboardReport machines={systemSets} npps={npps} devices={{ computer: computers, dispenser: dispensers, mixer: mixers, printer: printers }} events={replacementEvents} fetchTicketDetails={fetchTicketDetails} tickets={repairTickets} region={workspaceRegion} today={today}
+        fleet={totalSetsCount} stock={stockSetsCount} regionalCounts={regionChartData} models={modelChartData} /></details>
       <nav className="dashboard-jump" aria-label="Đi nhanh trong tổng quan">
         <button type="button" onClick={() => { document.getElementById('dashboard-charts')?.scrollIntoView({ block: 'start' }); }}>Biểu đồ</button>
         <button type="button" onClick={() => { setHealthOpen(true); document.getElementById('dashboard-health')?.scrollIntoView({ block: 'start' }); }}>Sức khỏe hệ thống</button>
@@ -328,94 +391,7 @@ export default function Dashboard({
         </div>
       )}
 
-      {/* Stat Cards Overview */}
-
-      <div className="overview-stats" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '16px' }}>
-
-        {/* Total Sets */}
-        <div className="glass-panel glass-panel-hover" style={{ padding: '20px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: '600', textTransform: 'uppercase' }}>Tổng Bộ Máy Pha Màu</span>
-            <div style={{ padding: '8px', borderRadius: '8px', background: 'rgba(56, 189, 248, 0.15)', color: 'var(--accent-blue)' }}>
-              <Cpu size={20} />
-            </div>
-          </div>
-          <div style={{ fontSize: '2rem', fontWeight: '800', color: 'var(--text-main)', lineHeight: 1.1 }}>
-            {totalSetsCount} <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)', fontWeight: 'normal' }}>Bộ</span>
-          </div>
-          <div style={{ marginTop: '12px', display: 'flex', gap: '8px', fontSize: '0.75rem', flexWrap: 'wrap' }}>
-            {regionalCounts.map(region => <span key={region.name} className="badge badge-info">{region.name}: {region.count} bộ</span>)}
-            <span className="badge badge-success">● {installedSetsCount} Đã Lắp</span>
-            <span className="badge badge-info" title={period.active ? "Bộ máy lắp trong kỳ, hiện đang ở kho" : "Gồm bộ đã ghép và số bộ có thể ghép đủ từ thiết bị lẻ, đồng nhất với Kho thiết bị"}>● {stockSetsCount} Trong Kho</span>
-          </div>
-        </div>
-
-        {/* Active Distributors */}
-        <div className="glass-panel glass-panel-hover" style={{ padding: '20px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: '600', textTransform: 'uppercase' }}>Nhà Phân Phối (NPP)</span>
-            <div style={{ padding: '8px', borderRadius: '8px', background: 'rgba(168, 85, 247, 0.15)', color: 'var(--accent-purple)' }}>
-              <Building2 size={20} />
-            </div>
-          </div>
-          <div style={{ fontSize: '2rem', fontWeight: '800', color: 'var(--text-main)', lineHeight: 1.1 }}>
-            {activeNpps.length} <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)', fontWeight: 'normal' }}>{period.active ? 'NPP có bộ máy trong kỳ' : 'NPP đang hợp tác'}</span>
-          </div>
-          <div style={{ marginTop: '12px', display: 'flex', gap: '8px', fontSize: '0.75rem', flexWrap: 'wrap' }}>
-            <span className="badge badge-info">{coverage.assigned.length} NPP đã ghép bộ</span><span className="badge badge-warning">{coverage.unassigned.length} NPP chưa ghép</span>
-            <span className="badge badge-success">● Chỉ tính NPP đang hợp tác</span>
-          </div>
-        </div>
-
-        <section className="glass-panel dashboard-device-kpi">
-          <h3>Thiết bị</h3>
-          <div className="dashboard-device-counts">
-            {deviceGroups.map(group => (
-              <button type="button" className="btn btn-secondary" key={group.label}
-                aria-expanded={deviceGroup === group.label}
-                onClick={() => { setDeviceGroup(deviceGroup === group.label ? null : group.label); setDeviceLimit(8); }}>
-                <span>{group.label}</span><strong>{group.total}</strong><small>{group.rows.length} chạy tốt</small>
-              </button>
-            ))}
-          </div>
-          {selectedDevices && (
-            <div className="dashboard-device-list">
-              <h4>{selectedDevices.label} chạy tốt</h4>
-              {selectedDevices.rows.length ? <ul>{selectedDevices.rows.slice(0, deviceLimit).map(row => (
-                <li key={row.id}><strong>{row.model}</strong>{row.serial && <small>{row.serial}</small>}<span>{row.npp}</span></li>
-              ))}</ul> : <p>Chưa có thiết bị chạy tốt.</p>}
-              {selectedDevices.rows.length > deviceLimit && <button type="button" className="btn btn-secondary" onClick={() => setDeviceLimit(limit => limit + 8)}>Xem thêm</button>}
-            </div>
-          )}
-        </section>
-
-        <section className="glass-panel dashboard-repair-kpi">
-          <h3>Sửa chữa & linh kiện</h3>
-          <strong className="dashboard-kpi-value">{totalRepairsCount}</strong> <small>phiếu sửa</small>
-          {frequentRepairs.length ? (
-            <ol>{frequentRepairs.map(([label, count]) => <li key={label}><span>{label}</span><strong>{count}</strong></li>)}</ol>
-          ) : <p>Chưa có loại nào từ 3 phiếu.</p>}
-          <button type="button" className="btn btn-secondary"
-            onClick={() => document.getElementById('repair-tracking-section')?.scrollIntoView({ block: 'start' })}>Xem phiếu</button>
-        </section>
-
-        <section className="glass-panel dashboard-exchange-kpi">
-          <h3>Đổi trả <span>{exchangeSummary.total}</span></h3>
-          {exchangeSummary.rows.length ? (
-            <table>
-              <thead><tr><th scope="col">Thiết bị</th><th scope="col">Mới</th><th scope="col">Cũ</th>{exchangeSummary.rows.some(([, row]) => row.unknown > 0) && <th scope="col">Chưa rõ</th>}</tr></thead>
-              <tbody>{exchangeSummary.rows.map(([label, counts]) => (
-                <tr key={label}><th scope="row">{label}</th><td>{counts.new}</td><td>{counts.used}</td>{exchangeSummary.rows.some(([, row]) => row.unknown > 0) && <td>{counts.unknown}</td>}</tr>
-              ))}</tbody>
-            </table>
-          ) : <p className="resource-muted">Chưa có phiếu đổi trả.</p>}
-        </section>
-
-      </div>
-
-
-
-      <section id="dashboard-charts" className="dashboard-chart-group" aria-labelledby="dashboard-chart-heading">
+      {appSettings.showCharts && <section id="dashboard-charts" className="dashboard-chart-group" aria-labelledby="dashboard-chart-heading">
       <h2 id="dashboard-chart-heading">Biểu đồ tổng quan</h2>
       <div className="dashboard-chart-grid">
 
@@ -475,7 +451,7 @@ export default function Dashboard({
       </div>
 
       {/* Installed System Sets Table */}
-      </section>
+      </section>}
       <details id="dashboard-health" className="dashboard-chart-group health-chart-group" open={healthOpen} onToggle={event=>setHealthOpen(event.currentTarget.open)}>
         <summary>Sức khỏe hệ thống máy pha màu</summary>
         {healthOpen&&<SystemHealthPanel machines={systemSets} devices={{computer:computers,dispenser:dispensers,mixer:mixers,printer:printers}} tickets={allRepairTickets} events={replacementEvents} npps={npps} historyError={replacementHistoryError} onNavigate={onNavigateWorkspace}/>}

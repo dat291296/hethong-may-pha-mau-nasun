@@ -29,6 +29,7 @@ import {
   Plus,
   RotateCcw
 } from 'lucide-react';
+import { useAuth } from '../../../shared/context/AuthContext.jsx';
 import SafePortal from '../../../shared/components/SafePortal';
 import { confirmAction } from '../../../shared/utils/confirmDialog.js';
 import TechnicalResources from './TechnicalResources';
@@ -42,6 +43,8 @@ import {
 } from '../data/troubleshootingData.js';
 
 export default function TechHandbook({ globalSearch = '', onSelectErrorForRepair }) {
+  const { role } = useAuth();
+  const canEdit = ['admin', 'technician'].includes(role);
   const [activeSubTab, setActiveSubTab] = useState('ERRORS'); // 'ERRORS' | 'SOPS' | 'TIPS'
 
   const [errorCodes, setErrorCodes] = useState(ERROR_CODES_DATA);
@@ -296,6 +299,7 @@ export default function TechHandbook({ globalSearch = '', onSelectErrorForRepair
   }, []);
 
   async function saveHandbookItems(key, items, apply) {
+    if (!canEdit) return false;
     try {
       const saved = await cacheOfflineData(key, key === 'tech_handbook_sops' ? { version: 1, items } : items);
       if (!saved) throw new Error('Handbook cache write failed');
@@ -462,7 +466,7 @@ export default function TechHandbook({ globalSearch = '', onSelectErrorForRepair
               <button 
                 type="button"
                 className="btn btn-secondary btn-sm"
-                onClick={handleResetDefaultErrors}
+                disabled={!canEdit} onClick={handleResetDefaultErrors}
                 title="Khôi phục danh sách mã lỗi chuẩn từ dữ liệu mẫu"
               >
                 <RotateCcw size={14} />
@@ -471,7 +475,7 @@ export default function TechHandbook({ globalSearch = '', onSelectErrorForRepair
               <button 
                 type="button"
                 className="btn btn-primary btn-sm"
-                onClick={handleOpenAddError}
+                disabled={!canEdit} onClick={handleOpenAddError}
               >
                 <Plus size={14} />
                 <span>Thêm Mã Lỗi Mới</span>
@@ -655,7 +659,7 @@ export default function TechHandbook({ globalSearch = '', onSelectErrorForRepair
                           className="btn btn-secondary btn-sm"
                           style={{ padding: '6px 10px' }}
                           title="Chỉnh sửa mã lỗi"
-                          onClick={() => handleOpenEditError(error)}
+                          disabled={!canEdit} onClick={() => handleOpenEditError(error)}
                         >
                           <Edit3 size={14} color="var(--accent-amber)" />
                           <span>Sửa</span>
@@ -666,7 +670,7 @@ export default function TechHandbook({ globalSearch = '', onSelectErrorForRepair
                           className="btn btn-secondary btn-sm"
                           style={{ padding: '6px 10px' }}
                           title="Xóa mã lỗi"
-                          onClick={() => handleDeleteError(error)}
+                          disabled={!canEdit} onClick={() => handleDeleteError(error)}
                         >
                           <Trash2 size={14} color="#ef4444" />
                           <span>Xóa</span>
@@ -1013,7 +1017,7 @@ export default function TechHandbook({ globalSearch = '', onSelectErrorForRepair
       {activeSubTab === 'SOPS' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {storageError && <p role="alert">{storageError}</p>}
-          <button id="handbook-sop-editor" className="btn btn-primary" disabled={!sopsReady} onClick={() => setSopDraft({ title: '', machineType: '', duration: '', toolsRequired: [], steps: [{ title: '', desc: '' }] })}>Thêm quy trình</button>
+          <button id="handbook-sop-editor" className="btn btn-primary" disabled={!canEdit || !sopsReady} onClick={() => setSopDraft({ title: '', machineType: '', duration: '', toolsRequired: [], steps: [{ title: '', desc: '' }] })}>Thêm quy trình</button>
           {sopDraft && (
             <form className="glass-panel sop-editor" onSubmit={async event => {
               event.preventDefault();
@@ -1089,8 +1093,8 @@ export default function TechHandbook({ globalSearch = '', onSelectErrorForRepair
                     sop.title, [sop.machineType, sop.duration],
                     [['Dụng cụ', sop.toolsRequired], ['Các bước', sop.steps.map(step => [step.title, step.desc].filter(Boolean).join('\n'))]]
                   )}>Xuất PDF</button>
-                  <button className="btn btn-secondary" disabled={!sopsReady} onClick={() => { setSopDraft(sop); document.getElementById('handbook-sop-editor')?.scrollIntoView(); }}>Sửa</button>
-                  <button className="btn btn-secondary" disabled={!sopsReady} onClick={() => {
+                  <button className="btn btn-secondary" disabled={!canEdit || !sopsReady} onClick={() => { setSopDraft(sop); document.getElementById('handbook-sop-editor')?.scrollIntoView(); }}>Sửa</button>
+                  <button className="btn btn-secondary" disabled={!canEdit || !sopsReady} onClick={() => {
                     if (window.confirm(`Xóa quy trình “${sop.title}”?`)) void saveHandbookItems('tech_handbook_sops', sops.filter(item => item.id !== sop.id), setSops);
                   }}>Xóa</button>
                 </div>
@@ -1128,7 +1132,7 @@ export default function TechHandbook({ globalSearch = '', onSelectErrorForRepair
               Kinh nghiệm xử lý thực địa được đúc kết bởi các Kỹ thuật viên Nasun Paint khi đi công tác xa.
             </p>
             <button
-              disabled={!tipsHydrated}
+              disabled={!canEdit || !tipsHydrated}
               onClick={() => { setTipId(null); setNewTip({ title: '', author: 'KTV. Kỹ Thuật Viên', tags: '', content: '' }); setShowAddTipModal(true); }}
               className="btn btn-primary"
               style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem' }}
@@ -1162,12 +1166,12 @@ export default function TechHandbook({ globalSearch = '', onSelectErrorForRepair
 
                   <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', lineHeight: '1.5', margin: 0 }}>
                     <details><summary>Xem mẹo</summary><p style={{ whiteSpace: 'pre-wrap' }}>{tip.content}</p></details>
-                    <button className="btn btn-secondary" disabled={!tipsHydrated} onClick={() => {
+                    <button className="btn btn-secondary" disabled={!canEdit || !tipsHydrated} onClick={() => {
                       setTipId(tip.id);
                       setNewTip({ ...tip, tags: tip.tags.join(', ') });
                       setShowAddTipModal(true);
                     }}>Sửa</button>
-                    <button className="btn btn-secondary" disabled={!tipsHydrated} onClick={() => {
+                    <button className="btn btn-secondary" disabled={!canEdit || !tipsHydrated} onClick={() => {
                       if (window.confirm(`Xóa mẹo “${tip.title}”?`)) void saveHandbookItems('tech_handbook_field_tips', fieldTips.filter(item => item.id !== tip.id), setFieldTips);
                     }}>Xóa</button>
                   </p>

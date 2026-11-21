@@ -1,10 +1,11 @@
+import { useAppSettings } from './AppSettings.jsx';
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  LayoutDashboard, 
-  Building2, 
-  Cpu, 
-  ArrowLeftRight, 
-  CalendarClock, 
+import {
+  LayoutDashboard,
+  Building2,
+  Cpu,
+  ArrowLeftRight,
+  CalendarClock,
   FileText,
   FileClock,
   Wrench,
@@ -23,6 +24,7 @@ import { confirmAction } from '../../shared/utils/confirmDialog.js';
 
 export default function Sidebar({ activeTab, setActiveTab, maintenanceCount, pendingRepairCount, isOpen, onClose }) {
   const { role, signOut } = useAuth();
+  const appSettings = useAppSettings();
   const sidebarRef = useRef(null);
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
@@ -103,7 +105,7 @@ export default function Sidebar({ activeTab, setActiveTab, maintenanceCount, pen
 
   // Auto expand group containing active tab on tab change
   useEffect(() => {
-    const activeGroup = menuGroups.find(group => 
+    const activeGroup = menuGroups.find(group =>
       group.items.some(item => item.id === activeTab)
     );
     if (activeGroup) {
@@ -138,7 +140,7 @@ export default function Sidebar({ activeTab, setActiveTab, maintenanceCount, pen
         display: 'flex',
         flexDirection: 'column',
         height: '100vh',
-      }} 
+      }}
     >
       {/* Brand Logo */}
       <div style={{
@@ -150,44 +152,44 @@ export default function Sidebar({ activeTab, setActiveTab, maintenanceCount, pen
         background: 'rgba(30, 41, 59, 0.15)'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <img 
-            src="/nasun_logo.png?v=3" 
-            alt="Nasun Paint Logo" 
+          <img
+            src={appSettings.logo || "/nasun_logo.png?v=3"}
+            alt={`${appSettings.company} Logo`}
             style={{
               width: '40px',
               height: '40px',
               objectFit: 'contain'
             }}
           />
-          
+
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-            <h2 style={{ 
-              fontSize: '1rem', 
-              fontWeight: '900', 
-              color: 'var(--text-main)', 
-              letterSpacing: '-0.02em', 
+            <h2 style={{
+              fontSize: '1rem',
+              fontWeight: '900',
+              color: 'var(--text-main)',
+              letterSpacing: '-0.02em',
               lineHeight: 1.1,
-              background: 'linear-gradient(90deg, #fff 0%, #cbd5e1 100%)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent'
+              overflowWrap: 'anywhere',
+
+
             }}>
-              NASUN PAINT
+              {appSettings.company}
             </h2>
-            <span style={{ 
-              fontSize: '0.65rem', 
-              color: 'var(--accent-cyan)', 
-              fontWeight: '700', 
-              textTransform: 'uppercase', 
+            <span style={{
+              fontSize: '0.65rem',
+              color: 'var(--accent-cyan)',
+              fontWeight: '700',
+              textTransform: 'uppercase',
               letterSpacing: '0.08em',
-              opacity: 0.9 
+              opacity: 0.9
             }}>
-              Hệ Thống Pha Màu
+              {appSettings.contact || "Hệ Thống Pha Màu"}
             </span>
           </div>
         </div>
 
         {isOpen && (
-          <button 
+          <button
             onClick={onClose}
             className="sidebar-close-btn"
             aria-label="Đóng menu quản lý"
@@ -299,7 +301,7 @@ export default function Sidebar({ activeTab, setActiveTab, maintenanceCount, pen
           const isExpanded = !!expandedGroups[group.id];
           const hasActiveChild = group.items.some(item => item.id === activeTab);
           const badgeCount = getGroupBadgeCount(group.id);
-          
+
           return (
             <div key={group.id} style={{ marginBottom: '6px' }}>
               {/* Group Header */}
@@ -344,9 +346,9 @@ export default function Sidebar({ activeTab, setActiveTab, maintenanceCount, pen
 
               {/* Sub-items list */}
               {isExpanded && (
-                <div style={{ 
-                  marginLeft: '20px', 
-                  borderLeft: '1px solid var(--border-color)', 
+                <div style={{
+                  marginLeft: '20px',
+                  borderLeft: '1px solid var(--border-color)',
                   paddingLeft: '4px',
                   display: 'flex',
                   flexDirection: 'column',
