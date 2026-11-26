@@ -50,6 +50,7 @@ try {
     await page.route('**/*', route => new URL(route.request().url()).origin === 'http://127.0.0.1:5195' ? route.continue() : route.abort());
     const desktop = () => page.setViewportSize({width:1280,height:844});
     await desktop();
+    await page.getByRole('button',{name:'Đối Tác & Thiết Bị',exact:true}).click();
     await page.getByRole('button',{name:'Bộ Máy & Kho Thiết Bị',exact:true}).click();
     await page.locator('.assetmanagement-screen').waitFor();
     const viewports = [];
@@ -74,6 +75,7 @@ try {
     await page.getByPlaceholder('09xx xxx xxx').fill('12');
     await page.locator('#npp-phone-feedback').filter({hasText:'không đúng định dạng'}).waitFor();
     await page.getByRole('button',{name:'Hủy Bỏ',exact:true}).click();
+    await page.getByRole('button',{name:/KỸ THUẬT & BẢO TRÌ/i}).click();
     await page.getByRole('button',{name:/Xử Lý & Sửa Chữa Máy/}).first().click();
     await page.getByRole('button',{name:'Tạo phiếu',exact:true}).click();
     await page.locator('input[aria-describedby="repair-serial-feedback"]').fill('???');
