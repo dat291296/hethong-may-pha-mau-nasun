@@ -123,6 +123,6 @@ Chọn NASUN hoặc NATOS để xem nghiệp vụ theo hãng của nhà phân ph
 
 Bộ chọn hãng xuất hiện ở Dashboard, Việc hôm nay và nhóm Đối tác & Thiết bị. Các màn hình nghiệp vụ khác tiếp tục dùng hãng đã chọn.
 
-Trong hồ sơ nhà phân phối hoặc bộ máy, mở **Vị trí ống màu CCA** của máy chiết Satint A2 / A2-100 đã liên kết. Kỹ thuật viên đối chiếu số seri, chọn đủ 14 mã theo vị trí thực tế rồi lưu khi có mạng. Khi điều chuyển, sơ đồ đi theo máy chiết. Khi thay máy, hồ sơ hiển thị sơ đồ của máy mới theo seri. Mẫu màu trên màn hình chỉ dùng để nhận diện.
+Trong hồ sơ nhà phân phối hoặc bộ máy, mở **Vị trí ống màu CCA** của máy chiết Satint A2 / A2-100 đã liên kết. Kỹ thuật viên đối chiếu số seri, nhập từng vị trí trong sơ đồ 16 ống, chọn mã màu, Không sử dụng hoặc Hỏng theo thực tế rồi lưu khi có mạng. Khi điều chuyển, sơ đồ đi theo máy chiết. Khi thay máy, hồ sơ hiển thị sơ đồ của máy mới theo seri. Mẫu màu trên màn hình chỉ dùng để nhận diện.
 
-Áp dụng migration 20261126000100_dispenser_colorant_slots.sql trước khi phát hành giao diện này. Máy cũ ban đầu chưa có sơ đồ.
+Áp dụng migration 20261126000200_sixteen_colorant_slots.sql sau migration 20261126000100_dispenser_colorant_slots.sql và trước khi phát hành giao diện này. Máy cũ ban đầu chưa có sơ đồ.

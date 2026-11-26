@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { scopeBrand, scopeWorkspace } from '../src/shared/workspace/regionalWorkspace.js';
-import { COLORANTS, colorantDevice, supportsColorantSlots, validColorantSlots } from '../src/modules/equipment/lib/colorantSlots.js';
+import { COLORANTS, displayColorantSlots, colorantDevice, supportsColorantSlots, validColorantSlots } from '../src/modules/equipment/lib/colorantSlots.js';
 
 test('a replacement selects its own layout and a transferred dispenser keeps its layout', () => {
   const old = { id: 'A', serial: 'SN01', setCode: 'S2', colorantSlots: Object.keys(COLORANTS) };
@@ -30,12 +30,17 @@ test('brand follows distributor, respects historical ticket owner and excludes c
   assert.equal(scopeBrand(data, 'ALL'), data);
 });
 
-test('only supported models accept complete permutations of the 14 codes', () => {
+test('partial 16-slot layouts and legacy 14-slot layouts remain valid', () => {
   for (const model of ['Satint A2', 'Santint A2-100']) assert.ok(supportsColorantSlots(model));
   assert.equal(supportsColorantSlots('Satint A20'), false);
   const codes = Object.keys(COLORANTS);
   assert.ok(validColorantSlots([...codes].reverse()));
   assert.equal(validColorantSlots(codes.slice(1)), false);
-  assert.equal(validColorantSlots([...codes.slice(1), 'B']), false);
+  assert.ok(validColorantSlots([...codes.slice(1), 'B']));
+  const partial = displayColorantSlots(null);
+  partial[0] = 'AXX'; partial[7] = 'BROKEN'; partial[15] = 'UNUSED';
+  assert.ok(validColorantSlots(partial));
+  assert.deepEqual(displayColorantSlots(codes).slice(0,14), codes);
+  assert.deepEqual(displayColorantSlots(codes).slice(14), ['', '']);
   assert.equal(validColorantSlots([...codes.slice(1), 'XX']), false);
 });

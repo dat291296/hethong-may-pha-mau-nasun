@@ -11,9 +11,13 @@ export const COLORANTS = {
 };
 
 export const supportsColorantSlots = model => /^sa(?:n)?tint[ -]+a2(?:[ -]100)?$/i.test(String(model || '').trim());
+export const SLOT_STATES = { UNUSED: 'Không sử dụng', BROKEN: 'Hỏng' };
+export function displayColorantSlots(slots) {
+  return Array.from({ length: 16 }, (_, index) => slots?.[index] || '');
+}
 export function validColorantSlots(slots) {
-  return Array.isArray(slots) && slots.length === 14 && new Set(slots).size === 14 &&
-    slots.every(code => Object.hasOwn(COLORANTS, code));
+  return Array.isArray(slots) && [14, 16].includes(slots.length) &&
+    slots.every(code => code === '' || Object.hasOwn(COLORANTS, code) || Object.hasOwn(SLOT_STATES, code));
 }
 
 export function colorantDevice(machine, dispensers) {

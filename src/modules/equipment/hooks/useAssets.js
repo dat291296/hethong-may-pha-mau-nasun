@@ -312,7 +312,7 @@ export function useAssets() {
 
   const saveColorantSlots = useCallback(async (device, slots) => {
     if (!supportsColorantSlots(device.model) || !validColorantSlots(slots)) {
-      throw new Error('Hãy chọn đủ 14 mã, mỗi mã một vị trí.');
+      throw new Error('Mã màu hoặc trạng thái ống chưa hợp lệ.');
     }
     await withAssetWrite(async () => {
       const current = assetStateRef.current.dispensers.find(row => row.id === device.id);

@@ -2509,8 +2509,13 @@ html {
 .colorant-panel summary { cursor: pointer; }
 .colorant-panel summary small { margin-inline-start: .75rem; color: var(--text-muted); }
 .colorant-panel p { margin-block: .75rem; }
-.colorant-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(78px,1fr)); gap: 6px; margin-bottom: 12px; }
-.colorant-cell { display: grid; gap: 4px; padding: 8px; border: 1px solid var(--border-color); border-radius: 8px; }
+.colorant-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; margin: 16px 0; }
+.colorant-cell { display: grid; align-content: start; min-width: 0; gap: 8px; padding: 12px; border: 1px solid var(--border-color); border-radius: 12px; background: var(--bg-main); }
 .colorant-cell small { color: var(--text-muted); }
-.colorant-cell select { max-width: 100%; font: inherit; }
+.colorant-cell select { width: 100%; min-width: 0; min-height: 44px; font: inherit; font-size: .8rem; background: var(--bg-main); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 6px; }
 .colorant-swatch { height: 10px; border-radius: 3px; border: 1px solid var(--border-color); }
+
+.colorant-cell.is-broken { border: 2px solid #ef6b65; background: rgba(239,107,101,.09); }
+.colorant-cell.is-unused { border-style: dashed; }
+.colorant-warning { color: #ef6b65; font-weight: 600; }
+@media (max-width: 520px) { .colorant-grid { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; } .colorant-panel { padding: 10px; } }

@@ -11,7 +11,9 @@ if (!['postgres:', 'postgresql:'].includes(destination.protocol) || ref !== appr
   || api.hostname !== approved + '.supabase.co' || !destination.password) {
   throw new Error('Production destination mismatch');
 }
-const migration = (await readFile('supabase/migrations/20261126000100_dispenser_colorant_slots.sql', 'utf8'))
+const filename = process.argv.includes('--sixteen')
+  ? '20261126000200_sixteen_colorant_slots.sql' : '20261126000100_dispenser_colorant_slots.sql';
+const migration = (await readFile('supabase/migrations/' + filename, 'utf8'))
   .replace(/^\s*(begin|commit);\s*$/gim, '');
 const query = `BEGIN;
 SET LOCAL lock_timeout = '5s';

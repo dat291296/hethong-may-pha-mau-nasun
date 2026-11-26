@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { COLORANTS, colorantDevice, supportsColorantSlots, validColorantSlots } from '../lib/colorantSlots.js';
+import { COLORANTS, SLOT_STATES, displayColorantSlots, colorantDevice, supportsColorantSlots, validColorantSlots } from '../lib/colorantSlots.js';
 
 export default function ColorantSlots({ machine, dispensers, editable, onSave }) {
   const device = colorantDevice(machine, dispensers);
@@ -14,7 +14,9 @@ function SerialLayout({ device, editable, onSave }) {
   const [original, setOriginal] = useState(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
-  const slots = draft || device.colorantSlots || Array(14).fill('');
+  const slots = draft || displayColorantSlots(device.colorantSlots);
+  const broken = slots.filter(code => code === 'BROKEN').length;
+  const unused = slots.filter(code => code === 'UNUSED').length;
   async function save() {
     setBusy(true);
     try {
@@ -28,24 +30,23 @@ function SerialLayout({ device, editable, onSave }) {
     }
   }
   return <details className="colorant-panel">
-    <summary><strong>Vị trí ống màu CCA</strong><small>{device.colorantSlots ? '14 vị trí' : 'Chưa nhập thứ tự'}</small></summary>
+    <summary><strong>Vị trí ống màu CCA</strong><small>16 ống{broken > 0 ? ' · ⚠ ' + broken + ' ống hỏng' : ''}{unused > 0 ? ' · ' + unused + ' không sử dụng' : ''}</small></summary>
     <p>{device.model} · Seri <strong>{device.serial}</strong> · Màu hiển thị tham khảo</p>
-    {draft && <p>Chọn mã theo thứ tự trên máy. Chọn mã đang ở ống khác để đổi chỗ hai ống.</p>}
+    {broken > 0 && <p role="alert" className="colorant-warning">⚠ Có {broken} ống hỏng cần kiểm tra trước khi sử dụng máy.</p>}
+    {draft && <p>Chọn mã màu hoặc trạng thái cho từng ống. Bạn có thể lưu sau khi sửa một ống.</p>}
     <div className="colorant-grid">{slots.map((code, index) => {
-      const [name, color] = COLORANTS[code] || ['Chưa chọn', null];
+      const [name, color] = COLORANTS[code] || [SLOT_STATES[code] || 'Chưa ghi nhận', null];
       const label = 'Ống ' + String(index + 1).padStart(2, '0');
-      return <div className="colorant-cell" key={index}>
+      return <div className={'colorant-cell' + (code === 'BROKEN' ? ' is-broken' : code === 'UNUSED' ? ' is-unused' : '')} key={index}>
         <small>{label}</small><span className="colorant-swatch" style={{ backgroundColor: color }} />
         {draft ? <select aria-label={label} value={code} disabled={busy} onChange={event => {
           const next = [...draft];
           const selected = event.target.value;
-          const previousIndex = selected ? draft.indexOf(selected) : -1;
-          if (previousIndex >= 0) next[previousIndex] = draft[index];
           next[index] = selected;
           setDraft(next);
           setMessage('');
-        }}><option value="">Chọn mã</option>{Object.keys(COLORANTS).map(value =>
-          <option key={value}>{value}</option>)}</select> : <strong>{code || '—'}</strong>}
+        }}><option value="">Chưa ghi nhận</option><option value="UNUSED">Không sử dụng</option><option value="BROKEN">⚠ Hỏng</option>{Object.keys(COLORANTS).map(value =>
+          <option key={value}>{value}</option>)}</select> : <strong>{code === 'BROKEN' ? '⚠ Hỏng' : SLOT_STATES[code] || code || '—'}</strong>}
         <small>{name}</small>
       </div>;
     })}</div>
