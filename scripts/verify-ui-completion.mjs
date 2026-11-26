@@ -37,6 +37,7 @@ async function cli(...args) {
 // Exclude all application environment files and force the development-only
 // fixture path. This server cannot initialize a configured Supabase client.
 const server = await createServer({ configFile: false, envDir: false, envPrefix: 'NASUN_UI_UNUSED_',
+  optimizeDeps: { entries: ['index.html'] }, resolve: { dedupe: ['react', 'react-dom'] },
   plugins: [react()], root, server: { host: '127.0.0.1', port: 5195, strictPort: true },
   define: { 'import.meta.env.VITE_SUPABASE_URL': 'undefined', 'import.meta.env.VITE_SUPABASE_ANON_KEY': 'undefined',
     'import.meta.env.VITE_REMOTE_REPORTING_ENABLED': '"false"', 'import.meta.env.VITE_BUILD_REVISION': '"synthetic-ui"' } });
