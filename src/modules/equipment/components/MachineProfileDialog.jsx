@@ -1,3 +1,5 @@
+import ColorantSlots from './ColorantSlots.jsx';
+import { canEditRegion } from '../../../shared/workspace/workspaceFilters.js';
 import { EQUIPMENT_SLOTS, resolveEquipmentSlot } from '../lib/equipmentReplacement.js';
 import EquipmentReplacementDialog from './EquipmentReplacementDialog.jsx';
 import { missingSystemSetFields } from '../lib/dataCompleteness.js';
@@ -9,7 +11,7 @@ import { Camera, ZoomIn, Upload } from 'lucide-react';
 import LazyImage from '../../../shared/components/LazyImage.jsx';
 import { isUnknownSerial } from '../lib/deviceSerial.js';
 
-export default function MachineProfileDialog({ can, computers, dispensers, editingDevice, editingSet, getSetPhotos, handleOpenEditDevice, handleOpenEditSet, machineProfile, mixers, onReplaceEquipment, onRequestMaintenance, onRequestRepair, printers, profileTab, replacement, replacementEvents, replacementHistoryError, selectedSetDetails, setProfileTab, setReplacement, setSelectedPhotoViewer, setSelectedSetDetails, systemSets, user }) {
+export default function MachineProfileDialog({ onSaveSlots, can, computers, dispensers, editingDevice, editingSet, getSetPhotos, handleOpenEditDevice, handleOpenEditSet, machineProfile, mixers, onReplaceEquipment, onRequestMaintenance, onRequestRepair, printers, profileTab, replacement, replacementEvents, replacementHistoryError, selectedSetDetails, setProfileTab, setReplacement, setSelectedPhotoViewer, setSelectedSetDetails, systemSets, user }) {
   return (<>{/* COMBO SET DETAIL & FULL PHOTO GALLERY MODAL */}
       {selectedSetDetails && !editingDevice && !editingSet && !replacement && (
         <SafePortal>
@@ -37,6 +39,7 @@ export default function MachineProfileDialog({ can, computers, dispensers, editi
                 <div hidden={profileTab !== 'equipment'}>
                 <p className="resource-muted">Cần bổ sung: {missingSystemSetFields(selectedSetDetails).join(' · ') || 'Đã có các trường thông tin chính'}</p>
                 <div className="equipment-slot-grid">{EQUIPMENT_SLOTS.map(spec=>{const devices={computer:computers,dispenser:dispensers,mixer:mixers,printer:printers}[spec.category];const slot={...spec,...resolveEquipmentSlot(selectedSetDetails,spec.category,devices)};return <article className="equipment-slot" key={slot.category}><h4>{slot.label}</h4>{slot.device?<><strong>{slot.device.model||slot.device.type}</strong><code>{slot.device.id} · {slot.category==='computer'?'Không yêu cầu seri':isUnknownSerial(slot.device.serial)?'⚠ Chưa có seri':slot.device.serial}</code><small>{slot.device.status}</small></>:<p role="status" className="repair-missing-fields">{slot.state==='empty'?'Chưa gán thiết bị':'Liên kết chưa khớp — cần đối chiếu'}{slot.pointer&&<small> Mã đang ghi nhận: {slot.pointer}</small>}</p>}<div className="workspace-actions"><button className="btn btn-secondary btn-sm" disabled={!can('asset:edit')||!slot.device} onClick={()=>handleOpenEditDevice(slot.category,slot.device)}>Chỉnh sửa {slot.label.toLocaleLowerCase('vi')}</button><button className="btn btn-primary btn-sm" disabled={!can('asset:edit')||!onReplaceEquipment||(slot.state==='conflict'&&user?.role!=='admin')} onClick={()=>setReplacement({machine:selectedSetDetails,slot,devices})}>{slot.state==='conflict'?'Đối chiếu liên kết':slot.device?'Thay thiết bị':'Chọn từ kho'}</button></div></article>;})}</div>
+                <ColorantSlots machine={selectedSetDetails} dispensers={dispensers} editable={can('asset:edit') && canEditRegion(user, selectedSetDetails.region)} onSave={onSaveSlots} />
                 <MachineProfileSummary machine={selectedSetDetails} profile={machineProfile} showEquipment={false} />
 
                 <div className="machine-profile-extra">{[['tintingSoftware','Phần mềm pha màu'],['softwareVersion','Phiên bản'],['agentStatus','Trạng thái kết nối'],['lastMaintenanceDate','Bảo trì gần nhất'],['province','Tỉnh / Thành'],['region','Khu vực'],['notes','Ghi chú']].map(([key,label]) => <div key={key}><strong>{label}:</strong> {selectedSetDetails[key] || 'Chưa ghi nhận'}</div>)}</div>

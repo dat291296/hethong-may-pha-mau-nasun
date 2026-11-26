@@ -5,9 +5,7 @@ import { getAuthErrorMessage } from '../src/shared/security/authFeedback.js';
 
 test('recovery exposes only verified TOTP factors when MFA is required', async () => {
   const auth = {
-    getSession: async () => ({ data: { session: {} } }),
-    refreshSession: async () => ({ data: { session: {} } }),
-    updateUser: async () => ({ error: { code: 'insufficient_aal', status: 401 } }),
+    updateUser: async () => ({ error: { code: 'insufficient_aal' } }),
     mfa: { listFactors: async () => ({ data: { totp: [
       { id: 'verified', status: 'verified', friendly_name: 'Authenticator', secret: 'never expose' },
       { id: 'pending', status: 'unverified' },
@@ -27,8 +25,6 @@ test('recovery exposes only verified TOTP factors when MFA is required', async (
 test('MFA verification raises assurance before retrying password update', async () => {
   let verified = false;
   const auth = {
-    getSession: async () => ({ data: { session: {} } }),
-    refreshSession: async () => ({ data: { session: {} } }),
     mfa: { challengeAndVerify: async payload => {
       assert.deepEqual(payload, { factorId: 'factor', code: '123456' });
       verified = true;
@@ -52,7 +48,7 @@ test('invalid, rejected, and stalled MFA codes do not succeed', async () => {
 });
 
 test('MFA recovery errors provide actionable feedback', () => {
-  assert.match(getAuthErrorMessage({ code: 'insufficient_aal', status: 401 }, 'update-password'), /hai lớp/);
+  assert.match(getAuthErrorMessage({ code: 'insufficient_aal' }, 'update-password'), /hai lớp/);
   assert.match(getAuthErrorMessage({ code: 'RECOVERY_MFA_REQUIRED' }, 'update-password'), /6 số/);
   assert.match(getAuthErrorMessage({ code: 'RECOVERY_MFA_UNAVAILABLE' }, 'update-password'), /quản trị viên/);
   assert.match(getAuthErrorMessage({ code: 'mfa_verification_failed' }, 'update-password'), /Mã xác thực/);

@@ -8,6 +8,8 @@ import {saveSystemSetEdit} from '../lib/systemSetEdit.js';
 import { recordOperationalError } from '../../../shared/diagnostics/operationalDiagnostics.js';
 import { userErrorMessage } from '../../../shared/security/userError.js';
 import { saveDeviceEdit } from '../lib/deviceEdit.js';
+import { supportsColorantSlots, validColorantSlots } from '../lib/colorantSlots.js';
+import { isUnknownSerial } from '../lib/deviceSerial.js';
 import { requireCompleteWrite } from '../../../shared/data-access/guardedWrite.js';
 import { ASSET_TABLES, DEVICE_TABLES, assetColumns, assetCacheKey, cachedAssetSnapshot, createAssetRefreshQueue, createAssetReadBarrier } from '../lib/assetQuery.js';
 import { fetchAllRows } from '../../../shared/data-access/paginatedQuery.js';
@@ -136,12 +138,12 @@ export function useAssets() {
           if (Array.isArray(rows)) {
             setters[table](rows);
             readyTablesRef.current.add(table);
+            if (table === 'system_sets') setSystemSetsReady(true);
             if (details) fullTablesRef.current.add(table);
           }
         }));
         if (disposed || owner !== getOfflineOwner()) return;
         setSummaryReady(!isSupabaseConfigured || ASSET_TABLES.every(table => readyTablesRef.current.has(table)));
-        setSystemSetsReady(!isSupabaseConfigured || readyTablesRef.current.has('system_sets'));
         const complete = ASSET_TABLES.every(table => fullTablesRef.current.has(table));
         setDetailsReady(!isSupabaseConfigured || complete);
         if (complete) detailsRequestedRef.current = true;
@@ -308,6 +310,30 @@ export function useAssets() {
     });
   }, [withAssetWrite, updateRows, deviceConfigs]);
 
+  const saveColorantSlots = useCallback(async (device, slots) => {
+    if (!supportsColorantSlots(device.model) || !validColorantSlots(slots)) {
+      throw new Error('Hãy chọn đủ 14 mã, mỗi mã một vị trí.');
+    }
+    await withAssetWrite(async () => {
+      const current = assetStateRef.current.dispensers.find(row => row.id === device.id);
+      if (isUnknownSerial(device.serial) || !current || current.serial !== device.serial || current.updatedAt !== device.updatedAt) {
+        throw new Error('Máy hoặc sơ đồ đã thay đổi. Hãy mở lại đúng số seri trước khi lưu.');
+      }
+      let revision = new Date().toISOString();
+      if (isSupabaseConfigured) {
+        if (!navigator.onLine) throw new Error('Cần kết nối mạng để lưu sơ đồ ống màu.');
+        if (!device.updatedAt) throw new Error('Tải lại thông tin máy trước khi lưu.');
+        const result = requireCompleteWrite(await safeQuery(client => client.from('dispensers')
+          .update({ colorant_slots: slots }).eq('serial', device.serial).eq('id', device.id)
+          .eq('updated_at', device.updatedAt).select('id,updated_at'), 'saveColorantSlots'));
+        revision = result.data[0].updated_at;
+      }
+      const rows = updateRows('dispensers', previous => previous.map(row => row.id === device.id
+        ? { ...row, colorantSlots: slots, updatedAt: revision } : row));
+      await persistAssetsLocal('dispensers', rows);
+    });
+  }, [updateRows, withAssetWrite]);
+
   // ── Generic edit device ────────────────────────────────────────────────────
   // Full editor: retain the revision captured when the form opened.
   const editDeviceDetails = useCallback(async (category, id, updates, revision) => {
@@ -430,7 +456,14 @@ export function useAssets() {
     const nowIso = new Date().toISOString();
     const markedItems = items.map(item => ({ ...item, createdAt: nowIso, isNew: true }));
 
-    const dbItems = items.map(item => mapDeviceToDb(item,cfg.table));
+    const dbItems = items.map(item => {
+      const row = mapDeviceToDb(item, cfg.table);
+      if (cfg.table === 'dispensers' && item.colorantSlots != null) {
+        if (!validColorantSlots(item.colorantSlots)) throw new Error('Sơ đồ ống màu trong dữ liệu nhập chưa hợp lệ.');
+        row.colorant_slots = item.colorantSlots;
+      }
+      return row;
+    });
     const result = !isSupabaseConfigured ? {queued:false} : await withAssetWrite(() => persistBatchMutation({items:dbItems, online:isSupabaseConfigured && navigator.onLine,
       write:rows => safeQuery(sb => sb.from(cfg.table).upsert(rows,{onConflict:'id'}).select('id'), 'importDevices'),
       queue:item => enqueueOfflineAction('ADD_DEVICE',item,cfg.table),
@@ -556,7 +589,7 @@ export function useAssets() {
     }
   }, [updateRows]);
   return {
-    dispensers, setDispensers,
+    saveColorantSlots, dispensers, setDispensers,
     mixers,     setMixers,
     computers,  setComputers,
     printers,   setPrinters,
@@ -580,7 +613,8 @@ export function useAssets() {
 
 // ─── Field Mappers (DB → App format) ──────────────────────────────────────────
 function mapDbToDispenser(row) {
-  return { 
+  return {
+    colorantSlots: row.colorant_slots ?? row.colorantSlots ?? null,
     id: row.id, 
     model: row.model, 
     serial: row.serial, 

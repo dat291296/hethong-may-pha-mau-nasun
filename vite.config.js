@@ -23,6 +23,8 @@ export default defineConfig(({ mode }) => {
       },
     }],
     base: '/',
+    optimizeDeps: { entries: ['index.html'] },
+    resolve: { dedupe: ['react', 'react-dom'] },
     define: {
       'import.meta.env.VITE_BUILD_REVISION': JSON.stringify(process.env.GITHUB_SHA || ''),
     },

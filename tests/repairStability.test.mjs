@@ -164,6 +164,31 @@ async function hookFixture(overrides = {}) {
 
 const ticket = id => ({ id, ticketCode: id, date: '2026-10-31', notes: 'before' });
 
+test('initial repair data can be shown while its encrypted offline write is still pending', async () => {
+  const cache = deferred();
+  const writing = deferred();
+  const f = await hookFixture({
+    fetchAllRows: async () => ({ data: [{ id: 'R1', ticket_code: 'R1' }], error: null }),
+    cacheOfflineData: () => { writing.resolve(); return cache.promise; },
+  });
+  assert.equal(f.render().hasRepairSnapshot, false);
+  const pending = f.render().refetch();
+  await writing.promise;
+  assert.equal(f.render().hasRepairSnapshot, true);
+  assert.equal(f.render().loading, false);
+  assert.equal(f.render().repairTickets[0].ticketCode, 'R1');
+  cache.resolve(true);
+  assert.equal(await pending, true);
+});
+
+test('an empty but complete repair response is ready for display', async () => {
+  const f = await hookFixture();
+  assert.equal(f.render().hasRepairSnapshot, false);
+  assert.equal(await f.render().refetch(), true);
+  assert.equal(f.render().hasRepairSnapshot, true);
+  assert.deepEqual(f.render().repairTickets, []);
+});
+
 test('real repair callbacks merge reverse-order acknowledgements without a React rerender', async () => {
   const a = deferred(), b = deferred();
   const f = await hookFixture({ submitFieldCommand: input => input.entityId === 'A' ? a.promise : b.promise });

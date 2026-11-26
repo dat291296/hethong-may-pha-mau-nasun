@@ -16,7 +16,9 @@ function taskDescription(task) {
   return 'Hẹn NPP, kiểm tra máy và cập nhật lịch bảo trì';
 }
 
-export default function TechnicianWorkQueue({ repairTickets = [], systemSets = [], npps = [], teamUsers = [], onNavigate, onOpenQrScan, onOpenRouteMap, onRefresh }) {
+const EMPTY_ROWS = [];
+
+export default function TechnicianWorkQueue({ repairTickets = EMPTY_ROWS, systemSets = EMPTY_ROWS, machinesReady = true, dataReady = true, npps = [], teamUsers = [], onNavigate, onOpenQrScan, onOpenRouteMap, onRefresh }) {
   const { user } = useAuth();
   const workspaceRegion = useContext(WorkspaceRegionContext);
   const [scope, setScope] = useState(user?.role === 'technician' ? 'MINE' : 'ALL');
@@ -102,16 +104,16 @@ export default function TechnicianWorkQueue({ repairTickets = [], systemSets = [
       </header>
 
       <div className="work-queue-stats" aria-label="Tóm tắt công việc">
-        <button type="button" className={`work-queue-stat ${counts.overdue ? 'is-danger' : ''}`} onClick={() => setFilter('OVERDUE')}><strong>{counts.overdue}</strong><span>Quá hạn</span></button>
-        <button type="button" className="work-queue-stat" onClick={() => setFilter('TODAY')}><strong>{counts.today}</strong><span>Hôm nay</span></button>
-        <button type="button" className="work-queue-stat" onClick={() => setFilter('ALL')}><strong>{counts.all}</strong><span>Tổng việc</span></button>
-        <div className="work-queue-stat"><strong>{incomplete.length}</strong><span>Thiếu dữ liệu</span></div>
+        <button type="button" className={`work-queue-stat ${counts.overdue ? 'is-danger' : ''}`} onClick={() => setFilter('OVERDUE')}><strong>{dataReady ? counts.overdue : '—'}</strong><span>Quá hạn</span></button>
+        <button type="button" className="work-queue-stat" onClick={() => setFilter('TODAY')}><strong>{dataReady ? counts.today : '—'}</strong><span>Hôm nay</span></button>
+        <button type="button" className="work-queue-stat" onClick={() => setFilter('ALL')}><strong>{dataReady ? counts.all : '—'}</strong><span>Tổng việc</span></button>
+        <div className="work-queue-stat"><strong>{machinesReady ? incomplete.length : '—'}</strong><span>Thiếu dữ liệu</span></div>
       </div>
 
       <div className="work-queue-toolbar" role="toolbar" aria-label="Lọc công việc">
         <div className="work-queue-segments">
-          <button type="button" aria-pressed={scope === 'MINE'} onClick={() => setScope('MINE')}>Việc của tôi ({counts.mine})</button>
-          <button type="button" aria-pressed={scope === 'ALL'} onClick={() => setScope('ALL')}>{['admin', 'viewer'].includes(user?.role) ? 'Toàn đội' : 'Trong miền'} ({counts.all})</button>
+          <button type="button" aria-pressed={scope === 'MINE'} onClick={() => setScope('MINE')}>Việc của tôi{dataReady && ` (${counts.mine})`}</button>
+          <button type="button" aria-pressed={scope === 'ALL'} onClick={() => setScope('ALL')}>{['admin', 'viewer'].includes(user?.role) ? 'Toàn đội' : 'Trong miền'}{dataReady && ` (${counts.all})`}</button>
         </div>
         <select className="form-select" aria-label="Lọc loại công việc" value={filter} onChange={event => setFilter(event.target.value)}>
           <option value="ALL">Tất cả việc</option>
@@ -143,7 +145,7 @@ export default function TechnicianWorkQueue({ repairTickets = [], systemSets = [
             </div>
           </article>;
         })}
-        {!filteredTasks.length && <div className="work-queue-empty glass-panel"><CheckCircle2 size={34} aria-hidden="true" /><h2>Không có việc cần xử lý</h2><p>Thử chuyển sang “Trong miền” hoặc đổi bộ lọc để xem các công việc khác.</p></div>}
+        {dataReady && !filteredTasks.length && <div className="work-queue-empty glass-panel"><CheckCircle2 size={34} aria-hidden="true" /><h2>Không có việc cần xử lý</h2><p>Thử chuyển sang “Trong miền” hoặc đổi bộ lọc để xem các công việc khác.</p></div>}
       </div>
 
       {incomplete.length > 0 && <details className="work-queue-data-quality glass-panel"><summary><span>Hồ sơ cần bổ sung</span><strong>{incomplete.length}</strong></summary><p>Bổ sung khi đi hiện trường; dữ liệu thiếu không đồng nghĩa máy bị hỏng.</p>{incomplete.slice(0, 8).map(({ machine, fields }) => <div className="work-queue-quality-row" key={machine.setCode}><div><strong>{machine.nppName || 'Chưa có NPP'} · {machine.setCode}</strong><span>{fields.join(' · ')}</span></div><button type="button" className="btn btn-secondary" onClick={() => onNavigate?.('assets', machine.setCode)}>Mở hồ sơ</button></div>)}</details>}

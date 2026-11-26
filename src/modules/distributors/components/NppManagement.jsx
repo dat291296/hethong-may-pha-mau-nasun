@@ -1,3 +1,5 @@
+import ColorantSlots from '../../equipment/components/ColorantSlots.jsx';
+import { canEditRegion } from '../../../shared/workspace/workspaceFilters.js';
 import { pageWindow } from '../../../shared/data-access/pageWindow.js';
 import { DataLoadingState, EmptyState, InputFeedback } from '../../../shared/components/DataState.jsx';
 import { validatePhone } from '../../../shared/security/sanitize.js';
@@ -22,7 +24,7 @@ import { exportExcel } from '../../../shared/utils/excelExport.js';
 import FloatingActionButton from '../../../shared/components/FloatingActionButton.jsx';
 import { confirmAction } from '../../../shared/utils/confirmDialog.js';
 
-export default function NppManagement({ globalSearch = '', loading = false, loadError = '', onReload, coverageFilter = 'ALL', onCoverageFilterChange = () => {}, npps, systemSets, devices = [], systemSetsReady = true, replacementEvents = [], onAddNpp, onEditNpp, onDeleteNpp, onLoadNppPhotos, onOpenImportModal, onOpenQrScan, onReissueQrToken, onOpenMachineProfile, onRequestWorkProgress, qrLookupTarget }) {
+export default function NppManagement({ workspaceBrand = 'ALL', codeCatalog, slotDispensers = [], onSaveSlots, globalSearch = '', loading = false, loadError = '', onReload, coverageFilter = 'ALL', onCoverageFilterChange = () => {}, npps, systemSets, devices = [], systemSetsReady = true, replacementEvents = [], onAddNpp, onEditNpp, onDeleteNpp, onLoadNppPhotos, onOpenImportModal, onOpenQrScan, onReissueQrToken, onOpenMachineProfile, onRequestWorkProgress, qrLookupTarget }) {
   const { user, can } = useAuth();
   const [searchTerm, setSearchTerm] = useWorkspaceState('npps:search', '');
   useEffect(() => { if (globalSearch) setSearchTerm(globalSearch); }, [globalSearch, setSearchTerm]);
@@ -31,7 +33,7 @@ export default function NppManagement({ globalSearch = '', loading = false, load
   const coverage = React.useMemo(() => nppCoverage(npps, systemSets), [npps, systemSets]);
   const coverageAssignedIds = React.useMemo(() => new Set(coverage.assigned.map(item => String(item.id))), [coverage.assigned]);
   const [statusFilter, setStatusFilter] = useWorkspaceState('npps:status', 'ALL');
-  const [brandFilter, setBrandFilter] = useWorkspaceState('npps:brand', 'ALL');
+  const defaultBrand = workspaceBrand === 'Natos' ? 'Natos' : 'Nasun';
   const [selectedNpp, setSelectedNpp] = useState(null);
   const [reissueBusy, setReissueBusy] = useState(false);
   const [reissueMessage, setReissueMessage] = useState('');
@@ -70,7 +72,7 @@ export default function NppManagement({ globalSearch = '', loading = false, load
     { key: 'province', label: 'Tỉnh Thành' }, { key: 'address', label: 'Địa Chỉ' }, { key: 'status', label: 'Trạng Thái' }
   ], 'Nha_Phan_Phoi', 'NPP');
 
-  const filterSignature = [coverageFilter,searchTerm,statusFilter,brandFilter,provinceFilter,ownerFilter,dateFrom,dateTo].join('|');
+  const filterSignature = [coverageFilter,searchTerm,statusFilter,provinceFilter,ownerFilter,dateFrom,dateTo].join('|');
   const previousFilters = React.useRef(filterSignature);
   useEffect(() => { if (previousFilters.current !== filterSignature) { previousFilters.current = filterSignature; setCurrentPage(1); } }, [filterSignature, setCurrentPage]);
 
@@ -87,7 +89,7 @@ export default function NppManagement({ globalSearch = '', loading = false, load
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
-    brand: 'Nasun',
+    brand: defaultBrand,
     region: 'Miền Bắc',
     province: 'Hà Nội',
     address: '',
@@ -103,10 +105,9 @@ export default function NppManagement({ globalSearch = '', loading = false, load
     const owners = systemSetsReady ? (setsByNppId.get(String(npp.id)) || []).map(machine => machine.technician) : [];
     const matchesExtra = (provinceFilter === 'ALL' || npp.province === provinceFilter) && (!systemSetsReady || ownerFilter === 'ALL' || owners.includes(ownerFilter)) && matchesDateRange(npp.createdAt,dateFrom,dateTo);
     const matchesStatus = statusFilter === 'ALL' || npp.status === statusFilter;
-    const matchesBrand = brandFilter === 'ALL' || (npp.brand || 'Nasun') === brandFilter;
     const isAssigned = coverageAssignedIds.has(String(npp.id));
-    return found && matchesExtra && matchesStatus && matchesBrand && (!systemSetsReady || coverageFilter === 'ALL' || (coverageFilter === 'ASSIGNED' ? isAssigned : !isAssigned));
-  }), [npps, setsByNppId, systemSetsReady, searchTerm, provinceFilter, ownerFilter, dateFrom, dateTo, statusFilter, brandFilter, coverageFilter, coverageAssignedIds]);
+    return found && matchesExtra && matchesStatus && (!systemSetsReady || coverageFilter === 'ALL' || (coverageFilter === 'ASSIGNED' ? isAssigned : !isAssigned));
+  }), [npps, setsByNppId, systemSetsReady, searchTerm, provinceFilter, ownerFilter, dateFrom, dateTo, statusFilter, coverageFilter, coverageAssignedIds]);
 
   const nppPage = pageWindow(filteredNpps.length, currentPage, pageSize);
 
@@ -124,10 +125,10 @@ export default function NppManagement({ globalSearch = '', loading = false, load
     setSaveNotice('');
     setCustomCode(false);
     setFormData({
-      code: nextNppCode(defaultRegion, npps),
+      code: nextNppCode(defaultRegion, codeCatalog || npps),
       name: '',
       phone: '',
-      brand: 'Nasun',
+      brand: defaultBrand,
       region: defaultRegion,
       province: 'Hà Nội',
       address: '',
@@ -154,7 +155,7 @@ export default function NppManagement({ globalSearch = '', loading = false, load
     setEditingNpp(npp);
     setCustomCode(false);
     setFormData({
-      code: validateNppCode(npp.code || npp.id, npp.region) ? npp.code || npp.id : nextNppCode(npp.region,npps),
+      code: validateNppCode(npp.code || npp.id, npp.region) ? npp.code || npp.id : nextNppCode(npp.region, codeCatalog || npps),
       name: npp.name || '',
       phone: npp.phone || '',
       brand: npp.brand || 'Nasun',
@@ -290,7 +291,7 @@ export default function NppManagement({ globalSearch = '', loading = false, load
       ...formData,
       id: newId,
       previewCode: formData.code,
-      code: customCode ? formData.code.trim() : (isSupabaseConfigured ? null : nextNppCode(formData.region,npps)),
+      code: customCode ? formData.code.trim() : (isSupabaseConfigured ? null : nextNppCode(formData.region, codeCatalog || npps)),
       googleMapsUrl: mapsUrl,
       createdAt: new Date().toISOString().split('T')[0]
     });
@@ -327,7 +328,7 @@ export default function NppManagement({ globalSearch = '', loading = false, load
       const result = await onEditNpp({
         ...editingNpp,
         ...formData,
-        code: customCode ? formData.code.trim() : editingNpp.region !== formData.region ? (isSupabaseConfigured ? null : nextNppCode(formData.region,npps)) : (editingNpp.storedCode || null),
+        code: customCode ? formData.code.trim() : editingNpp.region !== formData.region ? (isSupabaseConfigured ? null : nextNppCode(formData.region, codeCatalog || npps)) : (editingNpp.storedCode || null),
         googleMapsUrl: mapsUrl
       });
       setSaveNotice(result?.queued ? 'Đã lưu trên thiết bị, đang chờ đồng bộ NPP.' : 'Đã cập nhật NPP trên hệ thống.');
@@ -360,11 +361,11 @@ export default function NppManagement({ globalSearch = '', loading = false, load
       {!systemSetsReady && <p role="status" className="resource-muted">Danh sách NPP đã tải; thông tin bộ máy liên kết đang được đồng bộ.</p>}
       {loading && npps.length === 0 && <DataLoadingState label="Đang tải danh sách NPP…" />}
       {loadError && <div role="alert" className="resource-error">{loadError}<button className="btn btn-secondary" disabled={loading} onClick={onReload}>Thử tải lại</button></div>}
-      {!loading && !loadError && filteredNpps.length === 0 && <EmptyState title="Chưa có NPP phù hợp" description="Bỏ bộ lọc hoặc chọn Thêm NPP để tạo nhà phân phối trong miền được phân công." onAction={() => { setSearchTerm(''); setStatusFilter('ALL'); setBrandFilter('ALL'); setProvinceFilter('ALL'); setOwnerFilter('ALL'); setDateFrom(''); setDateTo(''); onCoverageFilterChange('ALL'); }} />}
+      {!loading && !loadError && filteredNpps.length === 0 && <EmptyState title="Chưa có NPP phù hợp" description="Bỏ bộ lọc hoặc chọn Thêm NPP để tạo nhà phân phối trong miền được phân công." onAction={() => { setSearchTerm(''); setStatusFilter('ALL'); setProvinceFilter('ALL'); setOwnerFilter('ALL'); setDateFrom(''); setDateTo(''); onCoverageFilterChange('ALL'); }} />}
       {saveNotice && <div role="status" className="glass-panel" style={{ padding: '12px' }}>{saveNotice}</div>}
       <div className="npp-qr-toolbar">{can('qr:scan') && <button type="button" className="btn btn-secondary" style={{ minHeight: 48 }} onClick={onOpenQrScan}><Camera size={17}/> Quét QR</button>}{qrLookupTarget && <span role="status">Đang xem kết quả quét · bộ máy {qrLookupTarget.highlightedSetCode || 'chưa chọn'}</span>}</div>
       
-      <WorkspaceFilterBar search={searchTerm} onSearch={setSearchTerm} placeholder="Tìm mã, tên NPP, điện thoại…" count={filteredNpps.length} fields={[{key:'province',label:'Tỉnh / thành',value:provinceFilter,onChange:setProvinceFilter,options:uniqueOptions(npps.map(item=>item.province))},{key:'owner',label:'Kỹ thuật viên phụ trách bộ máy',value:ownerFilter,onChange:setOwnerFilter,options:uniqueOptions(systemSets.map(item=>item.technician))},{key:'brand',label:'Hãng',value:brandFilter,onChange:setBrandFilter,options:uniqueOptions(['Nasun','Natos'])},{key:'status',label:'Trạng thái',value:statusFilter,onChange:setStatusFilter,options:uniqueOptions(['Đang hợp tác','Đã ngưng hợp tác'])},{key:'from',label:'Ngày tạo NPP · từ',type:'date',defaultValue:'',value:dateFrom,onChange:setDateFrom},{key:'to',label:'Ngày tạo NPP · đến',type:'date',defaultValue:'',value:dateTo,onChange:setDateTo}]} onReset={() => { onCoverageFilterChange('ALL'); setSearchTerm(''); setStatusFilter('ALL'); setBrandFilter('ALL'); setProvinceFilter('ALL'); setOwnerFilter('ALL'); setDateFrom(''); setDateTo(''); }} actions={<><details className="filter-more-actions"><summary>Thao tác khác</summary><div><button className="btn btn-secondary" onClick={onOpenImportModal}>Nhập Excel</button><button className="btn btn-secondary" onClick={exportNpps}>Xuất Excel</button></div></details><button className="btn btn-primary" onClick={handleOpenAdd}>Thêm NPP</button></>}/>
+      <WorkspaceFilterBar search={searchTerm} onSearch={setSearchTerm} placeholder="Tìm mã, tên NPP, điện thoại…" count={filteredNpps.length} fields={[{key:'province',label:'Tỉnh / thành',value:provinceFilter,onChange:setProvinceFilter,options:uniqueOptions(npps.map(item=>item.province))},{key:'owner',label:'Kỹ thuật viên phụ trách bộ máy',value:ownerFilter,onChange:setOwnerFilter,options:uniqueOptions(systemSets.map(item=>item.technician))},{key:'status',label:'Trạng thái',value:statusFilter,onChange:setStatusFilter,options:uniqueOptions(['Đang hợp tác','Đã ngưng hợp tác'])},{key:'from',label:'Ngày tạo NPP · từ',type:'date',defaultValue:'',value:dateFrom,onChange:setDateFrom},{key:'to',label:'Ngày tạo NPP · đến',type:'date',defaultValue:'',value:dateTo,onChange:setDateTo}]} onReset={() => { onCoverageFilterChange('ALL'); setSearchTerm(''); setStatusFilter('ALL'); setProvinceFilter('ALL'); setOwnerFilter('ALL'); setDateFrom(''); setDateTo(''); }} actions={<><details className="filter-more-actions"><summary>Thao tác khác</summary><div><button className="btn btn-secondary" onClick={onOpenImportModal}>Nhập Excel</button><button className="btn btn-secondary" onClick={exportNpps}>Xuất Excel</button></div></details><button className="btn btn-primary" onClick={handleOpenAdd}>Thêm NPP</button></>}/>
 
       <p className="npp-coverage-summary">{systemSetsReady ? `${coverage.assigned.length} NPP đã ghép · ${coverage.unassigned.length} NPP chưa ghép` : 'Đang tải thống kê bộ máy liên kết…'}</p>
       {/* NPP Cards Grid */}
@@ -605,7 +606,7 @@ export default function NppManagement({ globalSearch = '', loading = false, load
                         className="form-select" 
                         value={formData.region} 
                         disabled={['manager', 'qc', 'technician'].includes(user?.role) && user?.managedRegion !== 'Toàn Quốc'}
-                        onChange={e => { setCustomCode(false); setFormData({ ...formData, region: e.target.value, code: nextNppCode(e.target.value,npps) }); }}
+                        onChange={e => { setCustomCode(false); setFormData({ ...formData, region: e.target.value, code: nextNppCode(e.target.value, codeCatalog || npps) }); }}
                       >
                         <option value="Miền Bắc">Miền Bắc</option>
                         <option value="Miền Trung">Miền Trung</option>
@@ -777,6 +778,7 @@ export default function NppManagement({ globalSearch = '', loading = false, load
                           <div>Kỹ thuật viên: {set.technician || 'Chưa phân công'}</div>
                           <div>Ghi chú: {set.notes || 'Không có'}</div>
                           {(replacementEvents || []).filter(event => event.setCode === set.setCode).length > 0 && <div><strong>Lịch sử thay thế:</strong> {(replacementEvents || []).filter(event => event.setCode === set.setCode).map(event => `${event.changedAt || '—'} ${event.action || ''}: ${event.oldDeviceId || '—'} → ${event.newDeviceId || '—'}`).join(' · ')}</div>}
+                          <ColorantSlots machine={set} dispensers={slotDispensers} editable={can('asset:edit') && canEditRegion(user, selectedNpp.region)} onSave={onSaveSlots} />
                           {set.setCode && <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}><button type="button" className="btn btn-secondary btn-sm" onClick={() => onOpenMachineProfile?.(set)}>Mở hồ sơ bộ máy</button><button type="button" className="btn btn-primary btn-sm" onClick={() => onRequestWorkProgress?.(selectedNpp, set)}>Cập nhật tiến độ công việc</button></div>}
                         </div>
                       ))}

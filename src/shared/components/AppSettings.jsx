@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
-import { Settings, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
+import './appSettings.css';
 
 const defaults = { theme: 'dark', fontSize: 16, showOperations: true, showCharts: true, showReport: true, company: 'NASUN PAINT', contact: '', logo: '' };
 const eventName = 'nasun-app-settings-changed';
@@ -34,7 +34,6 @@ export default function AppSettings() {
   const [draft,setDraft]=useState(settings);
   const [message,setMessage]=useState('');
   const [loading,setLoading]=useState(false);
-  const dialog=useRef(null);
   const canEditCompany=role==='admin';
   const update=(field,value)=>setDraft(previous=>({...previous,[field]:value}));
   const save=event=>{
@@ -57,9 +56,8 @@ export default function AppSettings() {
       update('logo',data);
     } catch(error){setMessage(error.message||'Không tải được logo.');} finally {setLoading(false);}
   };
-  return <><button type="button" className="btn btn-secondary" onClick={()=>{setDraft(settings);setMessage('');dialog.current.showModal();}}><Settings size={17}/> Cài đặt app</button>
-  <dialog ref={dialog} className="app-settings-dialog" aria-labelledby="app-settings-title"><form onSubmit={save}>
-    <header><h2 id="app-settings-title">Cài đặt app</h2><button type="button" className="btn btn-secondary" aria-label="Đóng cài đặt" onClick={()=>dialog.current.close()}><X size={18}/></button></header>
+  return <section className="app-settings-page glass-panel" aria-labelledby="app-settings-title"><form onSubmit={save}>
+    <h1 id="app-settings-title">Cài đặt app</h1>
     <p className="settings-hint">Áp dụng ngay khi lưu. Cài đặt dành cho tài khoản trên trình duyệt này, chưa đồng bộ sang thiết bị khác.</p>
     <fieldset><legend>Giao diện</legend>
       <label>Chế độ màu<select value={draft.theme} onChange={e=>update('theme',e.target.value)}><option value="dark">Tối — mặc định</option><option value="light">Sáng</option></select></label>
@@ -75,6 +73,6 @@ export default function AppSettings() {
     </fieldset>
     <p role="status">{loading?'Đang kiểm tra ảnh…':message}</p>
     <footer><button type="button" className="btn btn-secondary" onClick={()=>setDraft(canEditCompany?{...defaults}:{...defaults,company:settings.company,contact:settings.contact,logo:settings.logo})}>Khôi phục mặc định</button><button type="submit" className="btn btn-primary" disabled={loading}>Lưu & áp dụng</button></footer>
-  </form></dialog></>;
+  </form></section>;
 }
 

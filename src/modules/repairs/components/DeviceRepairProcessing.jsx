@@ -1,7 +1,7 @@
 import RepairEditorDialog from './RepairEditorDialog.jsx';
 import RepairDetailDialog from './RepairDetailDialog.jsx';
 import { DataLoadingState, EmptyState } from '../../../shared/components/DataState.jsx';
-import { SERVICE_CHECKLIST, failureComponents, summarizeFailureComponents, requiresRepairReturn, isRepairAwaitingReturn } from '../lib/repairClassification.js';
+import { SERVICE_CHECKLIST, failureComponents, summarizeFailureComponents, requiresRepairReturn, isRepairAwaitingReturn, isRepairAwaitingProcessing, repairProcessingBadge } from '../lib/repairClassification.js';
 import { userErrorMessage } from '../../../shared/security/userError.js';
 import { repairListPage, repairStringList, hasMalformedRepairLists, uniqueAssignedMachine, getRepairTicketYear } from '../lib/repairList.js';
 import { validateDocumentFile } from '../../handbook/lib/technicalResources.js';
@@ -42,6 +42,11 @@ export const PRODUCT_CATEGORIES = [
 ];
 
 const EMPTY_SERVICE_CHECKLIST = Object.freeze(Object.fromEntries(SERVICE_CHECKLIST.map(([key]) => [key, false])));
+
+function ProcessingBadge({ ticket }) {
+  const { label, tone } = repairProcessingBadge(ticket);
+  return <span className={`badge badge-${tone}`}>{label}</span>;
+}
 
 function createFieldWorkflowDefaults() {
   return {
@@ -560,7 +565,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
     const matchesModel = modelFilter === 'ALL' || t.machineModel === modelFilter;
 
     let matchesTab = true;
-    if (activeTab === 'PENDING') matchesTab = t.processingStatus === 'Chưa xử lý';
+    if (activeTab === 'PENDING') matchesTab = isRepairAwaitingProcessing(t);
     if (activeTab === 'NOT_RETURNED') matchesTab = isRepairAwaitingReturn(t);
     if (activeTab === 'REPLACED') matchesTab = t.actionDirection === 'Xuất đổi';
 
@@ -570,7 +575,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
   const pageData=repairListPage(filteredTickets,listPage,listSize);
 
   // Calculate statistics
-  const pendingCount = yearTickets.filter(t => t.processingStatus === 'Chưa xử lý').length;
+  const pendingCount = yearTickets.filter(isRepairAwaitingProcessing).length;
   const notReturnedCount = yearTickets.filter(t => isRepairAwaitingReturn(t)).length;
   const replacedCount = yearTickets.filter(t => t.actionDirection === 'Xuất đổi').length;
 
@@ -669,7 +674,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
 
         <div className="glass-panel" style={{ padding: '16px 20px', borderLeft: '4px solid var(--accent-amber)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: '600' }}>Chưa Xử Lý (Cần Gấp)</span>
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: '600' }}>Chờ sửa / đang xử lý</span>
             <Clock size={20} color="var(--accent-amber)" />
           </div>
           <div style={{ fontSize: '1.6rem', fontWeight: '800', marginTop: '6px', color: 'var(--accent-amber)' }}>{pendingCount}</div>
@@ -753,11 +758,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
                       )}
                     </td>
                     <td>
-                      {ticket.processingStatus === 'Đã xử lý' ? (
-                        <span className="badge badge-success">✓ Đã xử lý</span>
-                      ) : (
-                        <span className="badge badge-warning">⏳ Chưa xử lý</span>
-                      )}
+                      <ProcessingBadge ticket={ticket} />
                     </td>
                     <td>
                       {!requiresRepairReturn(ticket) ? <span className="badge badge-neutral">Không cần gửi trả</span> : ticket.customerReturnStatus === 'Đã gửi trả' ? (
@@ -819,11 +820,7 @@ export default function DeviceRepairProcessing({ globalSearch = '', initialFilte
                     <div className="mobile-card-subtitle">{ticket.nppName}</div>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-end' }}>
-                    {ticket.processingStatus === 'Đã xử lý' ? (
-                      <span className="badge badge-success" style={{ fontSize: '0.65rem' }}>✓ Đã xử lý</span>
-                    ) : (
-                      <span className="badge badge-warning" style={{ fontSize: '0.65rem' }}>⏳ Chưa xử lý</span>
-                    )}
+                    <ProcessingBadge ticket={ticket} />
                     {!requiresRepairReturn(ticket) ? <span className="badge badge-neutral">Không cần gửi trả</span> : ticket.customerReturnStatus === 'Đã gửi trả' ? (
                       <span className="badge badge-success" style={{ fontSize: '0.65rem' }}>✓ Đã trả</span>
                     ) : (

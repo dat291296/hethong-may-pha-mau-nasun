@@ -29,6 +29,23 @@ async function fixture(overrides = {}) {
   const hook=new Function(...Object.keys(dependencies),source+'\nreturn useNpps;')(...Object.values(dependencies));
   return {view,render(){cursor=0;return hook();}};
 }
+test('NPP becomes ready on a complete response even before saving the offline copy', async () => {
+  const cache = deferred();
+  const writing = deferred();
+  const f = await fixture({
+    getOfflineQueue: async () => [],
+    fetchAllRows: async () => ({ data: [{ id: 'N1', name: 'NPP mẫu' }], error: null }),
+    cacheOfflineData: () => { writing.resolve(); return cache.promise; },
+  });
+  assert.equal(f.render().hasSnapshot, false);
+  const pending = f.render().refetch();
+  await writing.promise;
+  assert.equal(f.render().hasSnapshot, true);
+  assert.equal(f.render().npps[0].id, 'N1');
+  cache.resolve(true);
+  assert.equal(await pending, true);
+});
+
 test('NPP concurrent creates retain both rows in visible and durable snapshots',async()=>{
  const f=await fixture(); const h=f.render();
  await Promise.all([h.addNpp({id:'A',name:'A'}),h.addNpp({id:'B',name:'B'})]);

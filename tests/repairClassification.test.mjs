@@ -1,8 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {SERVICE_CHECKLIST,FAILURE_COMPONENTS,failureComponents,summarizeFailureComponents,requiresRepairReturn,isRepairAwaitingReturn,repairReturnLabel} from '../src/modules/repairs/lib/repairClassification.js';
+import {SERVICE_CHECKLIST,FAILURE_COMPONENTS,failureComponents,summarizeFailureComponents,requiresRepairReturn,isRepairAwaitingReturn,repairReturnLabel,repairProcessingBadge,isRepairAwaitingProcessing} from '../src/modules/repairs/lib/repairClassification.js';
 import {repairMissingFields} from '../src/modules/repairs/lib/repairCompleteness.js';
 import {repairNeedsAction} from '../src/modules/fieldwork/lib/teamWorkspace.js';
+
+test('repair status distinguishes a saved in-progress ticket and keeps it in the processing queue', () => {
+  for (const [processingStatus, tone] of [['Chưa xử lý', 'warning'], ['Đang xử lý', 'info'], ['Đã xử lý', 'success']]) {
+    const ticket = { processingStatus };
+    assert.deepEqual(repairProcessingBadge(ticket), { label: processingStatus, tone });
+    assert.equal(isRepairAwaitingProcessing(ticket), processingStatus !== 'Đã xử lý');
+  }
+  assert.deepEqual(repairProcessingBadge({}), { label: 'Chưa xử lý', tone: 'warning' });
+});
 test('local service never creates a return backlog, exchanges and explicit collections do',()=>{
  const local={actionDirection:'Sửa chữa',processingStatus:'Đã xử lý',customerReturnStatus:'Chưa gửi trả'};
  assert.equal(requiresRepairReturn(local),false);assert.equal(isRepairAwaitingReturn(local),false);assert.equal(repairReturnLabel(local),'Không cần gửi trả');assert.equal(repairNeedsAction(local),false);

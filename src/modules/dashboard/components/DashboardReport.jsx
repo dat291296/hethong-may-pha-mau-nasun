@@ -15,8 +15,7 @@ const columns = [
   { key: 'replacementCondition', label: 'Mới / cũ' },
 ];
 
-export default function DashboardReport({ machines, npps, devices, events, fetchTicketDetails, tickets, region, today, fleet, stock, regionalCounts, models }) {
-  const [open, setOpen] = useState(false);
+export default function DashboardReport({ machines, npps, devices, events, fetchTicketDetails, tickets, region, today, fleet, stock, regionalCounts, models, onClose }) {
   const [from, setFrom] = useState(today.slice(0, 8) + '01');
   const [to, setTo] = useState(today);
   const [excelBusy, setExcelBusy] = useState(false);
@@ -24,7 +23,6 @@ export default function DashboardReport({ machines, npps, devices, events, fetch
   const [selected, setSelected] = useState(['tickets', 'fleet', 'stock', 'activity', 'equipment', 'regions', 'models', 'health']);
   const [pdfBusy, setPdfBusy] = useState(false);
   const [paperSize, setPaperSize] = useState('A4');
-  if (!open) return <button className="btn btn-secondary" type="button" onClick={() => setOpen(true)}>Báo cáo Dashboard</button>;
 
   const valid = Boolean(from && to && from <= to);
   const rows = valid ? tickets.filter(ticket => {
@@ -173,7 +171,7 @@ export default function DashboardReport({ machines, npps, devices, events, fetch
     <div className="workspace-actions">
       <button className="btn btn-primary" disabled={!valid || !selected.length || pdfBusy} onClick={savePdf}>{pdfBusy ? 'Đang tạo PDF…' : 'Tải PDF'}</button>
       <button className="btn btn-secondary" disabled={!valid || excelBusy} onClick={saveExcel}>{excelBusy ? 'Đang xuất…' : 'Tải Excel'}</button>
-      <button className="btn btn-secondary" onClick={() => setOpen(false)}>Đóng</button>
+      <button className="btn btn-secondary" type="button" onClick={onClose}>Đóng</button>
     </div>
     {error && <p role="alert">{error}</p>}
   </section>;

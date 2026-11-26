@@ -1,0 +1,18 @@
+.app-settings-page { width:100%; max-width:720px; margin-inline:auto; padding:24px; }
+.app-settings-page footer { display:flex; align-items:center; justify-content:flex-end; gap:12px; flex-wrap:wrap; }
+.app-settings-page h1 { font-size:1.2rem; }
+.app-settings-page fieldset { margin:18px 0; padding:16px; border:1px solid var(--border-color); border-radius:10px; min-width:0; }
+.app-settings-page legend { padding:0 8px; font-weight:700; }
+.app-settings-page label { display:grid; gap:7px; margin:12px 0; font-size:.85rem; }
+.app-settings-page input:not([type=checkbox]),.app-settings-page select { width:100%; min-width:0; min-height:44px; padding:10px; border:1px solid var(--border-color); border-radius:7px; background:var(--bg-main); color:var(--text-main); font:inherit; }
+.app-settings-page .settings-check { display:flex; align-items:center; min-height:44px; margin:2px 0; gap:10px; }
+.app-settings-page input[type=checkbox] { width:20px; height:20px; accent-color:var(--accent-cyan); }
+.app-settings-page .btn { min-height:44px; }
+.app-settings-page .settings-hint { color:var(--text-muted); font-size:.8rem; margin-top:12px; }
+.app-settings-page .settings-logo { display:flex; gap:12px; align-items:center; }
+.app-settings-page .settings-logo img { width:56px; height:56px; object-fit:contain; }
+.app-settings-page [role=status] { margin:12px 0; font-size:.85rem; }
+@media(max-width:600px) {
+  .app-settings-page { padding:16px; }
+  .app-settings-page footer .btn { flex:1 1 auto; }
+}
