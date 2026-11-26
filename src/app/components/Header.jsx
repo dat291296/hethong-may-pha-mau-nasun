@@ -156,6 +156,7 @@ export default function Header({
   const getTitle = () => {
     switch (activeTab) {
       case 'dashboard': return 'Dashboard Quản Trị Hệ Thống Máy Pha Màu';
+      case 'appSettings': return 'Cài đặt app';
       case 'technicianWork': return 'Công việc hôm nay của kỹ thuật viên';
       case 'npp': return 'Danh Sách Quản Lý Nhà Phân Phối (NPP)';
       case 'assets': return 'Quản Lý Bộ Máy Pha Màu & Kho Thiết Bị Lẻ';

@@ -105,11 +105,9 @@
 .dashboard-repair-kpi button { min-height: 44px; }
 
 /* ERP operations workspace */
-.dashboard-screen { gap: 18px !important; }
+.dashboard-screen { display:flex; flex-direction:column; gap:18px !important; }
 .erp-heading { display:flex; align-items:center; justify-content:space-between; gap:18px; padding:8px 0; }
-.erp-eyebrow { color:var(--accent-cyan); font-size:.7rem; font-weight:800; letter-spacing:.12em; }
 .erp-heading h1 { margin:7px 0; font-size:clamp(1.4rem,2.5vw,2rem); letter-spacing:-.03em; }
-.erp-heading p,.erp-regions p { margin:0; color:var(--text-muted); font-size:.82rem; line-height:1.6; }
 .erp-heading .btn { min-height:48px; }
 .erp-operations { display:grid; grid-template-columns:1.2fr 1fr; gap:18px; }
 .erp-priority,.erp-regions,.erp-report { min-width:0; padding:20px; border:1px solid var(--border-color); border-radius:12px; background:var(--bg-card); }
@@ -154,20 +152,5 @@
 @media(max-width:390px) { .dashboard-screen > .overview-stats { grid-template-columns:minmax(0,1fr) !important; } }
 .dashboard-screen > .overview-stats > .glass-panel-hover:nth-child(-n+2) { border-top-color: var(--accent-blue) !important; }
 .erp-heading-actions { display:flex; flex-wrap:wrap; gap:10px; }
-.dashboard-screen.hide-operations .erp-operations,.dashboard-screen.hide-charts #dashboard-charts,.dashboard-screen.hide-charts .dashboard-jump button:first-child,.dashboard-screen.hide-report .erp-report { display:none; }
-.app-settings-dialog { margin:auto; width:min(560px,calc(100% - 24px)); max-height:calc(100dvh - 32px); padding:22px; color:var(--text-main); background:var(--bg-card); border:1px solid var(--border-color); border-radius:14px; overflow:auto; }
-.app-settings-dialog::backdrop { background:rgba(2,8,23,.75); }
-.app-settings-dialog header,.app-settings-dialog footer { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
-.app-settings-dialog h2 { font-size:1.2rem; }
-.app-settings-dialog fieldset { margin:18px 0; padding:16px; border:1px solid var(--border-color); border-radius:10px; min-width:0; }
-.app-settings-dialog legend { padding:0 8px; font-weight:700; }
-.app-settings-dialog label { display:grid; gap:7px; margin:12px 0; font-size:.85rem; }
-.app-settings-dialog input:not([type=checkbox]),.app-settings-dialog select { width:100%; min-width:0; min-height:44px; padding:10px; border:1px solid var(--border-color); border-radius:7px; background:var(--bg-main); color:var(--text-main); font:inherit; }
-.app-settings-dialog .settings-check { display:flex; align-items:center; min-height:44px; margin:2px 0; gap:10px; }
-.app-settings-dialog input[type=checkbox] { width:20px; height:20px; accent-color:var(--accent-cyan); }
-.app-settings-dialog .btn { min-height:44px; }
-.settings-hint { color:var(--text-muted); font-size:.8rem; margin-top:12px; }
-.settings-logo { display:flex; gap:12px; align-items:center; }
-.settings-logo img { width:56px; height:56px; object-fit:contain; }
-.app-settings-dialog [role=status] { margin:12px 0; font-size:.85rem; }
-@media(max-width:600px) { .erp-heading-actions{width:100%}.app-settings-dialog{padding:16px} }
+.dashboard-table-content { padding-top:12px; min-width:0; }
+@media(max-width:600px) { .erp-heading-actions { width:100%; } }

@@ -52,6 +52,10 @@ NASUN hỗ trợ đội kỹ thuật theo dõi vòng đời bộ máy pha màu t
 4. Kỹ thuật viên theo dõi công việc, bổ sung hồ sơ và cập nhật phiếu xử lý.
 5. Kiểm tra trạng thái đồng bộ để biết nội dung đã được gửi hay còn chờ xử lý.
 
+Trong menu quản lý, bấm **Đối tác & Thiết bị** hoặc **Kỹ thuật & Bảo trì** để mở các mục con. **Cài đặt app** nằm dưới **Hệ thống & Nhật ký** và áp dụng cho tài khoản trên trình duyệt đang dùng. Trên Tổng quan, mở từng mục để xem chi tiết bộ máy cấp phát, lịch sử sửa chữa hoặc báo cáo.
+
+Khi mở lại app, **Tổng quan** và **Công việc hôm nay** hiển thị từng phần từ dữ liệu đã lưu của tài khoản và cập nhật qua mạng. Trên thiết bị mới, các phần xuất hiện lần lượt khi máy chủ trả dữ liệu. Dấu **—** cho biết chỉ số chưa có đủ dữ liệu.
+
 ## 5. Phân quyền theo miền
 
 | Tài khoản | Xem thông tin | Chỉnh sửa |
@@ -112,3 +116,13 @@ Thay đổi database cần được đánh giá riêng, sao lưu và kiểm tra 
 Ứng dụng được cập nhật theo từng đợt phát hành. Kiểm tra [GitHub Actions](https://github.com/dat291296/hethong-may-pha-mau-nasun/actions) để biết bản triển khai đã thành công; commit lên GitHub chưa đồng nghĩa website đã cập nhật.
 
 Kiểm thử toàn bộ luồng trên iPhone thật vẫn cần hoàn tất. Công cụ kiểm thử mobile được cấu hình riêng trên máy phát triển và không đi kèm bản ứng dụng web.
+
+### Chọn hãng và nhập vị trí ống màu
+
+Chọn NASUN hoặc NATOS để xem nghiệp vụ theo hãng của nhà phân phối. Kho chung và bản ghi chưa xác định được hãng có trong **Tất cả hãng**. Quyền tài khoản và phạm vi miền vẫn áp dụng.
+
+Bộ chọn hãng xuất hiện ở Dashboard, Việc hôm nay và nhóm Đối tác & Thiết bị. Các màn hình nghiệp vụ khác tiếp tục dùng hãng đã chọn.
+
+Trong hồ sơ nhà phân phối hoặc bộ máy, mở **Vị trí ống màu CCA** của máy chiết Satint A2 / A2-100 đã liên kết. Kỹ thuật viên đối chiếu số seri, chọn đủ 14 mã theo vị trí thực tế rồi lưu khi có mạng. Khi điều chuyển, sơ đồ đi theo máy chiết. Khi thay máy, hồ sơ hiển thị sơ đồ của máy mới theo seri. Mẫu màu trên màn hình chỉ dùng để nhận diện.
+
+Áp dụng migration 20261126000100_dispenser_colorant_slots.sql trước khi phát hành giao diện này. Máy cũ ban đầu chưa có sơ đồ.

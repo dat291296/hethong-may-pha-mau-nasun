@@ -5,7 +5,7 @@ import ErrorBoundary from '../shared/components/ErrorBoundary.jsx';
 import {useReplacementEvents} from '../modules/equipment/hooks/useReplacementEvents.js';
 import { WorkspaceRegionContext } from '../shared/hooks/useWorkspaceState.js';
 import RegionalWorkspaceBar from './components/RegionalWorkspaceBar.jsx';
-import { defaultWorkspaceRegion, resolveWorkspaceRegion, scopeWorkspace } from '../shared/workspace/regionalWorkspace.js';
+import { defaultWorkspaceRegion, resolveWorkspaceRegion, scopeBrand, scopeWorkspace } from '../shared/workspace/regionalWorkspace.js';
 import { assertAdditionalSetConfirmed } from '../modules/equipment/lib/assemblyGuard.js';
 import { isStabilizerMissing, STABILIZER_NPP } from '../modules/equipment/lib/stabilizer.js';
 import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
@@ -36,6 +36,8 @@ import { hasPermission } from '../shared/security/rbac.js';
 import { useNpps } from '../modules/distributors/hooks/useNpps.js';
 import { useAssets, generateNextSetCode } from '../modules/equipment/hooks/useAssets.js';
 import { useRepairs } from '../modules/repairs/hooks/useRepairs.js';
+import { isRepairAwaitingProcessing } from '../modules/repairs/lib/repairClassification.js';
+import AppSettings from '../shared/components/AppSettings.jsx';
 import { useAuditLogs } from '../modules/audit/hooks/useAuditLogs.js';
 import { useLockedMonths } from '../modules/users/hooks/useLockedMonths.js';
 import { useTintingLogs } from '../modules/workflows/hooks/useTintingLogs.js';
@@ -98,7 +100,8 @@ function persistWorkflowCache(key, data) {
 }
 
 export default function App() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
+  if (loading && !user) return <main className="app-startup" role="status">Đang mở NASUN…</main>;
   return user ? <AppWorkspace key={user.id} /> : <LoginModal />;
 }
 
@@ -141,6 +144,7 @@ function AppWorkspace() {
   const [regionalSelection, setRegionalSelection] = useState(null);
   const [nppCoverageFilter, setNppCoverageFilter] = useState('ALL');
   const regionalIdentity = `${user?.id}:${user?.role}:${user?.managedRegion}`;
+  const [brand, setBrand] = useState('ALL');
   const workspaceRegion = regionalSelection?.identity === regionalIdentity
     ? regionalSelection.region : defaultWorkspaceRegion(user);
   const setWorkspaceRegion = region => setRegionalSelection({ identity: regionalIdentity, region });
@@ -201,10 +205,10 @@ function AppWorkspace() {
   }, [user]);
 
   // Main State via Supabase hooks
-  const { npps, setNpps, addNpp, editNpp, deleteNpp, importNpps, fetchNppPhotos, reissueQrToken, loading: nppsLoading, error: nppsLoadError, refetch: refetchNpps } = useNpps();
+  const { npps, setNpps, addNpp, editNpp, deleteNpp, importNpps, fetchNppPhotos, reissueQrToken, hasSnapshot: nppsReady, loading: nppsLoading, error: nppsLoadError, refetch: refetchNpps } = useNpps();
   const {
     dispensers, setDispensers, mixers, setMixers, computers, printers, setPrinters, systemSets, setSystemSets,
-    addStockDevice, editDevice, editDeviceDetails, deleteDevice, deleteSystemSet, assembleSet, replaceEquipment, updateSystemSet, importDevices, importSystemSets, detailsReady: assetDetailsReady, summaryReady: assetSummaryReady, systemSetsReady, ensureDetails: ensureAssetDetails, loading: assetsLoading, loadError: assetsLoadError, refetch: refetchAssets
+    addStockDevice, editDevice, editDeviceDetails, saveColorantSlots, deleteDevice, deleteSystemSet, assembleSet, replaceEquipment, updateSystemSet, importDevices, importSystemSets, detailsReady: assetDetailsReady, summaryReady: assetSummaryReady, systemSetsReady, ensureDetails: ensureAssetDetails, loading: assetsLoading, loadError: assetsLoadError, refetch: refetchAssets
   } = useAssets();
   const replacementHistory=useReplacementEvents();
   const handleReplaceEquipment=async payload=>{
@@ -265,11 +269,12 @@ function AppWorkspace() {
     }
     setQrScanError('');
     setShowQrScanner(false);
+    if (brand !== 'ALL') setBrand(['Nasun', 'Natos'].find(name => name.toLowerCase() === (result.npp.brand || 'Nasun').toLowerCase()) || 'ALL');
     setQrLookupTarget({ scanId: crypto.randomUUID(), nppId: result.npp.id, highlightedSetCode: result.highlightedSetCode });
     setActiveTab('npp');
     void recordQrAudit({ p_action: 'scan', p_npp_code: result.npp.code || result.npp.id, p_code_kind: result.type || parsed.kind, p_result: 'found' });
     return true;
-  }, [user?.role, user?.managedRegion, npps, systemSets, systemSetsReady, assetDetailsReady, dispensers, mixers, computers, printers, recordQrAudit]);
+  }, [brand, user?.role, user?.managedRegion, npps, systemSets, systemSetsReady, assetDetailsReady, dispensers, mixers, computers, printers, recordQrAudit]);
 
   const routeQrToken = /^\/n\/([0-9A-HJKMNP-TV-Z]{10})\/?$/.exec(window.location.pathname)?.[1] || '';
   useEffect(() => {
@@ -332,7 +337,9 @@ function AppWorkspace() {
         if (now - last < 30_000) return;
         lastFocusRefreshRef.current.set(activeTab, now);
         const tasks = [];
-        if (['dashboard', 'npp'].includes(activeTab)) {
+        if (activeTab === 'dashboard' && !assetSummaryReady) {
+          tasks.push(refetchNpps(), refetchAssets());
+        } else if (['dashboard', 'npp', 'technicianWork'].includes(activeTab)) {
           tasks.push(refetchNpps(), refetchAssets(['system_sets']));
         } else if (['assets', 'maintenance', 'workflows'].includes(activeTab)) {
           tasks.push(refetchAssets());
@@ -355,7 +362,7 @@ function AppWorkspace() {
       window.removeEventListener('nasun-sync-completed', refreshActiveData);
       document.removeEventListener('visibilitychange', refreshActiveData);
     };
-  }, [activeTab, refetchNpps, refetchAssets, refetchRepairs, refetchAuditLogs, refetchTintingLogs, refetchLockedMonths]);
+  }, [activeTab, assetSummaryReady, refetchNpps, refetchAssets, refetchRepairs, refetchAuditLogs, refetchTintingLogs, refetchLockedMonths]);
 
   // Excel Import Modal state
   const [showImportModal, setShowImportModal] = useState(false);
@@ -902,12 +909,29 @@ function AppWorkspace() {
     }
   };
 
-  const regionalData = useMemo(() => scopeWorkspace({ npps, systemSets, dispensers, mixers, computers, printers, repairTickets, auditLogs, tintingLogs }, workspaceRegion), [npps, systemSets, dispensers, mixers, computers, printers, repairTickets, auditLogs, tintingLogs, workspaceRegion]);
-  const scopedMaintenanceAlerts = maintenanceAlerts.filter(item => workspaceRegion === 'ALL' || resolveWorkspaceRegion(item, npps, systemSets) === workspaceRegion);
-  const scopedUnstabilizedAlerts = unstabilizedAlerts.filter(item => workspaceRegion === 'ALL' || resolveWorkspaceRegion(item, npps, systemSets) === workspaceRegion);
-  const scopedPendingRepairCount = regionalData.repairTickets.filter(ticket => ticket.processingStatus === 'Chưa xử lý').length;
-  const regionCounts = Object.fromEntries(['Miền Bắc', 'Miền Trung', 'Miền Nam', 'UNASSIGNED'].map(region => [region, npps.filter(item => resolveWorkspaceRegion(item) === region).length]));
-  regionCounts.ALL = npps.length;
+  const brandData = useMemo(() => scopeBrand({
+    npps, systemSets, dispensers, mixers, computers, printers, repairTickets, auditLogs, tintingLogs,
+    replacementEvents: replacementHistory.events,
+  }, brand), [npps, systemSets, dispensers, mixers, computers, printers, repairTickets, auditLogs, tintingLogs, replacementHistory.events, brand]);
+  const regionalData = useMemo(() => scopeWorkspace(brandData, workspaceRegion), [brandData, workspaceRegion]);
+  const visibleMachines = new Set(regionalData.systemSets);
+  const scopedMaintenanceAlerts = maintenanceAlerts.filter(item => visibleMachines.has(item));
+  const scopedUnstabilizedAlerts = unstabilizedAlerts.filter(item => visibleMachines.has(item));
+  const scopedPendingRepairCount = regionalData.repairTickets.filter(isRepairAwaitingProcessing).length;
+  const regionCounts = nppsReady ? Object.fromEntries(['Miền Bắc', 'Miền Trung', 'Miền Nam', 'UNASSIGNED'].map(region => [region, brandData.npps.filter(item => resolveWorkspaceRegion(item) === region).length])) : {};
+  if (nppsReady) regionCounts.ALL = brandData.npps.length;
+  const machinesReady = nppsReady && systemSetsReady;
+  const repairsReady = nppsReady && hasRepairSnapshot;
+  const workDataReady = machinesReady && repairsReady;
+  const dashboardDataReady = workDataReady && assetSummaryReady;
+  const startupIncomplete = activeTab === 'dashboard' ? !dashboardDataReady : activeTab === 'technicianWork' && !workDataReady;
+  const startupUnavailable = !navigator.onLine || (!machinesReady && (nppsLoadError || assetsLoadError)) ||
+    (!repairsReady && (nppsLoadError || repairsLoadError)) || (activeTab === 'dashboard' && !assetSummaryReady && assetsLoadError);
+  const refreshStartup = () => Promise.allSettled([
+    refetchNpps(),
+    refetchAssets(activeTab === 'dashboard' && !assetSummaryReady ? undefined : ['system_sets']),
+    refetchRepairs(),
+  ]);
 
   if (!user) {
     return <LoginModal />;
@@ -944,7 +968,11 @@ function AppWorkspace() {
           activeTab={activeTab}
           assetDetailsReady={assetDetailsReady}
           onEnsureAssetDetails={ensureAssetDetails}
-          onLoadBackupRepairs={fetchBackupTickets}
+          onLoadBackupRepairs={async () => {
+            const rows = await fetchBackupTickets();
+            const data = scopeBrand({ npps, systemSets, dispensers, mixers, computers, printers, repairTickets: rows }, brand);
+            return scopeWorkspace(data, workspaceRegion).repairTickets;
+          }}
           onNavigate={setActiveTab}
           globalSearch={globalSearch}
           setGlobalSearch={setGlobalSearch}
@@ -974,31 +1002,53 @@ function AppWorkspace() {
           <button type="button" className="btn btn-secondary btn-sm" disabled={nppsLoading || assetsLoading} onClick={() => Promise.allSettled([refetchNpps(), refetchAssets()])}>Tải lại dữ liệu NPP và bộ máy</button>
         </div>}
         <main key={activeTab} className="page-transition nasun-workspace" data-page={activeTab} style={{ flex: 1, padding: '28px', overflowY: 'auto' }}>
-          {!['users', 'adminChanges', 'techHandbook', 'profile', 'syncLog', 'offline'].includes(activeTab) && <RegionalWorkspaceBar key={regionalIdentity} user={user} region={workspaceRegion} onChange={setWorkspaceRegion} counts={regionCounts} compact={activeTab === 'npp'} extra={activeTab === 'npp' ? <label className="coverage-inline">Ghép bộ<select aria-label="Lọc NPP theo tình trạng ghép bộ" className="form-select" value={nppCoverageFilter} onChange={event => setNppCoverageFilter(event.target.value)}><option value="ALL">Tất cả NPP</option><option value="ASSIGNED">Đã ghép bộ</option><option value="UNASSIGNED">Chưa ghép bộ</option></select></label> : null} />}
-          <WorkspaceRegionContext.Provider value={workspaceRegion}><ErrorBoundary key={`${regionalIdentity}:${workspaceRegion}:${activeTab}`} fallback={({ reset }) => <section role="alert" className="glass-panel" style={{ margin: '28px auto', maxWidth: 720, padding: 24 }}><h2>Không tải được màn hình này</h2><p>Phần dữ liệu đã lưu trên thiết bị vẫn được giữ nguyên. Thử tải lại module hoặc chuyển sang màn hình khác.</p><button type="button" className="btn btn-primary" onClick={reset}>Thử lại</button></section>}><Suspense key={`${regionalIdentity}:${workspaceRegion}`} fallback={<ModuleLoadingSkeleton type={activeTab} />}>
+          {['dashboard', 'technicianWork', 'npp', 'assets', 'workflows'].includes(activeTab) && <div className="brand-switch" role="group" aria-label="Hãng đang xem">
+            {['ALL', 'Nasun', 'Natos'].map(value => <button type="button" key={value} aria-pressed={brand === value} onClick={() => {
+              if (brand === value) return;
+              setBrand(value);
+              setGlobalSearch('');
+              setMachineProfileReturn(null);
+              setPrefilledRepairData(null);
+              setQrLookupTarget(null);
+              setWorkflowResult(null);
+              setWorkspaceFilter('ALL');
+            }}>{value === 'ALL' ? 'Tất cả hãng' : value.toUpperCase()}</button>)}
+          </div>}
+          {!['users', 'adminChanges', 'techHandbook', 'profile', 'syncLog', 'offline', 'appSettings'].includes(activeTab) && <RegionalWorkspaceBar key={regionalIdentity} user={user} region={workspaceRegion} onChange={setWorkspaceRegion} counts={regionCounts} compact={activeTab === 'npp'} extra={activeTab === 'npp' ? <label className="coverage-inline">Ghép bộ<select aria-label="Lọc NPP theo tình trạng ghép bộ" className="form-select" value={nppCoverageFilter} onChange={event => setNppCoverageFilter(event.target.value)}><option value="ALL">Tất cả NPP</option><option value="ASSIGNED">Đã ghép bộ</option><option value="UNASSIGNED">Chưa ghép bộ</option></select></label> : null} />}
+          {startupIncomplete && <aside className="startup-data-status">
+            <span role="status">{startupUnavailable ? 'Một số phần chưa có dữ liệu trên thiết bị.' : 'Đang tải các phần dữ liệu còn lại…'}</span>
+            {startupUnavailable && navigator.onLine && <button type="button" className="btn btn-secondary btn-sm" disabled={nppsLoading || assetsLoading || repairsLoading} onClick={refreshStartup}>Thử tải lại</button>}
+          </aside>}
+          <WorkspaceRegionContext.Provider value={workspaceRegion}><ErrorBoundary key={`${regionalIdentity}:${workspaceRegion}:${brand}:${activeTab}`} fallback={({ reset }) => <section role="alert" className="glass-panel" style={{ margin: '28px auto', maxWidth: 720, padding: 24 }}><h2>Không tải được màn hình này</h2><p>Phần dữ liệu đã lưu trên thiết bị vẫn được giữ nguyên. Thử tải lại module hoặc chuyển sang màn hình khác.</p><button type="button" className="btn btn-primary" onClick={reset}>Thử lại</button></section>}><Suspense key={`${regionalIdentity}:${workspaceRegion}`} fallback={<ModuleLoadingSkeleton type={activeTab} />}>
           {machineProfileReturn && ['repairs', 'maintenance'].includes(activeTab) && (
             <div className="glass-panel" style={{ padding: 12, marginBottom: 16 }}>
               <button className="btn btn-secondary" onClick={() => navigateWorkspace('assets', machineProfileReturn.search, machineProfileReturn.filter)}>← Quay lại hồ sơ máy {machineProfileReturn.machine.setCode}</button>
             </div>
           )}
 
-          {activeTab === 'technicianWork' && ((!assetSummaryReady || nppsLoading && !npps.length || repairsLoading && !hasRepairSnapshot && !repairTickets.length) ? <ModuleLoadingSkeleton type="repairs" /> : (
+          {activeTab === 'technicianWork' && (
             <TechnicianWorkQueue
-              repairTickets={regionalData.repairTickets}
-              systemSets={regionalData.systemSets}
+              repairTickets={repairsReady ? regionalData.repairTickets : undefined}
+              systemSets={machinesReady ? regionalData.systemSets : undefined}
+              machinesReady={machinesReady}
+              dataReady={workDataReady}
               npps={regionalData.npps}
               teamUsers={qcUsers}
               onNavigate={navigateWorkspace}
               onOpenQrScan={() => { setQrScanError(''); setShowQrScanner(true); }}
               onOpenRouteMap={() => setActiveTab('routeMap')}
-              onRefresh={() => Promise.allSettled([refetchRepairs(), refetchAssets(['system_sets']), refetchNpps()])}
+              onRefresh={refreshStartup}
             />
-          ))}
+          )}
 
-          {activeTab === 'dashboard' && ((!assetSummaryReady || nppsLoading && !npps.length || repairsLoading && !hasRepairSnapshot && !repairTickets.length) ? <ModuleLoadingSkeleton type="dashboard" /> : (
+          {activeTab === 'dashboard' && (
             <Dashboard
+              nppsReady={nppsReady}
+              machinesReady={machinesReady}
+              inventoryReady={assetSummaryReady}
+              repairsReady={repairsReady}
               fetchTicketDetails={fetchTicketDetails}
-              replacementEvents={replacementHistory.events}
+              replacementEvents={brandData.replacementEvents}
               replacementHistoryError={replacementHistory.error}
               teamUsers={qcUsers}
               systemSets={regionalData.systemSets}
@@ -1008,17 +1058,20 @@ function AppWorkspace() {
               computers={regionalData.computers}
               printers={regionalData.printers}
               repairTickets={regionalData.repairTickets}
-              auditLogs={regionalData.auditLogs}
               maintenanceAlerts={scopedMaintenanceAlerts}
               unstabilizedAlerts={scopedUnstabilizedAlerts}
               setActiveTab={navigateMain}
               onNavigateWorkspace={navigateWorkspace}
               onOpenNewInstallation={() => setWorkflowMode('INSTALL')}
             />
-          ))}
+          )}
 
           {activeTab === 'npp' && (
             <NppManagement
+              slotDispensers={assetDetailsReady ? regionalData.dispensers : []}
+              onSaveSlots={saveColorantSlots}
+              workspaceBrand={brand}
+              codeCatalog={npps}
               loading={nppsLoading}
               loadError={nppsLoadError}
               onReload={refetchNpps}
@@ -1036,7 +1089,7 @@ function AppWorkspace() {
               onOpenImportModal={() => openImportModal('npp')}
               onOpenQrScan={() => { setQrScanError(''); setShowQrScanner(true); }}
               onReissueQrToken={reissueQrToken}
-              replacementEvents={replacementHistory.events}
+              replacementEvents={brandData.replacementEvents}
               onOpenMachineProfile={machine => { rememberMachineProfile(machine, 'equipment'); navigateWorkspace('assets', machine.setCode); }}
               onRequestWorkProgress={(npp, machine) => {
                 const device = machine?.dispenserSerial || machine?.mixerSerial || machine?.computerSerial || machine?.pcSerial || machine?.printerSerial || '';
@@ -1057,6 +1110,7 @@ function AppWorkspace() {
 
           {activeTab === 'assets' && (!assetDetailsReady ? <ModuleLoadingSkeleton type="assets" /> : (
             <AssetManagement
+              onSaveSlots={saveColorantSlots}
               catalog={{ systemSets, npps, dispensers, mixers, computers, printers }}
               globalSearch={globalSearch}
               initialFilter={workspaceFilter}
@@ -1076,7 +1130,7 @@ function AppWorkspace() {
               onAddStockDevice={handleAddStockDevice}
               onReplaceEquipment={handleReplaceEquipment}
               onReload={refetchAssets}
-              replacementEvents={replacementHistory.events}
+              replacementEvents={brandData.replacementEvents}
               replacementHistoryError={replacementHistory.error}
               onEditDevice={handleEditDevice}
               onDeleteDevice={handleDeleteDevice}
@@ -1089,10 +1143,11 @@ function AppWorkspace() {
           ))}
 
           {activeTab === 'profile' && <ProfileScreen onOpenSyncLog={() => setActiveTab('syncLog')} onOpenNotificationSettings={() => { if ('Notification' in window && Notification.permission === 'default') void Notification.requestPermission(); }} />}
+          {activeTab === 'appSettings' && <AppSettings key={user?.id} />}
           {activeTab === 'syncLog' && <SyncLogScreen onBack={() => setActiveTab('profile')} />}
           {activeTab === 'offline' && <OfflinePage systemSets={regionalData.systemSets} repairTickets={regionalData.repairTickets} npps={regionalData.npps} onNavigate={setActiveTab} />}
 
-          {activeTab === 'repairs' && (!assetSummaryReady ? <ModuleLoadingSkeleton type="repairs" /> : (
+          {activeTab === 'repairs' && (!machinesReady ? <ModuleLoadingSkeleton type="repairs" /> : (
             <RepairWorkspaceBoundary><DeviceRepairProcessing
               loading={repairsLoading}
               loadError={repairsLoadError}
@@ -1185,7 +1240,7 @@ function AppWorkspace() {
             </div>
           )}
 
-          {activeTab === 'maintenance' && (!assetSummaryReady ? <ModuleLoadingSkeleton type="maintenance" /> : (
+          {activeTab === 'maintenance' && (!machinesReady ? <ModuleLoadingSkeleton type="maintenance" /> : (
             <MaintenanceSchedule
               loading={assetsLoading}
               globalSearch={globalSearch}
@@ -1240,8 +1295,8 @@ function AppWorkspace() {
       {workflowMode && (!assetDetailsReady ? <div className="modal-overlay"><div className="modal-content"><AssetLoadingSkeleton /><p role="alert">{assetsLoadError}</p><button className="btn btn-secondary" onClick={() => setWorkflowMode(null)}>Đóng</button><button className="btn btn-primary" disabled={assetsLoading} onClick={() => void ensureAssetDetails()}>Tải lại</button></div></div> : (
         <WorkflowModal
           mode={workflowMode}
-          systemSets={systemSets}
-          npps={npps}
+          systemSets={brand === 'ALL' ? systemSets : [...brandData.systemSets, ...systemSets.filter(machine => !machine.nppId)]}
+          npps={brandData.npps}
           onClose={() => setWorkflowMode(null)}
           onSubmitInstall={handleInstallSubmit}
           onSubmitWithdraw={handleWithdrawSubmit}

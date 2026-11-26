@@ -16,7 +16,8 @@ import {
   BookOpen,
   MapPin,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  Settings
 } from 'lucide-react';
 
 import { useAuth } from '../../shared/context/AuthContext.jsx';
@@ -60,11 +61,7 @@ export default function Sidebar({ activeTab, setActiveTab, maintenanceCount, pen
     };
   }, [isOpen]);
 
-  const [expandedGroups, setExpandedGroups] = useState({
-    partner_assets: true,
-    tech_maint: true,
-    system_settings: false
-  });
+  const [expandedGroups, setExpandedGroups] = useState({});
 
   const menuGroups = [
     {
@@ -102,19 +99,6 @@ export default function Sidebar({ activeTab, setActiveTab, maintenanceCount, pen
       ]
     }
   ];
-
-  // Auto expand group containing active tab on tab change
-  useEffect(() => {
-    const activeGroup = menuGroups.find(group =>
-      group.items.some(item => item.id === activeTab)
-    );
-    if (activeGroup) {
-      setExpandedGroups(prev => ({
-        ...prev,
-        [activeGroup.id]: true
-      }));
-    }
-  }, [activeTab]);
 
   const toggleGroup = (groupId) => {
     setExpandedGroups(prev => ({
@@ -220,11 +204,34 @@ export default function Sidebar({ activeTab, setActiveTab, maintenanceCount, pen
         .sidebar-menu-btn:active {
           transform: scale(0.98);
         }
+        .sidebar-settings-link {
+          width: 100%;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          min-height: 44px;
+          padding: 10px 12px;
+          border: 0;
+          border-left: 3px solid transparent;
+          border-radius: 8px;
+          background: transparent;
+          color: var(--text-muted);
+          font: inherit;
+          font-size: .875rem;
+          cursor: pointer;
+        }
+        .sidebar-settings-link[aria-current="page"] {
+          color: var(--accent-cyan);
+          background: color-mix(in srgb, var(--accent-cyan) 12%, transparent);
+          border-left-color: var(--accent-cyan);
+          font-weight: 700;
+        }
         .sidebar-menu-btn:hover {
           background: rgba(255, 255, 255, 0.04) !important;
           color: var(--accent-cyan) !important;
         }
         .sidebar-group-header {
+          min-height: 44px;
           transition: all 0.2s cubic-bezier(0.23, 1, 0.32, 1);
         }
         .sidebar-group-header:active {
@@ -306,8 +313,10 @@ export default function Sidebar({ activeTab, setActiveTab, maintenanceCount, pen
             <div key={group.id} style={{ marginBottom: '6px' }}>
               {/* Group Header */}
               <button
+                type="button"
                 onClick={() => toggleGroup(group.id)}
                 className="sidebar-group-header"
+                aria-expanded={isExpanded}
                 style={{
                   width: '100%',
                   display: 'flex',
@@ -362,6 +371,8 @@ export default function Sidebar({ activeTab, setActiveTab, maintenanceCount, pen
                     return (
                       <button
                         key={item.id}
+                        type="button"
+                        aria-current={isActive ? 'page' : undefined}
                         onClick={() => {
                           setActiveTab(item.id);
                           if (onClose) onClose();
@@ -406,6 +417,14 @@ export default function Sidebar({ activeTab, setActiveTab, maintenanceCount, pen
             </div>
           );
         })}
+        <button
+          type="button"
+          className="sidebar-menu-btn sidebar-settings-link"
+          aria-current={activeTab === 'appSettings' ? 'page' : undefined}
+          onClick={() => { setActiveTab('appSettings'); onClose?.(); }}
+        >
+          <Settings size={18} aria-hidden="true" /> Cài đặt app
+        </button>
         <button type="button" className="sidebar-mobile-account sidebar-menu-btn" aria-current={activeTab === 'profile' ? 'page' : undefined} onClick={() => { setActiveTab('profile'); onClose?.(); }}>
           <UserCheck size={20} aria-hidden="true" /> Tài khoản của tôi
         </button>

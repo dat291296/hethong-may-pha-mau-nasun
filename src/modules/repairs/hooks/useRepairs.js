@@ -32,11 +32,11 @@ export function filterRepairTicketsById(tickets, idToRemove) {
 
 export function useRepairs({ enabled = true } = {}) {
   const [repairTickets, publishRepairTickets] = useState(INITIAL_REPAIR_TICKETS);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(isSupabaseConfigured && enabled);
   const [loadError,setLoadError]=useState('');
-  const [hasRepairSnapshot, setHasRepairSnapshot] = useState(false);
+  const [hasRepairSnapshot, setHasRepairSnapshot] = useState(!isSupabaseConfigured);
   const [cacheHydrated,setCacheHydrated]=useState(false);
-  const hasSnapshot = useRef(false);
+  const hasSnapshot = useRef(!isSupabaseConfigured);
   const fetchVersion = useRef(0);
   const stateRef = useRef(null);
   if (!stateRef.current) stateRef.current = createRepairState({
@@ -46,6 +46,10 @@ export function useRepairs({ enabled = true } = {}) {
     persist: rows => cacheOfflineData('repair_tickets', rows),
   });
   const repairState = stateRef.current;
+  const markSnapshotReady = useCallback(() => {
+    hasSnapshot.current = true;
+    setHasRepairSnapshot(true);
+  }, []);
   const persistRepairTickets = useCallback(async (updater, owner) => {
     try {
       await repairState.update(updater, owner);
@@ -68,13 +72,16 @@ export function useRepairs({ enabled = true } = {}) {
     async function loadCached() {
       try {
         const cached = await getCachedOfflineData('repair_tickets', null);
-        if (!disposed && Array.isArray(cached) && await repairState.acceptRead(token, cached, false) && !disposed) { hasSnapshot.current = true; setHasRepairSnapshot(true); }
+        if (!disposed && Array.isArray(cached) && await repairState.acceptRead(token, cached, false) && !disposed) {
+          markSnapshotReady();
+          setLoading(false);
+        }
       } catch (error) { recordOperationalError('runtime', error); }
       finally { if (!disposed) setCacheHydrated(true); }
     }
     loadCached();
     return () => { disposed = true; };
-  }, [repairState]);
+  }, [markSnapshotReady, repairState]);
 
   const fetchRepairs = useCallback(async ({ details = false } = {}) => {
     if (!isSupabaseConfigured) return;
@@ -82,17 +89,25 @@ export function useRepairs({ enabled = true } = {}) {
     const token = repairState.captureRead();
     const requestOwner = token.owner;
     setLoading(!hasSnapshot.current);setLoadError('');
+    const acceptSnapshot = (rows, persist = true) => {
+      if (!Array.isArray(rows) || !repairState.canCommit(token)) return false;
+      const acceptance = repairState.acceptRead(token, rows, persist);
+      // The rows are already published. Let the encrypted cache write finish independently of the UI.
+      markSnapshotReady();
+      setLoading(false);
+      return acceptance;
+    };
     try {
       await repairState.flush();
       if (!repairState.canCommit(token)) return false;
       if (!navigator.onLine) {
         const cached = await getCachedOfflineData('repair_tickets', null);
-        return Array.isArray(cached) ? await repairState.acceptRead(token, cached, false) : false;
+        return await acceptSnapshot(cached, false);
       }
       const pendingQueue = await getOfflineQueue();
       if (pendingQueue.some(item => ['ADD_REPAIR','EDIT_REPAIR','DELETE_REPAIR'].includes(item.action)||(item.action==='FIELD_OPERATION'&&item.payload?.kind?.startsWith('REPAIR')))) {
         const cached=await getCachedOfflineData('repair_tickets',null);
-        if (Array.isArray(cached)) await repairState.acceptRead(token, cached, false);
+        await acceptSnapshot(cached, false);
         if(version===fetchVersion.current&&requestOwner===getOfflineOwner())setLoadError('Có thay đổi đang chờ đồng bộ. Giữ dữ liệu trên thiết bị; kiểm tra hàng chờ trước khi tải bản server.');
         return false;
       }
@@ -101,25 +116,23 @@ export function useRepairs({ enabled = true } = {}) {
       if(error)throw error;
       if(!Array.isArray(data))throw Error('INCOMPLETE_REPAIR_RESPONSE');
       const previous = new Map(repairState.read().map(ticket => [ticket.id, ticket]));
-      const accepted = await repairState.acceptRead(token, data.map(row => {
+      return await acceptSnapshot(data.map(row => {
         const ticket = mapDbToRepair(row);
         return details ? ticket : mergeRepairSummary(ticket, previous.get(ticket.id));
       }));
-      if (accepted) hasSnapshot.current = true;
-      return accepted;
     } catch(error) {
       recordOperationalError('runtime',error);
       if(repairState.canCommit(token)){
         setLoadError('Chưa tải được phiếu từ server. Dữ liệu đã có được giữ nguyên; kiểm tra kết nối và thử lại.');
         try {
           const cached=await getCachedOfflineData('repair_tickets',null);
-          if(Array.isArray(cached))await repairState.acceptRead(token,cached,false);
+          await acceptSnapshot(cached, false);
         } catch(cacheError) {recordOperationalError('runtime',cacheError);}
       }
       else if(requestOwner===getOfflineOwner() && error.code === 'REPAIR_CACHE_WRITE_FAILED')setLoadError('Chưa lưu được bản xem offline. Dữ liệu đang có được giữ nguyên; kiểm tra dung lượng thiết bị rồi thử tải lại.');
       return false;
     } finally {if(version===fetchVersion.current&&requestOwner===getOfflineOwner())setLoading(false);}
-  },[repairState]);
+  },[markSnapshotReady, repairState]);
 
   useEffect(() => {
     if (cacheHydrated && enabled) void fetchRepairs();

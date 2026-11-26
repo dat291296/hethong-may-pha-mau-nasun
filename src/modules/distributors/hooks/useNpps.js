@@ -18,6 +18,7 @@ import { generateQrToken } from '../lib/qrPayload.js';
 export function useNpps() {
   const [npps, publishNpps] = useState(() => isSupabaseConfigured ? [] : INITIAL_NPPS.map(item => ({ ...item, qrToken: item.qrToken || generateQrToken() })));
   const [loading, setLoading] = useState(isSupabaseConfigured);
+  const [hasSnapshot, setHasSnapshot] = useState(!isSupabaseConfigured);
   const [error, setError]   = useState(null);
   const fetchVersion = useRef(0);
   const activeOwner = useRef(null);
@@ -30,6 +31,10 @@ export function useNpps() {
     nppsRef.current = rows;
     publishNpps(rows);
   }, []);
+  const publishSnapshot = useCallback(rows => {
+    setNpps(rows);
+    setHasSnapshot(true);
+  }, [setNpps]);
   const refreshRef = useRef(null);
   const mutationTail = useRef(Promise.resolve());
   const pendingWrites = useRef(0);
@@ -110,7 +115,7 @@ export function useNpps() {
       if (pendingQueue.some(item => ['ADD_NPP', 'EDIT_NPP', 'DELETE_NPP'].includes(item.action))) {
         const cached = await getCachedOfflineData('npps', null);
         if (version !== fetchVersion.current || requestOwner !== getOfflineOwner()) return false;
-        if (Array.isArray(cached)) setNpps(cached);
+        if (Array.isArray(cached)) publishSnapshot(cached);
         setError(Array.isArray(cached)
           ? 'NPP đang có thay đổi chờ đồng bộ. Đang hiển thị bản lưu trên thiết bị; hãy xử lý hàng chờ trước khi tải lại từ máy chủ.'
           : 'NPP đang có thay đổi chờ đồng bộ nhưng chưa có bản lưu trên thiết bị. Không tải đè dữ liệu; kiểm tra hàng chờ đồng bộ.');
@@ -126,7 +131,7 @@ export function useNpps() {
       if (!Array.isArray(data)) throw Object.assign(new Error('INCOMPLETE_NPP_RESPONSE'), { code: 'INCOMPLETE_QUERY' });
       const previousById = new Map(nppsRef.current.map(npp => [npp.id, npp]));
       const mapped = data.map(row => ({ ...mapDbToNpp(row), photos: previousById.get(row.id)?.photos || [] }));
-      const cacheSaved = await persistNpps(mapped, setNpps);
+      const cacheSaved = await persistNpps(mapped, publishSnapshot);
       if (version === fetchVersion.current && requestOwner === getOfflineOwner()) {
         setError(cacheSaved ? null : 'Đã tải NPP nhưng chưa lưu được bản ngoại tuyến trên thiết bị.');
       }
@@ -137,7 +142,7 @@ export function useNpps() {
       setError(userErrorMessage(fetchError, 'Chưa tải được NPP. Dữ liệu trên thiết bị được giữ nguyên; kiểm tra phiên đăng nhập, quyền truy cập và kết nối.'));
       try {
         const cached = await getCachedOfflineData('npps', null);
-        if (!cacheDirty.current && version === fetchVersion.current && requestOwner === getOfflineOwner() && Array.isArray(cached)) setNpps(cached);
+        if (!cacheDirty.current && version === fetchVersion.current && requestOwner === getOfflineOwner() && Array.isArray(cached)) publishSnapshot(cached);
       } catch (cacheError) {
         recordOperationalError('runtime', cacheError);
       }
@@ -146,7 +151,7 @@ export function useNpps() {
       if (version === fetchVersion.current && requestOwner === getOfflineOwner()) setLoading(false);
       recordDataLoadMetric(performance.now() - startedAt, 'NPP_DATA_LOAD');
     }
-  }, [persistNpps, setNpps]);
+  }, [persistNpps, publishSnapshot, setNpps]);
 
   refreshRef.current = fetchNpps;
 
@@ -159,21 +164,18 @@ export function useNpps() {
       try {
         const cached = await getCachedOfflineData('npps', null);
         if (!disposed && version === fetchVersion.current && !pendingWrites.current && !cacheDirty.current && owner === getOfflineOwner() && Array.isArray(cached)) {
-          setNpps(cached);
+          publishSnapshot(cached);
           setLoading(false);
         }
       } catch (cacheError) {
         recordOperationalError('runtime', cacheError);
       } finally {
-        if (!disposed) {
-          setLoading(false);
-          void fetchNpps();
-        }
+        if (!disposed) void fetchNpps();
       }
     }
     void loadCached();
     return () => { disposed = true; };
-  }, [fetchNpps, persistNpps, setNpps]);
+  }, [fetchNpps, publishSnapshot]);
 
   // ── CRUD Operations ────────────────────────────────────────────────────────
   const addNpp = useCallback(async (nppData) => {
@@ -303,7 +305,7 @@ export function useNpps() {
     deleteNpp: serializeMutation(deleteNpp), importNpps: serializeMutation(importNpps),
     fetchNppPhotos: serializeMutation(fetchNppPhotos), reissueQrToken: serializeMutation(reissueQrToken),
   }), [serializeMutation, addNpp, editNpp, deleteNpp, importNpps, fetchNppPhotos, reissueQrToken]);
-  return { npps, setNpps, loading, error, ...mutations, refetch: fetchNpps };
+  return { npps, setNpps, hasSnapshot, loading, error, ...mutations, refetch: fetchNpps };
 }
 
 // ─── Field Mappers ─────────────────────────────────────────────────────────────

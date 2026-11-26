@@ -322,8 +322,8 @@ export default function RepairEditorDialog({ PRODUCT_CATEGORIES, addErrorPhotos,
 
                   <div className="responsive-form-grid">
                     <div className="form-group">
-                      <label className="form-label">⚡ Tình Trạng Sửa Chữa</label>
-                      <select className="form-select" value={formData.processingStatus} onChange={e => setFormData({ ...formData, processingStatus: e.target.value })}>
+                      <label className="form-label" htmlFor="repair-processing-status">Tình trạng sửa chữa</label>
+                      <select id="repair-processing-status" className="form-select" value={formData.processingStatus} onChange={e => setFormData({ ...formData, processingStatus: e.target.value })}>
                         <option value="Chưa xử lý">⏳ Chưa Xử Lý</option>
                         <option value="Đang xử lý">🔧 Đang Xử Lý</option>
                         <option value="Đã xử lý">✓ Đã Xử Lý Xong</option>

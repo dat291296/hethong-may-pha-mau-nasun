@@ -27,6 +27,7 @@ const summaryColumns = {
 };
 const detailColumns = {
   ...summaryColumns,
+  dispensers: summaryColumns.dispensers + ',colorant_slots',
   computers: `${summaryColumns.computers},os,specs,network,stabilizer,tinting_software,software_version`,
   printers: `${summaryColumns.printers},connection`,
   system_sets: `${setSummary},notes,installation_photos`,

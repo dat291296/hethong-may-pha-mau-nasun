@@ -289,7 +289,7 @@ export default function DataBackupSyncModal({
             )}
 
             <div style={{ background: 'var(--bg-secondary)', padding: '1rem', borderRadius: '8px', marginBottom: '1rem' }}>
-              <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.9rem' }}>📊 Thống kê dữ liệu hiện tại trên thiết bị:</h4>
+              <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.9rem' }}>📊 Dữ liệu trong phạm vi đang xem:</h4>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem', fontSize: '0.825rem' }}>
                 <div>• Nhà phân phối: <strong>{npps.length}</strong></div>
                 <div>• Máy chiết: <strong>{dispensers.length}</strong></div>
