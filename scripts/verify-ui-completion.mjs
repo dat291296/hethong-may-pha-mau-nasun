@@ -37,6 +37,7 @@ async function cli(...args) {
 // Exclude all application environment files and force the development-only
 // fixture path. This server cannot initialize a configured Supabase client.
 const server = await createServer({ configFile: false, envDir: false, envPrefix: 'NASUN_UI_UNUSED_',
+  optimizeDeps: { entries: ['index.html'] }, resolve: { dedupe: ['react', 'react-dom'] },
   plugins: [react()], root, server: { host: '127.0.0.1', port: 5195, strictPort: true },
   define: { 'import.meta.env.VITE_SUPABASE_URL': 'undefined', 'import.meta.env.VITE_SUPABASE_ANON_KEY': 'undefined',
     'import.meta.env.VITE_REMOTE_REPORTING_ENABLED': '"false"', 'import.meta.env.VITE_BUILD_REVISION': '"synthetic-ui"' } });
@@ -50,6 +51,7 @@ try {
     await page.route('**/*', route => new URL(route.request().url()).origin === 'http://127.0.0.1:5195' ? route.continue() : route.abort());
     const desktop = () => page.setViewportSize({width:1280,height:844});
     await desktop();
+    await page.getByRole('button',{name:'Đối Tác & Thiết Bị',exact:true}).click();
     await page.getByRole('button',{name:'Bộ Máy & Kho Thiết Bị',exact:true}).click();
     await page.locator('.assetmanagement-screen').waitFor();
     const viewports = [];
@@ -74,6 +76,7 @@ try {
     await page.getByPlaceholder('09xx xxx xxx').fill('12');
     await page.locator('#npp-phone-feedback').filter({hasText:'không đúng định dạng'}).waitFor();
     await page.getByRole('button',{name:'Hủy Bỏ',exact:true}).click();
+    await page.getByRole('button',{name:/KỸ THUẬT & BẢO TRÌ/i}).click();
     await page.getByRole('button',{name:/Xử Lý & Sửa Chữa Máy/}).first().click();
     await page.getByRole('button',{name:'Tạo phiếu',exact:true}).click();
     await page.locator('input[aria-describedby="repair-serial-feedback"]').fill('???');
